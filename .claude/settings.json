@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(uv sync*)",
+      "Bash(uv run *)",
+      "Bash(uv add *)",
+      "Bash(uv remove *)",
+      "Bash(uv lock*)",
+      "Bash(uv tree*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git switch *)",
+      "Bash(git checkout -b *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git stash*)",
+      "Bash(ffprobe *)",
+      "Bash(ffmpeg *)",
+      "Bash(say *)",
+      "Bash(ollama list)",
+      "Bash(ollama ps)",
+      "Bash(ollama show *)",
+      "Bash(npm run *)",
+      "WebSearch",
+      "WebFetch(domain:huggingface.co)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:docs.ollama.com)",
+      "WebFetch(domain:code.claude.com)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git rebase*)",
+      "Bash(rm -rf *)",
+      "Bash(brew *)",
+      "Bash(ollama pull *)",
+      "Bash(ollama rm *)",
+      "Bash(npm install*)"
+    ],
+    "deny": [
+      "Edit(~/Coulisses/Données/**)",
+      "Edit(~/Library/Application Support/Coulisses/**)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_edit.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_bash.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit_lint.sh\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

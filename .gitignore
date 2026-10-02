@@ -1,0 +1,63 @@
+# Données : jamais dans git (ADR 0001)
+*.wav
+*.m4a
+*.mp3
+*.flac
+*.ogg
+*.opus
+*.aac
+*.aif
+*.aiff
+*.caf
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.avi
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.rttm
+*.safetensors
+*.gguf
+*.onnx
+*.bin
+*.pt
+*.pth
+*.npz
+*.mlmodel
+*.mlpackage/
+.data/
+# Sorties de séances et du banc (transcripts réels) — pas de `models/` nu : c'est aussi un module de code
+**/sessions/*/runs/
+**/sessions/*/annotations/
+provenance.json
+**/bench/references/
+**/bench/reports/
+!engine/tests/fixtures/**
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.pyright/
+*.egg-info/
+dist/
+build/
+
+# Web
+node_modules/
+atelier/web/dist/
+*.tsbuildinfo
+
+# Local
+.DS_Store
+.env
+.env.*
+CLAUDE.local.md
+.claude/settings.local.json
+

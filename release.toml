@@ -1,0 +1,4 @@
+# Fichiers où scripts/release.py écrit la version publiée de l'application (groupe 1 du
+# motif). Vide tant que l'application n'a pas de code : ajouter ici son pyproject.toml et
+# son package.json dès qu'ils existent.
+fichiers = []

@@ -1,0 +1,43 @@
+#!/bin/bash
+# Blocks commits containing real user data: audio/video, databases, models, or large files.
+# Synthetic test fixtures under engine/tests/fixtures/ are allowed if small (< 1 MB).
+
+status=0
+max_bytes=$((5 * 1024 * 1024))
+fixture_max=$((1024 * 1024))
+
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  size=$(wc -c < "$f" | tr -d ' ')
+  lower=$(echo "$f" | tr '[:upper:]' '[:lower:]')
+
+  case "$lower" in
+    engine/tests/fixtures/*)
+      if [ "$size" -gt "$fixture_max" ]; then
+        echo "✗ Fixture trop lourde (> 1 Mo) : $f" >&2; status=1
+      fi
+      continue ;;
+  esac
+
+  case "$lower" in
+    *.wav|*.m4a|*.mp3|*.flac|*.ogg|*.opus|*.aac|*.aif|*.aiff|*.caf|*.mp4|*.mov|*.mkv|*.webm|*.avi)
+      echo "✗ Audio/vidéo interdit dans git : $f" >&2; status=1 ;;
+    *.db|*.sqlite|*.sqlite3|*.db-wal|*.db-shm)
+      echo "✗ Base de données interdite dans git : $f" >&2; status=1 ;;
+    *.safetensors|*.gguf|*.bin|*.pt|*.pth|*.onnx|*.mlmodel|*.mlpackage/*|*.npz)
+      echo "✗ Poids de modèle interdits dans git : $f" >&2; status=1 ;;
+    *.rttm)
+      echo "✗ RTTM hors fixtures : probablement une vraie séance : $f" >&2; status=1 ;;
+    */sessions/*/runs/*|sessions/*/runs/*|*provenance.json|*bench/references/*|*bench/reports/*)
+      echo "✗ Sortie de séance ou du banc : probablement un vrai transcript : $f" >&2; status=1 ;;
+  esac
+
+  if [ "$size" -gt "$max_bytes" ]; then
+    echo "✗ Fichier > 5 Mo : $f" >&2; status=1
+  fi
+done < <(git diff --cached --name-only --diff-filter=AM)
+
+if [ $status -ne 0 ]; then
+  echo "Commit refusé : les données des séances ne quittent jamais la machine (ADR 0001)." >&2
+fi
+exit $status
