@@ -1,6 +1,6 @@
 # Direction artistique de l'interface
 
-Statut : proposée (2026-09-28). Brief de l'utilisateur : « chaleureux, coloré, aéré, animé ; un outil un peu rigolo et sympa, sans être beauf ». Explorée dans l'atelier (`atelier/web/src/theme/`, ADR 0015 : référence, pas le produit) et écran de référence `#/maquette`.
+Statut : proposée (2026-09-28). Brief de l'utilisateur : « chaleureux, coloré, aéré, animé ; un outil un peu rigolo et sympa, sans être beauf ». Explorée dans l'atelier du moteur (`~/Coulisses/Moteur/atelier/web/src/theme/`, ADR 0015 du moteur : référence, pas le produit) et écran de référence `#/maquette` (lancer l'interface d'atelier : `cd ~/Coulisses/Moteur/atelier/web && npm run dev`). Les fichiers cités plus bas sous `atelier/` sont dans ce dépôt-là.
 
 ## Direction retenue et finitions
 

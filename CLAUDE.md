@@ -13,8 +13,10 @@ App macOS 100 % locale de débrief de séances d'impro : enregistrement mono-mic
 
 ## Le moteur
 - Dépôt `~/Coulisses/Moteur`. Son contrat : `engine/README.md` (entrées, sorties, organisation des exécutions, garanties) et `engine/schemas/*.schema.json`.
-- L'application en dépend **par étiquette** (`vX.Y.Z`), jamais par chemin vers le code d'un autre dépôt. Dans le `pyproject.toml` de l'application : `coulisses = { git = "file:///Users/t.serre/Coulisses/Moteur", subdirectory = "engine", tag = "v1.0.0" }` (dans `[tool.uv.sources]`, avec `coulisses[mlx-audio,pyannote,wav2vec2]` en dépendance). Monter de version = changer cette étiquette, relire le `CHANGELOG.md` du moteur, puis passer les tests de l'application. Une version **majeure** du moteur change le contrat : l'application doit s'adapter.
-- On appelle le moteur par `coulisses.chain.run_chain` ou `coulisses-traiter`, et on lit ses sorties selon ses schémas. On n'importe jamais ses modules internes (moteurs, worker) et on n'écrit jamais dans ses exécutions.
+- L'application en dépend **par étiquette** (`vX.Y.Z`), jamais par chemin vers le code d'un autre dépôt. Dans le `pyproject.toml` de l'application : `coulisses = { git = "file:///Users/t.serre/Coulisses/Moteur", subdirectory = "engine", tag = "v1.1.0" }` (dans `[tool.uv.sources]`, avec `coulisses[mlx-audio,pyannote,wav2vec2]` en dépendance). Monter de version = changer cette étiquette, relire le `CHANGELOG.md` du moteur, puis passer les tests de l'application. Une version **majeure** du moteur change le contrat : l'application doit s'adapter.
+- Le paquet Python de l'application ne s'appelle pas `coulisses` (nom pris par le moteur) : `coulisses_app`.
+- Le moteur ne fait que transcription, alignement, diarisation, attribution (un seul profil, `chaine-retenue`). Phases, titre et résumés sont faits par l'application (`prompting/`).
+- On appelle le moteur par `coulisses.chain.run_chain` ou `coulisses-traiter`, et on lit ses sorties selon ses schémas. `run_chain` laisse l'application choisir le dossier de chaque exécution et fournir la fonction `run_stage` qui lance chaque étape (celle du moteur : `coulisses.chain.execute_stage(séance)`, que l'application peut envelopper pour réutiliser une exécution réussie) : c'est ce qui permet de reprendre ou de relancer une seule étape. L'avancement se lit dans `chain.json` et `progress.json` (`chain-plan.schema.json`, `progress.schema.json`, règle de suivi dans `engine/README.md`, depuis la v1.1.0). On n'importe jamais ses modules internes (moteurs, worker) et on n'écrit jamais dans ses exécutions.
 - Installer le moteur : la dépendance étiquetée, puis `coulisses-models installer-environnement diarizen` et les modèles du catalogue (`coulisses-models telecharger <clé>`), qui vont dans `~/Coulisses/Modèles` et `~/Coulisses/Environnements`.
 - Le moteur à améliorer (nouveau modèle, plus rapide, plus juste) : dans son dépôt, avec son banc d'essai, jamais ici.
 
@@ -43,13 +45,13 @@ Des hooks bloquent une partie de ces violations (`.claude/hooks/`). Un blocage n
 - Avant chaque commit qui touche le code, la configuration ou un prompt : fais relire le diff par l'agent `gardien-principes`.
 - Une décision structurante prise = un ADR (`/adr`). Un comportement produit modifié = la spec mise à jour dans le même commit.
 - **Messages de commit : Conventional Commits, description en français à l'impératif** : `type(portée): description`, ex. `feat(enregistrement): ajoute la pause`. Types : `feat` (nouveauté, version mineure), `fix` (correction, version corrective), `perf` (plus rapide, version corrective), `refactor`, `docs`, `test`, `build`, `chore`, `style` (aucune version). `!` après la portée = changement incompatible (version majeure ; avant 1.0.0, mineure). Les fusions : `fusionne <branche>`. Un hook refuse les messages hors convention.
-- **Versions : jamais à la main.** À chaque fusion dans `main`, `scripts/release.py` (hook `post-merge`) calcule la version suivante, met à jour les fichiers listés dans `release.toml` et `CHANGELOG.md`, commite `chore(version): vX.Y.Z` et pose l'étiquette. Dès que l'application a un `pyproject.toml` ou un `package.json`, ajoute-les à `release.toml`.
+- **Versions : jamais à la main.** À chaque fusion dans `main`, `scripts/release.py` (hook `post-merge`) calcule la version suivante, met à jour les fichiers listés dans `release.toml` et `CHANGELOG.md`, commite `chore(version): vX.Y.Z` et pose l'étiquette. Dès que l'application a un `pyproject.toml` ou un `package.json`, ajoute-les à `release.toml` (`fichiers`), et le dossier de son `uv.lock` à `verrous`.
 
 ## Langues
 Code, identifiants, commentaires et logs techniques en anglais. Docs, commits, interface, messages d'erreur montrés à l'utilisateur et prompts en français (prompts rédigés en français natif, jamais traduits).
 
 ## Pièges connus
 - Ollama tronque **en silence** au-delà de `num_ctx`. Il faut toujours le fixer, et compter les tokens avant l'envoi.
-- Le traitement d'une séance prend ≈ 10 min par heure d'audio : il tourne en tâche de fond, son avancement se lit dans les `progress.json` du moteur, et l'interface ne bloque jamais dessus.
+- Le traitement d'une séance prend ≈ 10 min par heure d'audio : il tourne en tâche de fond, son avancement se lit dans `chain.json` et les `progress.json` du moteur (schémas publiés), et l'interface ne bloque jamais dessus.
 - Ne charge jamais un modèle dans le processus de l'application : le moteur lance chaque étape dans un sous-processus.
 - La permission micro de macOS s'applique au processus parent (Terminal pendant le développement).
