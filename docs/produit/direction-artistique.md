@@ -68,7 +68,33 @@ Valeurs données en clair puis en sombre. Les deux modes sont conçus ensemble.
   - un bouton se soulève au survol et s'enfonce au clic : retour tactile.
 - `prefers-reduced-motion` est respecté : les transitions deviennent instantanées.
 - Bibliothèque : `motion` pour les éléments partagés et les mises en page ; CSS seule pour les survols.
-- Les animations illustrées (Rive) restent possibles pour les états vides et les attentes longues. À introduire quand un écran en a besoin, pas avant.
+- La piste d'animations est à l'essai dans l'atelier, en trois niveaux (sans, sobres, généreuses). Le niveau reste à choisir ; cette section sera précisée ensuite.
+
+## Animations dessinées et animations en code
+
+Deux outils, chacun pour ce qu'il fait le mieux.
+
+- **En code** : tout ce qui dépend des données ou du pointeur. Les micro-interactions de la relecture, et l'écran « Traitement en cours » : chaque voix est une corde, le fil gris emmêlé se sépare en une corde colorée par personne, avec ses mots et son nom. Les cordes se pincent au survol, se tirent et se relâchent ; un son facultatif donne une note par voix.
+- **Dans Rive** : ce qui est dessiné. Une illustration d'état, un moment de réussite. Les fichiers seront produits plus tard. En attendant, chaque emplacement affiche un visuel d'attente fait en code, pensé pour avoir l'air fini.
+
+Emplacements prévus :
+
+| Fichier | Quand | Entrées |
+|---|---|---|
+| `etat-vide.riv` | La liste des enregistrements est vide | `survol` |
+| `enregistrement.riv` | Pendant la captation | `niveau` (0 à 100), `pause` |
+| `termine.riv` | Le traitement se termine | `jouer` |
+| `erreur.riv` | Une étape a échoué | aucune |
+
+Règles :
+- Un emplacement prend les mêmes entrées, qu'il affiche le visuel d'attente ou le fichier Rive. Déposer le fichier suffit à le faire jouer.
+- Une machine à états par fichier, nommée `Principal`, et une entrée commune `sombre` : un fichier Rive ne lit pas les couleurs du thème, il porte ses deux palettes.
+- Encre neutre et accent brique, fond transparent, trait de 1,75. Ni dégradé de fond, ni grain.
+- Une boucle seulement si elle porte un état. Sinon l'animation se joue une fois.
+- Fichiers et moteur Rive embarqués dans l'application : par défaut Rive télécharge son moteur depuis un CDN, ce que le principe 1 interdit. Il faut lui donner ses fichiers locaux.
+- Si un fichier est illisible, le visuel d'attente reste affiché et l'erreur est journalisée.
+
+La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/web/src/illustrations/rive/README.md`.
 
 ## L'écran de relecture : deux colonnes
 
@@ -122,7 +148,7 @@ Explorées dans l'atelier du moteur entre le 28 septembre et le 2 octobre 2026, 
 
 ## Mise en œuvre
 
-- **Référence visuelle** : l'atelier du moteur (ADR 0015), qui n'est pas le produit. Lancer `cd ~/Coulisses/Moteur/atelier/web && npm run dev`, puis ouvrir `#/maquette`. L'atelier ne contient plus que cette direction. Deux exemples s'y comparent : une réunion d'équipe et une répétition.
-- **Code de référence**, à relire et non à importer : thème dans `atelier/web/src/theme/coulisses.ts` (palette des participants dans `shared.ts`), écran dans `atelier/web/src/pages/maquette/` (`ColumnsLayout.tsx`, `parts.tsx`, modèle dans `model.ts`).
+- **Référence visuelle** : l'atelier du moteur (ADR 0015), qui n'est pas le produit. Lancer `cd ~/Coulisses/Moteur/atelier/web && npm run dev`, puis ouvrir `#/maquette`. L'atelier ne contient plus que cette direction. Trois vues s'y choisissent : relecture, traitement, états. Deux exemples s'y comparent : une réunion d'équipe et une répétition.
+- **Code de référence**, à relire et non à importer : thème dans `atelier/web/src/theme/coulisses.ts` (palette des participants dans `shared.ts`), écran dans `atelier/web/src/pages/maquette/` (`ColumnsLayout.tsx`, `parts.tsx`, modèle dans `model.ts`). Emplacements d'illustration dans `atelier/web/src/illustrations/`, cordes dans `pages/maquette/VoiceStrings.tsx`.
 - **Dans l'application** : un seul thème Astryx, écrit avec `defineTheme`, sans sélecteur de finition. Construit avec `npx astryx theme build` et importé avec sa CSS. Polices depuis les paquets Fontsource `dm-sans` et `figtree`.
 - **Validation** : une capture en clair et une en sombre à chaque changement visuel, relues avant de continuer.
