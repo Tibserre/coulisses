@@ -13,7 +13,7 @@ App macOS 100 % locale de débrief de séances d'impro : enregistrement mono-mic
 
 ## Le moteur
 - Dépôt `~/Coulisses/Moteur`. Son contrat : `engine/README.md` (entrées, sorties, organisation des exécutions, garanties) et `engine/schemas/*.schema.json`.
-- L'application en dépend **par étiquette** (`vX.Y.Z`), jamais par chemin vers le code d'un autre dépôt. Monter de version = changer cette étiquette, relire le `CHANGELOG.md` du moteur, puis passer les tests de l'application. Une version **majeure** du moteur change le contrat : l'application doit s'adapter.
+- L'application en dépend **par étiquette** (`vX.Y.Z`), jamais par chemin vers le code d'un autre dépôt. Dans le `pyproject.toml` de l'application : `coulisses = { git = "file:///Users/t.serre/Coulisses/Moteur", subdirectory = "engine", tag = "v1.0.0" }` (dans `[tool.uv.sources]`, avec `coulisses[mlx-audio,pyannote,wav2vec2]` en dépendance). Monter de version = changer cette étiquette, relire le `CHANGELOG.md` du moteur, puis passer les tests de l'application. Une version **majeure** du moteur change le contrat : l'application doit s'adapter.
 - On appelle le moteur par `coulisses.chain.run_chain` ou `coulisses-traiter`, et on lit ses sorties selon ses schémas. On n'importe jamais ses modules internes (moteurs, worker) et on n'écrit jamais dans ses exécutions.
 - Installer le moteur : la dépendance étiquetée, puis `coulisses-models installer-environnement diarizen` et les modèles du catalogue (`coulisses-models telecharger <clé>`), qui vont dans `~/Coulisses/Modèles` et `~/Coulisses/Environnements`.
 - Le moteur à améliorer (nouveau modèle, plus rapide, plus juste) : dans son dépôt, avec son banc d'essai, jamais ici.
