@@ -7,7 +7,7 @@ App macOS 100 % locale de débrief de séances d'impro : enregistrement mono-mic
 ## Où trouver quoi
 - `docs/produit/spec-v1.md` : ce que fait le produit et pourquoi. **À lire avant toute fonctionnalité.**
 - `docs/produit/glossaire-domaine.md` : terme français ↔ identifiant anglais. Aucun synonyme inventé.
-- `docs/produit/direction-artistique.md` : la direction visuelle retenue.
+- `docs/produit/direction-artistique.md` : la direction visuelle retenue (ADR 0017). **À lire avant tout écran.**
 - `docs/decisions/` : ADR de l'application. Une décision **acceptée** ne se contourne pas : on propose un nouvel ADR (`/adr`). Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015) sont dans `coulisses-moteur`.
 - `docs/produit/questions-ouvertes.md` : ce qui n'est pas tranché. Ne tranche pas à la place de l'utilisateur.
 
