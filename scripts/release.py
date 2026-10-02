@@ -108,6 +108,21 @@ def write_version(version: str) -> list[str]:
     return touched
 
 
+def relock() -> list[str]:
+    """Each folder of `verrous` in release.toml: its uv.lock records the project's own
+    version, so it is refreshed (offline) in the same commit as the new version."""
+    config = tomllib.loads((ROOT / "release.toml").read_text(encoding="utf-8"))
+    touched: list[str] = []
+    for folder in config.get("verrous", []):
+        result = subprocess.run(
+            ["uv", "lock", "--offline", "--quiet"], cwd=ROOT / folder, capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            sys.exit(f"Verrou non mis à jour dans {folder} : {result.stderr.strip()}")
+        touched.append(f"{folder}/uv.lock")
+    return touched
+
+
 def write_changelog(version: str, groups: dict[str, list[str]]) -> None:
     path = ROOT / "CHANGELOG.md"
     lines = [f"## v{version} — {date.today().isoformat()}", ""]
@@ -136,6 +151,7 @@ def main() -> None:
         print("Aucune version à publier (pas de feat, fix, perf ni changement incompatible).")
         return
     touched = write_version(version)
+    touched += relock()
     write_changelog(version, groups)
     git("add", "CHANGELOG.md", *touched)
     git(

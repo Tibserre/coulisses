@@ -88,7 +88,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.4 Traitement
 
-- **Étapes** (détail dans `docs/decisions/0003-pipeline-etapes-et-provenance.md`) : préparation audio, déréverbération (optionnelle), transcription, alignement, diarisation, attribution, détection des phases, titre, résumés.
+- **Étapes** : préparation audio, déréverbération (optionnelle), transcription, alignement, diarisation, attribution, détection des phases, titre, résumés. **Le moteur** (dépôt `coulisses-moteur`, ADR 0003 et 0014 de ce dépôt-là) fait la transcription, l'alignement, la diarisation et l'attribution ; **l'application** fait les phases, le titre et les résumés (via `prompting/`). La préparation audio et la déréverbération ne sont pas dans la chaîne retenue.
 - **File d'attente** persistante : survit à un redémarrage.
 - **Une étape qui échoue n'efface pas les précédentes.** L'erreur est lisible dans l'app.
 - **Chaque étape se relance seule**, avec d'autres réglages ou un autre moteur. Exemple : refaire la diarisation sans retranscrire. Les étapes en aval sont alors marquées **périmées**, jamais supprimées.
@@ -194,7 +194,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 | Rapide | 80 min d'audio traitées en « quelques minutes » (cible à fixer par la mesure, ordre de grandeur ≤ 15 min). |
 | Mémoire | Tient dans 64 Go avec les autres applis ouvertes. Pas deux gros modèles chargés en même temps sans nécessité. |
 | Robustesse | Crash pendant l'enregistrement : au plus quelques secondes perdues. Crash pendant le traitement : reprise à l'étape interrompue. |
-| Données | Un seul dossier visible `~/Coulisses/` : `Code/` (seul sous git), `Modèles/`, `Données/`. Jamais dans un dossier synchronisé (ADR 0010). |
+| Données | Un seul dossier visible `~/Coulisses/` : `App/` et `Moteur/` (les deux dépôts git, ADR 0016), `Modèles/`, `Environnements/`, `Données/`. Jamais dans un dossier synchronisé (ADR 0010). |
 | Longues séances | 2 h sans dérive d'horodatage ni dégradation de la diarisation. |
 
 ## 11. Critères de réussite V1

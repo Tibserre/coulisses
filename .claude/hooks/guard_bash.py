@@ -42,7 +42,7 @@ RULES = [
     ),
     (
         re.compile(r"\bpython3?\s+-m\s+venv\b|\bvirtualenv\b"),
-        "L'environnement est géré par uv (`uv sync` dans engine/).",
+        "L'environnement est géré par uv (`uv sync` dans le projet).",
     ),
 ]
 

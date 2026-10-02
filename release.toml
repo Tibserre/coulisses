@@ -1,3 +1,7 @@
+# Dossiers dont le uv.lock est remis à jour à chaque version (il contient la version du
+# projet). À remplir dès que l'application a un pyproject.toml, ex. ["."].
+verrous = []
+
 # Fichiers où scripts/release.py écrit la version publiée de l'application (groupe 1 du
 # motif). Vide tant que l'application n'a pas de code : ajouter ici son pyproject.toml et
 # son package.json dès qu'ils existent.

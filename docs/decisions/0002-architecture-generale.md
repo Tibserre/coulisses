@@ -1,6 +1,6 @@
 # 0002 — Architecture générale
 
-Statut : Acceptée (2026-09-24)
+Statut : Acceptée (2026-09-24). Organisation du dépôt **précisée par 0016** : le moteur est un dépôt à part.
 
 ## Contexte
 Traitements ML lourds (plusieurs modèles de plusieurs Go, exécutions de plusieurs heures), interface riche (relecture synchronisée avec l'audio), un seul utilisateur sur un seul Mac. Electron n'est justifié que par un besoin natif avéré.
@@ -15,6 +15,11 @@ Traitements ML lourds (plusieurs modèles de plusieurs Go, exécutions de plusie
 - **Outillage Python** : `uv`, Python 3.12 (le Python système 3.14 est trop récent pour l'écosystème ML), `ruff` (format + lint), `pyright` (types), `pytest`.
 
 ## Organisation du dépôt
+**Depuis l'ADR 0016**, cette organisation est répartie en deux dépôts :
+- **le moteur** (`coulisses-moteur`, paquet Python `coulisses`) contient `worker/`, `stages/`, `engines/`, `models/`, les profils et le banc d'essai ;
+- **l'application** (ce dépôt) contient le reste : service (`api/`), `capture/`, `storage/`, `retention/`, `prompting/`, les actions fournies (`config/`, prompts en .md) et l'interface (`web/`). Son paquet Python ne peut pas s'appeler `coulisses`, nom pris par le moteur (par exemple `coulisses_app`). Le moteur y est une dépendance, utilisée par son contrat.
+
+Organisation d'origine, pour mémoire :
 ```
 engine/                  # paquet Python `coulisses`
   src/coulisses/
