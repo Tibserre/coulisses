@@ -7,13 +7,12 @@
 |---|---|---|---|
 | Q3 | Nom définitif de l'app | Avant la PWA | « Coulisses » provisoire |
 | Q8 | Schéma de données : remplacer le format provisoire `session.json` (écrit par `coulisses-traiter`) par la base SQLite prévue (ADR 0002, 0006). À valider avant toute donnée réelle. | Avant la première vraie séance | Proposition de schéma à préparer (`/jalon`) |
-| Q9 | Profils : la spec prévoit *Rapide* et *Qualité max* (§7.4), le moteur n'en livre qu'un (`chaine-retenue`, ≈ 10 min de calcul par heure d'audio, déjà dans l'objectif de vitesse de Rapide, et la meilleure qualité mesurée au banc). Garder un seul profil en V1 ? | Avant l'écran de traitement | Un seul profil en V1 ; un second seulement si le banc trouve mieux en plus lent |
 | Q7 | Rangement des comptes rendus dans Google Drive : copie à la main depuis l'export, ou export automatique vers un dossier local synchronisé par Google Drive pour ordinateur ? L'app n'envoie jamais rien elle-même (P1). | Phase interface | Export Markdown vers un dossier choisi |
 
 ## À trancher par la mesure (banc d'essai)
 | # | Question |
 |---|---|
-| M1 | Moteur de transcription pour Rapide et pour Qualité max. |
+| M1 | ~~Moteur de transcription pour Rapide et pour Qualité max.~~ Tranché : un seul profil, la chaîne retenue du moteur (2026-10-02). |
 | M2 | L'alignement forcé améliore-t-il les horodatages d'un moteur qui en fournit déjà nativement ? |
 | M3 | Moteur et seuil de diarisation qui maximisent la pureté en discussion sans exploser le nombre de locuteurs. |
 | M4 | La déréverbération aide-t-elle la diarisation ? Et la transcription ? |

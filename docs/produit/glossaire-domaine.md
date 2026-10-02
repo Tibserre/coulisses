@@ -24,7 +24,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Capacité | `capability` | Ce qu'un moteur déclare savoir faire (ex. horodatage mesuré au mot, nombre minimal de locuteurs, glossaire). |
 | Moteur | `engine` | Implémentation interchangeable d'une étape (ex. un modèle de transcription donné). |
 | Référence de modèle | `model_ref` | Dépôt et révision épinglée d'un modèle, choisis par un profil, jamais par un moteur. |
-| Profil | `profile` | Choix d'un moteur + réglages pour chaque étape : `fast` (Rapide), `max` (Qualité max). |
+| Profil | `profile` | Choix d'un moteur + réglages pour chaque étape. Un seul en V1 : `chaine-retenue`, défini par le moteur. |
 | Provenance | `provenance` | Moteur, version, modèle, réglages, durée, mémoire max, date d'une exécution. |
 | Locuteur | `speaker` | Voix distincte trouvée par la diarisation dans une séance (« Locuteur 3 »). Pas encore une personne. |
 | Rattachement | `speaker_assignment` | Lien d'un locuteur vers une personne, ou vers un personnage joué par une personne. |

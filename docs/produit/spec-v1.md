@@ -54,7 +54,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 1. **Préparer** : choisir le spectacle, cocher les membres présents, ajouter d'éventuels invités.
 2. **Enregistrer** : un gros bouton, niveau d'entrée visible, alerte si trop faible ou saturé. Un tap pose un marqueur (« scène », « discussion », « moment clé »). Je peux taper des notes horodatées.
    *Ou* importer un fichier enregistré ailleurs.
-3. **Traiter** : automatiquement à l'arrêt, en arrière-plan, progression par étape visible. Profil **Rapide** (quelques minutes) ou **Qualité max** (pour la nuit).
+3. **Traiter** : automatiquement à l'arrêt, en arrière-plan, progression par étape visible. Un seul réglage : la chaîne retenue du moteur (≈ 10 min de calcul par heure d'audio).
 4. **Relire** : transcript par locuteur, horodaté, découpé en phases. Cliquer une ligne rejoue l'audio à cet instant. Je renomme, fusionne, scinde des locuteurs, j'en marque un comme « personnage joué par Marie », je corrige un mot, je corrige une phase.
 5. **Résumer** : le Résumé Impro est déjà là. Je peux lancer d'autres actions, relancer, comparer deux versions côte à côte. Mes corrections (noms, texte, phases) sont prises en compte.
 6. **Retrouver et partager** : bibliothèque par spectacle, recherche plein texte, export Markdown, copie dans le presse-papiers.
@@ -92,7 +92,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **File d'attente** persistante : survit à un redémarrage.
 - **Une étape qui échoue n'efface pas les précédentes.** L'erreur est lisible dans l'app.
 - **Chaque étape se relance seule**, avec d'autres réglages ou un autre moteur. Exemple : refaire la diarisation sans retranscrire. Les étapes en aval sont alors marquées **périmées**, jamais supprimées.
-- **Profils** : *Rapide* et *Qualité max*, définis en configuration. Un profil = un moteur et des réglages par étape.
+- **Profil** : un seul en V1, la chaîne retenue du moteur (`chaine-retenue`), la plus juste mesurée au banc et déjà rapide (décidé le 2026-10-02). Un second profil ne viendra que si le banc trouve mieux en plus lent.
 - **Nombre approximatif de présents** : utilisé comme minimum de locuteurs, jamais comme maximum.
 - **Provenance** : chaque résultat porte le moteur, sa version, le modèle, les réglages, la durée, la mémoire max, la date.
 - **Traitement de nuit** : le Mac ne dort pas pendant un traitement. Si le Mac est sur batterie, l'app prévient qu'un capot fermé peut interrompre la nuit.
@@ -166,7 +166,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 ### 7.12 Réglages et modèles
 
 - **Lancement** : une icône dans le Dock ouvre une petite app lanceur, qui démarre le service et ouvre l'interface. Rien ne tourne quand l'app n'est pas utilisée. La permission micro de macOS est accordée à ce lanceur (ADR 0005).
-- Choix du profil par défaut, durée de conservation, préavis de purge.
+- Durée de conservation, préavis de purge.
 - **Modèles dans un dossier visible** : `~/Coulisses/Modèles`, un sous-dossier par modèle avec sa fiche (source, révision, taille, date). Je les vois, les déplace ou les supprime dans le Finder ou depuis l'app.
 - Liste des moteurs et modèles installés, avec leur taille disque ; suppression d'un modèle après confirmation.
 - Téléchargement d'un modèle : action explicite, seule exception au hors-ligne, jamais déclenchée automatiquement. Un modèle absent arrête le traitement avec un message qui dit comment le télécharger.
@@ -190,8 +190,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 | Domaine | Exigence |
 |---|---|
 | Hors ligne | Tout le parcours fonctionne en mode avion. Vérifié par un test automatisé réseau coupé. |
-| Qualité max | 80 min d'audio traitées en moins de 8 h, résumé compris. |
-| Rapide | 80 min d'audio traitées en « quelques minutes » (cible à fixer par la mesure, ordre de grandeur ≤ 15 min). |
+| Vitesse | 80 min d'audio traitées en 15 min au plus par le moteur (≈ 10 min de calcul par heure d'audio mesurées), résumés en plus. |
 | Mémoire | Tient dans 64 Go avec les autres applis ouvertes. Pas deux gros modèles chargés en même temps sans nécessité. |
 | Robustesse | Crash pendant l'enregistrement : au plus quelques secondes perdues. Crash pendant le traitement : reprise à l'étape interrompue. |
 | Données | Un seul dossier visible `~/Coulisses/` : `App/` et `Moteur/` (les deux dépôts git, ADR 0016), `Modèles/`, `Environnements/`, `Données/`. Jamais dans un dossier synchronisé (ADR 0010). |
@@ -199,7 +198,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 
 ## 11. Critères de réussite V1
 
-- Une vraie séance de 80 min enregistrée dans l'app donne un compte rendu sans intervention, en Qualité max, avant le lendemain matin.
+- Une vraie séance de 80 min enregistrée dans l'app donne un compte rendu sans intervention, avant le lendemain matin.
 - Sur l'extrait annoté, les tours de parole des phases de discussion sont majoritairement bien attribués, et nettement mieux qu'avec OpenWhispr sur le même audio (protocole : `evaluation.md`).
 - Je renomme un locuteur, je relance le résumé, et le bon nom apparaît.
 - Passer d'un modèle à un autre, à n'importe quelle étape, ne demande qu'un changement de configuration.
