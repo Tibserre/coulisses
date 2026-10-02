@@ -7,6 +7,7 @@
 |---|---|---|---|
 | Q3 | Nom définitif de l'app | Avant la PWA | « Coulisses » provisoire |
 | Q8 | Schéma de données : remplacer le format provisoire `session.json` (écrit par `coulisses-traiter`) par la base SQLite prévue (ADR 0002, 0006). À valider avant toute donnée réelle. | Avant la première vraie séance | Proposition de schéma à préparer (`/jalon`) |
+| Q9 | Portée du produit : l'utilisateur veut, à terme, transcrire et analyser tout type de réunion, pas seulement l'impro. La spec dit aujourd'hui « une seule chose : le débrief de séance d'impro ». L'interface est déjà générique (ADR 0017) ; restent les actions de résumé, le glossaire et le vocabulaire des phases. | Avant de spécifier décisions, actions et questions | Garder l'impro en V1, prévoir des jeux d'actions par type de réunion |
 | Q7 | Rangement des comptes rendus dans Google Drive : copie à la main depuis l'export, ou export automatique vers un dossier local synchronisé par Google Drive pour ordinateur ? L'app n'envoie jamais rien elle-même (P1). | Phase interface | Export Markdown vers un dossier choisi |
 
 ## À trancher par la mesure (banc d'essai)
