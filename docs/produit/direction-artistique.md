@@ -122,7 +122,7 @@ Explorées dans l'atelier du moteur entre le 28 septembre et le 2 octobre 2026, 
 
 ## Mise en œuvre
 
-- **Référence visuelle** : l'atelier du moteur (ADR 0015), qui n'est pas le produit. Lancer `cd ~/Coulisses/Moteur/atelier/web && npm run dev`, puis ouvrir `#/maquette?organisation=columns&finition=script`. Deux exemples s'y comparent : une réunion d'équipe et une répétition.
-- **Code de référence**, à relire et non à importer : thème dans `atelier/web/src/theme/` (finition `script` de `finishes.ts`, palette dans `shared.ts`), écran dans `atelier/web/src/pages/maquette/` (`ColumnsLayout.tsx`, `parts.tsx`, modèle dans `model.ts`).
+- **Référence visuelle** : l'atelier du moteur (ADR 0015), qui n'est pas le produit. Lancer `cd ~/Coulisses/Moteur/atelier/web && npm run dev`, puis ouvrir `#/maquette`. L'atelier ne contient plus que cette direction. Deux exemples s'y comparent : une réunion d'équipe et une répétition.
+- **Code de référence**, à relire et non à importer : thème dans `atelier/web/src/theme/coulisses.ts` (palette des participants dans `shared.ts`), écran dans `atelier/web/src/pages/maquette/` (`ColumnsLayout.tsx`, `parts.tsx`, modèle dans `model.ts`).
 - **Dans l'application** : un seul thème Astryx, écrit avec `defineTheme`, sans sélecteur de finition. Construit avec `npx astryx theme build` et importé avec sa CSS. Polices depuis les paquets Fontsource `dm-sans` et `figtree`.
 - **Validation** : une capture en clair et une en sombre à chaque changement visuel, relues avant de continuer.
