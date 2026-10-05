@@ -20,7 +20,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Étape | `stage` | Un maillon du traitement : `prepare`, `dereverb`, `transcribe`, `align`, `diarize`, `attribute`, `segment_phases`, `title`, `summarize`. |
 | Exécution | `run` | Une exécution d'une étape sur une séance, avec ses entrées, sa sortie, sa provenance, son statut. Immuable une fois terminée. |
 | Exécution active | `active_run` | Pour une séance et une étape, l'exécution affichée et utilisée en aval. |
-| Statut d'exécution | `run_status` | `queued`, `running`, `succeeded`, `failed`, `stale` (périmée : une entrée amont a changé). |
+| Statut d'exécution | `run_status` | `queued`, `running`, `succeeded`, `failed`, `stale` (périmée : une entrée amont n'est plus l'exécution active ; état calculé, le statut enregistré d'une exécution finie ne change jamais). |
+| Tâche | `job` | Travail mis en file pour une séance (une chaîne à lancer, une étape à relancer, une génération). Produit une ou plusieurs exécutions. La file survit à un redémarrage. |
 | Capacité | `capability` | Ce qu'un moteur déclare savoir faire (ex. horodatage mesuré au mot, nombre minimal de locuteurs, glossaire). |
 | Moteur | `engine` | Implémentation interchangeable d'une étape (ex. un modèle de transcription donné). |
 | Référence de modèle | `model_ref` | Dépôt et révision épinglée d'un modèle, choisis par un profil, jamais par un moteur. |
@@ -51,6 +52,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Conservation | `retention` | Politique de durée de vie de l'audio. |
 | Purge | `purge` | Suppression de tout l'audio d'une séance à échéance. Le texte reste. |
 | Suppression | `deletion` | Suppression manuelle et confirmée : de l'audio seul, ou de la séance entière, texte compris. Distincte de la purge. |
+| Journal des suppressions | `deletion_log` | Trace de chaque purge et de chaque suppression : quand, quoi, quelle séance. |
 | Épinglée | `pinned` | Séance soustraite à la purge. |
 | Banc d'essai | `bench` | Outillage de mesure des moteurs sur mes données (`evaluation.md`). |
 | Campagne | `campaign` | Une série de tests du banc : des systèmes × les fichiers d'un jeu de test, avec son rapport. |

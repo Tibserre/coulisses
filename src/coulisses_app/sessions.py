@@ -1,0 +1,250 @@
+"""Sessions: import of a recording, listing, reading (ADR 0006, 0018)."""
+
+from __future__ import annotations
+
+import hashlib
+import secrets
+import shutil
+import sqlite3
+import string
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import BinaryIO
+
+from pydantic import BaseModel
+
+from coulisses_app import jobs
+from coulisses_app.media import probe
+from coulisses_app.paths import DataDir
+from coulisses_app.storage.db import connect, now_iso
+
+REFERENCE_SOURCE_ID = "ref"
+"""The single source of V1, named as the engine names it in its outputs (ADR 0006)."""
+
+_ID_ALPHABET = string.ascii_lowercase + string.digits
+_CHUNK = 1024 * 1024
+
+
+class AudioSource(BaseModel):
+    source_id: str
+    origin: str
+    original_name: str
+    file_name: str
+    sha256: str
+    size_bytes: int
+    duration_s: float | None
+    sample_rate: int | None
+    channels: int | None
+    codec: str | None
+    file_present: bool
+
+
+class Session(BaseModel):
+    id: str
+    title: str | None
+    recorded_at: str
+    created_at: str
+    attendee_count: int | None
+    reference_source_id: str
+    duration_s: float | None
+    job_state: str | None
+    """State of the latest job: queued, running, done, failed; None if never processed."""
+    job_error: str | None
+
+
+def new_session_id(when: datetime) -> str:
+    """`AAAAMMJJ-HHMMSS-xxxx`, local time: stable, never derived from the title."""
+    suffix = "".join(secrets.choice(_ID_ALPHABET) for _ in range(4))
+    return f"{when.astimezone().strftime('%Y%m%d-%H%M%S')}-{suffix}"
+
+
+def import_recording(
+    data: DataDir,
+    stream: BinaryIO,
+    original_name: str,
+    *,
+    attendee_count: int | None,
+    recorded_at: datetime | None,
+    profile: str,
+) -> str:
+    """Keep the file exactly as received, make it a session and queue its processing.
+
+    The file is first received in `imports-en-cours/`; if ffmpeg cannot read it, that copy
+    is removed and `UnreadableAudioError` says why (the user's original is untouched)."""
+    if attendee_count is not None and attendee_count < 1:
+        raise ValueError("Le nombre de présents doit être au moins 1.")
+    data.incoming.mkdir(parents=True, exist_ok=True)
+    suffix = Path(original_name).suffix.lower()
+    received = data.incoming / f"{secrets.token_hex(8)}{suffix}"
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with received.open("xb") as out:
+            while chunk := stream.read(_CHUNK):
+                digest.update(chunk)
+                out.write(chunk)
+                size += len(chunk)
+        info = probe(received, shown_as=original_name)
+    except BaseException:
+        received.unlink(missing_ok=True)
+        raise
+
+    now = datetime.now(UTC)
+    session_id = new_session_id(now)
+    while data.session_dir(session_id).exists():
+        session_id = new_session_id(now)
+    session_dir = data.session_dir(session_id)
+    sources = data.sources_dir(session_id)
+    stored = sources / f"{REFERENCE_SOURCE_ID}{suffix}"
+    stamp = now_iso()
+    conn = connect(data)
+    moved = False
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT INTO session (id, troupe_id, title, recorded_at, created_at,"
+            " reference_source_id, attendee_count)"
+            " VALUES (?, (SELECT MIN(id) FROM troupe), NULL, ?, ?, ?, ?)",
+            (
+                session_id,
+                (recorded_at or now).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                stamp,
+                REFERENCE_SOURCE_ID,
+                attendee_count,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO audio_source (session_id, source_id, origin, original_name,"
+            " file_name, sha256, size_bytes, duration_s, sample_rate, channels, codec,"
+            " added_at) VALUES (?, ?, 'imported', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                session_id,
+                REFERENCE_SOURCE_ID,
+                original_name,
+                stored.name,
+                digest.hexdigest(),
+                size,
+                info.duration_s,
+                info.sample_rate,
+                info.channels,
+                info.codec,
+                stamp,
+            ),
+        )
+        jobs.enqueue_chain(conn, session_id, profile=profile, attendees=attendee_count)
+        sources.mkdir(parents=True)
+        shutil.move(received, stored)
+        moved = True
+        conn.commit()
+    except BaseException:
+        # Nothing half-made: the database is rolled back and the copy goes back to
+        # `imports-en-cours/`, where the next start reports it (`interrupted_imports`).
+        conn.rollback()
+        if moved:
+            shutil.move(stored, received)
+        for folder in (sources, session_dir):
+            if folder.is_dir() and not any(folder.iterdir()):
+                folder.rmdir()
+        raise
+    finally:
+        conn.close()
+    return session_id
+
+
+def _session(row: sqlite3.Row) -> Session:
+    return Session(
+        id=row["id"],
+        title=row["title"],
+        recorded_at=row["recorded_at"],
+        created_at=row["created_at"],
+        attendee_count=row["attendee_count"],
+        reference_source_id=row["reference_source_id"],
+        duration_s=row["duration_s"],
+        job_state=row["job_state"],
+        job_error=row["job_error"],
+    )
+
+
+_SESSION_QUERY = """
+SELECT s.*, a.duration_s, j.state AS job_state, j.error AS job_error
+FROM session s
+LEFT JOIN audio_source a ON a.session_id = s.id AND a.source_id = s.reference_source_id
+LEFT JOIN job j ON j.id = (SELECT MAX(id) FROM job WHERE session_id = s.id)
+"""
+
+
+def list_sessions(data: DataDir) -> list[Session]:
+    conn = connect(data)
+    try:
+        rows = conn.execute(_SESSION_QUERY + " ORDER BY s.recorded_at DESC, s.id DESC")
+        return [_session(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_session(data: DataDir, session_id: str) -> Session | None:
+    conn = connect(data)
+    try:
+        row = conn.execute(_SESSION_QUERY + " WHERE s.id = ?", (session_id,)).fetchone()
+        return _session(row) if row else None
+    finally:
+        conn.close()
+
+
+def reference_source(data: DataDir, session_id: str) -> AudioSource | None:
+    conn = connect(data)
+    try:
+        row = conn.execute(
+            "SELECT a.* FROM audio_source a JOIN session s ON s.id = a.session_id"
+            " AND a.source_id = s.reference_source_id WHERE s.id = ?",
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    path = data.sources_dir(session_id) / row["file_name"]
+    return AudioSource(
+        source_id=row["source_id"],
+        origin=row["origin"],
+        original_name=row["original_name"],
+        file_name=row["file_name"],
+        sha256=row["sha256"],
+        size_bytes=row["size_bytes"],
+        duration_s=row["duration_s"],
+        sample_rate=row["sample_rate"],
+        channels=row["channels"],
+        codec=row["codec"],
+        file_present=path.is_file(),
+    )
+
+
+def reference_audio_path(data: DataDir, session_id: str) -> Path | None:
+    source = reference_source(data, session_id)
+    if source is None:
+        return None
+    return data.sources_dir(session_id) / source.file_name
+
+
+def interrupted_imports(data: DataDir) -> list[str]:
+    """What an interrupted import or a crash left on disk without a session in the database:
+    reported at start, never deleted by the application (P8)."""
+    found: list[str] = []
+    if data.incoming.is_dir():
+        found.extend(
+            f"Import interrompu : une copie est restée dans {path} (l'original n'a pas bougé)."
+            for path in sorted(data.incoming.iterdir())
+        )
+    sessions_root = data.root / "sessions"
+    if sessions_root.is_dir():
+        conn = connect(data)
+        try:
+            known = {r["id"] for r in conn.execute("SELECT id FROM session")}
+        finally:
+            conn.close()
+        found.extend(
+            f"Dossier de séance inconnu de la base : {folder}"
+            for folder in sorted(sessions_root.iterdir())
+            if folder.is_dir() and folder.name not in known
+        )
+    return found
