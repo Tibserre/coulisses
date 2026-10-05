@@ -22,6 +22,8 @@ import { TranscriptView } from "../components/TranscriptView.tsx";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
 import { buildModel, turnAt, wordAt, type ReviewModel } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
+import { useDevMode } from "../devMode.ts";
+import { friendlyError } from "../errors.ts";
 
 export function SessionPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -32,6 +34,7 @@ export function SessionPage({ id }: { id: string }) {
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [provenanceOf, setProvenanceOf] = useState<StageView | null>(null);
   const pb = usePlayback();
+  const dev = useDevMode();
 
   const refresh = useCallback(async () => {
     try {
@@ -131,19 +134,17 @@ export function SessionPage({ id }: { id: string }) {
           <div className="cl-review__columns">
             <TranscriptView model={model} pb={pb} current={current} />
             <aside className="cl-side">
-              <KeyFigures
-                model={model}
-                duration={session?.duration_s ?? null}
-              />
+              <KeyFigures model={model} duration={session?.duration_s ?? null} dev={dev} />
               <Participants model={model} />
-              <section>
-                <Heading level={3}>Traitement</Heading>
-                <StageList
-                  stages={detail.stages}
-                  onShowProvenance={setProvenanceOf}
-                />
-              </section>
-              <SourceInfo detail={detail} />
+              {(dev || detail.stages.some(
+                  (s) => s.state === "failed" || s.state === "stalled" || s.folder_missing,
+                )) && (
+                <section>
+                  <Heading level={3}>Traitement</Heading>
+                  <StageList stages={detail.stages} onShowProvenance={setProvenanceOf} />
+                </section>
+              )}
+              {dev && <SourceInfo detail={detail} />}
             </aside>
           </div>
           <PlayerBar model={model} pb={pb} current={currentRow} />
@@ -170,7 +171,14 @@ function ProcessingPanel({
   onShowProvenance: (s: StageView) => void;
 }) {
   const { session } = detail;
+  const dev = useDevMode();
   const failed = session.job_state === "failed";
+  const failedStage = detail.stages.find((s) => s.state === "failed");
+  const failure = dev
+    ? `${session.job_error ?? "Erreur inconnue"}.`
+    : failedStage
+      ? `« ${failedStage.label} » : ${friendlyError(failedStage.error) ?? "échec"}`
+      : (session.job_error ?? "Erreur inconnue");
   const running = session.job_state === "queued" || session.job_state === "running";
   const attributed = detail.stages.some((s) => s.stage === "attribute" && s.state === "succeeded");
   const [resumeError, setResumeError] = useState<string | null>(null);
@@ -217,7 +225,7 @@ function ProcessingPanel({
         <Banner
           status="error"
           title="Une étape a échoué"
-          description={`${session.job_error ?? "Erreur inconnue"}. Les étapes réussies sont gardées ; reprendre ne relance que le reste.`}
+          description={`${failure} Les étapes réussies sont gardées ; reprendre ne relance que le reste.`}
           endContent={
             <Button
               label="Reprendre le traitement"
@@ -263,9 +271,11 @@ function ProcessingPanel({
 function KeyFigures({
   model,
   duration,
+  dev,
 }: {
   model: ReviewModel;
   duration: number | null;
+  dev: boolean;
 }) {
   const voices = model.speakers.filter((s) => s.label !== null).length;
   return (
@@ -284,10 +294,12 @@ function KeyFigures({
           {model.rows.filter((r) => r.kind === "turn").length}
         </dd>
       </div>
-      <div>
-        <dt>Mots horodatés</dt>
-        <dd>{Math.round(model.timedShare * 100)} %</dd>
-      </div>
+      {dev && (
+        <div>
+          <dt>Mots horodatés</dt>
+          <dd>{Math.round(model.timedShare * 100)} %</dd>
+        </div>
+      )}
     </dl>
   );
 }

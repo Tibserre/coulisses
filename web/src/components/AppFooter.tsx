@@ -1,15 +1,21 @@
+import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import type { AppInfo } from "../api.ts";
+import { setDevMode, useDevMode } from "../devMode.ts";
 
-/** Where the data lives and which versions run: always visible (P7). */
+/** The developer-mode switch; in that mode, where the data lives and which versions run
+ *  (P7). */
 export function AppFooter({ info }: { info: AppInfo | null }) {
-  if (!info) return null;
+  const dev = useDevMode();
   return (
     <footer className="cl-footer">
-      <Text type="supporting">
-        Données : {info.data_dir} · Coulisses {info.app_version} · moteur {info.engine_version} ·
-        chaîne « {info.profile} »
-      </Text>
+      <Switch label="Mode développeur" value={dev} onChange={setDevMode} />
+      {dev && info && (
+        <Text type="supporting">
+          Données : {info.data_dir} · Coulisses {info.app_version} · moteur{" "}
+          {info.engine_version} · chaîne « {info.profile} »
+        </Text>
+      )}
     </footer>
   );
 }

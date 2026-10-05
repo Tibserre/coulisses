@@ -40,6 +40,13 @@ log = logging.getLogger(__name__)
 
 ENGINE_STAGES = (StageName.TRANSCRIBE, StageName.ALIGN, StageName.DIARIZE, StageName.ATTRIBUTE)
 
+STAGE_LABELS = {  # shown to the user
+    "transcribe": "Transcription",
+    "align": "Alignement des mots",
+    "diarize": "Qui parle quand",
+    "attribute": "Qui a dit quoi",
+}
+
 
 def planned_stages(chain: ChainConfig) -> list[StageName]:
     """The engine stages a chain will run, in display order."""
@@ -262,8 +269,9 @@ class Processor:
         failed = [r for r in runs.all if not r.succeeded]
         if failed:
             first = failed[0]
+            label = STAGE_LABELS.get(first.provenance.stage, first.provenance.stage)
             return ChainJobResult(
-                error=f"Étape {first.provenance.stage} en échec : "
+                error=f"Étape « {label} » en échec : "
                 f"{error_summary(first.provenance) or 'erreur inconnue'}"
             )
         missing = [s.value for s in planned_stages(self.chain) if not _ran(runs, s)]

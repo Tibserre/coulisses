@@ -13,17 +13,10 @@ from coulisses.api import ChainConfig, Progress, read_provenance
 from pydantic import BaseModel, ValidationError
 
 from coulisses_app.paths import DataDir
-from coulisses_app.processing import error_summary, planned_stages
+from coulisses_app.processing import STAGE_LABELS, error_summary, planned_stages
 from coulisses_app.storage.db import connect
 
 SILENCE_LIMIT_S = 15 * 60
-
-STAGE_LABELS = {
-    "transcribe": "Transcription",
-    "align": "Alignement des mots",
-    "diarize": "Qui parle quand",
-    "attribute": "Qui a dit quoi",
-}
 
 
 class ProgressView(BaseModel):
