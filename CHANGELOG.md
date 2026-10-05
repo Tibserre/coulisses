@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.3.0 — 2026-10-05
+
+### Nouveautés
+
+- explique chaque échec d'étape d'après le code d'erreur du moteur (erreurs)
+
 ## v0.2.0 — 2026-10-05
 
 ### Nouveautés
