@@ -4,7 +4,7 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
 import type { StageView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
-import { friendlyError } from "../errors.ts";
+import { describeStageError } from "../errors.ts";
 import { formatBytes, formatDuration } from "../format.ts";
 
 const STATE_TEXT: Record<StageView["state"], string> = {
@@ -72,7 +72,7 @@ export function StageList({
               ))}
             {s.error && (
               <Text as="p" color="primary" type="supporting">
-                {dev ? s.error : friendlyError(s.error)}
+                {dev ? s.error : describeStageError(s)}
               </Text>
             )}
             {s.folder_missing && (

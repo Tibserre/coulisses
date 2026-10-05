@@ -84,6 +84,22 @@ def requeue(conn: sqlite3.Connection, job_id: int) -> None:
         )
 
 
+def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> None:
+    """Resume a failed job asking for another minimum of voices, only after a diarization
+    refused with `too_few_speakers` (checked by the caller). The former minimum stays in
+    that run's provenance (`error.details.expected`): nothing is lost."""
+    params = job.params.model_copy(update={"attendees": attendees})
+    with conn:
+        conn.execute(
+            "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL, params = ?"
+            " WHERE id = ?",
+            (params.model_dump_json(), job.id),
+        )
+        conn.execute(
+            "UPDATE session SET attendee_count = ? WHERE id = ?", (attendees, job.session_id)
+        )
+
+
 def latest_job(conn: sqlite3.Connection, session_id: str) -> Job | None:
     row = conn.execute(
         "SELECT * FROM job WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,)

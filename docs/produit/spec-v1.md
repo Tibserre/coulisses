@@ -91,7 +91,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 - **Étapes** : préparation audio, déréverbération (optionnelle), transcription, alignement, diarisation, attribution, détection des phases, titre, résumés. **Le moteur** (dépôt `coulisses-moteur`, ADR 0003 et 0014 de ce dépôt-là) fait la transcription, l'alignement, la diarisation et l'attribution ; **l'application** fait les phases, le titre et les résumés (via `prompting/`). La préparation audio et la déréverbération ne sont pas dans la chaîne retenue.
 - **File d'attente** persistante : survit à un redémarrage.
-- **Une étape qui échoue n'efface pas les précédentes.** L'erreur est lisible dans l'app.
+- **Une étape qui échoue n'efface pas les précédentes.** L'erreur est lisible dans l'app, en français, avec ce qu'il faut faire (modèle à installer, mémoire, fichier illisible…) d'après le code d'erreur du moteur. Reprendre ne relance que ce qui n'a pas réussi. Si la diarisation a trouvé moins de voix que de présents, je reprends en indiquant moins de présents : le moteur ne fusionne jamais des voix pour atteindre le compte.
 - **Chaque étape se relance seule**, avec d'autres réglages ou un autre moteur. Exemple : refaire la diarisation sans retranscrire. Les étapes en aval sont alors marquées **périmées**, jamais supprimées.
 - **Profil** : un seul en V1, la chaîne retenue du moteur (`chaine-retenue`), la plus juste mesurée au banc et déjà rapide (décidé le 2026-10-02). Un second profil ne viendra que si le banc trouve mieux en plus lent.
 - **Nombre approximatif de présents** : utilisé comme minimum de locuteurs, jamais comme maximum.

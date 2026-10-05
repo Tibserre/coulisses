@@ -319,3 +319,14 @@ def test_a_run_whose_folder_was_deleted_is_made_again(data: DataDir, recording: 
     assert Processor(data, FAKE_CHAIN).run_job(claim(data)).error is None
     transcriptions = [r["id"] for r in runs(data, session_id) if r["stage"] == "transcribe"]
     assert len(transcriptions) == 2 and transcriptions[0] == lost["id"]
+
+
+def test_a_refused_diarization_says_why_with_the_engine_code(
+    data: DataDir, recording: Path
+) -> None:
+    session_id = import_(data, recording, attendees=3)
+    Processor(data, REFUSED_DIARIZATION).run_job(claim(data))
+    diarize = next(v for v in stage_views(data, FAKE_CHAIN, session_id) if v.stage == "diarize")
+    assert diarize.state == "failed"
+    assert diarize.error_code == "too_few_speakers"
+    assert diarize.error_details == {"found": 1, "expected": 3}

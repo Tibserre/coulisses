@@ -149,3 +149,55 @@ def test_the_whole_journey_opens_no_network_connection(
     assert client.get(f"/api/seances/{session_id}/transcript").status_code == 200
     assert client.get(f"/api/seances/{session_id}/audio").status_code == 200
     assert attempts == []
+
+
+def test_after_too_few_voices_the_processing_resumes_with_fewer_attendees(
+    data: DataDir, recording: Path
+) -> None:
+    from coulisses.api import StageConfig
+
+    refused = FAKE_CHAIN.model_copy(
+        update={"diarize": StageConfig(engine="fake_under_segmenting")}
+    )  # finds one voice whatever the attendees
+    client = TestClient(create_app(data, refused, profile="essai", processor=None, web_dir=None))
+    session_id = upload(client, recording, presents="3")
+
+    def run_next() -> None:
+        conn = connect(data)
+        try:
+            job = jobs.claim_next(conn)
+        finally:
+            conn.close()
+        assert job is not None
+        Processor(data, refused).run_job(job)
+
+    run_next()
+    stages = {s["stage"]: s for s in client.get(f"/api/seances/{session_id}").json()["stages"]}
+    assert stages["diarize"]["error_code"] == "too_few_speakers"
+    transcription = stages["transcribe"]["run_id"]
+
+    assert (
+        client.post(f"/api/seances/{session_id}/reprendre", json={"presents": 0}).status_code == 422
+    )
+    resumed = client.post(f"/api/seances/{session_id}/reprendre", json={"presents": 1})
+    assert resumed.status_code == 200
+    assert resumed.json()["attendee_count"] == 1
+    run_next()
+    detail = client.get(f"/api/seances/{session_id}").json()
+    assert detail["session"]["job_state"] == "done"
+    stages = {s["stage"]: s for s in detail["stages"]}
+    assert stages["transcribe"]["run_id"] == transcription  # not redone
+
+
+def test_the_attendees_cannot_change_after_another_failure(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = upload(client, recording, presents="2")
+    (data.sources_dir(session_id) / "ref.wav").unlink()  # fails before any diarization
+    process_next(data)
+    refused = client.post(f"/api/seances/{session_id}/reprendre", json={"presents": 1})
+    assert refused.status_code == 409
+    assert "trop peu de voix" in refused.json()["detail"]
+    detail = client.get(f"/api/seances/{session_id}").json()
+    assert detail["session"]["attendee_count"] == 2  # untouched
+    assert detail["session"]["job_state"] == "failed"

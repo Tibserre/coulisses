@@ -28,6 +28,18 @@ export interface AudioSource {
   file_present: boolean;
 }
 
+export type ErrorCode =
+  | "model_missing"
+  | "model_altered"
+  | "environment_missing"
+  | "audio_unreadable"
+  | "too_few_speakers"
+  | "out_of_memory"
+  | "interrupted"
+  | "cancelled"
+  | "scratch_not_cleared"
+  | "engine_failed";
+
 export type StageState =
   "pending" | "running" | "stalled" | "succeeded" | "failed";
 
@@ -47,6 +59,10 @@ export interface StageView {
   duration_s: number | null;
   max_rss_bytes: number | null;
   error: string | null;
+  /** The engine's closed list of error codes (engine ADR 0021), null for the
+   *  application's own errors and runs closed before engine v1.3.0. */
+  error_code: ErrorCode | null;
+  error_details: Record<string, unknown> | null;
   folder_missing: boolean;
 }
 
@@ -159,13 +175,12 @@ export const api = {
       `/api/seances/${encodeURIComponent(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `/api/seances/${encodeURIComponent(id)}/audio`,
-  async resume(id: string): Promise<Session> {
-    const response = await fetch(
-      `/api/seances/${encodeURIComponent(id)}/reprendre`,
-      {
-        method: "POST",
-      },
-    );
+  async resume(id: string, attendees?: number): Promise<Session> {
+    const response = await fetch(`/api/seances/${encodeURIComponent(id)}/reprendre`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(attendees != null ? { presents: attendees } : {}),
+    });
     if (!response.ok) throw await readError(response);
     return (await response.json()) as Session;
   },

@@ -18,6 +18,7 @@ from coulisses.api import (
     ChainConfig,
     ChainInput,
     ChainRuns,
+    ErrorCode,
     Provenance,
     RunStage,
     RunStillRunningError,
@@ -80,6 +81,10 @@ def _activate(conn: sqlite3.Connection, session_id: str, stage: str, run_id: str
         " ON CONFLICT (session_id, stage) DO UPDATE SET run_id = excluded.run_id",
         (session_id, stage, run_id),
     )
+
+
+_STOPPED = (ErrorCode.INTERRUPTED, ErrorCode.CANCELLED)
+"""Codes of a run stopped by its caller rather than failed (engine ADR 0021)."""
 
 
 class ApplicationStoppingError(RuntimeError):
@@ -247,7 +252,7 @@ class Processor:
                 finally:
                     conn.close()
                 raise
-            if prov.error is not None and prov.error.type in ("Interrupted", "Cancelled"):
+            if prov.error is not None and prov.error.code in _STOPPED:
                 interrupted.append(stage.value)
             conn = connect(self.data)
             try:
