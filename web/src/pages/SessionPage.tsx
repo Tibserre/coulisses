@@ -6,6 +6,7 @@ import {
   MetadataList,
   MetadataListItem,
 } from "@astryxdesign/core/MetadataList";
+import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
 import { ArrowLeft } from "lucide-react";
@@ -23,7 +24,7 @@ import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
 import { buildModel, turnAt, wordAt, type ReviewModel } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
 import { useDevMode } from "../devMode.ts";
-import { friendlyError } from "../errors.ts";
+import { describeStageError } from "../errors.ts";
 
 export function SessionPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
@@ -122,8 +123,8 @@ export function SessionPage({ id }: { id: string }) {
         <ProcessingPanel
           detail={detail}
           transcriptError={transcriptError}
-          onResume={async () => {
-            await api.resume(id);
+          onResume={async (attendees) => {
+            await api.resume(id, attendees);
             await refresh();
           }}
           onShowProvenance={setProvenanceOf}
@@ -167,7 +168,7 @@ function ProcessingPanel({
 }: {
   detail: SessionDetail;
   transcriptError: string | null;
-  onResume: () => Promise<void>;
+  onResume: (attendees?: number) => Promise<void>;
   onShowProvenance: (s: StageView) => void;
 }) {
   const { session } = detail;
@@ -177,15 +178,19 @@ function ProcessingPanel({
   const failure = dev
     ? `${session.job_error ?? "Erreur inconnue"}.`
     : failedStage
-      ? `« ${failedStage.label} » : ${friendlyError(failedStage.error) ?? "échec"}`
+      ? `« ${failedStage.label} » : ${describeStageError(failedStage) ?? "échec"}`
       : (session.job_error ?? "Erreur inconnue");
   const running = session.job_state === "queued" || session.job_state === "running";
   const attributed = detail.stages.some((s) => s.stage === "attribute" && s.state === "succeeded");
+  const tooFew = failedStage?.error_code === "too_few_speakers";
+  const found = Number(failedStage?.error_details?.found);
+  const [attendees, setAttendees] = useState<number | null>(null);
+  const proposed = attendees ?? (Number.isFinite(found) && found >= 1 ? found : 1);
   const [resumeError, setResumeError] = useState<string | null>(null);
-  const resume = async () => {
+  const resume = async (withAttendees?: number) => {
     setResumeError(null);
     try {
-      await onResume();
+      await onResume(withAttendees);
     } catch (e) {
       setResumeError((e as Error).message);
     }
@@ -227,14 +232,33 @@ function ProcessingPanel({
           title="Une étape a échoué"
           description={`${failure} Les étapes réussies sont gardées ; reprendre ne relance que le reste.`}
           endContent={
-            <Button
-              label="Reprendre le traitement"
-              variant="primary"
-              size="sm"
-              clickAction={resume}
-            />
+            tooFew ? undefined : (
+              <Button
+                label="Reprendre le traitement"
+                variant="primary"
+                size="sm"
+                clickAction={() => resume()}
+              />
+            )
           }
         />
+      )}
+      {failed && tooFew && (
+        <div className="cl-retry">
+          <div style={{ width: 200 }}>
+            <NumberInput
+              label="Nombre de présents"
+              description="Au moins autant de voix seront cherchées."
+              value={proposed}
+              onChange={(v) => setAttendees(Number.isFinite(v) && v >= 1 ? Math.round(v) : null)}
+            />
+          </div>
+          <Button
+            label={`Reprendre avec ${proposed} présent${proposed > 1 ? "s" : ""}`}
+            variant="primary"
+            clickAction={() => resume(proposed)}
+          />
+        </div>
       )}
       {resumeError && (
         <Banner status="error" title="La reprise a échoué" description={resumeError} />

@@ -14,6 +14,7 @@ from typing import Annotated, Any
 from coulisses.api import (
     AttributedTranscript,
     ChainConfig,
+    ErrorCode,
     RunNotSucceededError,
     read_output,
     read_provenance,
@@ -21,7 +22,7 @@ from coulisses.api import (
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from coulisses_app import jobs, sessions
 from coulisses_app.media import UnreadableAudioError
@@ -45,6 +46,10 @@ class SessionDetail(BaseModel):
     session: sessions.Session
     source: sessions.AudioSource | None
     stages: list[StageView]
+
+
+class ResumeRequest(BaseModel):
+    presents: int | None = Field(default=None, ge=1)
 
 
 class Imported(BaseModel):
@@ -130,8 +135,9 @@ def create_app(
         )
 
     @app.post("/api/seances/{session_id}/reprendre")
-    def resume(session_id: str) -> sessions.Session:
-        """Put the latest failed job back in the queue: the stages that succeeded are kept."""
+    def resume(session_id: str, demande: ResumeRequest | None = None) -> sessions.Session:
+        """Put the latest failed job back in the queue: the stages that succeeded are kept.
+        `presents` changes the minimum of voices (after « too few speakers »)."""
         conn = connect(data)
         try:
             job = jobs.latest_job(conn, session_id)
@@ -141,7 +147,19 @@ def create_app(
                 raise HTTPException(
                     status_code=409, detail="Le traitement de cette séance n'est pas en échec."
                 )
-            jobs.requeue(conn, job.id)
+            if demande is not None and demande.presents is not None:
+                # Only a diarization refused for too few voices may be redone with another
+                # minimum: after any other failure, the successful runs (diarization
+                # included) are reused, and they were made with the former minimum.
+                if not _refused_for_too_few_voices(data, session_id, job.id):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Le nombre de présents ne peut changer qu'après une diarisation "
+                        "refusée pour trop peu de voix.",
+                    )
+                jobs.resume_with_attendees(conn, job, demande.presents)
+            else:
+                jobs.requeue(conn, job.id)
         finally:
             conn.close()
         if processor is not None:
@@ -192,6 +210,28 @@ def create_app(
 
     _mount_interface(app, web_dir)
     return app
+
+
+def _refused_for_too_few_voices(data: DataDir, session_id: str, job_id: int) -> bool:
+    """Whether the job's latest diarization failed with `too_few_speakers` (engine code)."""
+    conn = connect(data)
+    try:
+        row = conn.execute(
+            "SELECT id, status FROM run WHERE job_id = ? AND stage = 'diarize'"
+            " ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            (job_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None or row["status"] != "failed":
+        return False
+    folder = data.run_dir(session_id, row["id"])
+    prov = read_provenance(folder) if folder.is_dir() else None
+    return (
+        prov is not None
+        and prov.error is not None
+        and prov.error.code == ErrorCode.TOO_FEW_SPEAKERS
+    )
 
 
 def _run_folder(data: DataDir, session_id: str, run_id: str) -> Path:

@@ -404,6 +404,12 @@ button.cl-time {
   overflow-y: auto;
 }
 
+.cl-retry {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-4);
+}
+
 .cl-dialog-body {
   padding: var(--spacing-4) var(--spacing-5) var(--spacing-5);
 }

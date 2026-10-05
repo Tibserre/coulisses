@@ -8,6 +8,7 @@ from __future__ import annotations
 import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 from coulisses.api import ChainConfig, Progress, read_provenance
 from pydantic import BaseModel, ValidationError
@@ -38,6 +39,10 @@ class StageView(BaseModel):
     duration_s: float | None = None
     max_rss_bytes: int | None = None
     error: str | None = None
+    error_code: str | None = None
+    """The engine's closed list (`ErrorCode`, engine ADR 0021); None for an error of the
+    application itself or a run closed before engine v1.3.0."""
+    error_details: dict[str, Any] | None = None
     folder_missing: bool = False
 
 
@@ -117,6 +122,9 @@ def _run_view(
         view.duration_s = prov.duration_s
         view.max_rss_bytes = prov.max_rss_bytes or None
         view.error = error_summary(prov) or row["error_summary"]
+        if prov.error is not None and prov.error.code is not None:
+            view.error_code = prov.error.code.value
+            view.error_details = dict(prov.error.details)
         return view
     if row["status"] in ("queued", "running"):
         view.state = "running"
