@@ -36,7 +36,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | Table | Colonnes | Étape |
 |---|---|---|
 | `troupe` | `id`, `name*`, `created_at*` | 1 (une créée d'office) ; devient `space` à l'étape 2 |
-| `space` (ADR 0020) | `troupe` renommée, plus `voice_recognition*` (bool, faux par défaut), `archived_at` | 2 |
+| `space` (ADR 0020) | `troupe` renommée (migration 0002), plus `voice_recognition*` (bool, faux par défaut), `archived_at` | 2 |
 | `session` | `id*` (texte), `troupe_id*`, `title`, `title_edited*` (bool), `recorded_at*` (début de la captation ; pour un import, date de modification du fichier, corrigeable), `created_at*`, `reference_source_id*`, `attendee_count` (nombre saisi, minimum de voix) | 1 ; à l'étape 2, `troupe_id` → `space_id` et `attendee_count` → `unnamed_attendees` (présents non nommés, en plus des cochés) |
 | `audio_source` | `session_id*`, `source_id*`, `origin*` (`captured`, `imported`), `original_name*`, `file_name*`, `sha256*`, `size_bytes*`, `duration_s`, `sample_rate`, `channels`, `codec`, `device`, `offset_s*` (0 en V1), `drift_ppm*` (0 en V1), `added_at*`, `removed_at` | 1 |
 | `audio_source` (captation) | `capture_state` (`recording`, `complete`, `recovered` : interrompue puis réparée au redémarrage), `capture_ended_at` | 6 |
@@ -44,10 +44,10 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `run` | `id*` (texte), `session_id*`, `job_id`, `stage*`, `status*` (`queued`, `running`, `succeeded`, `failed` : jamais modifié une fois fini), `producer*` (`engine`, `app`), `engine_version`, `created_at*`, `finished_at`, `error_summary` | 1 |
 | `run_upstream` | `run_id*`, `upstream_run_id*` | 1 |
 | `active_run` | `session_id*`, `stage*`, `run_id*` (clé : séance + étape) | 1 |
-| `person` | `id`, `space_id*`, `kind*` (`member`, `guest`), `name*`, `role` (texte libre, nul pour un invité), `created_at*`, `archived_at` | 2 |
+| `person` | `id`, `space_id*`, `kind*` (`member`, `guest`), `name*`, `role` (texte libre), `color_slot*` (couleur de la palette, gardée d'une séance à l'autre : la moins utilisée de l'espace à la création), `created_at*`, `archived_at` | 2 |
 | `attendee` | `session_id*`, `person_id*` | 2 |
 | `glossary_entry` | `id`, `space_id*`, `term*`, `category`, `variants*` (JSON : graphies fautives connues), `created_at*`, `archived_at` | 2 |
-| `edit` | `id`, `session_id*`, `run_id*` (exécution corrigée), `kind*`, `payload*` (JSON), `person_id` (pour un rattachement), `anchor_start_s`, `anchor_end_s` (temps mesurés, pour le report), `reverts_edit_id`, `created_at*` | 2 |
+| `edit` | `id`, `session_id*`, `run_id*` (exécution « qui a dit quoi » corrigée), `kind*` (`assign_speaker` : nommer une voix, personne, nom libre ou personnage joué par une personne ; `merge_speakers` ; `reassign_turns` : donner des répliques à une autre voix ou à une nouvelle, pour scinder ; `edit_text` : texte d'une réplique ; `revert` : annulation), `payload*` (JSON), `person_id` (pour un rattachement), `anchor_start_s`, `anchor_end_s` (temps mesurés, pour le report), `reverts_edit_id`, `created_at*` | 2 |
 | `edit_carryover` | `edit_id*`, `target_run_id*`, `outcome*` (`applied`, `not_applied`), `reason` | 7 |
 | `marker` | `id`, `session_id*`, `kind*` (`scene`, `discussion`, `key_moment`), `at_s*`, `created_at*` | 4 (pose en direct : 6) |
 | `note` | `id`, `session_id*`, `at_s` (nul : note d'après séance), `text*`, `created_at*`, `updated_at*` | 5 (en direct : 6) |

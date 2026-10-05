@@ -27,9 +27,19 @@ def tables(data: DataDir) -> set[str]:
 def test_a_new_database_gets_the_tables_of_step_1_without_a_backup(tmp_path: Path) -> None:
     data = DataDir(tmp_path)
     assert db.migrate(data) == []
-    assert {"troupe", "session", "audio_source", "job", "run", "run_upstream", "active_run"} <= (
-        tables(data)
-    )
+    assert {
+        "space",
+        "session",
+        "audio_source",
+        "job",
+        "run",
+        "run_upstream",
+        "active_run",
+        "person",
+        "attendee",
+        "glossary_entry",
+        "edit",
+    } <= (tables(data))
     assert not data.backups.exists()
 
 
@@ -80,7 +90,7 @@ def test_an_import_keeps_the_file_exactly_and_queues_its_processing(
 ) -> None:
     with recording.open("rb") as f:
         session_id = sessions.import_recording(
-            data, f, "Répétition.WAV", attendee_count=4, recorded_at=None, profile="essai"
+            data, f, "Répétition.WAV", unnamed_attendees=4, recorded_at=None, profile="essai"
         )
     stored = data.sources_dir(session_id) / "ref.wav"
     assert stored.read_bytes() == recording.read_bytes()
@@ -92,7 +102,9 @@ def test_an_import_keeps_the_file_exactly_and_queues_its_processing(
     assert source.duration_s is not None and source.duration_s > 1
     session = sessions.get_session(data, session_id)
     assert session is not None
-    assert session.attendee_count == 4
+    assert session.unnamed_attendees == 4
+    assert session.min_voices == 4
+    assert session.space_name == "Ma troupe"
     assert session.job_state == "queued"
     assert session.title is None  # generated later (step 3), never the folder name
 
@@ -100,7 +112,7 @@ def test_an_import_keeps_the_file_exactly_and_queues_its_processing(
 def test_a_session_id_is_dated_and_never_holds_the_title(data: DataDir, recording: Path) -> None:
     with recording.open("rb") as f:
         session_id = sessions.import_recording(
-            data, f, "x.wav", attendee_count=None, recorded_at=None, profile="essai"
+            data, f, "x.wav", unnamed_attendees=None, recorded_at=None, profile="essai"
         )
     date, clock, suffix = session_id.split("-")
     assert len(date) == 8 and len(clock) == 6 and len(suffix) == 4
@@ -111,7 +123,7 @@ def test_an_unreadable_file_is_refused_and_leaves_nothing(data: DataDir, tmp_pat
     fake.write_text("ceci n'est pas un enregistrement", encoding="utf-8")
     with fake.open("rb") as f, pytest.raises(UnreadableAudioError):
         sessions.import_recording(
-            data, f, fake.name, attendee_count=3, recorded_at=None, profile="essai"
+            data, f, fake.name, unnamed_attendees=3, recorded_at=None, profile="essai"
         )
     assert sessions.list_sessions(data) == []
     assert list(data.incoming.iterdir()) == []
@@ -127,7 +139,7 @@ def test_a_failed_import_leaves_nothing_half_made(
     monkeypatch.setattr(jobs, "enqueue_chain", broken)
     with recording.open("rb") as f, pytest.raises(sqlite3.OperationalError):
         sessions.import_recording(
-            data, f, "a.wav", attendee_count=None, recorded_at=None, profile="essai"
+            data, f, "a.wav", unnamed_attendees=None, recorded_at=None, profile="essai"
         )
     assert sessions.list_sessions(data) == []
     assert not (data.root / "sessions").exists() or not any((data.root / "sessions").iterdir())
@@ -145,7 +157,7 @@ def test_an_unknown_session_folder_is_reported_not_deleted(data: DataDir) -> Non
 def test_only_the_session_deletion_cascades(data: DataDir, recording: Path) -> None:
     with recording.open("rb") as f:
         session_id = sessions.import_recording(
-            data, f, "a.wav", attendee_count=None, recorded_at=None, profile="essai"
+            data, f, "a.wav", unnamed_attendees=None, recorded_at=None, profile="essai"
         )
     conn = db.connect(data)
     try:
