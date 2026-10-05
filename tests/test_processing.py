@@ -111,7 +111,7 @@ def test_the_attendees_reach_the_engine_as_a_minimum(data: DataDir, recording: P
 def test_a_failed_stage_is_visible_and_keeps_what_succeeded(data: DataDir, recording: Path) -> None:
     session_id = import_(data, recording, attendees=3)
     result = Processor(data, REFUSED_DIARIZATION).run_job(claim(data))
-    assert result.error is not None and "diarize" in result.error
+    assert result.error is not None and "Qui parle quand" in result.error
     job = job_state(data, session_id)
     assert job.state == "failed"
     by_stage = {r["stage"]: r for r in runs(data, session_id)}

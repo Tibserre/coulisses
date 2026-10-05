@@ -96,6 +96,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Profil** : un seul en V1, la chaîne retenue du moteur (`chaine-retenue`), la plus juste mesurée au banc et déjà rapide (décidé le 2026-10-02). Un second profil ne viendra que si le banc trouve mieux en plus lent.
 - **Nombre approximatif de présents** : utilisé comme minimum de locuteurs, jamais comme maximum.
 - **Provenance** : chaque résultat porte le moteur, sa version, le modèle, les réglages, la durée, la mémoire max, la date.
+- **Mode développeur** : un interrupteur, désactivé par défaut, affiche les détails techniques (provenance de chaque étape, durée de calcul, mémoire, versions, dossier des données, empreinte du fichier, erreur brute du moteur). Sans lui, l'interface ne montre que l'état de chaque étape et une erreur en français simple : rien n'est caché d'une erreur, seulement son détail technique.
 - **Traitement de nuit** : le Mac ne dort pas pendant un traitement. Si le Mac est sur batterie, l'app prévient qu'un capot fermé peut interrompre la nuit.
 
 ### 7.5 Phases

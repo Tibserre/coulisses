@@ -115,6 +115,10 @@ body {
 }
 
 .cl-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-3) var(--spacing-6);
   padding: var(--spacing-4) var(--spacing-8);
   border-top: 1px solid var(--color-border);
 }
@@ -197,7 +201,8 @@ body {
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.1em;
   font-variant-caps: all-small-caps;
-  font-size: var(--font-size-sm);
+  /* Small caps are drawn at x-height: a full-size font keeps the names readable. */
+  font-size: 1rem;
 }
 
 /* Unnamed speakers stay grey, in italics, never a colour of the palette. */
