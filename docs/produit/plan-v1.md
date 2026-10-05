@@ -4,7 +4,7 @@
 
 | # | Étape | Ce que l'utilisateur peut faire à la fin | État |
 |---|---|---|---|
-| 1 | Socle : importer, traiter, lire | Importer un fichier, suivre le traitement en tâche de fond (reprise après un arrêt), lire le transcript par tours et réécouter (vitesse, espace et flèches), voir la provenance | En recette |
+| 1 | Socle : importer, traiter, lire | Importer un fichier, suivre le traitement en tâche de fond (reprise après un arrêt), lire le transcript par tours et réécouter (vitesse, espace et flèches), voir la provenance | Livrée (v0.1.0) |
 | 2 | Troupe et relecture corrigée | Membres, invités, présents, glossaire ; nommer, fusionner, scinder les locuteurs, « personnage joué par X », corriger un mot ; raccourcis de relecture (renommer…) | |
 | 3 | Résumé Impro | Titre et Résumé Impro prêts à la fin du traitement, avec les bons noms ; copie, export Markdown | |
 | 4 | Phases | Détection, correction, phases dans le transcript et dans le prompt | |

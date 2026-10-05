@@ -27,7 +27,7 @@ Le moteur (étiquette dans `pyproject.toml`) a besoin de ses modèles et de l'en
 uv run coulisses-app
 ```
 
-Le service écoute sur `http://127.0.0.1:8765` et ouvre l'interface. Les données vont dans `~/Coulisses/Données-dev` tant que `COULISSES_DATA_DIR` ne désigne pas un autre dossier. Ctrl-C arrête le service ; un traitement en cours reprend au lancement suivant.
+Le service écoute sur `http://127.0.0.1:8765` et ouvre l'interface. Les séances vont dans `~/Coulisses/Données`. Pour développer : `COULISSES_DATA_DIR=~/Coulisses/Données-dev uv run coulisses-app`. Ctrl-C arrête le service ; un traitement en cours reprend au lancement suivant.
 
 Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l'API passe par le service).
 

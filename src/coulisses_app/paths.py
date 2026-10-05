@@ -1,8 +1,8 @@
 """Where the application keeps its data (ADR 0010, 0018).
 
-Real data lives in ~/Coulisses/Données; development uses ~/Coulisses/Données-dev and tests a
-temporary folder. Until the first step is validated by the user, the default is the
-development folder: the real one must be chosen explicitly (COULISSES_DATA_DIR).
+Real data lives in ~/Coulisses/Données, the default since the user validated step 1
+(2026-10-05). Development sets COULISSES_DATA_DIR=~/Coulisses/Données-dev; tests use a
+temporary folder.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DATA_DIR_ENV = "COULISSES_DATA_DIR"
-DEFAULT_DATA_DIR = Path.home() / "Coulisses" / "Données-dev"
+DEFAULT_DATA_DIR = Path.home() / "Coulisses" / "Données"
 
 
 @dataclass(frozen=True)
