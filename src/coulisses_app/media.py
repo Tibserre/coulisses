@@ -21,7 +21,8 @@ class AudioInfo:
     codec: str | None
 
 
-def probe(path: Path) -> AudioInfo:
+def probe(path: Path, shown_as: str | None = None) -> AudioInfo:
+    """`shown_as` replaces the path in messages (the user knows the file by its own name)."""
     try:
         done = subprocess.run(
             [
@@ -47,6 +48,7 @@ def probe(path: Path) -> AudioInfo:
         ) from exc
     if done.returncode != 0:
         detail = done.stderr.strip().splitlines()[-1] if done.stderr.strip() else "erreur inconnue"
+        detail = detail.replace(f"{path}: ", "").replace(str(path), shown_as or path.name)
         raise UnreadableAudioError(f"Ce fichier n'est pas lisible par ffmpeg ({detail}).")
     info = _Probe.model_validate_json(done.stdout or "{}")
     if not info.streams:

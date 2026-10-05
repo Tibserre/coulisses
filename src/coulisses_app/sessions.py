@@ -84,7 +84,7 @@ def import_recording(
                 digest.update(chunk)
                 out.write(chunk)
                 size += len(chunk)
-        info = probe(received)
+        info = probe(received, shown_as=original_name)
     except BaseException:
         received.unlink(missing_ok=True)
         raise

@@ -10,6 +10,34 @@ Ce dépôt contient **l'application**. Le traitement de l'audio (transcription, 
 - Questions ouvertes : [`docs/produit/questions-ouvertes.md`](docs/produit/questions-ouvertes.md)
 - Versions : [`CHANGELOG.md`](CHANGELOG.md), publiées automatiquement à chaque fusion dans `main`.
 
-État : l'application est à construire, à partir de la spécification.
+État : étape 1 du [plan](docs/produit/plan-v1.md) (importer, traiter, lire).
+
+## Lancer
+
+Une fois, après un clonage :
+
+```bash
+uv sync
+cd web && npm install && npm run build
+```
+
+Le moteur (étiquette dans `pyproject.toml`) a besoin de ses modèles et de l'environnement de DiariZen : `uv run coulisses-models installer-environnement diarizen`, puis `uv run coulisses-models telecharger <clé>` pour chaque modèle (`uv run coulisses-models catalogue`).
+
+```bash
+uv run coulisses-app
+```
+
+Le service écoute sur `http://127.0.0.1:8765` et ouvre l'interface. Les données vont dans `~/Coulisses/Données-dev` tant que `COULISSES_DATA_DIR` ne désigne pas un autre dossier. Ctrl-C arrête le service ; un traitement en cours reprend au lancement suivant.
+
+Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l'API passe par le service).
+
+## Tests
+
+```bash
+uv run pytest                 # service, avec les faux moteurs du moteur (secondes)
+uv run pytest -m slow         # la vraie chaîne sur un enregistrement synthétique (≈ 1 min)
+uv run ruff check . && uv run pyright
+cd web && npm test && npm run typecheck && npm run lint
+```
 
 Après un clonage : `git config core.hooksPath .githooks` active les garde-fous (données de séance hors de git, messages de commit, versions automatiques).

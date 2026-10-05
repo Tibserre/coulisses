@@ -91,7 +91,9 @@ def test_an_unreadable_file_gets_a_french_message(client: TestClient, tmp_path: 
     with bad.open("rb") as f:
         response = client.post("/api/seances", files={"fichier": ("notes.wav", f, "audio/wav")})
     assert response.status_code == 422
-    assert "ffmpeg" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "ffmpeg" in detail
+    assert "imports-en-cours" not in detail  # no internal path shown to the user
 
 
 def test_zero_attendees_is_refused(client: TestClient, recording: Path) -> None:
