@@ -6,7 +6,7 @@
 
 ## 1. En une phrase
 
-Une app 100 % locale qui enregistre une séance d'improvisation avec un micro (ou plusieurs appareils, plus tard), identifie au mieux qui parle, et produit en français des comptes rendus structurés pour construire le spectacle.
+Une app 100 % locale qui enregistre une séance (répétition d'impro ou réunion de travail) avec un micro (ou plusieurs appareils, plus tard), identifie au mieux qui parle, et produit en français des comptes rendus structurés.
 
 ## 2. Pourquoi
 
@@ -16,13 +16,13 @@ OpenWhispr, utilisé jusqu'ici, échoue sur ce cas d'usage :
 - prompts de résumé en anglais, sans consigne de langue ;
 - beaucoup de fonctions inutiles ici (sync, comptes, dictée, overlay).
 
-Coulisses fait **une seule chose, bien** : du débrief de séance d'impro.
+Coulisses fait **une seule chose, bien** : le débrief d'une séance enregistrée. Le premier usage, et la référence de qualité, est la répétition d'impro ; le même outil sert aux réunions de travail (ADR 0020).
 
 ## 3. Utilisateur et contexte
 
 - **Un seul utilisateur** : moi, sur mon Mac (Apple M5 Pro, 64 Go). Pas de distribution prévue ; seuls les comptes rendus sont partagés.
-- **Une troupe** : quelques comédiens et un coach, plus des invités ponctuels.
-- **Une séance** : 1 h à 2 h, en salle, micro posé. Alternance de **scènes jouées** et de **discussions** (retours, débrief, décisions sur le spectacle).
+- **Des espaces** : une troupe d'impro (quelques comédiens et un coach, plus des invités ponctuels), des équipes ou des clients au travail. Chaque espace a ses membres ; les participants changent d'un espace à l'autre.
+- **Une séance** : 1 h à 2 h, en salle, micro posé. En impro, alternance de **scènes jouées** et de **discussions** (retours, débrief, décisions sur le spectacle) ; au travail, une réunion découpée en chapitres.
 - **Captation** : le Mac dans la salle (V1), ou un téléphone / enregistreur dont on importe le fichier (V1). Captation simultanée Mac + téléphones (plus tard, prévue dans le modèle dès la V1).
 
 ## 4. Objectifs
@@ -51,23 +51,24 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ## 6. Parcours principal
 
-1. **Préparer** : choisir le spectacle, cocher les membres présents, ajouter d'éventuels invités.
+1. **Préparer** : choisir l'espace et le projet, cocher les membres présents, ajouter d'éventuels invités.
 2. **Enregistrer** : un gros bouton, niveau d'entrée visible, alerte si trop faible ou saturé. Un tap pose un marqueur (« scène », « discussion », « moment clé »). Je peux taper des notes horodatées.
    *Ou* importer un fichier enregistré ailleurs.
 3. **Traiter** : automatiquement à l'arrêt, en arrière-plan, progression par étape visible. Un seul réglage : la chaîne retenue du moteur (≈ 10 min de calcul par heure d'audio).
 4. **Relire** : transcript par locuteur, horodaté, découpé en phases. Cliquer une ligne rejoue l'audio à cet instant. Je renomme, fusionne, scinde des locuteurs, j'en marque un comme « personnage joué par Marie », je corrige un mot, je corrige une phase.
-5. **Résumer** : le Résumé Impro est déjà là. Je peux lancer d'autres actions, relancer, comparer deux versions côte à côte. Mes corrections (noms, texte, phases) sont prises en compte.
-6. **Retrouver et partager** : bibliothèque par spectacle, recherche plein texte, export Markdown, copie dans le presse-papiers.
+5. **Résumer** : les résumés automatiques de l'espace sont déjà là (le Résumé Impro pour une troupe). Je peux lancer d'autres actions, relancer, comparer deux versions côte à côte. Mes corrections (noms, texte, phases) sont prises en compte.
+6. **Retrouver et partager** : bibliothèque par espace et par projet, recherche plein texte, export Markdown, copie dans le presse-papiers.
 
 ## 7. Fonctionnalités V1
 
-### 7.1 Troupe, spectacles, présents
+### 7.1 Espaces, projets, présents (ADR 0020)
 
-- **Une troupe** avec sa liste de membres. Chaque membre a un nom et un rôle (coach, comédien).
-- **Invités** : ajoutés à la volée sur une séance, réutilisables ensuite.
-- **Spectacles** (projets) : groupent les séances. Une séance appartient à un spectacle, ou à « Sans spectacle ».
-- **Présents** : cochés à la préparation ou après coup. Leur nombre alimente le minimum de locuteurs (P3).
-- Le modèle de données permet plusieurs troupes, mais l'interface V1 n'en montre qu'une.
+- **Des espaces** : une troupe, une équipe, un client. Chaque séance appartient à un espace. Un espace a ses membres, ses invités, son glossaire, ses projets et ses réglages. Les espaces sont étanches : une personne présente dans deux espaces y a deux fiches.
+- **Membres** : un nom et un rôle libre (« coach », « comédienne », « cheffe de projet »).
+- **Invités** : ajoutés à la volée sur une séance, réutilisables ensuite dans le même espace.
+- **Projets** : groupent les séances d'un espace (un spectacle pour une troupe). Une séance appartient à un projet, ou à aucun.
+- **Présents** : cochés à la préparation ou après coup, plus un nombre de personnes non nommées si besoin. Leur total alimente le minimum de locuteurs (P3).
+- **Réglages d'un espace** : les résumés lancés automatiquement après le traitement, et la reconnaissance des voix d'une séance à l'autre (désactivée par défaut). À la création, un **modèle de départ** (« Troupe d'impro », « Réunions de travail », « Vide ») les remplit une fois ; tout reste modifiable. Il n'y a pas de type d'espace.
 
 ### 7.2 Enregistrement
 
@@ -116,7 +117,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.7 Glossaire
 
-- Glossaire de la troupe : prénoms, jargon, formats, noms d'exercices, personnages récurrents.
+- Un glossaire par espace : prénoms, jargon, formats, noms d'exercices, personnages récurrents, sigles.
 - Utilisé à la **transcription** (dans la limite de ce que le moteur accepte) et au **résumé** (contexte).
 - Une entrée peut avoir des variantes fautives connues (« Kathy » → « Cathy ») pour aider la relecture.
 
@@ -127,7 +128,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.9 Résumés (« actions »)
 
-- **Actions fournies** : Résumé Impro (lancée automatiquement ; son prompt est réécrit pour Coulisses, le texte OpenWhispr servant de témoin), Retours de jeu par comédien, Idées de scènes et personnages, Prochaines étapes et logistique, Résumé court à envoyer à la troupe.
+- **Actions fournies** : Compte rendu de réunion (lancée automatiquement par le modèle « Réunions de travail », à écrire), Résumé Impro (lancée automatiquement par le modèle « Troupe d'impro » ; son prompt est réécrit pour Coulisses, le texte OpenWhispr servant de témoin), Retours de jeu par comédien, Idées de scènes et personnages, Prochaines étapes et logistique, Résumé court à envoyer à la troupe.
 - **Résumé court à envoyer à la troupe** : destiné à WhatsApp. Environ 10 lignes, sans titres Markdown, quelques puces, au plus un emoji. Il se colle tel quel dans le groupe. L'utilisateur le range aussi dans Google Drive, à partir de l'export (voir Q7).
 - **Actions modifiables et créables** dans l'app : nom, description, prompt. Les actions fournies peuvent être dupliquées ; l'original reste restaurable.
 - **Assemblage du prompt**, toujours dans cet ordre :
@@ -135,7 +136,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
   2. prompt de l'action ;
   3. règle de repli : si rien de substantiel, une phrase factuelle, jamais une réponse vide ;
   4. consigne de langue explicite (français) ;
-  5. contexte de séance : spectacle, date, présents et rôles, glossaire, locuteurs avec leur nom et les personnages identifiés, notes manuelles ;
+  5. contexte de séance : espace, projet, date, présents et rôles, glossaire, locuteurs avec leur nom et les personnages identifiés, notes manuelles ;
   6. transcript au format `[mm:ss] Nom : texte`, avec les marqueurs et les phases.
 - **Pas de troncature silencieuse** : la taille du prompt est mesurée avant l'envoi. Si elle dépasse la fenêtre du modèle, l'app bascule sur un résumé par sections puis une consolidation, et l'indique. Chaque appel partiel et la consolidation passent par l'assemblage complet, consigne de langue comprise.
 - **Historique des générations** par séance. Chaque génération conserve le prompt complet envoyé, le modèle et ses réglages (P7).
@@ -147,7 +148,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 ### 7.10 Conservation de l'audio
 
 - **Durée réglable**, 90 jours par défaut.
-- À échéance, l'audio est supprimé : l'original **et** toutes ses versions dérivées (rééchantillonnée, déréverbérée…). Les sorties textuelles de chaque étape sont gardées, ainsi que les empreintes vocales des locuteurs (utiles aux futurs profils vocaux).
+- À échéance, l'audio est supprimé : l'original **et** toutes ses versions dérivées (rééchantillonnée, déréverbérée…). Les sorties textuelles de chaque étape sont gardées, ainsi que les empreintes vocales que le moteur a écrites dans ses exécutions. Elles ne servent à reconnaître les voix que dans un espace qui l'a activé.
 - **Aucune purge** d'une séance dont le traitement n'a pas abouti (transcription, alignement quand il est requis, diarisation et attribution réussis).
 - **Épingler** une séance la soustrait à la purge (extrait annoté pour l'évaluation, séance charnière).
 - **Avertissement à l'avance** (7 jours par défaut, réglable) des séances bientôt purgées, par un **bandeau dans l'app** et une **notification macOS**. Je peux prolonger.
@@ -158,7 +159,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.11 Bibliothèque
 
-- Séances groupées par spectacle, triées par date.
+- Séances groupées par espace et par projet, triées par date.
 - État visible de chaque séance : en traitement, prête, en erreur, audio bientôt purgé, audio purgé, épinglée.
 - **Recherche plein texte** dans les transcripts, les notes et les résumés (insensible aux accents et à la casse).
 - **Export Markdown** (résumé, transcript, ou les deux) et copie dans le presse-papiers.
@@ -178,11 +179,11 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 ## 9. Plus tard
 
 - **Captation multi-appareils** : Mac + un ou plusieurs téléphones, synchronisation, meilleur son, et différences de niveau entre appareils comme indice de diarisation. *Prioritaire parmi les évolutions.*
-- **Profils vocaux** : reconnaître Marie d'une séance à l'autre (les empreintes vocales sont conservées dès la V1).
-- **Questions sur tout l'historique** d'un spectacle (« qu'avait-on décidé pour la fin ? »).
+- **Profils vocaux** : reconnaître Marie d'une séance à l'autre, seulement dans les espaces où la reconnaissance des voix est activée.
+- **Questions sur tout l'historique** d'un projet (« qu'avait-on décidé pour la fin ? »).
 - Micro multi-capsules : direction d'arrivée + empreinte vocale.
 - Diarisation par la vidéo.
-- Export PDF, partage avec la troupe.
+- Export PDF, partage avec les participants.
 - Téléphone utilisé comme micro piloté par l'app.
 
 ## 10. Exigences non fonctionnelles

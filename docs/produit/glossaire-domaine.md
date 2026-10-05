@@ -4,12 +4,14 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 
 | Français | Code | Définition |
 |---|---|---|
-| Troupe | `troupe` | Le groupe. Possède des membres, un glossaire, des spectacles. Une seule visible en V1. |
-| Membre | `member` | Personne de la troupe, avec un rôle : `coach` ou `actor` (comédien). |
-| Invité | `guest` | Personne extérieure présente à une ou plusieurs séances. |
+| Espace | `space` | Ce qui regroupe des séances et les gens qui y participent : une troupe d'impro, une équipe, un client (ADR 0020). Possède des membres, des invités, un glossaire, des projets, des réglages. Étanche : une personne n'appartient qu'à un espace. |
+| Modèle de départ | `space_template` | Pré-remplissage des réglages d'un espace à sa création (« Troupe d'impro », « Réunions de travail », « Vide »). Pas un type : tout reste modifiable ensuite. |
+| Reconnaissance des voix | `voice_recognition` | Réglage d'un espace : reconnaître une personne d'une séance à l'autre par sa voix. Désactivé par défaut. |
+| Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
+| Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |
-| Spectacle | `show` | Projet artistique qui regroupe des séances. |
-| Séance | `session` | Un enregistrement de répétition/atelier, de 1 h à 2 h. Unité de traitement. |
+| Projet | `project` | Regroupe des séances d'un espace (un spectacle pour une troupe). |
+| Séance | `session` | Un enregistrement (répétition, atelier, réunion), de 1 h à 2 h. Unité de traitement. Appartient à un espace. |
 | Présents | `attendees` | Personnes présentes à une séance. Leur nombre donne le minimum de locuteurs. |
 | Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). 1 en V1, N plus tard. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
@@ -45,7 +47,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Correction | `edit` | Modification utilisateur (texte, locuteur, phase). Stockée à part des sorties de moteurs. |
 | Vue corrigée | `corrected_view` | Sortie de l'exécution active avec les corrections appliquées. Ce qu'affiche l'app et ce que lisent les résumés. |
 | Report des corrections | `edit_carryover` | Réapplication des corrections sur une nouvelle exécution amont. Ce qui n'a pas pu être reporté est listé. |
-| Glossaire | `glossary` | Termes de la troupe : prénoms, jargon, formats, exercices, personnages récurrents. |
+| Glossaire | `glossary` | Termes d'un espace : prénoms, jargon, formats, exercices, personnages récurrents, sigles. |
 | Action | `action` | Modèle de résumé : nom, description, prompt. Ex. « Résumé Impro ». |
 | Assemblage | `prompt_assembly` | Construction du prompt complet dans l'ordre fixe de la spec §7.9. Seul chemin vers le LLM. |
 | Génération | `generation` | Un résultat d'action sur une séance, avec le prompt complet envoyé et la provenance. |

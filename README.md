@@ -1,6 +1,6 @@
 # Coulisses
 
-Assistant de débrief pour une troupe d'impro, 100 % local : enregistrer une séance, savoir qui a dit quoi, obtenir un compte rendu en français.
+Assistant de débrief, 100 % local, pour une troupe d'impro comme pour une équipe : enregistrer une séance, savoir qui a dit quoi, obtenir un compte rendu en français.
 
 Ce dépôt contient **l'application**. Le traitement de l'audio (transcription, alignement, diarisation, attribution) est fait par **le moteur**, dépôt `coulisses-moteur`, utilisé par version (`vX.Y.Z`) et par son contrat.
 
