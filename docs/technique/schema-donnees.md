@@ -35,25 +35,26 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 
 | Table | Colonnes | Étape |
 |---|---|---|
-| `troupe` | `id`, `name*`, `created_at*` | 1 (une troupe créée d'office) |
-| `session` | `id*` (texte), `troupe_id*`, `title`, `title_edited*` (bool), `recorded_at*` (début de la captation ; pour un import, date de modification du fichier, corrigeable), `created_at*`, `reference_source_id*`, `attendee_count` (nombre saisi, minimum de voix) | 1 |
+| `troupe` | `id`, `name*`, `created_at*` | 1 (une créée d'office) ; devient `space` à l'étape 2 |
+| `space` (ADR 0020) | `troupe` renommée, plus `voice_recognition*` (bool, faux par défaut), `archived_at` | 2 |
+| `session` | `id*` (texte), `troupe_id*`, `title`, `title_edited*` (bool), `recorded_at*` (début de la captation ; pour un import, date de modification du fichier, corrigeable), `created_at*`, `reference_source_id*`, `attendee_count` (nombre saisi, minimum de voix) | 1 ; à l'étape 2, `troupe_id` → `space_id` et `attendee_count` → `unnamed_attendees` (présents non nommés, en plus des cochés) |
 | `audio_source` | `session_id*`, `source_id*`, `origin*` (`captured`, `imported`), `original_name*`, `file_name*`, `sha256*`, `size_bytes*`, `duration_s`, `sample_rate`, `channels`, `codec`, `device`, `offset_s*` (0 en V1), `drift_ppm*` (0 en V1), `added_at*`, `removed_at` | 1 |
 | `audio_source` (captation) | `capture_state` (`recording`, `complete`, `recovered` : interrompue puis réparée au redémarrage), `capture_ended_at` | 6 |
 | `job` | `id`, `session_id*`, `kind*` (`chain`, puis `stage`, `generation`), `state*` (`queued`, `running`, `done`, `failed`), `params*` (JSON : présents, glossaire figé, étapes demandées), `requested_at*`, `started_at`, `finished_at`, `error` | 1 |
 | `run` | `id*` (texte), `session_id*`, `job_id`, `stage*`, `status*` (`queued`, `running`, `succeeded`, `failed` : jamais modifié une fois fini), `producer*` (`engine`, `app`), `engine_version`, `created_at*`, `finished_at`, `error_summary` | 1 |
 | `run_upstream` | `run_id*`, `upstream_run_id*` | 1 |
 | `active_run` | `session_id*`, `stage*`, `run_id*` (clé : séance + étape) | 1 |
-| `person` | `id`, `troupe_id*`, `kind*` (`member`, `guest`), `name*`, `role` (`coach`, `actor`, nul pour un invité), `created_at*`, `archived_at` | 2 |
+| `person` | `id`, `space_id*`, `kind*` (`member`, `guest`), `name*`, `role` (texte libre, nul pour un invité), `created_at*`, `archived_at` | 2 |
 | `attendee` | `session_id*`, `person_id*` | 2 |
-| `glossary_entry` | `id`, `troupe_id*`, `term*`, `category`, `variants*` (JSON : graphies fautives connues), `created_at*`, `archived_at` | 2 |
+| `glossary_entry` | `id`, `space_id*`, `term*`, `category`, `variants*` (JSON : graphies fautives connues), `created_at*`, `archived_at` | 2 |
 | `edit` | `id`, `session_id*`, `run_id*` (exécution corrigée), `kind*`, `payload*` (JSON), `person_id` (pour un rattachement), `anchor_start_s`, `anchor_end_s` (temps mesurés, pour le report), `reverts_edit_id`, `created_at*` | 2 |
 | `edit_carryover` | `edit_id*`, `target_run_id*`, `outcome*` (`applied`, `not_applied`), `reason` | 7 |
 | `marker` | `id`, `session_id*`, `kind*` (`scene`, `discussion`, `key_moment`), `at_s*`, `created_at*` | 4 (pose en direct : 6) |
 | `note` | `id`, `session_id*`, `at_s` (nul : note d'après séance), `text*`, `created_at*`, `updated_at*` | 5 (en direct : 6) |
 | `action` | `id`, `name*`, `description*`, `prompt*`, `based_on` (clé d'une action fournie ou id), `created_at*`, `updated_at*`, `archived_at` | 5 |
 | `generation` | `id`, `session_id*`, `run_id*`, `action_ref*` (clé d'action fournie ou id), `created_at*` | 3 |
-| `action_preference` | `action_ref*`, `model` (modèle local choisi pour l'action, fournie ou non), `auto_run*` (lancée à la fin du traitement) | 5 |
-| `show` + `session.show_id` | `id`, `troupe_id*`, `name*`, `created_at*`, `archived_at` | 8 |
+| `action_preference` | `space_id*`, `action_ref*`, `model` (modèle local choisi pour l'action dans cet espace), `auto_run*` (lancée à la fin du traitement) | 3 |
+| `project` + `session.project_id` | `id`, `space_id*`, `name*`, `created_at*`, `archived_at` | 8 |
 | `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind`, `ref`, `text`. Cache reconstructible, jamais une source de vérité | 8 |
 | `session` (conservation) | `pinned*`, `retain_until` (prolongation), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) | 9 |
 | `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion`), `session_id*` (sans clé étrangère : la trace survit à la séance), `session_title`, `detail*` (JSON : fichiers supprimés, tailles) | 9 |
@@ -74,4 +75,4 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 - Une correction n'est jamais effacée : l'annuler ajoute une correction qui la désigne (`reverts_edit_id`).
 - Un fichier attendu et absent (supprimé dans le Finder) se signale à l'affichage ; la base n'est pas modifiée en silence.
 - La suppression d'une séance entière efface sa ligne et son dossier. Les sauvegardes de migration, elles, gardent une copie de la base : la confirmation le dit, et l'application liste ces sauvegardes ; l'utilisateur les supprime lui-même s'il le souhaite (étape 9, choix de l'utilisateur du 2026-10-05).
-- Le minimum de voix transmis au moteur : le plus grand de `attendee_count` et du nombre de présents cochés.
+- Le minimum de voix transmis au moteur : le nombre de présents cochés plus `unnamed_attendees` (rien si les deux sont nuls).

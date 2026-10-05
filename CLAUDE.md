@@ -1,6 +1,6 @@
 # Coulisses — l'application
 
-App macOS 100 % locale de débrief de séances d'impro : enregistrement mono-micro → qui a dit quoi → comptes rendus en français. Un seul utilisateur, un seul Mac (M5 Pro, 64 Go).
+App macOS 100 % locale de débrief de séances (répétitions d'impro d'abord, réunions de travail aussi, ADR 0020) : enregistrement mono-micro → qui a dit quoi → comptes rendus en français. Un seul utilisateur, un seul Mac (M5 Pro, 64 Go).
 
 **Phase actuelle : construire l'application, à neuf, à partir de `docs/`.** Ce dépôt ne contient que l'application. Le traitement de l'audio est fait par **le moteur**, un autre dépôt (`~/Coulisses/Moteur`, `coulisses-moteur`), utilisé **par une version étiquetée** et **uniquement par son contrat**. (Tiens cette ligne à jour à chaque changement de phase.)
 
