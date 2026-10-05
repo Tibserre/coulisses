@@ -1,0 +1,54 @@
+[project]
+name = "coulisses-app"
+version = "0.0.0"
+description = "Coulisses: debrief of improv rehearsals, 100 % local (the application; the engine is coulisses-moteur)."
+readme = "README.md"
+authors = [{ name = "Tibserre" }]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "coulisses[mlx-audio,pyannote,wav2vec2]",
+    "fastapi>=0.120",
+    "pydantic>=2.13",
+    "python-multipart>=0.0.20",
+    "uvicorn>=0.38",
+]
+
+[project.scripts]
+coulisses-app = "coulisses_app.cli:main"
+
+[tool.uv.sources]
+coulisses = { git = "file:///Users/t.serre/Coulisses/Moteur", subdirectory = "engine", tag = "v1.2.0" }
+
+[build-system]
+requires = ["uv_build>=0.12.18,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "ruff>=0.16.8",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# The repository tooling (hooks, release script) keeps its own style.
+extend-exclude = [".claude", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "BLE", "S110", "S112"]
+
+[tool.pyright]
+include = ["src", "tests"]
+strict = ["src"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: uses the real models of the retained chain (minutes, needs ~/Coulisses/Modèles)"]
+addopts = "-m 'not slow'"
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning"]
