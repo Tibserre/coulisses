@@ -1,6 +1,6 @@
 # 0020 — Des espaces plutôt qu'une troupe
 
-Statut : Proposée (2026-10-05). Tranche la question ouverte Q9.
+Statut : Acceptée (2026-10-05). Tranche la question ouverte Q9.
 
 ## Contexte
 La spec V1 ne parle que d'une troupe d'impro. Le 2026-10-05, l'utilisateur précise qu'il utilisera aussi l'outil au travail, avec des gens variés. Les participants ne sont donc pas les mêmes d'une réunion à l'autre : ils dépendent de l'équipe concernée. L'interface est déjà générique (ADR 0017). Le schéma (ADR 0018) n'a pour l'instant qu'une table `troupe` sans contenu propre.
