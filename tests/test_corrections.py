@@ -133,6 +133,7 @@ def test_a_corrected_word_keeps_its_measured_time() -> None:
     words = v.turns[0].words
     assert [x.text for x in words] == ["Bonjour", "Cathy"]
     assert (words[1].start, words[1].corrected, words[1].added) == (0.5, True, False)
+    assert words[1].confidence is None  # checked by hand: no longer « unsure »
     assert words[0].corrected is False
 
 

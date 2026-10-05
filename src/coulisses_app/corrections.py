@@ -195,7 +195,10 @@ def _apply_text(words: list[Word], text: str) -> list[Word]:
         for k, token in enumerate(new):
             if k < len(old):
                 kept = old[k]
-                out.append(kept.model_copy(update={"text": token, "corrected": True}))
+                # Checked by hand: the engine's confidence no longer applies to it.
+                out.append(
+                    kept.model_copy(update={"text": token, "corrected": True, "confidence": None})
+                )
             else:
                 out.append(
                     Word(
@@ -559,7 +562,9 @@ def add(data: DataDir, session_id: str, raw: object) -> CorrectedView:
                     while f"{NEW_VOICE_PREFIX}{n}" in used:
                         n += 1
                     request.target = f"{NEW_VOICE_PREFIX}{n}"
-                elif request.target not in labels:
+                elif request.target not in labels and not _created_voice(
+                    conn, session_id, request.target
+                ):
                     raise CorrectionError("Cette voix n'existe pas dans le transcript.")
                 chosen = [view.turns[i] for i in request.turns]
                 starts = [t.start for t in chosen if t.start is not None]
@@ -600,6 +605,20 @@ def add(data: DataDir, session_id: str, raw: object) -> CorrectedView:
     return result
 
 
+def _created_voice(conn: sqlite3.Connection, session_id: str, label: str) -> bool:
+    """A voice the user created by splitting, even if it has no line left (undone split):
+    redoing the split gives it its lines back."""
+    if not label.startswith(NEW_VOICE_PREFIX):
+        return False
+    return any(
+        json.loads(r[0]).get("target") == label
+        for r in conn.execute(
+            "SELECT payload FROM edit WHERE session_id = ? AND kind = ?",
+            (session_id, EditKind.REASSIGN_TURNS.value),
+        )
+    )
+
+
 def _edit_row(conn: sqlite3.Connection, session_id: str, edit_id: int) -> sqlite3.Row:
     row = conn.execute(
         "SELECT * FROM edit WHERE id = ? AND session_id = ?", (edit_id, session_id)
@@ -635,8 +654,17 @@ def redo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:
     try:
         row = _edit_row(conn, session_id, edit_id)
         undone = conn.execute("SELECT 1 FROM edit WHERE reverts_edit_id = ?", (edit_id,)).fetchone()
+        # Already redone: a later copy of it that is still in force.
+        redone = conn.execute(
+            "SELECT 1 FROM edit e WHERE e.session_id = ? AND e.id > ? AND e.kind = ?"
+            " AND e.payload = ? AND NOT EXISTS"
+            " (SELECT 1 FROM edit r WHERE r.reverts_edit_id = e.id)",
+            (session_id, edit_id, row["kind"], row["payload"]),
+        ).fetchone()
     finally:
         conn.close()
     if not undone:
         raise CorrectionError("Cette correction n'est pas annulée.")
+    if redone:
+        raise CorrectionError("Cette correction est déjà rétablie.")
     return add(data, session_id, json.loads(row["payload"]))

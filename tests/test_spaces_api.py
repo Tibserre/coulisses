@@ -167,8 +167,14 @@ def test_a_split_creates_a_new_voice_and_can_be_undone(
     new_voice = view["turns"][0]["speaker"]
     assert new_voice.startswith("coulisses:")
     assert [s["name"] for s in view["speakers"]] == ["Nouvelle voix 1"]
-    undone = client.post(f"{base}/corrections/{view['edits'][0]['id']}/annuler").json()
+    split_id = view["edits"][0]["id"]
+    undone = client.post(f"{base}/corrections/{split_id}/annuler").json()
     assert undone["turns"][0]["speaker"] == before
+    redone = client.post(f"{base}/corrections/{split_id}/retablir")
+    assert redone.status_code == 200, redone.text
+    assert redone.json()["turns"][0]["speaker"] == new_voice  # the same voice comes back
+    again = client.post(f"{base}/corrections/{split_id}/retablir")
+    assert again.status_code == 422 and "déjà rétablie" in again.json()["detail"]
 
 
 def test_bad_corrections_are_refused_with_a_reason(
@@ -217,3 +223,11 @@ def test_a_step_1_database_is_migrated_without_losing_anything(tmp_path: Path) -
         assert conn.execute("SELECT name FROM space").fetchone()[0] == "Ma troupe"
     finally:
         conn.close()
+
+
+def test_zero_unnamed_attendees_after_the_fact_is_refused(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = processed_session(client, data, recording, non_nommes="2")
+    response = client.put(f"/api/seances/{session_id}/presents", json={"unnamed": 0})
+    assert response.status_code == 422

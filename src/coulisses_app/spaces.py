@@ -390,7 +390,7 @@ def set_attendees(
     """Who was there, checked after the fact. It does not reprocess anything: the minimum
     of voices given to the engine stays the one of the processing already done."""
     if unnamed is not None and unnamed < 1:
-        unnamed = None
+        raise SpaceError("Le nombre de présents non nommés doit être au moins 1.")
     conn = connect(data)
     try:
         row = conn.execute("SELECT space_id FROM session WHERE id = ?", (session_id,)).fetchone()
