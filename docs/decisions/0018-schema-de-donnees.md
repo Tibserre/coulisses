@@ -11,14 +11,15 @@ Le moteur (`coulisses-traiter`) range une séance dans un `session.json` et un d
 3. **Tout le modèle V1 est fixé maintenant** (`docs/technique/schema-donnees.md`). Ses tables sont créées au fil des étapes, par des migrations numérotées qui ne vont que vers l'avant. Chaque migration est précédée d'une copie de la base dans `sauvegardes/`, que l'application ne supprime que sur demande explicite de l'utilisateur.
 4. **Les corrections forment un journal où l'on ne fait qu'ajouter** (`edit`). Chaque correction désigne l'exécution corrigée et porte ses temps mesurés, qui servent au report. Annuler ajoute une entrée. La vue corrigée est recalculée, jamais stockée comme vérité.
 5. **Les étapes de l'application** (phases, titre, résumés) sont aussi des exécutions : un dossier de même forme, avec la provenance (P7). Une génération y garde le prompt envoyé mot pour mot.
-6. **La file de traitement est une table** (`job`), et chaque tâche tourne dans son propre groupe de processus. Au redémarrage, l'application arrête ce qui reste d'une tâche orpheline et passe ses exécutions inachevées en échec (« interrompue »), sans perdre leur dossier. La tâche reprend ensuite, en réutilisant les exécutions réussies. Cela précise la règle de l'ADR 0002 (« les exécutions orphelines repassent en file ») : une exécution finie n'est jamais réécrite, c'est la tâche qui repasse en file.
+6. **La file de traitement est une table** (`job`). À la fermeture, l'application arrête ses étapes par `stop_all` (moteur v1.2.0). Après un plantage, elle clôt au redémarrage les exécutions inachevées par `close_interrupted` : le moteur les enregistre en échec (`Interrupted`), sans perdre leur dossier. La tâche reprend ensuite, en réutilisant les exécutions réussies. Cela précise la règle de l'ADR 0002 (« les exécutions orphelines repassent en file ») : une exécution finie n'est jamais réécrite, c'est la tâche qui repasse en file.
 7. **Les suppressions sont tracées** (`deletion_log`, sans clé étrangère, pour que la trace survive à la séance) : purge, suppression de l'audio, suppression de la séance.
 8. **Le statut d'une exécution finie ne change plus.** « Périmée » est calculé à partir des exécutions amont, ce qui permet de réactiver une ancienne version.
 
 ## Conséquences
 - `docs/technique/schema-donnees.md` est la référence. Une migration et sa mise à jour vont dans le même commit.
 - Le moteur garde son format pour ses propres outils. L'application ne lit de lui que ses dossiers d'exécution, selon ses schémas.
-- Le contrat du moteur ne garantit pas qu'une exécution ne contient pas d'audio : la purge supprime aussi tout fichier audio trouvé dans `runs/` et le liste. À faire publier dans le contrat du moteur.
+- Le moteur garantit depuis la v1.2.0 qu'une exécution finie ne contient pas d'audio : la purge ne supprime que `sources/`.
+- Les copies de sauvegarde gardent le texte d'une séance supprimée : la confirmation de suppression le dit, et l'utilisateur supprime lui-même les sauvegardes s'il le veut (choix du 2026-10-05).
 - La recherche plein texte (FTS5) est un cache reconstructible, pas une source de vérité.
 - Un fichier supprimé à la main dans le Finder se signale à l'affichage. La base n'est jamais « réparée » en silence.
 - Le glossaire gagne deux termes : tâche (`job`) et journal des suppressions (`deletion_log`).

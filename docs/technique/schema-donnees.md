@@ -19,7 +19,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 - `source_id` : `ref` pour la source de la V1 (l'identifiant que le moteur donne à la source dans ses sorties). La source de référence est désignée par `session.reference_source_id`, jamais déduite du nom.
 - `run_id` : `<étape>-<8 hexadécimaux>`, aussi le nom du dossier.
 - Exécutions du moteur : le moteur écrit le dossier, l'application ne fait que le lire. Exécutions de l'application (phases, titre, résumés) : même forme de dossier, écrit par l'application, immuable une fois fini.
-- En v1.1.0, les exécutions du moteur ne contiennent pas d'audio (JSON, et le fichier d'empreintes vocales désigné par `speaker_embeddings_file` dans la sortie de diarisation). Le contrat ne le garantit pas : la purge supprime `sources/` **et** tout fichier audio trouvé dans `runs/`, et liste chaque fichier supprimé dans le journal.
+- Une exécution finie ne contient jamais d'audio (garantie du moteur depuis la v1.2.0) : du JSON, un journal et, parfois, des empreintes vocales (`speaker_embeddings_file`). La purge ne supprime donc que `sources/`, et liste chaque fichier supprimé dans le journal.
 
 ## Conventions
 
@@ -39,7 +39,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `session` | `id*` (texte), `troupe_id*`, `title`, `title_edited*` (bool), `recorded_at*` (début de la captation ; pour un import, date de modification du fichier, corrigeable), `created_at*`, `reference_source_id*`, `attendee_count` (nombre saisi, minimum de voix) | 1 |
 | `audio_source` | `session_id*`, `source_id*`, `origin*` (`captured`, `imported`), `original_name*`, `file_name*`, `sha256*`, `size_bytes*`, `duration_s`, `sample_rate`, `channels`, `codec`, `device`, `offset_s*` (0 en V1), `drift_ppm*` (0 en V1), `added_at*`, `removed_at` | 1 |
 | `audio_source` (captation) | `capture_state` (`recording`, `complete`, `recovered` : interrompue puis réparée au redémarrage), `capture_ended_at` | 6 |
-| `job` | `id`, `session_id*`, `kind*` (`chain`, puis `stage`, `generation`), `state*` (`queued`, `running`, `done`, `failed`), `params*` (JSON : présents, glossaire figé, étapes demandées), `worker_pgid` (groupe de processus de la tâche en cours), `requested_at*`, `started_at`, `finished_at`, `error` | 1 |
+| `job` | `id`, `session_id*`, `kind*` (`chain`, puis `stage`, `generation`), `state*` (`queued`, `running`, `done`, `failed`), `params*` (JSON : présents, glossaire figé, étapes demandées), `requested_at*`, `started_at`, `finished_at`, `error` | 1 |
 | `run` | `id*` (texte), `session_id*`, `job_id`, `stage*`, `status*` (`queued`, `running`, `succeeded`, `failed` : jamais modifié une fois fini), `producer*` (`engine`, `app`), `engine_version`, `created_at*`, `finished_at`, `error_summary` | 1 |
 | `run_upstream` | `run_id*`, `upstream_run_id*` | 1 |
 | `active_run` | `session_id*`, `stage*`, `run_id*` (clé : séance + étape) | 1 |
@@ -68,10 +68,10 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 
 ## Règles de cohérence
 
-- Chaque tâche tourne dans un groupe de processus à elle (`job.worker_pgid`). Au démarrage du service, une tâche `running` est orpheline : l'application arrête ce qui reste de son groupe de processus, passe ses exécutions sans provenance à `failed` (« interrompue », dossier gardé), puis remet la tâche en file. Les exécutions réussies de la tâche sont reprises telles quelles (précise l'ADR 0002).
+- À la fermeture du service, `stop_all` du moteur arrête les étapes en cours et les enregistre en échec (`Interrupted`). Après un plantage, le sous-processus s'arrête seul ; au démarrage suivant, une tâche `running` est orpheline : l'application clôt chacune de ses exécutions sans provenance par `close_interrupted` (le moteur écrit l'échec, le dossier reste), puis remet la tâche en file. Les exécutions réussies sont reprises telles quelles (précise l'ADR 0002). Si le moteur refuse la clôture (processus encore vivant), la tâche reste en attente et le refus s'affiche.
 - Seul un `run` `succeeded` peut devenir actif ; une ancienne exécution réussie peut le redevenir.
 - **Périmée** (`stale`) est un état calculé, jamais stocké : une exécution active est périmée quand l'une de ses exécutions amont (`run_upstream`) n'est plus l'exécution active de son étape.
 - Une correction n'est jamais effacée : l'annuler ajoute une correction qui la désigne (`reverts_edit_id`).
 - Un fichier attendu et absent (supprimé dans le Finder) se signale à l'affichage ; la base n'est pas modifiée en silence.
-- La suppression d'une séance entière efface sa ligne et son dossier. Les sauvegardes de migration, elles, gardent une copie de la base : la confirmation le dit, et l'application liste ces sauvegardes avec la possibilité de les supprimer (étape 9).
+- La suppression d'une séance entière efface sa ligne et son dossier. Les sauvegardes de migration, elles, gardent une copie de la base : la confirmation le dit, et l'application liste ces sauvegardes ; l'utilisateur les supprime lui-même s'il le souhaite (étape 9, choix de l'utilisateur du 2026-10-05).
 - Le minimum de voix transmis au moteur : le plus grand de `attendee_count` et du nombre de présents cochés.
