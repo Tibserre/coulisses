@@ -4,6 +4,8 @@ import { test } from "node:test";
 import type { CorrectedView, Speaker, Word } from "./api.ts";
 import {
   buildModel,
+  phaseSpans,
+  phaseOf,
   isDoubtful,
   wordTip,
   liveEditsKey,
@@ -84,6 +86,19 @@ const VIEW: CorrectedView = {
   other_run_edits: 0,
   word_count: 7,
   timed_share: 6 / 7,
+  phases: [],
+  phases_run_id: null,
+  phases_problem: null,
+};
+
+/** The same, cut into two chapters: the first line, then the last two. */
+const CHAPTERED: CorrectedView = {
+  ...VIEW,
+  phases: [
+    { turn: 0, end_turn: 1, start: 0, end: 0.9, kind: "discussion", title: "Accueil", edited: false },
+    { turn: 1, end_turn: 3, start: 5, end: 9.3, kind: "scene", title: "Le marché", edited: false },
+  ],
+  phases_run_id: "segment_phases-1",
 };
 
 test("each line carries its voice from the corrected view", () => {
@@ -165,4 +180,60 @@ test("a word is underlined only when the transcription model doubted it (below 0
   assert.match(tip?.label ?? "", /^Le modèle doutait/);
   assert.equal(wordTip({ asr_confidence: 0.9, added: false, suggestion: null }), null);
   assert.equal(wordTip({ asr_confidence: 0.1, added: false, suggestion: "Kathy" })?.kind, "suggestion");
+});
+
+test("a heading opens each chapter, before its first line", () => {
+  const rows = buildModel(CHAPTERED).rows.map((r) => (r.kind === "phase" ? `c${r.number}` : r.kind));
+  // The untranscribed stretch (2–4 s) ends the first chapter.
+  assert.deepEqual(rows, ["c1", "turn", "untranscribed", "c2", "turn", "turn"]);
+  const headings = buildModel(CHAPTERED).rows.filter((r) => r.kind === "phase");
+  // Only the chapter that opens the session keeps its cut.
+  assert.deepEqual(
+    headings.map((r) => r.kind === "phase" && r.opensSession),
+    [true, false],
+  );
+});
+
+test("a folded chapter shows its heading only", () => {
+  const rows = buildModel(CHAPTERED, new Set([1])).rows;
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ["phase", "turn", "untranscribed", "phase"],
+  );
+  const folded = rows.at(-1);
+  assert.ok(folded?.kind === "phase" && folded.folded);
+  // The folded lines are still found by time (the page keeps the one heard open).
+  assert.equal(turnAt(buildModel(CHAPTERED, new Set([1])), 9.1)?.turn.index, 2);
+});
+
+test("a line belongs to the chapter that covers it", () => {
+  assert.equal(phaseOf(CHAPTERED.phases, 2)?.title, "Le marché");
+  assert.equal(phaseOf(VIEW.phases, 2), null);
+});
+
+test("the strip gives each chapter its stretch, the last one to the end", () => {
+  const spans = phaseSpans(CHAPTERED, 12);
+  assert.deepEqual(
+    spans.map((s) => [s.number, s.start, s.end]),
+    [
+      [1, 0, 5],
+      [2, 5, 12],
+    ],
+  );
+});
+
+test("a chapter whose first line has no time starts at its first timed line", () => {
+  const view: CorrectedView = {
+    ...CHAPTERED,
+    turns: CHAPTERED.turns.map((t) => (t.index === 1 ? { ...t, start: null } : t)),
+    phases: CHAPTERED.phases.map((p) => (p.turn === 1 ? { ...p, start: null } : p)),
+  };
+  assert.deepEqual(
+    phaseSpans(view, 12).map((s) => s.start),
+    [0, 9],
+  );
+});
+
+test("a new detection changes the summary's staleness key", () => {
+  assert.notEqual(liveEditsKey(VIEW), liveEditsKey(CHAPTERED));
 });

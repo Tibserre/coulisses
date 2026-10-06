@@ -250,7 +250,7 @@ export function SummaryPanel({
           {shown.stale && (
             <div className="cl-summary__stale">
               <Text type="supporting">
-                Le transcript a été corrigé depuis ce résumé.
+                Le transcript a changé depuis ce résumé.
               </Text>
               <Button
                 size="sm"

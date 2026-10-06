@@ -1048,3 +1048,259 @@ a.cl-iconbtn {
   white-space: pre-wrap;
   font-size: var(--font-size-xsm);
 }
+
+/* --------------------------------------------------------------- Chapters --- */
+
+/* A chapter heading: centred between two rules, in the weight of its kind (art
+   direction: main in muted brick, side in mid grey, quiet in light grey). Never a bar on
+   one side. */
+.cl-chapter {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  column-gap: var(--spacing-5);
+  align-items: center;
+  padding: var(--spacing-6) 0 var(--spacing-3);
+  --cl-chapter-ink: var(--coulisses-chapter-side-ink);
+}
+
+.cl-chapter[data-kind="scene"] {
+  --cl-chapter-ink: var(--coulisses-chapter-main-ink);
+}
+
+.cl-chapter[data-kind="other"] {
+  --cl-chapter-ink: var(--coulisses-chapter-quiet-ink);
+}
+
+.cl-chapter__body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  padding-inline-start: var(--spacing-4);
+  color: var(--cl-chapter-ink);
+}
+
+.cl-chapter__rule {
+  flex: 1 1 var(--spacing-6);
+  min-width: var(--spacing-4);
+  height: 1px;
+  background: var(--color-border);
+}
+
+.cl-chapter__kind {
+  font-size: var(--font-size-xsm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.1em;
+  font-variant-caps: all-small-caps;
+  opacity: 0.8;
+}
+
+/* Typed into like the rest of the text: no box, only the caret. */
+.cl-chapter__title {
+  flex: 0 1 auto;
+  min-width: 8ch;
+  max-width: 40ch;
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-md, 1.0625rem);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  outline: none;
+  cursor: text;
+  caret-color: var(--color-accent);
+}
+
+.cl-chapter[data-kind="other"] .cl-chapter__title {
+  font-weight: var(--font-weight-normal);
+}
+
+.cl-chapter__title:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  font-weight: var(--font-weight-normal);
+}
+
+.cl-chapter__count {
+  flex: none;
+  font-size: var(--font-size-xsm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.cl-chapter__kind,
+.cl-chapter__menu {
+  flex: none;
+}
+
+.cl-chapter__fold,
+.cl-chapter__menu {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-medium) var(--ease-standard);
+}
+
+.cl-chapter__fold {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  transform: rotate(90deg);
+}
+
+.cl-chapter[data-folded] .cl-chapter__fold {
+  transform: none;
+  opacity: 1;
+}
+
+.cl-chapter:hover .cl-chapter__fold,
+.cl-chapter:hover .cl-chapter__menu,
+.cl-chapter__fold:focus-visible,
+.cl-chapter__menu:focus-visible {
+  opacity: 1;
+}
+
+.cl-chapter:hover .cl-time__label {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.cl-chapter:hover .cl-time__play {
+  opacity: 1;
+  transform: none;
+}
+
+.cl-chapter__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--coulisses-chapter-side-ink);
+}
+
+.cl-chapter__swatch[data-kind="scene"] {
+  background: var(--coulisses-chapter-main-ink);
+}
+
+.cl-chapter__swatch[data-kind="other"] {
+  background: var(--coulisses-chapter-quiet-ink);
+}
+
+/* Controls stay out of a copied passage; the words (kind, count) can be selected. */
+.cl-chapter__fold,
+.cl-chapter__menu {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The strip under the title: one bar per chapter, as long as it lasts. */
+.cl-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-strip__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-height: 26px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-strip__current {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-strip__kind {
+  font-size: var(--font-size-xsm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.1em;
+  font-variant-caps: all-small-caps;
+  color: var(--coulisses-chapter-side-ink);
+}
+
+.cl-strip__current[data-kind="scene"] .cl-strip__kind {
+  color: var(--coulisses-chapter-main-ink);
+}
+
+.cl-strip__current[data-kind="other"] .cl-strip__kind {
+  color: var(--coulisses-chapter-quiet-ink);
+}
+
+.cl-strip__error {
+  color: var(--color-accent);
+}
+
+.cl-strip__note {
+  font-size: var(--font-size-xsm);
+}
+
+.cl-strip__tools {
+  margin-inline-start: auto;
+}
+
+.cl-strip__bars {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 6px;
+}
+
+.cl-strip__bar {
+  min-width: 3px;
+  flex-basis: 0;
+  border: 0;
+  padding: 0;
+  border-radius: 2px;
+  background: var(--coulisses-chapter-side);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.cl-strip__bar[data-kind="scene"] {
+  background: var(--coulisses-chapter-main);
+}
+
+.cl-strip__bar[data-kind="other"] {
+  background: var(--coulisses-chapter-quiet);
+}
+
+.cl-strip__bar[data-current] {
+  background: var(--coulisses-chapter-side-ink);
+}
+
+.cl-strip__bar[data-current][data-kind="scene"] {
+  background: var(--coulisses-chapter-main-ink);
+}
+
+.cl-strip__bar[data-current][data-kind="other"] {
+  background: var(--coulisses-chapter-quiet-ink);
+}
+
+.cl-strip__bar:hover {
+  transform: scaleY(1.6);
+}
+
+.cl-strip__head-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--color-text-primary);
+  pointer-events: none;
+  transition: left 250ms linear;
+}

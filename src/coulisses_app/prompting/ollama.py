@@ -137,10 +137,15 @@ class OllamaClient:
         return None
 
     def chat(
-        self, model: str, messages: list[dict[str, str]], options: dict[str, Any]
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        options: dict[str, Any],
+        *,
+        answer_format: dict[str, Any] | None = None,
     ) -> ChatAnswer:
         """One call, not streamed. `options` must hold `num_ctx` (Ollama truncates
-        silently otherwise)."""
+        silently otherwise). `answer_format`: a JSON schema the answer must follow."""
         if "num_ctx" not in options:
             raise ValueError("num_ctx is mandatory: Ollama truncates silently without it")
         model_options = {k: v for k, v in options.items() if k != "think"}
@@ -153,6 +158,7 @@ class OllamaClient:
                 # Given with the options so that it is recorded with them (provenance).
                 "think": bool(options.get("think", False)),
                 "options": model_options,
+                **({"format": answer_format} if answer_format is not None else {}),
             },
             self.timeout_s,
         )

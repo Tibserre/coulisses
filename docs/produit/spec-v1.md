@@ -99,11 +99,13 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Mode développeur** : un interrupteur, désactivé par défaut, affiche les détails techniques (provenance de chaque étape, durée de calcul, mémoire, versions, dossier des données, empreinte du fichier, erreur brute du moteur). Sans lui, l'interface ne montre que l'état de chaque étape et une erreur en français simple : rien n'est caché d'une erreur, seulement son détail technique.
 - **Traitement de nuit** : le Mac ne dort pas pendant un traitement. Si le Mac est sur batterie, l'app prévient qu'un capot fermé peut interrompre la nuit.
 
-### 7.5 Phases
+### 7.5 Phases (« chapitres » dans l'interface)
 
-- L'app **détecte automatiquement** les phases (scène, discussion, autre) à partir des marqueurs, du rythme des échanges et du contenu.
-- Les **marqueurs posés à la main priment** sur la détection.
-- Je corrige les phases en relecture (déplacer une frontière, changer un type).
+- L'app **détecte automatiquement** les phases après le traitement, avant le titre et les résumés : le LLM local lit la transcription et propose des chapitres, chacun de type jeu (`scene`), discussion ou autre, avec un titre court (ADR 0024). Une séance de travail est découpée par sujet. Chaque chapitre commence à une réplique existante, jamais à une heure inventée.
+- Les **marqueurs posés à la main priment** sur la détection (à l'étape de l'enregistrement).
+- Je corrige les chapitres en relecture : renommer en tapant directement dans le titre, changer le type, retirer une coupure (les répliques rejoignent le chapitre précédent), commencer un chapitre à une réplique (bouton ou touche C). Déplacer une frontière, c'est retirer la coupure puis recouper ailleurs. Cmd-Z et Maj-Cmd-Z annulent et rétablissent, comme les autres corrections. Une nouvelle détection garde mes corrections.
+- Sous le titre de la séance, une frise montre les chapitres, proportionnels à leur durée, avec le chapitre en cours et la tête de lecture ; un clic y amène la lecture. Dans le transcript, un chapitre se replie ; celui qu'on écoute reste ouvert.
+- Si la détection échoue (Ollama absent, réponse illisible), l'échec s'affiche avec « Relancer » et les résumés se font sans chapitres.
 - Les phases servent : à l'affichage, au transcript envoyé au modèle, à l'évaluation (attribution mesurée séparément sur les discussions), et plus tard éventuellement à des réglages de diarisation par phase.
 
 ### 7.6 Transcript et relecture
@@ -112,7 +114,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Lecture audio synchronisée** : clic sur une ligne → lecture à cet instant ; le mot courant est suivi. Vitesse de lecture réglable.
 - **Locuteurs** : renommer (en choisissant un membre, un invité, ou un nom libre), fusionner, scinder, marquer « personnage joué par X ».
 - **Édition du texte** : corriger un mot ou une phrase. Un mot corrigé garde son horodatage. Si la correction change le nombre de mots, la plage corrigée garde son début et sa fin mesurés ; les mots ajoutés n'ont pas de temps propre et sont marqués comme tels, jamais interpolés.
-- **Édition directe**, comme dans un document : je clique dans une réplique et je tape ; la correction s'enregistre quand je quitte la réplique ou appuie sur Entrée, Échap annule ma saisie. Un texte refusé reste à l'écran pour être corrigé. Cmd-Z et Maj-Cmd-Z annulent et rétablissent la dernière correction (texte, nom, fusion, scission) ; une réplique corrigée peut revenir à son texte d'origine. Rien n'est effacé : chaque annulation s'ajoute au journal.
+- **Édition directe**, comme dans un document : je clique dans une réplique et je tape ; la correction s'enregistre quand je quitte la réplique ou appuie sur Entrée, Échap annule ma saisie. Un texte refusé reste à l'écran pour être corrigé. Cmd-Z et Maj-Cmd-Z annulent et rétablissent la dernière correction (texte, nom, fusion, scission, chapitre) ; une réplique corrigée peut revenir à son texte d'origine. Rien n'est effacé : chaque annulation s'ajoute au journal.
 - **Glossaire en relecture** : une graphie fautive connue est signalée ; un clic applique les bonnes graphies du glossaire à toute la réplique.
 - **Mots peu sûrs** soulignés quand le modèle de transcription doutait (`asr_confidence` du moteur sous 0,3, depuis sa v1.4.0) et présentés comme « le modèle doutait » : ce score ne trouve qu'une partie des fautes, un mot non souligné n'est donc pas garanti juste. Le score d'alignement n'est jamais montré comme un doute.
 - Longues séances fluides (2 h, plusieurs milliers de tours).

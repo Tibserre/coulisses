@@ -35,6 +35,7 @@ from pydantic import BaseModel
 from coulisses_app import jobs, settings
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.generate import (
+    PHASES_REF,
     TITLE_REF,
     GenerationFailedError,
     ModelClient,
@@ -196,13 +197,15 @@ class Processor:
         return result
 
     def _queue_generations(self, conn: sqlite3.Connection, session_id: str) -> None:
-        """After a successful chain: the title, then the summaries the space runs
-        automatically (ADR 0020), with the model chosen for each or the default one."""
+        """After a successful chain: the chapters (the summaries read them), the title, then
+        the summaries the space runs automatically (ADR 0020), with the model chosen for
+        each or the default one."""
         space_id = conn.execute(
             "SELECT space_id FROM session WHERE id = ?", (session_id,)
         ).fetchone()[0]
         default = settings.default_model(conn)
         with conn:
+            jobs.enqueue_generation(conn, session_id, action_ref=PHASES_REF, model=default)
             jobs.enqueue_generation(conn, session_id, action_ref=TITLE_REF, model=default)
             for action_ref, model in settings.auto_actions(conn, space_id):
                 jobs.enqueue_generation(

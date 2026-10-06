@@ -16,8 +16,9 @@ from importlib.resources import files
 
 from pydantic import BaseModel
 
-from coulisses_app.corrections import CorrectedView, Speaker
+from coulisses_app.corrections import CorrectedView, Phase, Speaker
 from coulisses_app.format import clock
+from coulisses_app.phases import KIND_WORD
 
 FALLBACK_RULE = (
     "Si la transcription et les notes ne contiennent aucun échange substantiel (salutations, "
@@ -38,6 +39,7 @@ class Settings(BaseModel):
     num_ctx: int
     response_reserve: int
     title_reserve: int
+    phases_reserve: int
     chars_per_token: float
     temperature: float
     seed: int
@@ -50,6 +52,7 @@ def settings() -> Settings:
         num_ctx=raw["num_ctx"],
         response_reserve=raw["reserve_reponse"],
         title_reserve=raw["reserve_titre"],
+        phases_reserve=raw["reserve_chapitres"],
         chars_per_token=raw["caracteres_par_token"],
         temperature=raw["temperature"],
         seed=raw["graine"],
@@ -101,6 +104,13 @@ TITLE = Action(
     name="Titre de la séance",
     description="Un titre court pour retrouver la séance.",
     prompt=_text("titre.md").strip(),
+)
+
+PHASES = Action(
+    ref="chapitres",
+    name="Chapitres",
+    description="La séance découpée en chapitres : jeu, discussion ou autre.",
+    prompt=_text("chapitres.md").strip(),
 )
 
 
@@ -158,12 +168,27 @@ def context_block(ctx: SessionContext, view: CorrectedView) -> str:
     return "\n".join(lines)
 
 
-def transcript_lines(view: CorrectedView) -> list[tuple[float | None, str]]:
+@dataclass(frozen=True)
+class Line:
+    start: float | None
+    text: str
+    phase_heading: bool = False
+    """A chapter heading: where a long session is best cut into sections."""
+
+
+def phase_heading(phase: Phase) -> str:
+    stamp = f"[{clock(phase.start)}]" if phase.start is not None else "[--:--]"
+    title = f" « {phase.title} »" if phase.title else ""
+    return f"{stamp} ── Chapitre{title} ({KIND_WORD[phase.kind]}) ──"
+
+
+def transcript_lines(view: CorrectedView, *, with_phases: bool = True) -> list[Line]:
     """One line per line of the corrected view, `[mm:ss] Nom : texte`, with untranscribed
-    stretches in their place. Returns (start, line) pairs, for cutting into sections."""
+    stretches in their place and, unless asked otherwise, a heading at each chapter."""
     names = {s.label: s.name for s in view.speakers}
     played = {s.label: s.played_by for s in view.speakers}
-    items: list[tuple[float, int, str]] = []
+    starts = {p.turn: p for p in view.phases} if with_phases else {}
+    items: list[tuple[float, int, str, bool]] = []
     for turn in view.turns:
         name = names.get(turn.speaker, "Locuteur inconnu")
         if played.get(turn.speaker):
@@ -171,14 +196,25 @@ def transcript_lines(view: CorrectedView) -> list[tuple[float | None, str]]:
         stamp = f"[{clock(turn.start)}]" if turn.start is not None else "[--:--]"
         text = " ".join(w.text for w in turn.words)
         key = turn.start if turn.start is not None else math.inf
-        items.append((key, 1, f"{stamp} {name} : {text}"))
+        if turn.index in starts:
+            items.append((key, 1, phase_heading(starts[turn.index]), True))
+        items.append((key, 2, f"{stamp} {name} : {text}", False))
     for gap in view.untranscribed:
         items.append(
-            (gap.start, 0, f"[{clock(gap.start)}] (passage non transcrit jusqu'à {clock(gap.end)})")
+            (
+                gap.start,
+                0,
+                f"[{clock(gap.start)}] (passage non transcrit jusqu'à {clock(gap.end)})",
+                False,
+            )
         )
-    # Lines without a time keep the engine's order: a stable sort on the start only.
+    # Lines without a time keep the engine's order: a stable sort on the start only (a
+    # heading is added just before its line, so it stays there).
     ordered = sorted(enumerate(items), key=lambda e: (e[1][0], e[0]))
-    return [(None if math.isinf(i[0]) else i[0], i[2]) for _, i in ordered]
+    return [
+        Line(start=None if math.isinf(i[0]) else i[0], text=i[2], phase_heading=i[3])
+        for _, i in ordered
+    ]
 
 
 # -- the assembly --------------------------------------------------------------------------
@@ -221,6 +257,15 @@ def section_prompt(action_prompt: str, index: int, count: int, start: str, end: 
         f"partie {index} sur {count}, de {start} à {end}. Rédige le compte rendu de cette partie "
         f"seule, avec la même structure ; il sera ensuite fusionné avec les autres. N'annonce pas "
         f"que c'est une partie."
+    )
+
+
+def phases_section_prompt(action_prompt: str, index: int, count: int, start: str, end: str) -> str:
+    return (
+        f"{action_prompt}\n\n"
+        f"La séance est trop longue pour être lue d'un coup : cette demande ne porte que sur la "
+        f"partie {index} sur {count}, de {start} à {end}. Découpe cette partie seule : son "
+        f"premier chapitre commence à sa première réplique."
     )
 
 

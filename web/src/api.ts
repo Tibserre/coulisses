@@ -141,6 +141,30 @@ export interface Turn {
   edited: boolean;
 }
 
+export type PhaseKind = "scene" | "discussion" | "other";
+
+/** A chapter (a phase, in the service): from its first line to the next chapter's. */
+export interface Phase {
+  /** Index of its first line. */
+  turn: number;
+  /** Index of the first line after it (exclusive). */
+  end_turn: number;
+  start: number | null;
+  end: number | null;
+  kind: PhaseKind;
+  title: string;
+  edited: boolean;
+}
+
+export interface PhasesStatus {
+  state: "none" | "queued" | "running" | "failed" | "done";
+  error: string | null;
+  model: string | null;
+  finished_at: string | null;
+  /** What the model's answer said that had to be put right (developer mode). */
+  adjustments: string[];
+}
+
 export interface Speaker {
   label: string | null;
   number: number | null;
@@ -178,6 +202,12 @@ export interface CorrectedView {
   other_run_edits: number;
   word_count: number;
   timed_share: number;
+  /** Empty until the chapters are detected (or the user cuts one). */
+  phases: Phase[];
+  /** The detection the chapters come from. */
+  phases_run_id: string | null;
+  /** Why the detected chapters could not be read, when they could not. */
+  phases_problem: string | null;
 }
 
 export type EditRequest =
@@ -190,7 +220,9 @@ export type EditRequest =
     }
   | { kind: "merge_speakers"; source: string; target: string }
   | { kind: "reassign_turns"; turns: number[]; target?: string | null }
-  | { kind: "edit_text"; turn: number; text: string };
+  | { kind: "edit_text"; turn: number; text: string }
+  | { kind: "set_phase"; turn: number; phase_kind?: PhaseKind | null; title?: string | null }
+  | { kind: "remove_phase"; turn: number };
 
 export type Provenance = Record<string, unknown> & {
   run_id: string;
@@ -354,6 +386,8 @@ export const api = {
   setModel: (model: string) => send<ModelsInfo>("PUT", "/api/reglages/modele", { model }),
   actions: () => getJson<ActionInfo[]>("/api/actions"),
   generations: (id: string) => getJson<Generations>(`${sessionPath(id)}/resumes`),
+  phases: (id: string) => getJson<PhasesStatus>(`${sessionPath(id)}/chapitres`),
+  detectPhases: (id: string) => send<PhasesStatus>("POST", `${sessionPath(id)}/chapitres`),
   requestGeneration: (id: string, actionRef: string, model: string | null) =>
     send<Generations>("POST", `${sessionPath(id)}/resumes`, { action_ref: actionRef, model }),
   async generationPrompts(id: string, generationId: number): Promise<string> {

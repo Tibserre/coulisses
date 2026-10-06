@@ -18,7 +18,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 - `session_id` : `AAAAMMJJ-HHMMSS-xxxx` (heure locale du début de l'enregistrement ou de l'import, puis 4 caractères aléatoires `[a-z0-9]`). Jamais le titre.
 - `source_id` : `ref` pour la source de la V1 (l'identifiant que le moteur donne à la source dans ses sorties). La source de référence est désignée par `session.reference_source_id`, jamais déduite du nom.
 - `run_id` : `<étape>-<8 hexadécimaux>`, aussi le nom du dossier.
-- Exécutions du moteur : le moteur écrit le dossier, l'application ne fait que le lire. Exécutions de l'application (phases, titre, résumés) : même forme de dossier, écrit par l'application, immuable une fois fini.
+- Exécutions du moteur : le moteur écrit le dossier, l'application ne fait que le lire. Exécutions de l'application (chapitres `segment_phases`, titre, résumés) : même forme de dossier, écrit par l'application, immuable une fois fini. Les chapitres détectés sont dans `output.json` ; ceux qui sont affichés sont recalculés à partir de la détection active et du journal `edit` (ADR 0024).
 - Une exécution finie ne contient jamais d'audio (garantie du moteur depuis la v1.2.0) : du JSON, un journal et, parfois, des empreintes vocales (`speaker_embeddings_file`). La purge ne supprime donc que `sources/`, et liste chaque fichier supprimé dans le journal.
 
 ## Conventions
@@ -47,9 +47,9 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `person` | `id`, `space_id*`, `kind*` (`member`, `guest`), `name*`, `role` (texte libre), `color_slot*` (couleur de la palette, gardée d'une séance à l'autre : la moins utilisée de l'espace à la création), `created_at*`, `archived_at` | 2 |
 | `attendee` | `session_id*`, `person_id*` | 2 |
 | `glossary_entry` | `id`, `space_id*`, `term*`, `category`, `variants*` (JSON : graphies fautives connues), `created_at*`, `archived_at` | 2 |
-| `edit` | `id`, `session_id*`, `run_id*` (exécution « qui a dit quoi » corrigée), `kind*` (`assign_speaker` : nommer une voix, personne, nom libre ou personnage joué par une personne ; `merge_speakers` ; `reassign_turns` : donner des répliques à une autre voix ou à une nouvelle, pour scinder ; `edit_text` : texte d'une réplique ; `revert` : annulation), `payload*` (JSON), `person_id` (pour un rattachement), `anchor_start_s`, `anchor_end_s` (temps mesurés, pour le report), `reverts_edit_id`, `created_at*` | 2 |
+| `edit` | `id`, `session_id*`, `run_id*` (exécution « qui a dit quoi » corrigée), `kind*` (`assign_speaker` : nommer une voix, personne, nom libre ou personnage joué par une personne ; `merge_speakers` ; `reassign_turns` : donner des répliques à une autre voix ou à une nouvelle, pour scinder ; `edit_text` : texte d'une réplique ; `set_phase` : un chapitre commence à une réplique, ou change de type ou de titre ; `remove_phase` : une coupure de chapitre retirée ; `revert` : annulation), `payload*` (JSON), `person_id` (pour un rattachement), `anchor_start_s`, `anchor_end_s` (temps mesurés, pour le report), `reverts_edit_id`, `created_at*` | 2 |
 | `edit_carryover` | `edit_id*`, `target_run_id*`, `outcome*` (`applied`, `not_applied`), `reason` | 7 |
-| `marker` | `id`, `session_id*`, `kind*` (`scene`, `discussion`, `key_moment`), `at_s*`, `created_at*` | 4 (pose en direct : 6) |
+| `marker` | `id`, `session_id*`, `kind*` (`scene`, `discussion`, `key_moment`), `at_s*`, `created_at*` | 6 (les chapitres de l'étape 4 n'en ont pas besoin : ADR 0024) |
 | `note` | `id`, `session_id*`, `at_s` (nul : note d'après séance), `text*`, `created_at*`, `updated_at*` | 5 (en direct : 6) |
 | `action` | `id`, `name*`, `description*`, `prompt*`, `based_on` (clé d'une action fournie ou id), `created_at*`, `updated_at*`, `archived_at` | 5 |
 | `generation` | `id`, `session_id*`, `run_id*`, `action_ref*` (clé d'action fournie ou id), `created_at*` (migration 0003 ; provenance : `schemas/generation-provenance.schema.json`, ADR 0022) | 3 |

@@ -1,4 +1,5 @@
-"""One generation (a summary or the title) as a run of the application (ADR 0018, 0022).
+"""One generation (a summary, the title or the chapters) as a run of the application
+(ADR 0018, 0022, 0024).
 
 Its folder (`runs/<stage>-<hex>/`) keeps what was asked (`spec.json`), every call — the
 prompt sent word for word and the answer (`calls/`) —, the result (`output.md`) and the
@@ -24,11 +25,15 @@ from pydantic import BaseModel
 from coulisses_app import corrections, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
+from coulisses_app.phases import ANSWER_SCHEMA, PhaseAnswerError, snap
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaError
 from coulisses_app.storage.db import connect, now_iso
 
 TITLE_REF = "titre"
+PHASES_REF = "chapitres"
+
+Stage = Literal["summarize", "title", "segment_phases"]
 
 
 class ModelClient(Protocol):
@@ -37,7 +42,12 @@ class ModelClient(Protocol):
     def version(self) -> str | None: ...
 
     def chat(
-        self, model: str, messages: list[dict[str, str]], options: dict[str, object]
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        options: dict[str, object],
+        *,
+        answer_format: dict[str, object] | None = None,
     ) -> ChatAnswer: ...
 
 
@@ -65,7 +75,7 @@ class Provenance(BaseModel):
 
     run_id: str
     session_id: str
-    stage: Literal["summarize", "title"]
+    stage: Stage
     producer: Literal["app"] = "app"
     app_version: str
     status: Literal["succeeded", "failed"]
@@ -81,6 +91,9 @@ class Provenance(BaseModel):
     """Corrections in force when the prompt was assembled (names, text…)."""
     edit_ids: list[int] = []
     """Which ones: a summary is stale as soon as this set differs from today's."""
+    phases_run_id: str | None = None
+    """The chapter detection whose chapters were in the transcript sent (none for the
+    detection itself): a summary is stale when the chapters come from another one."""
     ollama_version: str | None = None
     calls: list[Call]
     started_at: datetime
@@ -115,24 +128,44 @@ def _context(conn: sqlite3.Connection, session: sessions.Session) -> assembly.Se
 
 
 def _sections(
-    lines: list[tuple[float | None, str]], budget_tokens: int, chars_per_token: float
-) -> list[list[tuple[float | None, str]]]:
-    """Consecutive lines, each section within the budget. A single line larger than the
-    budget is refused rather than cut (P8)."""
-    sections: list[list[tuple[float | None, str]]] = [[]]
-    size = 0
+    lines: list[assembly.Line], budget_tokens: int, chars_per_token: float
+) -> list[list[assembly.Line]]:
+    """Consecutive lines, each section within the budget, cut between chapters whenever a
+    whole chapter fits: a chapter longer than the budget is cut between its lines. A single
+    line larger than the budget is refused rather than cut (P8)."""
+    blocks: list[list[assembly.Line]] = []
     for line in lines:
-        cost = assembly.estimate_tokens(line[1] + "\n", chars_per_token)
-        if cost > budget_tokens:
-            raise GenerationFailedError(
-                "Une réplique est trop longue pour la fenêtre du modèle, même seule : "
-                "augmentez num_ctx dans les réglages de génération."
-            )
-        if size + cost > budget_tokens and sections[-1]:
-            sections.append([])
-            size = 0
-        sections[-1].append(line)
-        size += cost
+        if line.phase_heading or not blocks:
+            blocks.append([])
+        blocks[-1].append(line)
+
+    def cost(line: assembly.Line) -> int:
+        return assembly.estimate_tokens(line.text + "\n", chars_per_token)
+
+    sections: list[list[assembly.Line]] = [[]]
+    size = 0
+    for block in blocks:
+        block_size = sum(cost(line) for line in block)
+        if size + block_size <= budget_tokens:
+            sections[-1].extend(block)
+            size += block_size
+            continue
+        if sections[-1] and block_size <= budget_tokens:
+            sections.append(list(block))
+            size = block_size
+            continue
+        for line in block:  # a chapter too long for one section: cut between lines
+            line_size = cost(line)
+            if line_size > budget_tokens:
+                raise GenerationFailedError(
+                    "Une réplique est trop longue pour la fenêtre du modèle, même seule : "
+                    "augmentez num_ctx dans les réglages de génération."
+                )
+            if size + line_size > budget_tokens and sections[-1]:
+                sections.append([])
+                size = 0
+            sections[-1].append(line)
+            size += line_size
     return sections
 
 
@@ -148,14 +181,23 @@ def generate(
 ) -> Provenance:
     """Make one generation and record it, succeeded or failed (never silently)."""
     is_title = action_ref == TITLE_REF
-    stage: Literal["summarize", "title"] = "title" if is_title else "summarize"
-    chosen = assembly.TITLE if is_title else assembly.action(action_ref)
+    is_phases = action_ref == PHASES_REF
+    stage: Stage = "title" if is_title else "segment_phases" if is_phases else "summarize"
+    chosen = (
+        assembly.TITLE
+        if is_title
+        else assembly.PHASES
+        if is_phases
+        else assembly.action(action_ref)
+    )
     view = corrections.build_view(data, session_id)
     session = sessions.get_session(data, session_id)
     if view is None or session is None:
         raise GenerationFailedError("Le transcript de cette séance n'est pas encore prêt.")
     cfg = assembly.settings()
-    reserve = cfg.title_reserve if is_title else cfg.response_reserve
+    reserve = (
+        cfg.title_reserve if is_title else cfg.phases_reserve if is_phases else cfg.response_reserve
+    )
     options: dict[str, object] = {
         "num_ctx": cfg.num_ctx,
         "num_predict": reserve,
@@ -169,6 +211,9 @@ def generate(
         # ignores it, and models go on with a summary that the reserve cuts: see _check.
         options["stop"] = ["\n"]
     edit_ids = sorted(e.id for e in view.edits if not e.reverted)
+    # The detection reads the transcript without chapters; the others, with today's.
+    phases_run_id = None if is_phases else view.phases_run_id
+    answer_format = ANSWER_SCHEMA if is_phases else None
 
     run_id = f"{stage}-{secrets.token_hex(4)}"
     folder = data.run_dir(session_id, run_id)
@@ -217,12 +262,12 @@ def generate(
         )
         calls.append(record)
         started_call = time.monotonic()
-        answer = client.chat(model, prompt.messages(), options)
+        answer = client.chat(model, prompt.messages(), options, answer_format=answer_format)
         record.duration_s = time.monotonic() - started_call
         record.prompt_eval_count = answer.prompt_eval_count
         record.eval_count = answer.eval_count
         record.done_reason = answer.done_reason
-        record.response_file = f"calls/{index:02d}-response.md"
+        record.response_file = f"calls/{index:02d}-response.{'json' if is_phases else 'md'}"
         _write_new(folder / record.response_file, answer.content)
         _check(answer, estimated, cfg.num_ctx, first_line_only=is_title)
         return answer.content.strip()
@@ -238,8 +283,10 @@ def generate(
                     "action_prompt": chosen.prompt,
                     "model": model,
                     "options": options,
+                    "format": answer_format,
                     "source_run_id": view.run_id,
                     "edit_ids": edit_ids,
+                    "phases_run_id": phases_run_id,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -247,17 +294,21 @@ def generate(
         )
         digest = next((m.digest for m in _models(client) if m.name == model), None)
         ollama_version = _version(client)
-        lines = assembly.transcript_lines(view)
-        whole = "\n".join(line for _, line in lines)
+        lines = assembly.transcript_lines(view, with_phases=not is_phases)
+        whole = "\n".join(line.text for line in lines)
         prompt = assembly.assemble(chosen.prompt, context, whole)
         budget = cfg.num_ctx - reserve
         size = assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
+        cut_prompt = assembly.phases_section_prompt if is_phases else assembly.section_prompt
+        answers: list[str] = []
+        part_firsts: list[str] = []
         if size <= budget:
             output = call("unique", prompt, None)
+            answers.append(output)
         else:
             strategy = "sections"
             fixed = assembly.estimate_tokens(
-                assembly.section_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
+                cut_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
                 + assembly.assemble("", context, "").system
                 + assembly.assemble("", context, "").user,
                 cfg.chars_per_token,
@@ -265,20 +316,32 @@ def generate(
             parts: list[str] = []
             chunks = _sections(lines, budget - fixed, cfg.chars_per_token)
             for k, chunk in enumerate(chunks, start=1):
-                starts = [s for s, _ in chunk if s is not None]
+                starts = [line.start for line in chunk if line.start is not None]
                 first = clock(starts[0]) if starts else "?"
                 last = clock(starts[-1]) if starts else "?"
                 part_prompt = assembly.assemble(
-                    assembly.section_prompt(chosen.prompt, k, len(chunks), first, last),
+                    cut_prompt(chosen.prompt, k, len(chunks), first, last),
                     context,
-                    "\n".join(line for _, line in chunk),
+                    "\n".join(line.text for line in chunk),
                 )
                 parts.append(call("section", part_prompt, f"{first} à {last}"))
+                part_firsts.append(first)
+            answers = parts
+        if is_phases:
+            # Each part's chapters, put on the lines they name: no merging call needed.
+            detection = snap(answers, [(t.index, t.start) for t in view.turns])
+            for k, first in enumerate(part_firsts[1:], start=2):
+                detection.adjustments.append(
+                    f"Séance lue en {len(part_firsts)} parties : un chapitre commence à "
+                    f"{first} parce que la partie {k} y commence."
+                )
+            output = detection.model_dump_json(indent=2)
+        elif strategy == "sections":
             merged = "\n\n".join(
-                f"## Partie {k} sur {len(parts)}\n\n{text}" for k, text in enumerate(parts, 1)
+                f"## Partie {k} sur {len(answers)}\n\n{text}" for k, text in enumerate(answers, 1)
             )
             final = assembly.assemble(
-                assembly.consolidation_prompt(chosen.prompt, len(parts)),
+                assembly.consolidation_prompt(chosen.prompt, len(answers)),
                 context,
                 merged,
                 heading="Comptes rendus partiels",
@@ -293,7 +356,7 @@ def generate(
             output = _clean_title(output)
             if not output:
                 raise GenerationFailedError("Le modèle n'a pas proposé de titre.")
-    except (GenerationFailedError, OllamaError) as exc:
+    except (GenerationFailedError, OllamaError, PhaseAnswerError) as exc:
         error = GenerationError(type=type(exc).__name__, message=str(exc))
     except BaseException as exc:  # recorded as failed, then raised: never silent (P8)
         error = GenerationError(type=type(exc).__name__, message=str(exc))
@@ -314,6 +377,7 @@ def generate(
             source_run_id=view.run_id,
             edits_applied=len(edit_ids),
             edit_ids=edit_ids,
+            phases_run_id=phases_run_id,
             ollama_version=ollama_version,
             calls=calls,
             started_at=started,
@@ -321,7 +385,7 @@ def generate(
             duration_s=time.monotonic() - t0,
             error=error,
         )
-        _finish(data, session_id, run_id, folder, None if error else output, prov, is_title)
+        _finish(data, session_id, run_id, folder, None if error else output, prov)
     return prov
 
 
@@ -386,10 +450,10 @@ def _finish(
     folder: Path,
     output: str | None,
     prov: Provenance,
-    is_title: bool,
 ) -> None:
     if output is not None:
-        _write_new(folder / "output.md", output + "\n")
+        name = "output.json" if prov.stage == "segment_phases" else "output.md"
+        _write_new(folder / name, output + "\n")
     _write_new(folder / "provenance.json", prov.model_dump_json(indent=2))
     conn = connect(data)
     try:
@@ -412,7 +476,7 @@ def _finish(
                 " ON CONFLICT (session_id, stage) DO UPDATE SET run_id = excluded.run_id",
                 (session_id, prov.stage, run_id),
             )
-            if is_title:
+            if prov.stage == "title":
                 # The user's own title is never overwritten (title_edited); a session with
                 # no content keeps its date as its name.
                 if output != NO_CONTENT_TITLE:
@@ -420,7 +484,7 @@ def _finish(
                         "UPDATE session SET title = ? WHERE id = ? AND title_edited = 0",
                         (output, session_id),
                     )
-            else:
+            elif prov.stage == "summarize":
                 conn.execute(
                     "INSERT INTO generation (session_id, run_id, action_ref, created_at)"
                     " VALUES (?, ?, ?, ?)",

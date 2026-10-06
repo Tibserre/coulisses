@@ -13,9 +13,11 @@ import {
   type EditRequest,
   type CorrectedView,
   type Person,
+  type PhasesStatus,
   type SessionDetail,
   type StageView,
 } from "../api.ts";
+import { PhaseStrip } from "../components/PhaseStrip.tsx";
 import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../components/ReviewSide.tsx";
@@ -25,7 +27,7 @@ import { SummaryPanel } from "../components/SummaryPanel.tsx";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
-import { buildModel, liveEditsKey, toggleSelection, turnAt, wordAt } from "../transcript.ts";
+import { buildModel, liveEditsKey, phaseOf, toggleSelection, turnAt, wordAt } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
@@ -54,6 +56,9 @@ export function SessionPage({ id }: { id: string }) {
   const [giving, setGiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<"overview" | "summary">("summary");
+  /** Chapters folded by the user, by their first line. */
+  const [folded, setFolded] = useState<Set<number>>(new Set());
+  const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
   const pb = usePlayback();
   const dev = useDevMode();
 
@@ -93,6 +98,28 @@ export function SessionPage({ id }: { id: string }) {
     );
   }, [id, attributeRun]);
 
+  // The chapters: detected after the processing (or asked again), followed while they are.
+  const loadPhases = useCallback(async () => {
+    try {
+      setPhasesStatus(await api.phases(id));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [id]);
+  useEffect(() => {
+    if (attributeRun) void loadPhases();
+  }, [attributeRun, loadPhases]);
+  const phasesWaiting = phasesStatus?.state === "queued" || phasesStatus?.state === "running";
+  useEffect(() => {
+    if (!phasesWaiting) return;
+    const timer = window.setInterval(() => void loadPhases(), 3000);
+    return () => {
+      window.clearInterval(timer);
+      // Over: the transcript gets its chapters.
+      api.transcript(id).then(setView, (e: Error) => setTranscriptError(e.message));
+    };
+  }, [phasesWaiting, loadPhases, id]);
+
   const loadPeople = useCallback(async () => {
     if (spaceId != null) setPeople(await api.people(spaceId));
   }, [spaceId]);
@@ -100,7 +127,15 @@ export function SessionPage({ id }: { id: string }) {
     void loadPeople().catch((e: Error) => setError(e.message));
   }, [loadPeople]);
 
-  const model = useMemo(() => (view ? buildModel(view) : null), [view]);
+  // During playback, the chapter being heard stays open, even folded (art direction).
+  const unfolded = useMemo(() => (view ? buildModel(view) : null), [view]);
+  const heard = unfolded && pb.playing ? turnAt(unfolded, pb.time) : null;
+  const heardChapter = view && heard ? phaseOf(view.phases, heard.turn.index)?.turn ?? null : null;
+  const model = useMemo(() => {
+    if (!view) return null;
+    const shut = new Set([...folded].filter((t) => t !== heardChapter));
+    return shut.size ? buildModel(view, shut) : unfolded;
+  }, [view, folded, heardChapter, unfolded]);
   const currentRow = model ? turnAt(model, pb.time) : null;
   const current = currentRow ? { row: currentRow, word: wordAt(currentRow, pb.time) } : null;
 
@@ -145,6 +180,12 @@ export function SessionPage({ id }: { id: string }) {
         setSelected((before) => toggleSelection(before, order, turn, extend ? lastSelected : null));
         setLastSelected(turn);
       },
+      toggleFolded: (turn: number) =>
+        setFolded((before) => {
+          const next = new Set(before);
+          if (!next.delete(turn)) next.add(turn);
+          return next;
+        }),
     }),
     [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, model],
   );
@@ -182,7 +223,8 @@ export function SessionPage({ id }: { id: string }) {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  // N names the voice of the line being heard, E puts the cursor in its text; Cmd-Z and
+  // N names the voice of the line being heard, E puts the cursor in its text, C starts a
+  // chapter there; Cmd-Z and
   // Cmd-Shift-Z undo and redo corrections (inside a line being typed into, they undo the
   // typing, as anywhere).
   useEffect(() => {
@@ -200,11 +242,14 @@ export function SessionPage({ id }: { id: string }) {
       } else if (e.key === "e" || e.key === "E") {
         e.preventDefault();
         setEditingTurn(currentRow.turn.index);
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        void correct({ kind: "set_phase", turn: currentRow.turn.index }).catch(() => undefined);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentRow, history]);
+  }, [currentRow, history, correct]);
 
   const session = detail?.session;
   const title = session ? (session.title ?? `Séance du ${formatDate(session.recorded_at).toLowerCase()}`) : "";
@@ -235,6 +280,19 @@ export function SessionPage({ id }: { id: string }) {
             </Text>
           </div>
         )}
+        {session && view && (
+          <PhaseStrip
+            view={view}
+            duration={session.duration_s ?? 0}
+            time={pb.time}
+            status={phasesStatus}
+            dev={dev}
+            onSeek={pb.seek}
+            onDetect={() => {
+              api.detectPhases(id).then(setPhasesStatus, (e: Error) => setError(e.message));
+            }}
+          />
+        )}
       </header>
 
       {error && (
@@ -261,7 +319,7 @@ export function SessionPage({ id }: { id: string }) {
                 <div className="cl-review__notice">
                   <Banner
                     status="error"
-                    title="EditRequest refusée"
+                    title="Correction refusée"
                     description={editError}
                     isDismissable
                     onDismiss={() => setEditError(null)}

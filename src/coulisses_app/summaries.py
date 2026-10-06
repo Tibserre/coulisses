@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 from coulisses_app import corrections, jobs, sessions
 from coulisses_app.paths import DataDir
+from coulisses_app.phases import PhaseDetection
 from coulisses_app.prompting import assembly
-from coulisses_app.prompting.generate import TITLE_REF, Provenance
+from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, Provenance
 from coulisses_app.storage.db import connect
 
 
@@ -49,6 +51,8 @@ class Generations(BaseModel):
 def action_name(ref: str) -> str:
     if ref == TITLE_REF:
         return assembly.TITLE.name
+    if ref == PHASES_REF:
+        return assembly.PHASES.name
     try:
         return assembly.action(ref).name
     except KeyError:
@@ -79,7 +83,8 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
                 error=j.error,
             )
             for j in jobs.generation_jobs(conn, session_id)
-            if isinstance(j.params, jobs.GenerationParams)
+            # The chapters have their own place (phases_status), next to the transcript.
+            if isinstance(j.params, jobs.GenerationParams) and j.params.action_ref != PHASES_REF
         ]
     finally:
         conn.close()
@@ -127,7 +132,9 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
                 calls=len(prov.calls),
                 duration_s=prov.duration_s,
                 output=output_file.read_text(encoding="utf-8") if output_file.is_file() else None,
-                stale=prov.source_run_id != source or prov.edit_ids != live,
+                stale=prov.source_run_id != source
+                or prov.edit_ids != live
+                or prov.phases_run_id != (view.phases_run_id if view else None),
             )
         )
     return Generations(generations=found, pending=pending)
@@ -188,10 +195,62 @@ def export_markdown(
         view = corrections.build_view(data, session_id)
         if view is not None:
             lines += ["## Transcription", ""]
-            for _, line in assembly.transcript_lines(view):
-                stamp, _, rest = line.partition("] ")
+            for line in assembly.transcript_lines(view):
+                if line.phase_heading:
+                    # « [12:34] ── Chapitre « Titre » (jeu) ── » → a Markdown heading.
+                    lines += [f"### {line.text.split('── ', 1)[1].rstrip(' ─')}", ""]
+                    continue
+                stamp, _, rest = line.text.partition("] ")
                 name, _, text = rest.partition(" : ")
-                lines.append(f"**{stamp}] {name}** : {text}" if text else line)
+                lines.append(f"**{stamp}] {name}** : {text}" if text else line.text)
                 lines.append("")
     name = f"{when.strftime('%Y-%m-%d')} {title}".replace("/", "-")
     return f"{name}.md", "\n".join(lines).rstrip() + "\n"
+
+
+class PhasesStatus(BaseModel):
+    """Where the chapter detection stands, for the review screen."""
+
+    state: Literal["none", "queued", "running", "failed", "done"]
+    error: str | None = None
+    model: str | None = None
+    finished_at: datetime | None = None
+    adjustments: list[str] = []
+    """What the model's answer said that had to be put right (shown in developer mode)."""
+
+
+def phases_status(data: DataDir, session_id: str) -> PhasesStatus:
+    view = corrections.build_view(data, session_id)
+    conn = connect(data)
+    try:
+        waiting = [
+            j
+            for j in jobs.generation_jobs(conn, session_id)
+            if isinstance(j.params, jobs.GenerationParams) and j.params.action_ref == PHASES_REF
+        ]
+    finally:
+        conn.close()
+    if waiting:
+        job = waiting[-1]
+        assert isinstance(job.params, jobs.GenerationParams)
+        state: Literal["queued", "running", "failed"] = (
+            "running" if job.state == "running" else "failed" if job.state == "failed" else "queued"
+        )
+        return PhasesStatus(state=state, error=job.error, model=job.params.model)
+    if view is None or view.phases_run_id is None:
+        return PhasesStatus(state="none")
+    folder = data.run_dir(session_id, view.phases_run_id)
+    try:
+        prov = Provenance.model_validate_json((folder / "provenance.json").read_text("utf-8"))
+        detection = PhaseDetection.model_validate_json((folder / "output.json").read_text("utf-8"))
+    except (OSError, ValueError) as exc:
+        return PhasesStatus(
+            state="done",
+            error=f"La détection {view.phases_run_id} est illisible ({type(exc).__name__}).",
+        )
+    return PhasesStatus(
+        state="done",
+        model=prov.model,
+        finished_at=prov.finished_at,
+        adjustments=detection.adjustments,
+    )

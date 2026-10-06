@@ -11,6 +11,8 @@ num_ctx = 65536
 # Place gardée pour la réponse, en tokens : le prompt doit tenir dans num_ctx moins cela.
 reserve_reponse = 6144
 reserve_titre = 128
+# Les chapitres : une liste JSON (début, type, titre), une ligne par chapitre.
+reserve_chapitres = 4096
 
 # Caractères par token, volontairement bas pour surestimer la taille du prompt : Ollama
 # ne permet pas de compter les tokens avant l'envoi (ADR 0022). Mesuré le 2026-10-06 avec

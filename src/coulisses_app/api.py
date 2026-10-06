@@ -28,7 +28,7 @@ from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.prompting import assembly
-from coulisses_app.prompting.generate import TITLE_REF, ModelClient
+from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, ModelClient
 from coulisses_app.prompting.ollama import InstalledModel, OllamaClient, OllamaError
 from coulisses_app.status import StageView, stage_views
 from coulisses_app.storage.db import connect
@@ -359,6 +359,27 @@ def create_app(
             processor.wake()
         return summaries.list_generations(data, session_id)
 
+    @app.get("/api/seances/{session_id}/chapitres")
+    def phases(session_id: str) -> summaries.PhasesStatus:
+        return summaries.phases_status(data, session_id)
+
+    @app.post("/api/seances/{session_id}/chapitres", status_code=202)
+    def detect_phases(session_id: str) -> summaries.PhasesStatus:
+        """Detect the chapters again (the user's changes to them stay in force)."""
+        if corrections.build_view(data, session_id) is None:
+            raise HTTPException(status_code=409, detail="Le transcript n'est pas encore prêt.")
+        conn = connect(data)
+        try:
+            with conn:
+                jobs.enqueue_generation(
+                    conn, session_id, action_ref=PHASES_REF, model=settings.default_model(conn)
+                )
+        finally:
+            conn.close()
+        if processor is not None:
+            processor.wake()
+        return summaries.phases_status(data, session_id)
+
     @app.get("/api/seances/{session_id}/resumes/{generation_id}/prompts")
     def generation_prompts(session_id: str, generation_id: int) -> PlainTextResponse:
         try:
@@ -476,8 +497,8 @@ def create_app(
 
 
 def _check_action(ref: str) -> None:
-    if ref == TITLE_REF:
-        return  # the title can be made again too
+    if ref in (TITLE_REF, PHASES_REF):
+        return  # the title and the chapters can be made again too
     try:
         assembly.action(ref)
     except KeyError as exc:

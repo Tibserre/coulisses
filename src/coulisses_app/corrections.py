@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from coulisses_app import spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
+from coulisses_app.phases import KIND_WORD, TITLE_MAX, PhaseDetection, PhaseKind
 from coulisses_app.spaces import COLOR_SLOTS, Person, SpaceError
 from coulisses_app.storage.db import connect, now_iso
 
@@ -37,6 +38,8 @@ class EditKind(StrEnum):
     MERGE_SPEAKERS = "merge_speakers"
     REASSIGN_TURNS = "reassign_turns"
     EDIT_TEXT = "edit_text"
+    SET_PHASE = "set_phase"
+    REMOVE_PHASE = "remove_phase"
     REVERT = "revert"
 
 
@@ -79,12 +82,27 @@ class EditText(BaseModel):
     text: str
 
 
-Request = Annotated[
-    AssignSpeaker | MergeSpeakers | ReassignTurns | EditText, Field(discriminator="kind")
-]
-_REQUEST: TypeAdapter[AssignSpeaker | MergeSpeakers | ReassignTurns | EditText] = TypeAdapter(
-    Request
-)
+class SetPhase(BaseModel):
+    """A chapter starts at this line: created if none does, otherwise its kind or title
+    changed (what is left empty stays as it was; a new one takes the kind of the chapter it
+    cuts, and no title)."""
+
+    kind: Literal["set_phase"] = "set_phase"
+    turn: int
+    phase_kind: PhaseKind | None = None
+    title: str | None = Field(default=None, max_length=TITLE_MAX)
+
+
+class RemovePhase(BaseModel):
+    """No chapter starts at this line any more: its lines join the chapter before."""
+
+    kind: Literal["remove_phase"] = "remove_phase"
+    turn: int
+
+
+AnyRequest = AssignSpeaker | MergeSpeakers | ReassignTurns | EditText | SetPhase | RemovePhase
+Request = Annotated[AnyRequest, Field(discriminator="kind")]
+_REQUEST: TypeAdapter[AnyRequest] = TypeAdapter(Request)
 
 
 # -- what the review shows ---------------------------------------------------------------
@@ -146,6 +164,22 @@ class EditInfo(BaseModel):
     """For a text correction: the line it corrects."""
 
 
+class Phase(BaseModel):
+    """A chapter: from its first line to the next chapter's (or the end)."""
+
+    turn: int
+    """Its first line (index in the run)."""
+    end_turn: int
+    """The first line after it (exclusive)."""
+    start: float | None
+    """Measured start of its first line; None when that line has no time (P2)."""
+    end: float | None
+    kind: PhaseKind
+    title: str
+    edited: bool = False
+    """Changed or created by the user (the detection said otherwise)."""
+
+
 class Untranscribed(BaseModel):
     start: float
     end: float
@@ -162,6 +196,12 @@ class CorrectedView(BaseModel):
     plan): counted and shown, never dropped (P8)."""
     word_count: int
     timed_share: float
+    phases: list[Phase] = []
+    """Empty until a detection succeeds (or the user cuts a chapter)."""
+    phases_run_id: str | None = None
+    """The detection the chapters come from: a summary made with another is stale."""
+    phases_problem: str | None = None
+    """Why the detection's chapters could not be read, when they could not (P8)."""
 
 
 class CorrectionError(SpaceError):
@@ -273,9 +313,41 @@ def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
         people = {p.id: p for p in _people(conn, space_row["space_id"])}
         variants = _variants(conn, space_row["space_id"])
         journal = _journal(conn, session_id)
+        detection_run = _active_detection(conn, session_id, run_id)
     finally:
         conn.close()
-    return _replay(transcript, run_id, journal, people, variants)
+    detection: PhaseDetection | None = None
+    problem: str | None = None
+    if detection_run is not None:
+        path = data.run_dir(session_id, detection_run) / "output.json"
+        try:
+            detection = PhaseDetection.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            problem = (
+                f"Les chapitres détectés ({detection_run}/output.json) sont illisibles : "
+                f"{type(exc).__name__}. A-t-il été modifié ou supprimé dans le Finder ?"
+            )
+    return _replay(
+        transcript,
+        run_id,
+        journal,
+        people,
+        variants,
+        detection=detection,
+        detection_run_id=detection_run,
+        detection_problem=problem,
+    )
+
+
+def _active_detection(conn: sqlite3.Connection, session_id: str, run_id: str) -> str | None:
+    """The latest chapters detected on this « who said what » run (a detection made on
+    another run points at other lines: it does not apply)."""
+    row = conn.execute(
+        "SELECT a.run_id FROM active_run a JOIN run_upstream u ON u.run_id = a.run_id"
+        " WHERE a.session_id = ? AND a.stage = 'segment_phases' AND u.upstream_run_id = ?",
+        (session_id, run_id),
+    ).fetchone()
+    return row["run_id"] if row else None
 
 
 def _people(conn: sqlite3.Connection, space_id: int) -> list[Person]:
@@ -302,6 +374,10 @@ def _replay(
     journal: list[_Journal],
     people: dict[int, Person],
     variants: dict[str, str],
+    *,
+    detection: PhaseDetection | None = None,
+    detection_run_id: str | None = None,
+    detection_problem: str | None = None,
 ) -> CorrectedView:
     numbers = _numbering(transcript)
     words_of = [
@@ -321,6 +397,7 @@ def _replay(
     edited = [False] * len(transcript.turns)
     assigned: dict[str, AssignSpeaker] = {}
     new_voices: list[str] = []
+    phase_edits: list[SetPhase | RemovePhase] = []
 
     undone_by = {e.reverts: e.id for e in journal if e.kind == EditKind.REVERT and e.reverts}
     reverted = set(undone_by)
@@ -351,6 +428,8 @@ def _replay(
                 case EditText():
                     words_of[request.turn] = _apply_text(words_of[request.turn], request.text)
                     edited[request.turn] = True
+                case SetPhase() | RemovePhase():
+                    phase_edits.append(request)
         elif (
             isinstance(request, ReassignTurns)
             and request.target
@@ -403,6 +482,18 @@ def _replay(
         )
 
     speakers = _speakers(turns, numbers, new_voices, assigned, people)
+    phases, outside = _phases(turns, detection, phase_edits)
+    if outside:
+        detection_problem = " ".join(
+            filter(
+                None,
+                [
+                    detection_problem,
+                    f"{outside} chapitre(s) ou correction(s) de chapitre visent une réplique "
+                    "absente de ce traitement : ignorés ici, gardés dans leurs fichiers.",
+                ],
+            )
+        )
     all_words = [w for t in turns for w in t.words]
     timed = sum(1 for w in all_words if w.start is not None)
     return CorrectedView(
@@ -414,7 +505,59 @@ def _replay(
         other_run_edits=other_run,
         word_count=len(all_words),
         timed_share=timed / len(all_words) if all_words else 0.0,
+        phases=phases,
+        phases_run_id=detection_run_id if detection is not None else None,
+        phases_problem=detection_problem,
     )
+
+
+def _phases(
+    turns: list[Turn], detection: PhaseDetection | None, edits: list[SetPhase | RemovePhase]
+) -> tuple[list[Phase], int]:
+    """The detection's chapters, then the user's changes in the order they were made; and
+    how many of either point at no line of this run (never expected: counted, not hidden)."""
+    count = len(turns)
+    detected = detection.phases if detection else []
+    outside = sum(1 for p in detected if not 0 <= p.turn < count)
+    # Chapter start (line index) → (kind, title, edited).
+    starts: dict[int, tuple[PhaseKind, str, bool]] = {
+        p.turn: (p.kind, p.title, False) for p in detected if 0 <= p.turn < count
+    }
+    for edit in edits:
+        if not 0 <= edit.turn < count:
+            outside += 1
+            continue
+        if isinstance(edit, RemovePhase):
+            starts.pop(edit.turn, None)
+            continue
+        current = starts.get(edit.turn)
+        if current is None:
+            before = [t for t in starts if t < edit.turn]
+            kind: PhaseKind = starts[max(before)][0] if before else "discussion"
+            current = (kind, "", True)
+        starts[edit.turn] = (
+            edit.phase_kind or current[0],
+            current[1] if edit.title is None else edit.title,
+            True,
+        )
+    ordered = sorted(starts)
+    phases: list[Phase] = []
+    for k, first in enumerate(ordered):
+        end_turn = ordered[k + 1] if k + 1 < len(ordered) else count
+        kind, title, edited = starts[first]
+        ends = [t.end for t in turns[first:end_turn] if t.end is not None]
+        phases.append(
+            Phase(
+                turn=first,
+                end_turn=end_turn,
+                start=turns[first].start,
+                end=max(ends) if ends else None,
+                kind=kind,
+                title=title,
+                edited=edited,
+            )
+        )
+    return phases, outside
 
 
 def _unnamed_label(label: str, numbers: dict[str, int], new_voices: list[str]) -> str:
@@ -492,7 +635,7 @@ def _speaker(
 
 
 def _describe(
-    request: AssignSpeaker | MergeSpeakers | ReassignTurns | EditText,
+    request: AnyRequest,
     numbers: dict[str, int],
     new_voices: list[str],
     assigned: dict[str, AssignSpeaker],
@@ -525,6 +668,23 @@ def _describe(
         case EditText():
             start = transcript.turns[request.turn].start
             return f"Texte corrigé à {clock(start)}" if start is not None else "Texte corrigé"
+        case SetPhase() | RemovePhase():
+            start = (
+                transcript.turns[request.turn].start
+                if 0 <= request.turn < len(transcript.turns)
+                else None
+            )
+            at = f" à {clock(start)}" if start is not None else ""
+            if isinstance(request, RemovePhase):
+                return f"Coupure de chapitre retirée{at}"
+            changes: list[str] = []
+            if request.title is not None:
+                changes.append(f"« {request.title} »" if request.title else "sans titre")
+            if request.phase_kind is not None:
+                changes.append(KIND_WORD[request.phase_kind])
+            if not changes:
+                return f"Nouveau chapitre{at}"
+            return f"Chapitre{at} : {', '.join(changes)}"
 
 
 # -- recording a correction --------------------------------------------------------------
@@ -607,6 +767,34 @@ def add(data: DataDir, session_id: str, raw: object) -> CorrectedView:
                 turn = view.turns[request.turn]
                 if request.text == " ".join(w.text for w in turn.words):
                     raise CorrectionError("Le texte n'a pas changé.")
+                anchor = (turn.start, turn.end)
+            case SetPhase():
+                if request.turn < 0 or request.turn >= len(view.turns):
+                    raise CorrectionError("Réplique introuvable.")
+                if request.title is not None:
+                    request.title = " ".join(request.title.split())
+                current = next((p for p in view.phases if p.turn == request.turn), None)
+                if (
+                    current is not None
+                    and request.phase_kind in (None, current.kind)
+                    and (request.title in (None, current.title))
+                ):
+                    raise CorrectionError(
+                        "Un chapitre commence déjà ici."
+                        if request.phase_kind is None and request.title is None
+                        else "Ce chapitre est déjà ainsi."
+                    )
+                turn = view.turns[request.turn]
+                anchor = (turn.start, turn.end)
+            case RemovePhase():
+                if not any(p.turn == request.turn for p in view.phases):
+                    raise CorrectionError("Aucun chapitre ne commence à cette réplique.")
+                if view.turns[0].index == request.turn:
+                    raise CorrectionError(
+                        "Le chapitre qui ouvre la séance ne se retire pas : renommez-le ou "
+                        "changez son type."
+                    )
+                turn = view.turns[request.turn]
                 anchor = (turn.start, turn.end)
         with conn:
             conn.execute(

@@ -59,8 +59,13 @@ class FakeModel:
 
     def __init__(self, answer: str = "## Décisions\n- On garde la fin.", *, down: bool = False):
         self.answer = answer
+        self.phases_answer = (
+            '{"chapitres": [{"debut": "0:00", "type": "discussion", "titre": "Essai"}]}'
+        )
+        """What it answers when asked for chapters (a JSON schema given)."""
         self.down = down
         self.calls: list[tuple[str, list[dict[str, str]], dict[str, object]]] = []
+        self.formats: list[dict[str, object] | None] = []
         self.prompt_tokens = 1000
         self.done_reason: str | None = "stop"
         self.counted = True
@@ -76,15 +81,21 @@ class FakeModel:
         return [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
 
     def chat(
-        self, model: str, messages: list[dict[str, str]], options: dict[str, object]
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        options: dict[str, object],
+        *,
+        answer_format: dict[str, object] | None = None,
     ) -> ChatAnswer:
         if self.down:
             raise OllamaError(
                 "Ollama ne répond pas sur 127.0.0.1:11434 : lancez l'application Ollama."
             )
         self.calls.append((model, messages, options))
+        self.formats.append(answer_format)
         return ChatAnswer(
-            content=self.answer,
+            content=self.phases_answer if answer_format is not None else self.answer,
             prompt_eval_count=self.prompt_tokens if self.counted else None,
             eval_count=50 if self.counted else None,
             done_reason=self.done_reason,
