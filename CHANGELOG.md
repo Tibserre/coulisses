@@ -3,6 +3,19 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.4.0 — 2026-10-06
+
+### Nouveautés
+
+- corrige le texte en place, comme dans un document (relecture)
+- nomme les voix et corrige le transcript sans quitter l'écran (relecture)
+- range les séances par espace et garde les corrections en journal (espaces)
+
+### Corrections
+
+- rétablit l'infobulle des mots dans les répliques modifiables (relecture)
+- rétablit une scission annulée et refuse un double rétablissement (corrections)
+
 ## v0.3.0 — 2026-10-05
 
 ### Nouveautés
