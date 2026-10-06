@@ -5,7 +5,7 @@
 | # | Étape | Ce que l'utilisateur peut faire à la fin | État |
 |---|---|---|---|
 | 1 | Socle : importer, traiter, lire | Importer un fichier, suivre le traitement en tâche de fond (reprise après un arrêt), lire le transcript par tours et réécouter (vitesse, espace et flèches), voir la provenance | Livrée (v0.1.0) |
-| 2 | Espaces et relecture corrigée | Espaces (membres, invités, glossaire), présents cochés à l'import ; nommer une voix, personnage joué par, fusionner, scinder en donnant des répliques à une nouvelle voix, corriger un texte, suggestions du glossaire, annuler et rétablir ; raccourcis N et E | En recette |
+| 2 | Espaces et relecture corrigée | Espaces (membres, invités, glossaire), présents cochés à l'import ; nommer une voix, personnage joué par, fusionner, scinder en donnant des répliques à une nouvelle voix, corriger le texte en place (Cmd-Z, retour à l'origine), suggestions du glossaire, annuler et rétablir ; raccourcis N et E | Livrée (v0.4.0) |
 | 3 | Résumé Impro | Titre et Résumé Impro prêts à la fin du traitement, avec les bons noms ; copie, export Markdown | |
 | 4 | Phases | Détection, correction, phases dans le transcript et dans le prompt | |
 | 5 | Les autres actions | Les quatre autres actions, actions modifiables, historique, comparaison, choix du modèle, notes d'après séance | |
