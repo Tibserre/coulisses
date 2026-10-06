@@ -862,3 +862,34 @@ button.cl-name {
   user-select: text;
   -webkit-user-select: text;
 }
+
+/* Hover tip of a word (confidence, glossary, added by hand): generated content, so it is
+   never part of the text typed into or copied. Shown after a short wait. */
+.cl-word[data-tip]:hover::before {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 4px 8px;
+  border-radius: var(--radius-inner);
+  background: var(--color-text-primary);
+  color: var(--color-background-body);
+  font-size: var(--font-size-xsm);
+  font-weight: var(--font-weight-normal);
+  font-style: normal;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: cl-tip-in var(--duration-fast) var(--ease-standard) 300ms both;
+}
+
+@keyframes cl-tip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

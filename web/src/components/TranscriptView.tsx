@@ -39,8 +39,9 @@ export function inkOf(speaker: Speaker): string {
     : "var(--coulisses-speaker-unknown-ink)";
 }
 
-/** A word as text. Marks (current word, unsure, added, glossary) are drawn with CSS so
- *  that the line's text, typed into or copied, is exactly its words. */
+/** A word as text. Marks (current word, unsure, added, glossary) and their hover tip
+ *  are drawn with CSS, so that the line's text, typed into or copied, is exactly its
+ *  words (a native title does not show inside an editable line). */
 function Word({ word, isCurrent }: { word: WordData; isCurrent: boolean }) {
   const unsure = word.confidence != null && word.confidence < UNSURE_BELOW;
   const title = word.suggestion
@@ -56,7 +57,7 @@ function Word({ word, isCurrent }: { word: WordData; isCurrent: boolean }) {
       data-unsure={unsure || undefined}
       data-added={word.added || undefined}
       data-suggestion={word.suggestion ? true : undefined}
-      title={title}
+      data-tip={title}
     >
       {isCurrent && (
         <motion.span
