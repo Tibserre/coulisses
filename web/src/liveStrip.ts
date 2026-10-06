@@ -38,3 +38,21 @@ export function liveSegments(markers: readonly Marker[], elapsed: number): LiveS
   if (elapsed > start || segments.length === 0) segments.push({ kind, start, end: Math.max(start, elapsed) });
   return segments;
 }
+
+/** At most this far ahead of the last time the service gave, the strip moves on by itself
+ *  between two updates (display only: recorded times stay measured, P2). */
+export const AHEAD_MAX_S = 0.25;
+
+/** The time the strip shows at a frame: the time given, carried on for at most
+ *  `AHEAD_MAX_S` while recording, never going back; exactly the time given when paused
+ *  or with reduced motion. */
+export function shownElapsed(
+  given: number,
+  sinceGiven_s: number,
+  lastShown: number,
+  still: boolean,
+): number {
+  if (still) return given;
+  const ahead = given + Math.min(AHEAD_MAX_S, Math.max(0, sinceGiven_s));
+  return Math.max(Math.min(lastShown, given + AHEAD_MAX_S), ahead);
+}

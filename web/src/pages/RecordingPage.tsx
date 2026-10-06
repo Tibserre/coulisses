@@ -16,9 +16,10 @@ import {
 } from "lucide-react";
 import { api, type MarkerKind, type RecordingState } from "../api.ts";
 import { LevelMeter } from "../components/LevelMeter.tsx";
+import { LiveStrip } from "../components/LiveStrip.tsx";
 import { RecordingVisual } from "../components/RecordingVisual.tsx";
 import { formatClock } from "../format.ts";
-import { currentMode, liveSegments, type Mode } from "../liveStrip.ts";
+import { currentMode, type Mode } from "../liveStrip.ts";
 import { meterValue } from "../meter.ts";
 import { KIND_LABEL } from "../transcript.ts";
 
@@ -171,8 +172,6 @@ export function RecordingPage() {
   const level = state ? meterValue(state.levels.rms_db) : 0;
   const peak = state ? meterValue(state.levels.peak_db) : 0;
   const elapsed = state?.elapsed_s ?? 0;
-  const segments = state ? liveSegments(state.markers, elapsed) : [];
-  const span = Math.max(elapsed, 1);
   const marks = state
     ? [
         ...state.markers.map((m) => ({
@@ -290,29 +289,7 @@ export function RecordingPage() {
             </div>
 
             <section className="cl-live" aria-label="Déroulé de la séance">
-              <div className="cl-live__bar">
-                {segments.map((s) => (
-                  <span
-                    key={`${s.kind}${s.start}`}
-                    className="cl-live__segment"
-                    data-kind={s.kind}
-                    style={{
-                      left: `${(s.start / span) * 100}%`,
-                      width: `${((s.end - s.start) / span) * 100}%`,
-                    }}
-                  />
-                ))}
-                {state.markers
-                  .filter((m) => m.kind === "key_moment")
-                  .map((m) => (
-                    <span
-                      key={m.id}
-                      className="cl-live__moment"
-                      style={{ left: `${(m.at_s / span) * 100}%` }}
-                      title={`Moment clé à ${formatClock(m.at_s)}`}
-                    />
-                  ))}
-              </div>
+              <LiveStrip markers={state.markers} elapsed={elapsed} paused={paused} />
 
               <div className="cl-live__actions">
                 {mode ? (

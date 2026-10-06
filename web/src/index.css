@@ -1568,7 +1568,8 @@ a.cl-iconbtn {
   bottom: 0;
   border-radius: var(--radius-full);
   background: var(--coulisses-chapter-quiet);
-  transition: width 100ms linear;
+  /* Only the colour eases: the place is set at each frame. */
+  transition: background var(--duration-medium) var(--ease-standard);
 }
 
 .cl-live__segment[data-kind="scene"] {

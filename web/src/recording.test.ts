@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Marker } from "./api.ts";
-import { currentMode, liveSegments } from "./liveStrip.ts";
+import { AHEAD_MAX_S, currentMode, liveSegments, shownElapsed } from "./liveStrip.ts";
 import { meterValue } from "./meter.ts";
 import { PEAK_HOLD_S, step } from "./smoothLevel.ts";
 
@@ -46,4 +46,12 @@ test("the needle rises fast, falls slowly, and the peak holds before falling", (
   assert.equal(needle.peak, 90); // still held
   for (let i = 0; i < Math.ceil((PEAK_HOLD_S + 1) * 60); i++) needle = step(needle, 0, 0, 1 / 60);
   assert.ok(needle.peak < 50 && needle.level < 5);
+});
+
+test("between two times given, the strip carries on a little, never back, and stops when still", () => {
+  assert.equal(shownElapsed(10, 0.1, 10, false), 10.1);
+  assert.equal(shownElapsed(10, 2, 10, false), 10 + AHEAD_MAX_S); // capped
+  // A time given slightly behind what was shown: the strip waits instead of going back.
+  assert.equal(shownElapsed(10.05, 0, 10.2, false), 10.2);
+  assert.equal(shownElapsed(10, 0.5, 10.2, true), 10); // paused: exactly the time measured
 });
