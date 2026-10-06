@@ -3,6 +3,23 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.9.0 — 2026-10-06
+
+### Nouveautés
+
+- pose des marqueurs et des notes pendant la séance (enregistrement)
+- enregistre une séance avec le micro du Mac (enregistrement)
+
+### Corrections
+
+- fait avancer la frise en direct sans à-coups (enregistrement)
+- fait partir les ondes du centre au lieu de faire varier les anneaux (enregistrement)
+- anime le niveau sans à-coups (enregistrement)
+
+### Performances
+
+- arrête l'animation du niveau quand il ne bouge plus (enregistrement)
+
 ## v0.8.0 — 2026-10-06
 
 ### Nouveautés
