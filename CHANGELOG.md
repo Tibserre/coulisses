@@ -3,6 +3,17 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.7.0 — 2026-10-06
+
+### Nouveautés
+
+- découpe la séance en chapitres détectés puis corrigeables (chapitres)
+
+### Corrections
+
+- fait recharger la page après une nouvelle version (interface)
+- garde le titre quand le modèle continue après sa première ligne (titre)
+
 ## v0.6.0 — 2026-10-06
 
 ### Nouveautés
