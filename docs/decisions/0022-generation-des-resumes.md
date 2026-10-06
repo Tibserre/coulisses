@@ -1,6 +1,6 @@
 # 0022 — Générer les résumés : une exécution de l'application, une fenêtre jamais dépassée
 
-Statut : Acceptée (2026-10-06 : l'utilisateur choisit `qwen3.6:35b-mlx` par défaut, avec un sélecteur relié à Ollama dans l'application). Précision du 2026-10-06 sur le titre coupé après sa première ligne : proposée, à valider par l'utilisateur.
+Statut : Acceptée (2026-10-06 : l'utilisateur choisit `qwen3.6:35b-mlx` par défaut, avec un sélecteur relié à Ollama dans l'application). Précision du 2026-10-06 sur le titre coupé après sa première ligne : validée par l'utilisateur le même jour.
 
 ## Contexte
 Le titre et les résumés sont faits par l'application (spec §7.9), par le LLM local (Ollama sur 127.0.0.1), et par un seul chemin (P4, `prompting/`). Ollama tronque **en silence** ce qui dépasse `num_ctx`. Sa version 0.35 n'offre aucun moyen de compter les tokens d'un texte avant de l'envoyer. Chaque résultat doit garder sa provenance (P7) et le prompt envoyé mot pour mot (rules/prompts.md).
