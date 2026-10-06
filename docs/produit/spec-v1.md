@@ -74,9 +74,10 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 - Choix du micro.
 - **Captation brute** : pas de réduction de bruit, pas d'annulation d'écho, pas de gain automatique. WAV PCM 48 kHz, tel quel.
-- Vumètre, alertes de niveau (trop faible, saturation), pause et reprise.
+- Vumètre, alertes de niveau (trop faible, saturation, micro qui ne donne plus de son), pause et reprise. La pause coupe le son à l'instant où on la demande : le fichier ne contient que ce qui a été enregistré. Fermer la page n'arrête pas l'enregistrement ; la bibliothèque montre qu'il est en cours.
 - **Écriture continue sur disque** : une séance survit à un crash de l'interface, du service ou du Mac. Au redémarrage, l'enregistrement interrompu est récupéré et signalé.
-- **Pendant l'enregistrement, le Mac ne se met pas en veille.**
+- **Pendant l'enregistrement, le Mac ne se met pas en veille**, ni pendant le traitement.
+- **À l'arrêt**, le traitement démarre si le Mac est branché. Sur batterie, il attend : la séance propose « Traiter maintenant », avec la durée estimée (ADR 0027).
 - **Marqueurs** horodatés : scène, discussion, moment clé.
 - **Notes pendant la séance** : champ libre, chaque note horodatée.
 - **Import** : fichiers audio (wav, m4a, mp3, flac, ogg…) et vidéo (la piste audio est extraite). L'original est conservé tel quel.
@@ -205,7 +206,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 
 ## 11. Critères de réussite V1
 
-- Une vraie séance de 80 min enregistrée dans l'app donne un compte rendu sans intervention, avant le lendemain matin.
+- Une vraie séance de 80 min enregistrée dans l'app est traitée sans intervention (chapitres compris) avant le lendemain matin ; son compte rendu s'obtient ensuite en un clic (ADR 0025).
 - Sur l'extrait annoté, les tours de parole des phases de discussion sont majoritairement bien attribués, et nettement mieux qu'avec OpenWhispr sur le même audio (protocole : `evaluation.md`).
 - Je renomme un locuteur, je relance le résumé, et le bon nom apparaît.
 - Passer d'un modèle à un autre, à n'importe quelle étape, ne demande qu'un changement de configuration.

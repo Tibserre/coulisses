@@ -14,6 +14,7 @@ import uvicorn
 from coulisses.api import DEFAULT_PROFILE, ChainConfig, load_profile, profile_path
 
 from coulisses_app.api import create_app
+from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -57,8 +58,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Base sauvegardée avant mise à jour : {backup}", file=sys.stderr)
 
     chain = ChainConfig.from_profile(load_profile(profile_path(DEFAULT_PROFILE)))
-    processor = Processor(data, chain)
-    problems = processor.recover() + interrupted_imports(data)
+    awake = KeepAwake()
+    processor = Processor(data, chain, keep_awake=awake)
+    problems = processor.recover() + interrupted_imports(data) + recover_interrupted(data)
     for problem in problems:
         print(f"Attention : {problem}", file=sys.stderr)
 
@@ -69,11 +71,17 @@ def main(argv: list[str] | None = None) -> None:
         processor=processor,
         web_dir=default_web_dir(),
         recovery_problems=problems,
+        recorder=Recorder(data, keep_awake=awake),
     )
     url = f"http://{HOST}:{args.port}/"
     if not args.sans_navigateur:
         threading.Timer(1.0, webbrowser.open, args=(url,)).start()
     try:
-        uvicorn.run(app, host=HOST, port=args.port, log_level="warning")
+        # Open streams (the recording page's meter) are cut after 2 s at shutdown, so that
+        # the service's own shutdown always runs: the recording is closed, the stages
+        # stopped (ADR 0018, 0027).
+        uvicorn.run(
+            app, host=HOST, port=args.port, log_level="warning", timeout_graceful_shutdown=2
+        )
     finally:
         lock.close()

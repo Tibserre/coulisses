@@ -8,18 +8,20 @@ import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Stack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { FileAudio, Upload } from "lucide-react";
+import { FileAudio, Mic, Upload } from "lucide-react";
 import {
   api,
   type AppInfo,
   type Person,
   type Session,
   type Space,
+  type InputDevice,
+  type RecordingState,
 } from "../api.ts";
 import { AppFooter } from "../components/AppFooter.tsx";
 import { AppHeader } from "../components/AppHeader.tsx";
 import { JobBadge } from "../components/JobBadge.tsx";
-import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
+import { formatBytes, formatClock, formatDate, formatDuration, plural } from "../format.ts";
 
 const ACCEPT =
   "audio/*,video/*,.wav,.m4a,.mp3,.flac,.ogg,.opus,.aac,.aif,.aiff,.caf,.mp4,.mov,.mkv,.webm";
@@ -27,13 +29,19 @@ const ACCEPT =
 export function LibraryPage() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
+  const [recording, setRecording] = useState<RecordingState | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [list, about] = await Promise.all([api.sessions(), api.info()]);
+      const [list, about, current] = await Promise.all([
+        api.sessions(),
+        api.info(),
+        api.recording(),
+      ]);
       setSessions(list);
       setInfo(about);
+      setRecording(current);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -82,7 +90,22 @@ export function LibraryPage() {
               </ul>
             </Banner>
           )}
+          {recording && (
+            <Banner
+              status="info"
+              title={recording.state === "paused" ? "Enregistrement en pause" : "Enregistrement en cours"}
+              description={`${formatClock(recording.elapsed_s)} enregistrées avec ${recording.device}.`}
+              endContent={
+                <Button
+                  size="sm"
+                  label="Y revenir"
+                  onClick={() => (window.location.hash = "#/enregistrement")}
+                />
+              }
+            />
+          )}
           <ImportPanel
+            recording={recording !== null}
             onImported={(id) => (window.location.hash = `#/seance/${id}`)}
           />
           <section>
@@ -249,7 +272,14 @@ function AttendeesPicker({
   );
 }
 
-function ImportPanel({ onImported }: { onImported: (id: string) => void }) {
+function ImportPanel({
+  recording,
+  onImported,
+}: {
+  /** A recording is in progress: another cannot start. */
+  recording: boolean;
+  onImported: (id: string) => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -259,6 +289,31 @@ function ImportPanel({ onImported }: { onImported: (id: string) => void }) {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [microphones, setMicrophones] = useState<InputDevice[] | null>(null);
+  const [micro, setMicro] = useState<number | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    api.microphones().then(
+      (found) => {
+        setMicrophones(found);
+        setMicro((current) => current ?? found.find((m) => m.default)?.index ?? found[0]?.index ?? null);
+      },
+      (e: Error) => setError(e.message),
+    );
+  }, []);
+
+  const record = async () => {
+    setError(null);
+    setStarting(true);
+    try {
+      await api.startRecording({ espace: spaceId, presents: personIds, non_nommes: unnamed, micro });
+      window.location.hash = "#/enregistrement";
+    } catch (e) {
+      setError((e as Error).message);
+      setStarting(false);
+    }
+  };
 
   useEffect(() => {
     api.spaces().then(
@@ -307,11 +362,11 @@ function ImportPanel({ onImported }: { onImported: (id: string) => void }) {
     >
       <Stack gap={5}>
         <Stack gap={1}>
-          <Heading level={2}>Importer un enregistrement</Heading>
+          <Heading level={2}>Nouvelle séance</Heading>
           <Text color="secondary">
-            Un fichier audio ou vidéo, enregistré sur le Mac, un téléphone ou un
-            enregistreur. Il est gardé tel quel ; le traitement démarre tout
-            seul, en tâche de fond.
+            Enregistrez-la ici avec le micro du Mac, ou importez un fichier audio
+            ou vidéo enregistré ailleurs. Le son est gardé tel quel ; le
+            traitement démarre tout seul, en tâche de fond.
           </Text>
         </Stack>
         <input
@@ -365,14 +420,35 @@ function ImportPanel({ onImported }: { onImported: (id: string) => void }) {
             disabled={progress !== null}
           />
         )}
-        <div>
+        <Stack direction="horizontal" gap={4} vAlign="end" wrap="wrap">
+          <Button
+            label="Enregistrer"
+            variant="primary"
+            icon={<Mic size={16} strokeWidth={1.75} />}
+            onClick={() => void record()}
+            isDisabled={recording || starting || progress !== null || micro === null}
+          />
+          {microphones && microphones.length > 0 && (
+            <label className="cl-select">
+              <span>Micro</span>
+              <select value={micro ?? ""} onChange={(e) => setMicro(Number(e.target.value))}>
+                {microphones.map((m) => (
+                  <option key={m.index} value={m.index}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <Button
             label="Importer et traiter"
-            variant="primary"
             onClick={() => void start()}
             isDisabled={!file || progress !== null}
           />
-        </div>
+        </Stack>
+        {recording && (
+          <Text type="supporting">Un enregistrement est déjà en cours : arrêtez-le avant d'en commencer un autre.</Text>
+        )}
         {progress !== null && (
           <ProgressBar
             label="Envoi du fichier"

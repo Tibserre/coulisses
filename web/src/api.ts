@@ -62,6 +62,46 @@ export interface AudioSource {
   channels: number | null;
   codec: string | null;
   file_present: boolean;
+  /** A recording made in the application: being written, complete, or repaired after a
+   *  crash. Null for an imported file. */
+  capture_state: "recording" | "complete" | "recovered" | null;
+  device: string | null;
+}
+
+export interface InputDevice {
+  index: number;
+  name: string;
+  channels: number;
+  default: boolean;
+}
+
+export interface RecordingState {
+  session_id: string;
+  state: "recording" | "paused";
+  /** Recorded so far, pauses left out. */
+  elapsed_s: number;
+  device: string;
+  channels: number;
+  levels: { peak_db: number; rms_db: number };
+  too_quiet: boolean;
+  clipping: boolean;
+  /** Times the Mac could not keep up and lost some sound. */
+  dropouts: number;
+  error: string | null;
+}
+
+export interface StopResult {
+  session_id: string;
+  duration_s: number;
+  processing: boolean;
+  on_battery: boolean;
+}
+
+export interface RecordingRequest {
+  espace: number | null;
+  presents: number[];
+  non_nommes: number | null;
+  micro: number | null;
 }
 
 export type ErrorCode =
@@ -386,6 +426,16 @@ export const api = {
       `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `${sessionPath(id)}/audio`,
+  microphones: () => getJson<InputDevice[]>("/api/micros"),
+  power: () => getJson<{ on_battery: boolean }>("/api/alimentation"),
+  recording: () => getJson<RecordingState | null>("/api/enregistrement"),
+  startRecording: (request: RecordingRequest) =>
+    send<RecordingState>("POST", "/api/enregistrement", request),
+  pauseRecording: () => send<RecordingState>("POST", "/api/enregistrement/pause"),
+  resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
+  stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
+  levelsUrl: "/api/enregistrement/niveaux",
+  processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   resume: (id: string, attendees?: number) =>
     send<Session>(
       "POST",

@@ -33,6 +33,7 @@ from coulisses.api import (
 from pydantic import BaseModel
 
 from coulisses_app import jobs, settings
+from coulisses_app.capture import KeepAwake
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.generate import (
     PHASES_REF,
@@ -115,8 +116,11 @@ class Processor:
         models: Path | None = None,
         engine_stage: Callable[[str, Path | None], RunStage] = execute_stage,
         model_client: ModelClient | None = None,
+        keep_awake: KeepAwake | None = None,
     ) -> None:
         self.data = data
+        # The Mac does not go to sleep while a job runs (spec §7.4); none in tests.
+        self.keep_awake = keep_awake
         self.model_client: ModelClient = model_client or OllamaClient()
         self.chain = chain
         self.models = models
@@ -171,6 +175,15 @@ class Processor:
     # -- one job ------------------------------------------------------------------------
 
     def run_job(self, job: jobs.Job) -> ChainJobResult:
+        if self.keep_awake is not None:
+            self.keep_awake.hold()
+        try:
+            return self._run_job(job)
+        finally:
+            if self.keep_awake is not None:
+                self.keep_awake.release()
+
+    def _run_job(self, job: jobs.Job) -> ChainJobResult:
         if isinstance(job.params, jobs.GenerationParams):
             return self._run_generation_job(job, job.params)
         log.info("job %s: chain for session %s", job.id, job.session_id)
