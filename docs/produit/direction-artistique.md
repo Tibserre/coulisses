@@ -104,7 +104,8 @@ La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/we
 - l'horodatage dans la marge, cliquable pour lire à partir de là ;
 - le nom en petites capitales dans l'encre du participant, puis la réplique ;
 - pas de pastille ni d'avatar dans le texte ;
-- la réplique en cours porte un trait brique à gauche ; le mot en cours est surligné ;
+- la réplique en cours a son horodatage en brique ; le mot en cours est surligné. Aucun trait de couleur sur le bord (retour de l'utilisateur du 2026-10-06) ;
+- le texte d'une réplique se modifie directement, comme dans un document : un fond très léger au survol et pendant la saisie ;
 - un titre de chapitre, centré entre deux filets, à chaque changement de chapitre ;
 - une note prise à la main s'intercale dans une ligne atténuée, en italique, avec son icône ;
 - un mot peu sûr est souligné en pointillé, avec sa confiance au survol ;
@@ -126,6 +127,7 @@ La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/we
 
 ## Ce qu'on s'interdit
 
+- Une barre ou un bord de couleur sur un seul côté d'un élément (réplique, élément sélectionné, carte) : jugé « signature IA ». On signale par la couleur du texte, un fond léger ou la graisse.
 - Fonds crème, beige, jaunâtres ou « papier ». Grain sur un fond plat.
 - Dégradés de fond, dégradés maillés, verre dépoli, halos.
 - Violet ou bleu électrique en accent. Plus d'un accent.

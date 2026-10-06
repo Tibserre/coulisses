@@ -229,6 +229,10 @@ def create_app(
     def redo_correction(session_id: str, edit_id: int) -> corrections.CorrectedView:
         return corrections.redo(data, session_id, edit_id)
 
+    @app.post("/api/seances/{session_id}/repliques/{turn}/texte-d-origine")
+    def reset_text(session_id: str, turn: int) -> corrections.CorrectedView:
+        return corrections.reset_text(data, session_id, turn)
+
     @app.put("/api/seances/{session_id}/presents")
     def set_attendees(session_id: str, demande: AttendeesRequest) -> sessions.Session:
         spaces.set_attendees(data, session_id, demande.person_ids, demande.unnamed)

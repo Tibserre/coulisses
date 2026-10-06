@@ -210,7 +210,9 @@ export function CorrectionsHistory({
               <Text hasStrikethrough={e.reverted}>{e.description}</Text>
               <Text type="supporting">{formatDateTime(e.created_at)}</Text>
             </span>
-            {e.reverted ? (
+            {e.reverted && e.redone ? (
+              <Text type="supporting">rétablie plus loin</Text>
+            ) : e.reverted ? (
               <Button
                 size="sm"
                 variant="ghost"

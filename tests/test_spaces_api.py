@@ -231,3 +231,29 @@ def test_zero_unnamed_attendees_after_the_fact_is_refused(
     session_id = processed_session(client, data, recording, non_nommes="2")
     response = client.put(f"/api/seances/{session_id}/presents", json={"unnamed": 0})
     assert response.status_code == 422
+
+
+def test_a_line_goes_back_to_the_engine_text_and_the_history_says_what_to_redo(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = processed_session(client, data, recording, non_nommes="2")
+    base = f"/api/seances/{session_id}"
+    client.post(f"{base}/corrections", json={"kind": "edit_text", "turn": 0, "text": "bonsoir"})
+    second = client.post(
+        f"{base}/corrections", json={"kind": "edit_text", "turn": 0, "text": "bonsoir tous"}
+    ).json()
+    assert [e["turn"] for e in second["edits"]] == [0, 0]
+    back = client.post(f"{base}/repliques/0/texte-d-origine").json()
+    assert back["turns"][0]["words"][0]["text"] == "bonjour"
+    assert not back["turns"][0]["edited"]
+    assert all(e["reverted"] and e["undone_by"] for e in back["edits"])
+    assert client.post(f"{base}/repliques/0/texte-d-origine").status_code == 422
+    view = back
+    for _ in range(2):  # Cmd-Shift-Z twice: the latest undone first
+        target = max(
+            (e for e in view["edits"] if e["reverted"] and not e["redone"]),
+            key=lambda e: e["undone_by"],
+        )
+        view = client.post(f"{base}/corrections/{target['id']}/retablir").json()
+    assert [w["text"] for w in view["turns"][0]["words"]] == ["bonsoir", "tous"]
+    assert all(e["redone"] for e in view["edits"] if e["reverted"])

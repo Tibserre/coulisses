@@ -4,7 +4,6 @@ import { test } from "node:test";
 import type { CorrectedView, Speaker, Word } from "./api.ts";
 import {
   buildModel,
-  replaceWord,
   speakerTitle,
   toggleSelection,
   turnAt,
@@ -129,6 +128,3 @@ test("a click selects one line, Shift-click the whole range", () => {
   assert.deepEqual([...toggleSelection(range, order, 2, null)].sort(), [1, 3]);
 });
 
-test("accepting a suggestion replaces only that word", () => {
-  assert.equal(replaceWord([{ text: "Bonjour" }, { text: "Kathy" }], 1, "Cathy"), "Bonjour Cathy");
-});

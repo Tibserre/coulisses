@@ -1,15 +1,13 @@
-import { memo, useEffect, useRef, useState } from "react";
-import { Button } from "@astryxdesign/core/Button";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Popover } from "@astryxdesign/core/Popover";
-import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowRightLeft, Pencil, Play } from "lucide-react";
+import { ArrowRightLeft, Play, RotateCcw, SpellCheck } from "lucide-react";
 import { motion } from "motion/react";
 import type { EditRequest, Person, Speaker, Word as WordData } from "../api.ts";
 import { formatClock } from "../format.ts";
 import { speakerInk } from "../theme/shared.ts";
 import type { ReviewModel, Row, TurnRow } from "../transcript.ts";
-import { replaceWord, speakerTitle } from "../transcript.ts";
+import { speakerTitle } from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
 import { NamePanel } from "./NamePanel.tsx";
 
@@ -24,7 +22,8 @@ export interface Editing {
   people: Person[];
   correct: (correction: EditRequest) => Promise<void>;
   addGuest: (name: string) => Promise<Person>;
-  /** Line whose text is being corrected, by its index in the run. */
+  resetText: (turn: number) => Promise<void>;
+  /** A request to put the cursor in a line's text (E), by its index in the run. */
   editingTurn: number | null;
   setEditingTurn: (turn: number | null) => void;
   /** Line whose voice is being named. */
@@ -40,22 +39,24 @@ export function inkOf(speaker: Speaker): string {
     : "var(--coulisses-speaker-unknown-ink)";
 }
 
-function Word({
-  word,
-  isCurrent,
-  onAccept,
-}: {
-  word: WordData;
-  isCurrent: boolean;
-  /** Replace this word by the glossary's spelling. */
-  onAccept?: () => void;
-}) {
+/** A word as text. Marks (current word, unsure, added, glossary) are drawn with CSS so
+ *  that the line's text, typed into or copied, is exactly its words. */
+function Word({ word, isCurrent }: { word: WordData; isCurrent: boolean }) {
   const unsure = word.confidence != null && word.confidence < UNSURE_BELOW;
-  const inner = (
+  const title = word.suggestion
+    ? `Peut-être « ${word.suggestion} » (glossaire)`
+    : word.added
+      ? "Ajouté à la main, sans horodatage mesuré"
+      : unsure
+        ? `Mot peu sûr, confiance ${Math.round((word.confidence ?? 0) * 100)} %`
+        : undefined;
+  return (
     <span
       className="cl-word"
       data-unsure={unsure || undefined}
+      data-added={word.added || undefined}
       data-suggestion={word.suggestion ? true : undefined}
+      title={title}
     >
       {isCurrent && (
         <motion.span
@@ -66,49 +67,8 @@ function Word({
         />
       )}
       {word.text}
-      {word.added && (
-        <sup
-          className="cl-word__added"
-          aria-label="mot ajouté, sans horodatage mesuré"
-        >
-          +
-        </sup>
-      )}
     </span>
   );
-  if (word.suggestion && onAccept) {
-    return (
-      <Tooltip
-        content={`Peut-être « ${word.suggestion} » : cliquer pour corriger`}
-        hasHoverIndication={false}
-      >
-        <button type="button" className="cl-word__fix" onClick={onAccept}>
-          {inner}
-        </button>
-      </Tooltip>
-    );
-  }
-  if (unsure) {
-    return (
-      <Tooltip
-        content={`Mot peu sûr, confiance ${Math.round((word.confidence ?? 0) * 100)} %`}
-        hasHoverIndication={false}
-      >
-        {inner}
-      </Tooltip>
-    );
-  }
-  if (word.added) {
-    return (
-      <Tooltip
-        content="Ajouté à la main, sans horodatage mesuré"
-        hasHoverIndication={false}
-      >
-        {inner}
-      </Tooltip>
-    );
-  }
-  return inner;
 }
 
 function TimeLink({
@@ -195,63 +155,111 @@ export function GiveToPanel({
   );
 }
 
-function TextEditor({
-  initial,
-  onSave,
-  onCancel,
+function placeCaretAtEnd(element: HTMLElement) {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+/** The text of a line, typed into directly. Leaving it (or Enter) saves; Escape gives
+ *  back what was there. Cmd-Z undoes typing while in it; outside, it undoes the last
+ *  correction (the page handles that). A draft is never lost: refused, it stays on screen
+ *  to be fixed; scrolled out of view, it is saved (P8). */
+function EditableText({
+  turn,
+  currentWord,
+  editing,
 }: {
-  initial: string;
-  onSave: (text: string) => Promise<void>;
-  onCancel: () => void;
+  turn: TurnRow["turn"];
+  currentWord: number | null;
+  editing: Editing;
 }) {
-  const [text, setText] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  const area = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    area.current?.focus();
-    area.current?.select();
-  }, []);
-  const save = async () => {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const cancel = useRef(false);
+  /** What was typed and not saved yet; null when the line shows its saved text. */
+  const draft = useRef<string | null>(null);
+  // Typing, or saving what was typed: the line is left alone (no current-word mark).
+  const [active, setActive] = useState(false);
+  // Remounting the paragraph after each edit gives React back a DOM it knows.
+  const [version, setVersion] = useState(0);
+  const text = turn.words.map((w) => w.text).join(" ");
+  const { correct, editingTurn, setEditingTurn } = editing;
+
+  // E (or any request) puts the cursor at the end of this line.
+  useLayoutEffect(() => {
+    if (editingTurn === turn.index && ref.current) {
+      ref.current.focus();
+      placeCaretAtEnd(ref.current);
+      setEditingTurn(null);
+    }
+  }, [editingTurn, turn.index, setEditingTurn]);
+
+  // Scrolled out of the virtual list while typed into: save what was typed.
+  useEffect(
+    () => () => {
+      const typed = draft.current?.replace(/\s+/g, " ").trim();
+      if (typed && typed !== text) void correct({ kind: "edit_text", turn: turn.index, text: typed }).catch(() => undefined);
+    },
+    [correct, text, turn.index],
+  );
+
+  const finish = async () => {
+    const typed = (ref.current?.innerText ?? "").replace(/\s+/g, " ").trim();
+    if (cancel.current || typed === text) {
+      cancel.current = false;
+      draft.current = null;
+      setVersion((v) => v + 1);
+      setActive(false);
+      return;
+    }
     try {
-      await onSave(text);
-    } catch (e) {
-      setError((e as Error).message);
+      // An empty line is refused by the service, with its reason.
+      await correct({ kind: "edit_text", turn: turn.index, text: typed });
+      draft.current = null;
+      setVersion((v) => v + 1);
+      setActive(false);
+    } catch {
+      // Refused (shown by the page): the draft stays on screen, untouched, to be fixed.
     }
   };
+
   return (
-    <div className="cl-editor">
-      <textarea
-        ref={area}
-        className="cl-editor__area"
-        value={text}
-        aria-label="Texte de la réplique"
-        rows={Math.max(2, Math.ceil(text.length / 70))}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void save();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          }
-        }}
-      />
-      <div className="cl-editor__bar">
-        <span className="cl-editor__hint">
-          Entrée pour enregistrer, Échap pour annuler. Un mot corrigé garde son
-          horodatage.
+    <p
+      key={`${version}:${text}`}
+      ref={ref}
+      className="cl-words"
+      contentEditable="plaintext-only"
+      suppressContentEditableWarning
+      spellCheck
+      lang="fr"
+      role="textbox"
+      aria-label="Texte de la réplique, modifiable"
+      onFocus={() => setActive(true)}
+      onInput={() => {
+        draft.current = ref.current?.innerText ?? "";
+      }}
+      onBlur={() => void finish()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          ref.current?.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancel.current = true;
+          ref.current?.blur();
+        }
+      }}
+    >
+      {turn.words.map((w, i) => (
+        <span key={i}>
+          <Word word={w} isCurrent={!active && currentWord === i} />
+          {i < turn.words.length - 1 ? " " : ""}
         </span>
-        <Button size="sm" variant="ghost" label="Annuler" onClick={onCancel} />
-        <Button
-          size="sm"
-          variant="primary"
-          label="Enregistrer"
-          clickAction={save}
-        />
-      </div>
-      {error && <p className="cl-editor__error">{error}</p>}
-    </div>
+      ))}
+    </p>
   );
 }
 
@@ -271,15 +279,15 @@ const TurnLine = memo(function TurnLine({
 }) {
   const { turn, speaker } = row;
   const isCurrent = currentWord !== null;
-  const isEditing = editing.editingTurn === turn.index;
   const isSelected = editing.selected.has(turn.index);
   const [giving, setGiving] = useState(false);
-  const text = turn.words.map((w) => w.text).join(" ");
+  const suggestions = turn.words.filter((w) => w.suggestion);
 
-  const acceptSuggestion = (i: number, by: string) => {
+  const applyGlossary = () => {
+    const text = turn.words.map((w) => w.suggestion ?? w.text).join(" ");
     void editing
-      .correct({ kind: "edit_text", turn: turn.index, text: replaceWord(turn.words, i, by) })
-      .catch(() => undefined); // the refusal is shown by the page (editError)
+      .correct({ kind: "edit_text", turn: turn.index, text })
+      .catch(() => undefined);
   };
 
   return (
@@ -303,10 +311,7 @@ const TurnLine = memo(function TurnLine({
         />
         <TimeLink t={turn.start} isCurrent={isCurrent} onSeek={onSeek} />
       </div>
-      <div
-        className="cl-turn__body"
-        style={{ "--cl-ink": inkOf(speaker) } as React.CSSProperties}
-      >
+      <div className="cl-turn__body">
         <div className="cl-turn__head">
           <Popover
             isOpen={editing.namingTurn === turn.index}
@@ -358,15 +363,30 @@ const TurnLine = memo(function TurnLine({
             </button>
           )}
           <span className="cl-turn__actions">
-            <button
-              type="button"
-              className="cl-iconbtn"
-              aria-label="Corriger le texte (E)"
-              title="Corriger le texte (E)"
-              onClick={() => editing.setEditingTurn(turn.index)}
-            >
-              <Pencil size={14} strokeWidth={1.75} />
-            </button>
+            {suggestions.length > 0 && (
+              <button
+                type="button"
+                className="cl-iconbtn"
+                aria-label="Appliquer le glossaire"
+                title={`Appliquer le glossaire : ${suggestions.map((w) => `${w.text} → ${w.suggestion}`).join(", ")}`}
+                onClick={applyGlossary}
+              >
+                <SpellCheck size={14} strokeWidth={1.75} />
+              </button>
+            )}
+            {turn.edited && (
+              <button
+                type="button"
+                className="cl-iconbtn"
+                aria-label="Revenir au texte d'origine"
+                title="Revenir au texte d'origine"
+                onClick={() =>
+                  void editing.resetText(turn.index).catch(() => undefined)
+                }
+              >
+                <RotateCcw size={14} strokeWidth={1.75} />
+              </button>
+            )}
             <Popover
               isOpen={giving}
               onOpenChange={setGiving}
@@ -378,11 +398,13 @@ const TurnLine = memo(function TurnLine({
                   except={speaker.label}
                   onGive={(target) => {
                     setGiving(false);
-                    void editing.correct({
-                      kind: "reassign_turns",
-                      turns: [turn.index],
-                      target,
-                    });
+                    void editing
+                      .correct({
+                        kind: "reassign_turns",
+                        turns: [turn.index],
+                        target,
+                      })
+                      .catch(() => undefined);
                   }}
                 />
               }
@@ -398,41 +420,7 @@ const TurnLine = memo(function TurnLine({
             </Popover>
           </span>
         </div>
-        {isEditing ? (
-          <TextEditor
-            initial={text}
-            onCancel={() => editing.setEditingTurn(null)}
-            onSave={async (value) => {
-              if (value.trim() === text) {
-                editing.setEditingTurn(null);
-                return;
-              }
-              await editing.correct({
-                kind: "edit_text",
-                turn: turn.index,
-                text: value,
-              });
-              editing.setEditingTurn(null);
-            }}
-          />
-        ) : (
-          <p className="cl-words">
-            {turn.words.map((w, i) => (
-              <span key={i}>
-                <Word
-                  word={w}
-                  isCurrent={currentWord === i}
-                  onAccept={
-                    w.suggestion
-                      ? () => acceptSuggestion(i, w.suggestion!)
-                      : undefined
-                  }
-                />
-                {i < turn.words.length - 1 ? " " : ""}
-              </span>
-            ))}
-          </p>
-        )}
+        <EditableText turn={turn} currentWord={currentWord} editing={editing} />
       </div>
     </div>
   );
@@ -470,10 +458,11 @@ export function TranscriptView({
     }
   }, [pb.moves, currentIndex, virtualizer]);
 
-  // While playing, follow the sound only when the line leaves the screen: the page stays
-  // calm. Never on first display.
+  // While playing, follow the sound only when the line leaves the screen, and never while
+  // a line is being typed into. Never on first display.
   useEffect(() => {
-    if (!pb.playing || currentIndex < 0) return;
+    const typing = document.activeElement?.closest(".cl-words") != null;
+    if (!pb.playing || currentIndex < 0 || typing) return;
     const visible = virtualizer.getVirtualItems();
     const first = visible.find(
       (v) => v.start >= (virtualizer.scrollOffset ?? 0),

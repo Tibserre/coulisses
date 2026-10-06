@@ -133,7 +133,3 @@ export function toggleSelection(
   return next;
 }
 
-/** The text of a line once its word `index` is replaced (a glossary suggestion). */
-export function replaceWord(words: readonly { text: string }[], index: number, by: string): string {
-  return words.map((w, k) => (k === index ? by : w.text)).join(" ");
-}

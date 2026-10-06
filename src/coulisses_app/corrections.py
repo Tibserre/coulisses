@@ -136,6 +136,12 @@ class EditInfo(BaseModel):
     description: str
     created_at: str
     reverted: bool
+    undone_by: int | None = None
+    """Journal entry that undid it: the latest undone is the one Cmd-Shift-Z redoes."""
+    redone: bool = False
+    """Undone, then applied again by a later copy that is still in force."""
+    turn: int | None = None
+    """For a text correction: the line it corrects."""
 
 
 class Untranscribed(BaseModel):
@@ -312,7 +318,8 @@ def _replay(
     assigned: dict[str, AssignSpeaker] = {}
     new_voices: list[str] = []
 
-    reverted = {e.reverts for e in journal if e.kind == EditKind.REVERT and e.reverts}
+    undone_by = {e.reverts: e.id for e in journal if e.kind == EditKind.REVERT and e.reverts}
+    reverted = set(undone_by)
     infos: list[EditInfo] = []
     other_run = 0
     for entry in journal:
@@ -355,7 +362,21 @@ def _replay(
                 description=description,
                 created_at=entry.created_at,
                 reverted=not live,
+                undone_by=undone_by.get(entry.id),
+                turn=request.turn if isinstance(request, EditText) else None,
             )
+        )
+    in_force = [
+        (e.id, e.kind, e.payload)
+        for e in journal
+        if e.kind != EditKind.REVERT and e.id not in reverted and e.run_id == run_id
+    ]
+    payloads = {e.id: (e.kind, e.payload) for e in journal}
+    for info in infos:
+        # Redone: a later copy of it, on the same run, still in force.
+        info.redone = info.reverted and any(
+            later > info.id and (kind, payload) == payloads[info.id]
+            for later, kind, payload in in_force
         )
 
     turns: list[Turn] = []
@@ -646,6 +667,34 @@ def undo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:
     view = build_view(data, session_id)
     assert view is not None
     return view
+
+
+def reset_text(data: DataDir, session_id: str, turn: int) -> CorrectedView:
+    """Back to the engine's text for one line: every text correction of it still in force
+    is undone (each one by an entry of its own, so it can be redone)."""
+    view = build_view(data, session_id)
+    if view is None:
+        raise CorrectionError("Le transcript n'est pas encore prêt.")
+    live = [e.id for e in view.edits if e.turn == turn and not e.reverted]
+    if not live:
+        raise CorrectionError("Le texte de cette réplique n'a pas été corrigé.")
+    conn = connect(data)
+    try:
+        with conn:
+            conn.executemany(
+                "INSERT INTO edit (session_id, run_id, kind, payload, reverts_edit_id,"
+                " created_at) VALUES (?, ?, ?, '{}', ?, ?)",
+                # Latest first: redoing then brings them back in their original order.
+                [
+                    (session_id, view.run_id, EditKind.REVERT.value, i, now_iso())
+                    for i in reversed(live)
+                ],
+            )
+    finally:
+        conn.close()
+    result = build_view(data, session_id)
+    assert result is not None
+    return result
 
 
 def redo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:

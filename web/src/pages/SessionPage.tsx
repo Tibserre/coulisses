@@ -49,6 +49,7 @@ export function SessionPage({ id }: { id: string }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [lastSelected, setLastSelected] = useState<number | null>(null);
   const [giving, setGiving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const pb = usePlayback();
   const dev = useDevMode();
 
@@ -121,6 +122,15 @@ export function SessionPage({ id }: { id: string }) {
         await loadPeople();
         return guest;
       },
+      resetText: async (turn: number) => {
+        try {
+          setView(await api.resetText(id, turn));
+          setEditError(null);
+        } catch (e) {
+          setEditError((e as Error).message);
+          throw e;
+        }
+      },
       editingTurn,
       setEditingTurn,
       namingTurn,
@@ -132,25 +142,65 @@ export function SessionPage({ id }: { id: string }) {
         setLastSelected(turn);
       },
     }),
-    [people, correct, spaceId, loadPeople, editingTurn, namingTurn, selected, lastSelected, model],
+    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, model],
   );
 
-  // N names the voice of the line being heard, E corrects its text.
+  /** Cmd-Z undoes the last correction still in force; Cmd-Shift-Z redoes the last one
+   *  undone. Both go through the journal: nothing is erased (P5). */
+  const history = useCallback(
+    async (redo: boolean) => {
+      const edits = view?.edits ?? [];
+      try {
+        if (redo) {
+          const target = edits
+            .filter((e) => e.reverted && !e.redone && e.undone_by != null)
+            .sort((a, b) => (b.undone_by ?? 0) - (a.undone_by ?? 0))[0];
+          if (!target) return setNotice("Rien à rétablir.");
+          setView(await api.redo(id, target.id));
+          setNotice(`Rétabli : ${target.description}`);
+        } else {
+          const target = edits.filter((e) => !e.reverted).sort((a, b) => b.id - a.id)[0];
+          if (!target) return setNotice("Rien à annuler.");
+          setView(await api.undo(id, target.id));
+          setNotice(`Annulé : ${target.description}`);
+        }
+        setEditError(null);
+      } catch (e) {
+        setEditError((e as Error).message);
+      }
+    },
+    [id, view],
+  );
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  // N names the voice of the line being heard, E puts the cursor in its text; Cmd-Z and
+  // Cmd-Shift-Z undo and redo corrections (inside a line being typed into, they undo the
+  // typing, as anywhere).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey || !currentRow) return;
+      if (isTyping(e.target)) return;
+      if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        void history(e.shiftKey);
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || !currentRow) return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setNamingTurn(currentRow.turn.index);
       } else if (e.key === "e" || e.key === "E") {
         e.preventDefault();
-        pb.audioRef.current?.pause();
         setEditingTurn(currentRow.turn.index);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentRow, pb.audioRef]);
+  }, [currentRow, history]);
 
   const session = detail?.session;
   const title = session ? (session.title ?? `Séance du ${formatDate(session.recorded_at).toLowerCase()}`) : "";
@@ -218,6 +268,11 @@ export function SessionPage({ id }: { id: string }) {
                 </div>
               )}
               <TranscriptView model={model} pb={pb} current={current} editing={editing} />
+              {notice && (
+                <div className="cl-notice" role="status">
+                  {notice}
+                </div>
+              )}
               {selected.size > 0 && (
                 <div className="cl-selection" role="toolbar" aria-label="Répliques sélectionnées">
                   <Text>{plural(selected.size, "réplique sélectionnée", "répliques sélectionnées")}</Text>

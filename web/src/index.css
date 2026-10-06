@@ -170,13 +170,13 @@ body {
 }
 
 .cl-transcript > div {
-  max-width: calc(70ch + 4.5rem + var(--spacing-5) + var(--spacing-4));
+  max-width: calc(70ch + 6rem + var(--spacing-5) + var(--spacing-4));
   margin: 0 auto;
 }
 
 .cl-turn {
   display: grid;
-  grid-template-columns: 4.5rem 1fr;
+  grid-template-columns: 6rem 1fr;
   column-gap: var(--spacing-5);
   align-items: baseline;
   padding: var(--spacing-2) 0;
@@ -188,14 +188,8 @@ body {
   flex-direction: column;
   gap: var(--spacing-1);
   padding-inline-start: var(--spacing-4);
-  box-shadow: inset 1px 0 0 0 var(--color-border);
-  transition: box-shadow var(--duration-medium) var(--ease-standard);
 }
 
-/* The line being heard carries a brick rail on its left. */
-.cl-turn[data-current] .cl-turn__body {
-  box-shadow: inset 2px 0 0 0 var(--color-accent);
-}
 
 .cl-name {
   font-weight: var(--font-weight-semibold);
@@ -288,7 +282,7 @@ button.cl-time {
 
 .cl-gap {
   display: grid;
-  grid-template-columns: 4.5rem 1fr;
+  grid-template-columns: 6rem 1fr;
   column-gap: var(--spacing-5);
   align-items: baseline;
   padding: var(--spacing-3) 0;
@@ -543,7 +537,7 @@ button.cl-time {
 
 .cl-spaces__list a[aria-current="page"] {
   background: var(--color-background-muted);
-  box-shadow: inset 2px 0 0 var(--color-accent);
+  font-weight: var(--font-weight-medium);
 }
 
 .cl-spaces__list a[data-archived] {
@@ -696,13 +690,7 @@ button.cl-name:hover {
   color: var(--color-text-primary);
 }
 
-.cl-turn__body {
-  box-shadow: inset 1px 0 0 0 var(--color-border);
-}
 
-.cl-turn[data-current] .cl-turn__body {
-  box-shadow: inset 2px 0 0 0 var(--color-accent);
-}
 
 .cl-word[data-suggestion] {
   text-decoration: underline wavy var(--color-accent);
@@ -710,57 +698,12 @@ button.cl-name:hover {
   text-underline-offset: 4px;
 }
 
-.cl-word__fix {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
 
-.cl-word__added {
-  color: var(--color-text-secondary);
-  font-size: 0.6em;
-  margin-inline-start: 1px;
-}
 
-.cl-editor {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-  max-width: 70ch;
-}
 
-.cl-editor__area {
-  font: inherit;
-  font-size: var(--text-large-size);
-  line-height: var(--text-large-leading);
-  padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-element);
-  background: var(--color-background-surface);
-  color: var(--color-text-primary);
-  resize: vertical;
-}
 
-.cl-editor__bar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
 
-.cl-editor__hint {
-  flex: 1;
-  font-size: var(--font-size-xsm);
-  color: var(--color-text-secondary);
-}
 
-.cl-editor__error {
-  margin: 0;
-  color: var(--color-text-error, var(--color-accent));
-  font-size: var(--font-size-sm);
-}
 
 .cl-selection {
   position: absolute;
@@ -855,13 +798,7 @@ button.cl-name:hover {
   color: var(--color-text-secondary);
 }
 
-/* Copy and paste work everywhere (rules/web.md): names and suggested words stay text. */
-button.cl-name,
-.cl-word__fix {
-  user-select: text;
-  -webkit-user-select: text;
-}
-
+/* Controls stay out of a copied passage of the transcript. */
 .cl-turn__nommer,
 .cl-turn__actions,
 .cl-turn__check {
@@ -882,4 +819,58 @@ button.cl-name,
   white-space: pre-wrap;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------- Typed into lines --- */
+
+/* Lines are typed into directly, like a document: a faint ground on hover and while
+   typing, never a coloured edge (art direction: no accent bar on one side). */
+.cl-words[contenteditable] {
+  margin-inline: calc(-1 * var(--spacing-2));
+  padding-inline: var(--spacing-2);
+  border-radius: var(--radius-inner);
+  outline: none;
+  cursor: text;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.cl-words[contenteditable]:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-words[contenteditable]:focus {
+  background: var(--color-background-surface);
+  box-shadow: 0 0 0 1px var(--color-border), var(--shadow-low);
+}
+
+/* The line being heard: its time in brick and its current word lit; nothing else. */
+.cl-turn[data-current] .cl-time {
+  color: var(--color-accent);
+}
+
+/* Marks drawn by CSS stay out of the text a line is typed into or copied from. */
+.cl-word[data-added]::after {
+  content: "+";
+  color: var(--color-text-secondary);
+  font-size: 0.6em;
+  vertical-align: super;
+  margin-inline-start: 1px;
+}
+
+.cl-notice {
+  position: absolute;
+  left: 50%;
+  bottom: var(--spacing-4);
+  transform: translateX(-50%);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-med);
+  font-size: var(--font-size-sm);
+}
+
+/* Copy and paste work everywhere (rules/web.md): names stay text. */
+button.cl-name {
+  user-select: text;
+  -webkit-user-select: text;
 }

@@ -159,6 +159,12 @@ export interface EditInfo {
   description: string;
   created_at: string;
   reverted: boolean;
+  /** Journal entry that undid it: the latest undone is the one Cmd-Shift-Z redoes. */
+  undone_by: number | null;
+  /** Undone, then applied again by a later copy still in force. */
+  redone: boolean;
+  /** For a text correction: the line it corrects. */
+  turn: number | null;
 }
 
 export interface CorrectedView {
@@ -253,6 +259,8 @@ export const api = {
     send<CorrectedView>("POST", `${sessionPath(id)}/corrections/${editId}/annuler`),
   redo: (id: string, editId: number) =>
     send<CorrectedView>("POST", `${sessionPath(id)}/corrections/${editId}/retablir`),
+  resetText: (id: string, turn: number) =>
+    send<CorrectedView>("POST", `${sessionPath(id)}/repliques/${turn}/texte-d-origine`),
   setAttendees: (id: string, personIds: number[], unnamed: number | null) =>
     send<Session>("PUT", `${sessionPath(id)}/presents`, {
       person_ids: personIds,
