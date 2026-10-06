@@ -547,9 +547,20 @@ _NOT_BUILT = """<!doctype html><html lang="fr"><meta charset="utf-8"><title>Coul
 puis rechargez cette page. L'API répond déjà sur <code>/api/etat</code>.</p></body></html>"""
 
 
+class _Interface(StaticFiles):
+    """The built interface. The page is checked again at each load, so that a new build is
+    seen on the next reload; its scripts and styles carry a hash in their name."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        if response.media_type == "text/html":
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def _mount_interface(app: FastAPI, web_dir: Path | None) -> None:
     if web_dir is not None and (web_dir / "index.html").is_file():
-        app.mount("/", StaticFiles(directory=web_dir, html=True), name="interface")
+        app.mount("/", _Interface(directory=web_dir, html=True), name="interface")
         return
 
     @app.get("/", response_class=HTMLResponse)
