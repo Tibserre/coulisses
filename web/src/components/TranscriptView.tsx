@@ -4,6 +4,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowRightLeft,
   BookmarkPlus,
+  Flag,
+  PenLine,
+  Star,
   ChevronRight,
   Ellipsis,
   Play,
@@ -539,7 +542,12 @@ const PhaseHeading = memo(function PhaseHeading({
       </div>
       <div className="cl-chapter__body">
         <span className="cl-chapter__rule" aria-hidden />
-        <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>
+        <span className="cl-chapter__kind">
+          {phase.marked && (
+            <Flag size={11} strokeWidth={2} aria-label="Coupure posée pendant la séance" className="cl-chapter__marked" />
+          )}
+          {KIND_LABEL[phase.kind]}
+        </span>
         <PhaseTitle turn={phase.turn} title={phase.title} correct={editing.correct} />
         {folded && <span className="cl-chapter__count">{plural(lines, "réplique", "répliques")}</span>}
         <span className="cl-chapter__rule" aria-hidden />
@@ -675,6 +683,20 @@ export function TranscriptView({
                 />
               ) : row.kind === "phase" ? (
                 <PhaseHeading row={row} onSeek={pb.seek} editing={editing} />
+              ) : row.kind === "moment" ? (
+                <div className="cl-aside" data-kind="moment">
+                  <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />
+                  <span>
+                    <Star size={14} strokeWidth={1.75} aria-hidden /> Moment clé, marqué pendant la séance
+                  </span>
+                </div>
+              ) : row.kind === "note" ? (
+                <div className="cl-aside" data-kind="note">
+                  <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />
+                  <span>
+                    <PenLine size={14} strokeWidth={1.75} aria-hidden /> {row.note.text}
+                  </span>
+                </div>
               ) : (
                 <div className="cl-gap">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />

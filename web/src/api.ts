@@ -75,6 +75,22 @@ export interface InputDevice {
   default: boolean;
 }
 
+export type MarkerKind = "scene" | "discussion" | "key_moment";
+
+/** Set while recording, at a recorded time (pauses left out). */
+export interface Marker {
+  id: number;
+  kind: MarkerKind;
+  at_s: number;
+}
+
+/** A note taken while recording, at the time its first letter was typed. */
+export interface TimedNote {
+  id: number;
+  at_s: number;
+  text: string;
+}
+
 export interface RecordingState {
   session_id: string;
   state: "recording" | "paused";
@@ -88,6 +104,8 @@ export interface RecordingState {
   /** Times the Mac could not keep up and lost some sound. */
   dropouts: number;
   error: string | null;
+  markers: Marker[];
+  notes: TimedNote[];
 }
 
 export interface StopResult {
@@ -196,6 +214,8 @@ export interface Phase {
   kind: PhaseKind;
   title: string;
   edited: boolean;
+  /** Cut by a play or discussion marker set while recording. */
+  marked: boolean;
 }
 
 export interface PhasesStatus {
@@ -250,6 +270,12 @@ export interface CorrectedView {
   phases_run_id: string | null;
   /** Why the detected chapters could not be read, when they could not. */
   phases_problem: string | null;
+  /** Set while recording: play, discussion, key moment. */
+  markers: Marker[];
+  /** Notes taken while recording. */
+  timed_notes: TimedNote[];
+  /** Detected cuts a marker replaced, in words (developer mode). */
+  phases_by_markers: string[];
 }
 
 export type EditRequest =
@@ -435,6 +461,13 @@ export const api = {
   resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
   stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
   levelsUrl: "/api/enregistrement/niveaux",
+  mark: (kind: MarkerKind, atS?: number) =>
+    send<RecordingState>("POST", "/api/enregistrement/marqueurs", { kind, at_s: atS ?? null }),
+  unmark: (id: number) => send<RecordingState>("POST", `/api/enregistrement/marqueurs/${id}/retirer`),
+  addTimedNote: (text: string, atS: number) =>
+    send<RecordingState>("POST", "/api/enregistrement/notes", { text, at_s: atS }),
+  removeTimedNote: (id: number) =>
+    send<RecordingState>("POST", `/api/enregistrement/notes/${id}/retirer`),
   processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   resume: (id: string, attendees?: number) =>
     send<Session>(

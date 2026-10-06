@@ -22,8 +22,9 @@ from typing import Annotated, Literal
 from coulisses.api import AttributedTranscript, read_output
 from pydantic import BaseModel, Field, TypeAdapter
 
-from coulisses_app import spaces
+from coulisses_app import marks, spaces
 from coulisses_app.format import clock
+from coulisses_app.marks import Marker, TimedNote
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import KIND_WORD, TITLE_MAX, PhaseDetection, PhaseKind
 from coulisses_app.spaces import COLOR_SLOTS, Person, SpaceError
@@ -178,6 +179,9 @@ class Phase(BaseModel):
     title: str
     edited: bool = False
     """Changed or created by the user (the detection said otherwise)."""
+    marked: bool = False
+    """Cut by a play or discussion marker set while recording: it comes before the
+    detection (spec §7.5)."""
 
 
 class Untranscribed(BaseModel):
@@ -202,6 +206,12 @@ class CorrectedView(BaseModel):
     """The detection the chapters come from: a summary made with another is stale."""
     phases_problem: str | None = None
     """Why the detection's chapters could not be read, when they could not (P8)."""
+    markers: list[Marker] = []
+    """Set while recording (play, discussion, key moment), at recorded times."""
+    timed_notes: list[TimedNote] = []
+    """Notes taken while recording, at the time their first letter was typed."""
+    phases_by_markers: list[str] = []
+    """Detected cuts a marker replaced, in words (shown in developer mode, ADR 0024)."""
 
 
 class CorrectionError(SpaceError):
@@ -314,6 +324,8 @@ def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
         variants = _variants(conn, space_row["space_id"])
         journal = _journal(conn, session_id)
         detection_run = _active_detection(conn, session_id, run_id)
+        marked = marks.markers(conn, session_id)
+        notes_taken = marks.timed_notes(conn, session_id)
     finally:
         conn.close()
     detection: PhaseDetection | None = None
@@ -336,6 +348,8 @@ def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
         detection=detection,
         detection_run_id=detection_run,
         detection_problem=problem,
+        markers=marked,
+        timed_notes=notes_taken,
     )
 
 
@@ -378,6 +392,8 @@ def _replay(
     detection: PhaseDetection | None = None,
     detection_run_id: str | None = None,
     detection_problem: str | None = None,
+    markers: list[Marker] | None = None,
+    timed_notes: list[TimedNote] | None = None,
 ) -> CorrectedView:
     numbers = _numbering(transcript)
     words_of = [
@@ -482,7 +498,7 @@ def _replay(
         )
 
     speakers = _speakers(turns, numbers, new_voices, assigned, people)
-    phases, outside = _phases(turns, detection, phase_edits)
+    phases, outside, replaced = _phases(turns, detection, phase_edits, markers or [])
     if outside:
         detection_problem = " ".join(
             filter(
@@ -508,21 +524,72 @@ def _replay(
         phases=phases,
         phases_run_id=detection_run_id if detection is not None else None,
         phases_problem=detection_problem,
+        markers=markers or [],
+        timed_notes=timed_notes or [],
+        phases_by_markers=replaced,
     )
 
 
+MARKER_ABSORBS_S = 60.0
+"""A detected cut this close to a marker is the same cut: the marker's line wins, the
+detection's title stays."""
+
+
+def _line_after(turns: list[Turn], at_s: float) -> int | None:
+    """The first line starting at or after a time (half a second of slack: a marker set
+    while someone starts speaking belongs to that line)."""
+    return next((t.index for t in turns if t.start is not None and t.start >= at_s - 0.5), None)
+
+
 def _phases(
-    turns: list[Turn], detection: PhaseDetection | None, edits: list[SetPhase | RemovePhase]
-) -> tuple[list[Phase], int]:
-    """The detection's chapters, then the user's changes in the order they were made; and
-    how many of either point at no line of this run (never expected: counted, not hidden)."""
+    turns: list[Turn],
+    detection: PhaseDetection | None,
+    edits: list[SetPhase | RemovePhase],
+    marked: list[Marker],
+) -> tuple[list[Phase], int, list[str]]:
+    """The detection's chapters, the cuts marked while recording over them, then the
+    user's changes in the order they were made; and how many of the detection's chapters
+    or of the changes point at no line of this run (never expected: counted, not hidden)."""
     count = len(turns)
     detected = detection.phases if detection else []
     outside = sum(1 for p in detected if not 0 <= p.turn < count)
-    # Chapter start (line index) → (kind, title, edited).
-    starts: dict[int, tuple[PhaseKind, str, bool]] = {
-        p.turn: (p.kind, p.title, False) for p in detected if 0 <= p.turn < count
+    # Chapter start (line index) → (kind, title, edited, marked).
+    starts: dict[int, tuple[PhaseKind, str, bool, bool]] = {
+        p.turn: (p.kind, p.title, False, False) for p in detected if 0 <= p.turn < count
     }
+    replaced: list[str] = []
+    cutting = [m for m in marked if m.kind != "key_moment"]
+    first_line = turns[0].index if turns else None
+
+    def nearest_marker(at: float) -> Marker | None:
+        return min(cutting, key=lambda m: abs(m.at_s - at), default=None)
+
+    for marker in cutting:
+        line = _line_after(turns, marker.at_s)
+        if line is None:
+            continue  # set after the last line: nothing to cut
+        # The detected cut that is this marker's (closest to it, and to no other marker),
+        # if close enough: replaced by it, its title kept. The opening chapter stays.
+        claimed = [
+            first
+            for first, (_, _, _, by_marker) in starts.items()
+            if not by_marker
+            and first != first_line
+            and (at := turns[first].start) is not None
+            and abs(at - marker.at_s) <= MARKER_ABSORBS_S
+            and nearest_marker(at) is marker
+        ]
+        title = starts[line][1] if line in starts else ""
+        if claimed:
+            closest = min(claimed, key=lambda first: abs((turns[first].start or 0.0) - marker.at_s))
+            title = starts.pop(closest)[1]
+            replaced.append(
+                f"Marqueur {KIND_WORD['scene' if marker.kind == 'scene' else 'discussion']} à "
+                f"{clock(marker.at_s)} : remplace la coupure détectée à "
+                f"{clock(turns[closest].start or 0.0)}" + (f" (« {title} »)" if title else "")
+            )
+        kind: PhaseKind = "scene" if marker.kind == "scene" else "discussion"
+        starts[line] = (kind, title, False, True)
     for edit in edits:
         if not 0 <= edit.turn < count:
             outside += 1
@@ -534,17 +601,18 @@ def _phases(
         if current is None:
             before = [t for t in starts if t < edit.turn]
             kind: PhaseKind = starts[max(before)][0] if before else "discussion"
-            current = (kind, "", True)
+            current = (kind, "", True, False)
         starts[edit.turn] = (
             edit.phase_kind or current[0],
             current[1] if edit.title is None else edit.title,
             True,
+            current[3],
         )
     ordered = sorted(starts)
     phases: list[Phase] = []
     for k, first in enumerate(ordered):
         end_turn = ordered[k + 1] if k + 1 < len(ordered) else count
-        kind, title, edited = starts[first]
+        kind, title, edited, by_marker = starts[first]
         ends = [t.end for t in turns[first:end_turn] if t.end is not None]
         phases.append(
             Phase(
@@ -555,9 +623,10 @@ def _phases(
                 kind=kind,
                 title=title,
                 edited=edited,
+                marked=by_marker,
             )
         )
-    return phases, outside
+    return phases, outside, replaced
 
 
 def _unnamed_label(label: str, numbers: dict[str, int], new_voices: list[str]) -> str:

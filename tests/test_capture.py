@@ -425,3 +425,88 @@ def test_stopping_the_service_closes_the_recording(
     source = sessions.reference_source(data, session_id)
     assert source is not None and source.capture_state == "complete"
     assert source.duration_s == pytest.approx(0.3) and awake.held == 0
+
+
+# -- markers and notes while recording (6b) --------------------------------------------
+
+
+def test_markers_and_notes_are_set_at_the_recorded_time_and_can_be_taken_back(
+    data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
+) -> None:
+    rec = recorder(data, mic, awake, clock, battery=True)
+    client = TestClient(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
+    )
+    session_id = client.post("/api/enregistrement", json={}).json()["session_id"]
+    mic.push(tone(1.0, 0.3))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    played = client.post("/api/enregistrement/marqueurs", json={"kind": "scene"})
+    assert played.status_code == 201
+    assert [(m["kind"], m["at_s"]) for m in played.json()["markers"]] == [("scene", 1.0)]
+    moment = client.post("/api/enregistrement/marqueurs", json={"kind": "key_moment"}).json()
+    slip = moment["markers"][-1]["id"]
+    # A note dated when its first letter was typed (0.4 s), not when it was sent.
+    noted = client.post("/api/enregistrement/notes", json={"text": " Belle écoute ", "at_s": 0.4})
+    assert [(n["at_s"], n["text"]) for n in noted.json()["notes"]] == [(0.4, "Belle écoute")]
+    assert (
+        client.post("/api/enregistrement/notes", json={"text": "x", "at_s": 99}).status_code == 422
+    )
+    assert (
+        client.post("/api/enregistrement/notes", json={"text": "  ", "at_s": 0.5}).status_code
+        == 422
+    )
+    taken = client.post(f"/api/enregistrement/marqueurs/{slip}/retirer").json()
+    assert [m["kind"] for m in taken["markers"]] == ["scene"]
+    assert client.post("/api/enregistrement/marqueurs/999/retirer").status_code == 404
+    client.post("/api/enregistrement/arret")
+    conn = connect(data)
+    try:
+        from coulisses_app import marks
+
+        assert [(m.kind, m.at_s) for m in marks.markers(conn, session_id)] == [("scene", 1.0)]
+        assert [(n.at_s, n.text) for n in marks.timed_notes(conn, session_id)] == [
+            (0.4, "Belle écoute")
+        ]
+    finally:
+        conn.close()
+    assert client.post("/api/enregistrement/marqueurs", json={"kind": "scene"}).status_code == 422
+
+
+def test_a_note_taken_back_can_never_be_the_note_after_the_session_and_a_marker_comes_back(
+    data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
+) -> None:
+    from coulisses_app import notes as after_notes
+
+    rec = recorder(data, mic, awake, clock, battery=True)
+    client = TestClient(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
+    )
+    session_id = client.post("/api/enregistrement", json={}).json()["session_id"]
+    conn = connect(data)
+    try:
+        after_id = after_notes.set_after_session(conn, session_id, "Après la séance")
+        after_row = conn.execute(
+            "SELECT id FROM note WHERE session_id = ? AND at_s IS NULL", (session_id,)
+        ).fetchone()["id"]
+    finally:
+        conn.close()
+    del after_id
+    assert client.post(f"/api/enregistrement/notes/{after_row}/retirer").status_code == 404
+    mic.push(tone(1.0, 0.3))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    note = client.post("/api/enregistrement/notes", json={"text": "Idée", "at_s": 0.5}).json()
+    note_id = note["notes"][0]["id"]
+    assert client.post(f"/api/enregistrement/notes/{note_id}/retirer").json()["notes"] == []
+    # Taken back by mistake: put back where it was.
+    back = client.post("/api/enregistrement/marqueurs", json={"kind": "scene", "at_s": 0.3}).json()
+    assert [(m["kind"], m["at_s"]) for m in back["markers"]] == [("scene", 0.3)]
+    assert (
+        client.post("/api/enregistrement/marqueurs", json={"kind": "scene", "at_s": 50}).status_code
+        == 422
+    )
+    client.post("/api/enregistrement/arret")
+    conn = connect(data)
+    try:
+        assert after_notes.after_session(conn, session_id).text == "Après la séance"  # type: ignore[union-attr]
+    finally:
+        conn.close()

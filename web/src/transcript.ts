@@ -3,7 +3,7 @@
  * untranscribed stretches in between, a heading at each chapter, each line with its voice.
  * Times are the engine's, measured or absent: nothing here estimates one (P2).
  */
-import type { CorrectedView, Phase, PhaseKind, Speaker, Turn, Word } from "./api.ts";
+import type { CorrectedView, Marker, Phase, PhaseKind, Speaker, TimedNote, Turn, Word } from "./api.ts";
 
 export interface TurnRow {
   kind: "turn";
@@ -30,7 +30,23 @@ export interface PhaseRow {
   opensSession: boolean;
 }
 
-export type Row = TurnRow | GapRow | PhaseRow;
+/** A key moment marked while recording. */
+export interface MomentRow {
+  kind: "moment";
+  key: string;
+  start: number;
+  marker: Marker;
+}
+
+/** A note taken while recording, where it was thought of. */
+export interface NoteRow {
+  kind: "note";
+  key: string;
+  start: number;
+  note: TimedNote;
+}
+
+export type Row = TurnRow | GapRow | PhaseRow | MomentRow | NoteRow;
 
 export interface ReviewModel {
   rows: Row[];
@@ -78,12 +94,21 @@ export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = ne
     turn,
     speaker: speakerOf.get(turn.speaker) ?? UNKNOWN,
   }));
-  const gaps: GapRow[] = view.untranscribed.map((g, i) => ({
-    kind: "untranscribed",
-    key: `g${i}`,
-    start: g.start,
-    end: g.end,
-  }));
+  // Rows placed by time between the lines: untranscribed stretches, key moments, notes.
+  const gaps: (GapRow | MomentRow | NoteRow)[] = [
+    ...view.untranscribed.map((g, i): GapRow => ({
+      kind: "untranscribed",
+      key: `g${i}`,
+      start: g.start,
+      end: g.end,
+    })),
+    ...(view.markers ?? [])
+      .filter((m) => m.kind === "key_moment")
+      .map((m): MomentRow => ({ kind: "moment", key: `m${m.id}`, start: m.at_s, marker: m })),
+    ...(view.timed_notes ?? []).map(
+      (n): NoteRow => ({ kind: "note", key: `n${n.id}`, start: n.at_s, note: n }),
+    ),
+  ].sort((a, b) => a.start - b.start);
   const phases = view.phases ?? [];
   const startOf = new Map(phases.map((p, i) => [p.turn, { phase: p, number: i + 1 }]));
   // Gaps go before the first line that starts after them; lines without a time keep

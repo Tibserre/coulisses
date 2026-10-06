@@ -188,7 +188,8 @@ def phase_heading(phase: Phase) -> str:
 
 def transcript_lines(view: CorrectedView, *, with_phases: bool = True) -> list[Line]:
     """One line per line of the corrected view, `[mm:ss] Nom : texte`, with untranscribed
-    stretches in their place and, unless asked otherwise, a heading at each chapter."""
+    stretches, key moments and notes taken while recording in their place and, unless
+    asked otherwise, a heading at each chapter (spec §7.9)."""
     names = {s.label: s.name for s in view.speakers}
     played = {s.label: s.played_by for s in view.speakers}
     starts = {p.turn: p for p in view.phases} if with_phases else {}
@@ -209,6 +210,27 @@ def transcript_lines(view: CorrectedView, *, with_phases: bool = True) -> list[L
                 gap.start,
                 0,
                 f"[{clock(gap.start)}] (passage non transcrit jusqu'à {clock(gap.end)})",
+                False,
+            )
+        )
+    # What was marked while recording, at its time. Play and discussion markers already
+    # cut the chapters; the detection, which reads no chapters, sees them as such.
+    for marker in view.markers:
+        if marker.kind == "key_moment":
+            text = "★ Moment clé marqué pendant la séance"
+        elif with_phases:
+            continue
+        else:
+            text = "▸ Marqueur posé pendant la séance : début de " + (
+                "jeu" if marker.kind == "scene" else "discussion"
+            )
+        items.append((marker.at_s, 0, f"[{clock(marker.at_s)}] {text}", False))
+    for note in view.timed_notes:
+        items.append(
+            (
+                note.at_s,
+                0,
+                f"[{clock(note.at_s)}] ✎ Note prise pendant la séance : {note.text}",
                 False,
             )
         )

@@ -1417,12 +1417,24 @@ a.cl-iconbtn {
 .cl-recording__main {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-5);
-  max-width: 34rem;
+  gap: var(--spacing-6);
+  max-width: 44rem;
   margin: 0 auto;
-  padding: var(--spacing-6) var(--spacing-4) var(--spacing-10);
-  text-align: center;
+  padding: var(--spacing-4) var(--spacing-6) var(--spacing-10);
+}
+
+/* The drawing beside the clock: the time reads first, the level right under it. */
+.cl-recording__top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.cl-recording__clock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
 }
 
 .cl-recording__none {
@@ -1464,7 +1476,7 @@ a.cl-iconbtn {
 
 /* The stand-in for enregistrement.riv: ink and brick, a 1.75 stroke, no background. */
 .cl-recvisual {
-  width: min(240px, 60vw);
+  width: min(168px, 32vw);
   height: auto;
 }
 
@@ -1490,7 +1502,7 @@ a.cl-iconbtn {
 .cl-meter {
   position: relative;
   width: 100%;
-  height: 8px;
+  height: 4px;
   border-radius: var(--radius-full);
   background: var(--color-background-muted);
   overflow: hidden;
@@ -1500,7 +1512,7 @@ a.cl-iconbtn {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: var(--radius-full);
-  background: var(--color-text-secondary);
+  background: var(--coulisses-chapter-quiet-ink);
   transition: width 100ms linear;
 }
 
@@ -1530,6 +1542,7 @@ a.cl-iconbtn {
 .cl-recording__controls {
   display: flex;
   gap: var(--spacing-3);
+  margin-top: var(--spacing-1);
 }
 
 .cl-notprocessed {
@@ -1538,3 +1551,312 @@ a.cl-iconbtn {
   gap: var(--spacing-3);
 }
 
+
+/* What is marked while recording: the strip as it grows, the switch, the moment, a note. */
+.cl-live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  padding-top: var(--spacing-5);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-live__bar {
+  position: relative;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-background-muted);
+}
+
+.cl-live__segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--radius-full);
+  background: var(--coulisses-chapter-quiet);
+  transition: width 100ms linear;
+}
+
+.cl-live__segment[data-kind="scene"] {
+  background: var(--coulisses-chapter-main-ink);
+}
+
+.cl-live__segment[data-kind="discussion"] {
+  background: var(--coulisses-chapter-side-ink);
+}
+
+.cl-live__moment {
+  position: absolute;
+  top: -6px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  box-shadow: 0 0 0 1.75px var(--color-accent);
+}
+
+.cl-live__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+.cl-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  --cl-mode-ink: var(--coulisses-chapter-side-ink);
+}
+
+.cl-mode[data-kind="scene"] {
+  --cl-mode-ink: var(--coulisses-chapter-main-ink);
+}
+
+.cl-mode__now {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-xl, 1.375rem);
+  font-weight: var(--font-weight-medium);
+  color: var(--cl-mode-ink);
+}
+
+.cl-mode__since {
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-mode__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-2px);
+}
+
+.cl-mode__ask {
+  color: var(--color-text-secondary);
+}
+
+/* Quiet buttons: a soft fill that rises on hover, the shortcut shown beside. */
+.cl-mode__switch,
+.cl-moment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.cl-mode__switch:hover,
+.cl-moment:hover {
+  transform: translateY(-1px);
+  background: var(--coulisses-chapter-quiet);
+}
+
+.cl-mode__switch:active,
+.cl-moment:active {
+  transform: translateY(1px);
+}
+
+.cl-mode__switch[data-kind="scene"] {
+  color: var(--coulisses-chapter-main-ink);
+}
+
+.cl-moment {
+  color: var(--color-accent);
+}
+
+.cl-live kbd {
+  font: inherit;
+  font-size: var(--font-size-xsm);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--color-background-surface);
+}
+
+/* A note is typed like the rest of the text: no box, only the caret. */
+.cl-livenote {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  color: var(--color-text-secondary);
+}
+
+.cl-livenote input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  padding: var(--spacing-2) 0;
+  font: inherit;
+  font-style: italic;
+  color: var(--color-text-primary);
+  caret-color: var(--color-accent);
+}
+
+.cl-livenote__at {
+  font-size: var(--font-size-xsm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.cl-marks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-marks li {
+  display: grid;
+  grid-template-columns: 4rem 1fr auto;
+  align-items: baseline;
+  gap: var(--spacing-3);
+  padding: var(--spacing-1) 0;
+  font-size: var(--font-size-sm);
+}
+
+.cl-marks__time {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cl-marks__what {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  min-width: 0;
+}
+
+.cl-marks li[data-kind="discussion"] .cl-marks__what {
+  color: var(--coulisses-chapter-side-ink);
+}
+
+.cl-marks li[data-kind="scene"] .cl-marks__what {
+  color: var(--coulisses-chapter-main-ink);
+}
+
+.cl-marks li[data-kind="key_moment"] .cl-marks__what {
+  color: var(--color-accent);
+}
+
+.cl-marks li[data-kind="note"] .cl-marks__what {
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.cl-marks__remove {
+  border: 0;
+  background: none;
+  padding: 2px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cl-marks li:hover .cl-marks__remove,
+.cl-marks__remove:focus-visible {
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .cl-recording__top {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+/* Moments and notes from the recording, between the lines: an attenuated line, in
+   italics for a note, with its icon (art direction). */
+.cl-aside {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  column-gap: var(--spacing-5);
+  align-items: baseline;
+  padding: var(--spacing-2) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-aside > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  padding-inline-start: var(--spacing-4);
+}
+
+.cl-aside[data-kind="note"] > span {
+  font-style: italic;
+}
+
+.cl-aside[data-kind="moment"] > span {
+  color: var(--color-accent);
+}
+
+.cl-aside svg {
+  flex: none;
+  transform: translateY(2px);
+}
+
+.cl-aside:hover .cl-time__label {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.cl-aside:hover .cl-time__play {
+  opacity: 1;
+  transform: none;
+}
+
+.cl-chapter__marked {
+  margin-inline-end: 4px;
+  vertical-align: -1px;
+}
+
+.cl-strip__moment {
+  position: absolute;
+  top: -5px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  box-shadow: 0 0 0 1.75px var(--color-accent);
+  cursor: pointer;
+}
+
+/* In the flow of the recording screen, not floating like the review's notices. */
+.cl-notice.cl-undo {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  align-self: flex-start;
+}

@@ -36,6 +36,7 @@ from coulisses_app import (
     capture,
     corrections,
     jobs,
+    marks,
     notes,
     sessions,
     settings,
@@ -120,6 +121,18 @@ class RecordingRequest(BaseModel):
     non_nommes: int | None = None
     micro: int | None = None
     """Index of the input device; None: the system's default microphone."""
+
+
+class MarkerRequest(BaseModel):
+    kind: marks.MarkerKind
+    at_s: float | None = None
+    """None: now. A time already recorded: a marker taken back by mistake, put back."""
+
+
+class TimedNoteRequest(BaseModel):
+    text: str
+    at_s: float
+    """Recorded time when its first letter was typed."""
 
 
 class PowerInfo(BaseModel):
@@ -429,6 +442,22 @@ def create_app(
         if processor is not None and stopped.processing:
             processor.wake()
         return stopped
+
+    @app.post("/api/enregistrement/marqueurs", status_code=201)
+    def mark(demande: MarkerRequest) -> capture.RecordingState:
+        return recorder.mark(demande.kind, demande.at_s)
+
+    @app.post("/api/enregistrement/marqueurs/{marker_id}/retirer")
+    def unmark(marker_id: int) -> capture.RecordingState:
+        return recorder.take_back("marker", marker_id)
+
+    @app.post("/api/enregistrement/notes", status_code=201)
+    def timed_note(demande: TimedNoteRequest) -> capture.RecordingState:
+        return recorder.note(demande.text, demande.at_s)
+
+    @app.post("/api/enregistrement/notes/{note_id}/retirer")
+    def unnote(note_id: int) -> capture.RecordingState:
+        return recorder.take_back("note", note_id)
 
     @app.get("/api/enregistrement/niveaux")
     async def recording_levels() -> StreamingResponse:

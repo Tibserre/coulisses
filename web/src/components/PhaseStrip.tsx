@@ -60,6 +60,11 @@ export function PhaseStrip({
             {view.phases_problem}
           </span>
         )}
+        {dev && view.phases_by_markers.length > 0 && (
+          <span className="cl-strip__note" title={view.phases_by_markers.join("\n")}>
+            {plural(view.phases_by_markers.length, "coupure remplacée", "coupures remplacées")} par un marqueur
+          </span>
+        )}
         {dev && status?.state === "done" && status.adjustments.length > 0 && (
           <span className="cl-strip__note" title={status.adjustments.join("\n")}>
             {plural(status.adjustments.length, "ajustement", "ajustements")} de
@@ -106,6 +111,22 @@ export function PhaseStrip({
               }}
             />
           ))}
+          {view.markers
+            .filter((m) => m.kind === "key_moment" && m.at_s >= from && m.at_s <= to)
+            .map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className="cl-strip__moment"
+                style={{ left: `${((m.at_s - from) / (to - from)) * 100}%` }}
+                title={`Moment clé à ${formatClock(m.at_s)}`}
+                aria-label={`Moment clé à ${formatClock(m.at_s)}`}
+                onClick={(e) => {
+                  onSeek(m.at_s);
+                  e.currentTarget.blur();
+                }}
+              />
+            ))}
           <span
             className="cl-strip__head-mark"
             style={{ left: `${Math.min(100, Math.max(0, ((time - from) / (to - from)) * 100))}%` }}

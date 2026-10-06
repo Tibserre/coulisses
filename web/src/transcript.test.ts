@@ -89,14 +89,17 @@ const VIEW: CorrectedView = {
   phases: [],
   phases_run_id: null,
   phases_problem: null,
+  markers: [],
+  timed_notes: [],
+  phases_by_markers: [],
 };
 
 /** The same, cut into two chapters: the first line, then the last two. */
 const CHAPTERED: CorrectedView = {
   ...VIEW,
   phases: [
-    { turn: 0, end_turn: 1, start: 0, end: 0.9, kind: "discussion", title: "Accueil", edited: false },
-    { turn: 1, end_turn: 3, start: 5, end: 9.3, kind: "scene", title: "Le marché", edited: false },
+    { turn: 0, end_turn: 1, start: 0, end: 0.9, kind: "discussion", title: "Accueil", edited: false, marked: false },
+    { turn: 1, end_turn: 3, start: 5, end: 9.3, kind: "scene", title: "Le marché", edited: false, marked: false },
   ],
   phases_run_id: "segment_phases-1",
 };
@@ -236,4 +239,15 @@ test("a chapter whose first line has no time starts at its first timed line", ()
 
 test("a new detection changes the summary's staleness key", () => {
   assert.notEqual(liveEditsKey(VIEW), liveEditsKey(CHAPTERED));
+});
+
+test("key moments and notes from the recording sit between the lines, by time", () => {
+  const view: CorrectedView = {
+    ...VIEW,
+    markers: [{ id: 1, kind: "key_moment", at_s: 4.5 }, { id: 2, kind: "scene", at_s: 0 }],
+    timed_notes: [{ id: 1, at_s: 8, text: "Belle écoute" }],
+  };
+  const rows = buildModel(view).rows.map((r) => r.kind);
+  // 0:00 line, 2–4 s untranscribed, the moment at 4.5 s, 5 s line, the note at 8 s, 9 s line.
+  assert.deepEqual(rows, ["turn", "untranscribed", "moment", "turn", "note", "turn"]);
 });

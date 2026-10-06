@@ -25,9 +25,10 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from coulisses_app import sessions, wav
+from coulisses_app import marks, sessions, wav
 from coulisses_app.paths import DataDir
 from coulisses_app.spaces import SpaceError
+from coulisses_app.storage.db import connect
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +77,9 @@ class RecordingState(BaseModel):
     """Times the Mac could not keep up and lost some sound (input overflow)."""
     error: str | None = None
     """Writing stopped, or the microphone stopped delivering: what was recorded is kept."""
+    markers: list[marks.Marker] = []
+    """Set so far: play and discussion switches, key moments."""
+    notes: list[marks.TimedNote] = []
 
 
 class InputStream(Protocol):
@@ -217,6 +221,8 @@ class _Recording:
     error: str | None = None
     writer_thread: threading.Thread | None = None
     last_block_at: float = 0.0
+    markers: list[marks.Marker] = field(default_factory=lambda: list[marks.Marker]())
+    notes: list[marks.TimedNote] = field(default_factory=lambda: list[marks.TimedNote]())
 
 
 class StopResult(BaseModel):
@@ -394,6 +400,8 @@ class Recorder:
             clipping=recording.clipped_at is not None
             and now - recording.clipped_at <= CLIP_SHOWN_S,
             dropouts=recording.dropouts,
+            markers=list(recording.markers),
+            notes=list(recording.notes),
             error=recording.error
             or (
                 "Le micro ne donne plus de son depuis quelques secondes : est-il débranché ? "
@@ -419,6 +427,61 @@ class Recorder:
                 raise RecordingError("Aucun enregistrement en cours.")
             self._current.flags.paused = paused
             return self._state(self._current)
+
+    # -- what is marked while recording (6b) --------------------------------------------
+
+    def mark(self, kind: marks.MarkerKind, at_s: float | None = None) -> RecordingState:
+        """A marker now, at the time recorded so far (pauses left out); or at a time given,
+        already recorded (a marker taken back by mistake, put back)."""
+        with self._lock:
+            recording = self._require()
+            elapsed = recording.writer.frames / SAMPLE_RATE
+            if at_s is None:
+                at_s = elapsed
+            elif not 0 <= at_s <= elapsed:
+                raise RecordingError("Ce marqueur tombe hors de l'enregistrement.")
+            conn = connect(self.data)
+            try:
+                recording.markers.append(marks.add_marker(conn, recording.session_id, kind, at_s))
+            finally:
+                conn.close()
+            return self._state(recording)
+
+    def note(self, text: str, at_s: float) -> RecordingState:
+        """A note, at the time its first letter was typed (given by the interface): it
+        belongs where it was thought of, not where it was finished."""
+        with self._lock:
+            recording = self._require()
+            elapsed = recording.writer.frames / SAMPLE_RATE
+            if not 0 <= at_s <= elapsed + 1:
+                raise RecordingError("Cette note tombe hors de l'enregistrement.")
+            conn = connect(self.data)
+            try:
+                recording.notes.append(
+                    marks.add_timed_note(conn, recording.session_id, min(at_s, elapsed), text)
+                )
+            finally:
+                conn.close()
+            return self._state(recording)
+
+    def take_back(self, what: Literal["marker", "note"], item_id: int) -> RecordingState:
+        with self._lock:
+            recording = self._require()
+            conn = connect(self.data)
+            try:
+                marks.remove(conn, recording.session_id, what, item_id)
+            finally:
+                conn.close()
+            if what == "marker":
+                recording.markers = [m for m in recording.markers if m.id != item_id]
+            else:
+                recording.notes = [n for n in recording.notes if n.id != item_id]
+            return self._state(recording)
+
+    def _require(self) -> _Recording:
+        if self._current is None:
+            raise RecordingError("Aucun enregistrement en cours.")
+        return self._current
 
     def stop(self, *, profile: str) -> StopResult:
         """Stop, close the file, describe it; queue the processing unless on battery.

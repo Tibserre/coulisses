@@ -12,4 +12,4 @@ Pour chaque chapitre, donne :
 - `type` : `scene`, `discussion` ou `autre` ;
 - `titre` : trois à huit mots qui disent de quoi il s'agit (« Scène du bowling », « Retours sur la scène du catch », « Affiche et communication »). Pour une scène, nomme la situation jouée, sans la présenter comme réelle.
 
-Le premier chapitre commence à la première réplique. Ta réponse est toujours l'objet JSON demandé, même pour une séance sans contenu substantiel : un seul chapitre `autre` dont le titre le dit.
+Les marqueurs « ▸ Marqueur posé pendant la séance » ont été posés par le groupe au moment où il passait au jeu ou à la discussion : coupe à ces endroits, avec le type indiqué, et découpe librement entre eux. Le premier chapitre commence à la première réplique. Ta réponse est toujours l'objet JSON demandé, même pour une séance sans contenu substantiel : un seul chapitre `autre` dont le titre le dit.

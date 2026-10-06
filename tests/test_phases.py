@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from coulisses_app import corrections
 from coulisses_app.corrections import RemovePhase, SetPhase, _replay
+from coulisses_app.marks import Marker, TimedNote
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import (
     DetectedPhase,
@@ -398,3 +399,135 @@ def test_chapters_pointing_at_no_line_are_counted_not_hidden() -> None:
     v = _replay(TRANSCRIPT, "attribute-a", [], PEOPLE, {}, detection=elsewhere)
     assert len(v.phases) == 2
     assert v.phases_problem is not None and "1 chapitre(s)" in v.phases_problem
+
+
+# -- markers set while recording (step 6b) -------------------------------------------------
+
+
+def marker(kind: str, at_s: float, id_: int = 1) -> Marker:
+    return Marker(id=id_, kind=kind, at_s=at_s)  # type: ignore[arg-type]
+
+
+def test_a_marker_takes_the_place_of_the_detected_cut_near_it_and_keeps_its_title() -> None:
+    # The detection cut at 0:05 (« Le marché »); the group marked « play » at 0:04.8.
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        detection=DETECTED,
+        markers=[marker("scene", 4.8)],
+    )
+    assert [(p.turn, p.kind, p.title, p.marked) for p in v.phases] == [
+        (0, "discussion", "Accueil", False),
+        (2, "scene", "Le marché", True),
+    ]
+
+
+def test_a_marker_cuts_where_the_detection_did_not_and_wins_over_its_kind() -> None:
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        detection=DETECTED,
+        markers=[marker("scene", 4.8), marker("discussion", 5.9, 2)],
+    )
+    assert [(p.turn, p.kind, p.marked) for p in v.phases] == [
+        (0, "discussion", False),  # the opening chapter is never taken by a marker
+        (2, "scene", True),
+        (3, "discussion", True),
+    ]
+
+
+def test_key_moments_cut_nothing_and_without_detection_markers_still_cut() -> None:
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        markers=[marker("key_moment", 2.0), marker("scene", 1.9, 2)],
+    )
+    assert [(p.turn, p.kind, p.title, p.marked) for p in v.phases] == [(1, "scene", "", True)]
+
+
+def test_the_user_can_still_change_a_chapter_cut_by_a_marker() -> None:
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        journal(SetPhase(turn=2, title="Le marché")),
+        PEOPLE,
+        {},
+        markers=[marker("scene", 4.8)],
+    )
+    assert [(p.turn, p.title, p.marked, p.edited) for p in v.phases] == [
+        (2, "Le marché", True, True)
+    ]
+
+
+def test_moments_and_notes_are_in_the_transcript_sent_and_markers_for_the_detection() -> None:
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        markers=[marker("key_moment", 2.0), marker("scene", 4.8, 2)],
+        timed_notes=[TimedNote(id=1, at_s=5.5, text="Bonne fin de scène")],
+    )
+    sent = [line.text for line in assembly.transcript_lines(v)]
+    assert "[0:02] ★ Moment clé marqué pendant la séance" in sent
+    assert "[0:05] ✎ Note prise pendant la séance : Bonne fin de scène" in sent
+    assert not any("▸" in line for line in sent)  # the chapter heading says it already
+    detection = [line.text for line in assembly.transcript_lines(v, with_phases=False)]
+    assert "[0:04] ▸ Marqueur posé pendant la séance : début de jeu" in detection
+
+
+def test_a_detected_cut_more_than_a_minute_away_from_a_marker_stays() -> None:
+    from coulisses_app import corrections
+
+    detected = PhaseDetection(
+        phases=[
+            DetectedPhase(turn=0, kind="discussion", title="Accueil"),
+            DetectedPhase(turn=2, kind="scene", title="Le marché"),
+        ]
+    )
+    far = corrections.MARKER_ABSORBS_S + 1
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        detection=detected,
+        markers=[marker("discussion", 5.0 - far)],  # before the session: lands on line 0
+    )
+    assert [(p.turn, p.title) for p in v.phases] == [(0, "Accueil"), (2, "Le marché")]
+    near = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        detection=detected,
+        markers=[marker("scene", 4.8)],
+    )
+    assert near.phases_by_markers == [
+        "Marqueur jeu à 0:04 : remplace la coupure détectée à 0:05 (« Le marché »)"
+    ]
+
+
+def test_a_marker_after_the_last_line_cuts_nothing() -> None:
+    v = _replay(
+        TRANSCRIPT,
+        "attribute-a",
+        [],
+        PEOPLE,
+        {},
+        detection=DETECTED,
+        markers=[marker("scene", 99.0)],
+    )
+    assert [(p.turn, p.marked) for p in v.phases] == [(0, False), (2, False)]
