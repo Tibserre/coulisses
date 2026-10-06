@@ -24,6 +24,7 @@ import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../comp
 import { StageList } from "../components/StageList.tsx";
 import { GiveToPanel, TranscriptView, type Editing } from "../components/TranscriptView.tsx";
 import { SummaryPanel } from "../components/SummaryPanel.tsx";
+import { NotesSection } from "../components/NotesSection.tsx";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
@@ -384,6 +385,7 @@ export function SessionPage({ id }: { id: string }) {
                 <>
               <KeyFigures view={view} model={model} duration={session.duration_s} dev={dev} />
               <Participants model={model} />
+              <NotesSection sessionId={id} />
               <Attendees
                 session={session}
                 people={people}

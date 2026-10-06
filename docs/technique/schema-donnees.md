@@ -50,10 +50,10 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `edit` | `id`, `session_id*`, `run_id*` (exécution « qui a dit quoi » corrigée), `kind*` (`assign_speaker` : nommer une voix, personne, nom libre ou personnage joué par une personne ; `merge_speakers` ; `reassign_turns` : donner des répliques à une autre voix ou à une nouvelle, pour scinder ; `edit_text` : texte d'une réplique ; `set_phase` : un chapitre commence à une réplique, ou change de type ou de titre ; `remove_phase` : une coupure de chapitre retirée ; `revert` : annulation), `payload*` (JSON), `person_id` (pour un rattachement), `anchor_start_s`, `anchor_end_s` (temps mesurés, pour le report), `reverts_edit_id`, `created_at*` | 2 |
 | `edit_carryover` | `edit_id*`, `target_run_id*`, `outcome*` (`applied`, `not_applied`), `reason` | 7 |
 | `marker` | `id`, `session_id*`, `kind*` (`scene`, `discussion`, `key_moment`), `at_s*`, `created_at*` | 6 (les chapitres de l'étape 4 n'en ont pas besoin : ADR 0024) |
-| `note` | `id`, `session_id*`, `at_s` (nul : note d'après séance), `text*`, `created_at*`, `updated_at*` | 5 (en direct : 6) |
-| `action` | `id`, `name*`, `description*`, `prompt*`, `based_on` (clé d'une action fournie ou id), `created_at*`, `updated_at*`, `archived_at` | 5 |
+| `note` | `id`, `session_id*`, `at_s` (nul : note d'après séance), `text*`, `created_at*`, `updated_at*` (migration 0004 ; une seule note d'après séance par séance, gardée même vidée) | 5 (en direct : 6) |
+| `action` | `id`, `name*`, `description*`, `prompt*`, `based_on` (clé de l'action fournie dont c'est la version modifiée, qui garde cette clé ; vide pour une action à soi, de clé `perso-<id>`), `created_at*`, `updated_at*`, `archived_at` (restaurer l'original ou retirer une action archive la ligne, jamais d'effacement) (migration 0004 ; une seule version modifiée en vigueur par action fournie) | 5 |
 | `generation` | `id`, `session_id*`, `run_id*`, `action_ref*` (clé d'action fournie ou id), `created_at*` (migration 0003 ; provenance : `schemas/generation-provenance.schema.json`, ADR 0022) | 3 |
-| `action_preference` | `space_id*`, `action_ref*`, `model` (modèle local choisi pour l'action dans cet espace), `auto_run*` (lancée à la fin du traitement) | 3 |
+| `action_preference` | `space_id*`, `action_ref*`, `model` (inutilisée depuis l'ADR 0025), `auto_run*` (depuis l'ADR 0025 : le résumé proposé en premier dans l'espace ; rien ne se lance seul) | 3 |
 | `project` + `session.project_id` | `id`, `space_id*`, `name*`, `created_at*`, `archived_at` | 8 |
 | `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind`, `ref`, `text`. Cache reconstructible, jamais une source de vérité | 8 |
 | `session` (conservation) | `pinned*`, `retain_until` (prolongation), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) | 9 |
@@ -64,7 +64,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 
 - **Sorties et provenance** : dans les dossiers d'exécution. La base ne recopie que ce qu'il faut pour lister et décider (`status`, dates, version du moteur, résumé d'erreur).
 - **Vue corrigée** : recalculée depuis l'exécution active et le journal des corrections, jamais stockée comme vérité.
-- **Actions fournies** : fichiers du dépôt (`config/actions/*.md`), en lecture seule. Modifier une action fournie crée une action en base (`based_on`), l'original reste restaurable.
+- **Actions fournies** : fichiers de l'application (`prompting/textes/actions/*.md`), en lecture seule. Modifier une action fournie crée une action en base (`based_on`), l'original reste restaurable.
 - **Prompts envoyés, réponses, réglages du LLM** : dans le dossier d'exécution de la génération, un fichier par appel (`calls/01-prompt.txt`, `calls/01-response.md`… ; plusieurs appels pour un résumé par sections, puis la consolidation), le résultat (`output.md`) et `provenance.json`. Le schéma de provenance des exécutions de l'application (modèle, `num_ctx`, tokens comptés, température, graine, durée par appel) est publié à l'étape 3, dans `schemas/`.
 
 ## Règles de cohérence

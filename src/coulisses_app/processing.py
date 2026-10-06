@@ -43,6 +43,7 @@ from coulisses_app.prompting.generate import (
 )
 from coulisses_app.prompting.ollama import OllamaClient
 from coulisses_app.sessions import reference_audio_path
+from coulisses_app.spaces import SpaceError
 from coulisses_app.storage.db import connect, now_iso
 
 log = logging.getLogger(__name__)
@@ -197,20 +198,12 @@ class Processor:
         return result
 
     def _queue_generations(self, conn: sqlite3.Connection, session_id: str) -> None:
-        """After a successful chain: the chapters (the summaries read them), the title, then
-        the summaries the space runs automatically (ADR 0020), with the model chosen for
-        each or the default one."""
-        space_id = conn.execute(
-            "SELECT space_id FROM session WHERE id = ?", (session_id,)
-        ).fetchone()[0]
+        """After a successful chain: the chapters, then the title, with the default model.
+        Summaries are made on demand only, with the model chosen then (ADR 0025)."""
         default = settings.default_model(conn)
         with conn:
             jobs.enqueue_generation(conn, session_id, action_ref=PHASES_REF, model=default)
             jobs.enqueue_generation(conn, session_id, action_ref=TITLE_REF, model=default)
-            for action_ref, model in settings.auto_actions(conn, space_id):
-                jobs.enqueue_generation(
-                    conn, session_id, action_ref=action_ref, model=model or default
-                )
         self._wake.set()
 
     def _run_generation_job(self, job: jobs.Job, params: jobs.GenerationParams) -> ChainJobResult:
@@ -225,7 +218,8 @@ class Processor:
                 job_id=job.id,
             )
             result = ChainJobResult(error=prov.error.message if prov.error else None)
-        except GenerationFailedError as exc:
+        except (GenerationFailedError, SpaceError) as exc:
+            # Messages written for the user (an action archived since it was asked…).
             result = ChainJobResult(error=str(exc))
         # A job never takes the processing down: its error is recorded and shown (P8).
         except Exception as exc:

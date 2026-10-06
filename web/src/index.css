@@ -1304,3 +1304,78 @@ a.cl-iconbtn {
   pointer-events: none;
   transition: left 250ms linear;
 }
+
+/* --------------------------------------------------------------- Actions --- */
+
+.cl-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}
+
+.cl-summary__history li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+}
+
+.cl-summary__pick {
+  accent-color: var(--color-accent);
+}
+
+/* Two summaries side by side, each scrolling on its own. */
+.cl-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-6);
+  max-height: 75vh;
+}
+
+.cl-compare__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  min-width: 0;
+  overflow-y: auto;
+  padding-inline-end: var(--spacing-2);
+}
+
+/* The note after the session: typed into like the transcript, no box, only the caret. */
+.cl-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-notes__text {
+  min-height: 4.5em;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  outline: none;
+  cursor: text;
+  caret-color: var(--color-accent);
+}
+
+.cl-notes__text:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.cl-notes__error {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+}
+
+.cl-compare__side header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-compare__side header p {
+  margin: 0;
+}

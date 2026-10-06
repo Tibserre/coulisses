@@ -22,7 +22,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
-from coulisses_app import corrections, sessions, spaces
+from coulisses_app import actions, corrections, notes, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import ANSWER_SCHEMA, PhaseAnswerError, snap
@@ -94,6 +94,9 @@ class Provenance(BaseModel):
     phases_run_id: str | None = None
     """The chapter detection whose chapters were in the transcript sent (none for the
     detection itself): a summary is stale when the chapters come from another one."""
+    notes_digest: str | None = None
+    """Of the note written after the session, as it was sent (none without one): a summary
+    is stale when the note changed since."""
     ollama_version: str | None = None
     calls: list[Call]
     started_at: datetime
@@ -124,6 +127,7 @@ def _context(conn: sqlite3.Connection, session: sessions.Session) -> assembly.Se
         ],
         unnamed_attendees=session.unnamed_attendees,
         glossary=spaces.glossary_terms(conn, session.space_id),
+        notes=note.text if (note := notes.after_session(conn, session.id)) else None,
     )
 
 
@@ -183,13 +187,20 @@ def generate(
     is_title = action_ref == TITLE_REF
     is_phases = action_ref == PHASES_REF
     stage: Stage = "title" if is_title else "segment_phases" if is_phases else "summarize"
-    chosen = (
-        assembly.TITLE
-        if is_title
-        else assembly.PHASES
-        if is_phases
-        else assembly.action(action_ref)
-    )
+    modified = False
+    if is_title:
+        chosen = assembly.TITLE
+    elif is_phases:
+        chosen = assembly.PHASES
+    else:
+        # The action in force, the user's modified version if any (spec.json keeps it).
+        conn = connect(data)
+        try:
+            in_force = actions.get_action(conn, action_ref)
+            chosen = actions.as_prompt(in_force)
+            modified = in_force.modified
+        finally:
+            conn.close()
     view = corrections.build_view(data, session_id)
     session = sessions.get_session(data, session_id)
     if view is None or session is None:
@@ -219,7 +230,9 @@ def generate(
     folder = data.run_dir(session_id, run_id)
     conn = connect(data)
     try:
-        context = assembly.context_block(_context(conn, session), view)
+        session_context = _context(conn, session)
+        context = assembly.context_block(session_context, view)
+        notes_digest = notes.digest(session_context.notes)
         with conn:
             conn.execute(
                 "INSERT INTO run (id, session_id, job_id, stage, status, producer, created_at)"
@@ -281,6 +294,8 @@ def generate(
                     "action_ref": chosen.ref,
                     "action_name": chosen.name,
                     "action_prompt": chosen.prompt,
+                    # The user's modified version of a provided action, not the original.
+                    "action_modified": modified,
                     "model": model,
                     "options": options,
                     "format": answer_format,
@@ -378,6 +393,7 @@ def generate(
             edits_applied=len(edit_ids),
             edit_ids=edit_ids,
             phases_run_id=phases_run_id,
+            notes_digest=notes_digest,
             ollama_version=ollama_version,
             calls=calls,
             started_at=started,

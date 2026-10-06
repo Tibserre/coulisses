@@ -81,9 +81,9 @@ export function SpacesPage({ id }: { id: number | null }) {
           <label className="cl-select">
             <span>Modèle de départ</span>
             <select value={template} onChange={(e) => setTemplate(e.target.value as SpaceTemplate)}>
-              <option value="impro">Troupe d'impro : Résumé Impro après chaque séance</option>
-              <option value="reunion">Réunions de travail : compte rendu de réunion</option>
-              <option value="vide">Vide : aucun résumé automatique</option>
+              <option value="impro">Troupe d'impro : Résumé Impro proposé</option>
+              <option value="reunion">Réunions de travail : compte rendu de réunion proposé</option>
+              <option value="vide">Vide : aucun résumé proposé</option>
             </select>
           </label>
           <Button
@@ -199,7 +199,8 @@ function SpaceDetail({
   );
 }
 
-/** The summaries made after each processing in this space (ADR 0020). */
+/** The summary offered first in the « Résumé » tab of this space's sessions. Summaries are
+ *  made on demand only (ADR 0025): nothing runs on its own. */
 function AutoSummaries({ spaceId, onError }: { spaceId: number; onError: (m: string | null) => void }) {
   const [actions, setActions] = useState<ActionInfo[]>([]);
   const [chosen, setChosen] = useState<SpaceAction[]>([]);
@@ -212,30 +213,32 @@ function AutoSummaries({ spaceId, onError }: { spaceId: number; onError: (m: str
       (e: Error) => onError(e.message),
     );
   }, [spaceId, onError]);
+  const offered = chosen.find((c) => c.auto_run)?.action_ref ?? "";
+  const offer = async (ref: string) => {
+    try {
+      setChosen(await api.setOfferedAction(spaceId, ref || null));
+      onError(null);
+    } catch (e) {
+      onError((e as Error).message);
+    }
+  };
   return (
     <section className="cl-space__section">
-      <Heading level={3}>Résumés automatiques</Heading>
-      <Text type="supporting">Faits après chaque traitement d'une séance de cet espace, avec le modèle choisi dans le résumé.</Text>
-      {actions.map((a) => {
-        const current = chosen.find((c) => c.action_ref === a.ref);
-        return (
-          <Switch
-            key={a.ref}
-            label={a.name}
-            description={a.description}
-            value={current?.auto_run ?? false}
-            onChange={(on) =>
-              void api.setSpaceAction(spaceId, a.ref, on, current?.model ?? null).then(
-                (updated) => {
-                  setChosen(updated);
-                  onError(null);
-                },
-                (e: Error) => onError(e.message),
-              )
-            }
-          />
-        );
-      })}
+      <Heading level={3}>Résumé proposé</Heading>
+      <Text type="supporting">
+        Celui qui est proposé d'abord dans l'onglet Résumé des séances de cet espace. Aucun résumé ne se fait tout seul : vous le lancez, avec le modèle de votre choix.
+      </Text>
+      <label className="cl-select">
+        <span>Résumé proposé</span>
+        <select value={offered} onChange={(e) => void offer(e.target.value)}>
+          <option value="">Aucun en particulier</option>
+          {actions.map((a) => (
+            <option key={a.ref} value={a.ref}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </label>
     </section>
   );
 }

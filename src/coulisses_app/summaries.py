@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from coulisses_app import corrections, jobs, sessions
+from coulisses_app import actions, corrections, jobs, notes, sessions
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import PhaseDetection
 from coulisses_app.prompting import assembly
@@ -29,7 +29,7 @@ class Generation(BaseModel):
     output: str | None
     """None when the output file is missing (moved or deleted in the Finder)."""
     stale: bool
-    """Corrections were made, or the transcript changed, since it was generated."""
+    """Corrections, chapters, the note after the session or the transcript changed since."""
     problem: str | None = None
     """Why it cannot be read as usual (missing or unreadable files), said as it is."""
 
@@ -48,15 +48,13 @@ class Generations(BaseModel):
     pending: list[PendingGeneration]
 
 
-def action_name(ref: str) -> str:
+def action_name(ref: str, names: dict[str, str]) -> str:
+    """`names`: the actions in force, by key. An archived action is shown by its key."""
     if ref == TITLE_REF:
         return assembly.TITLE.name
     if ref == PHASES_REF:
         return assembly.PHASES.name
-    try:
-        return assembly.action(ref).name
-    except KeyError:
-        return ref
+    return names.get(ref, ref)
 
 
 def _live_edits(view: corrections.CorrectedView | None) -> tuple[str | None, list[int]]:
@@ -73,11 +71,14 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
         rows = conn.execute(
             "SELECT * FROM generation WHERE session_id = ? ORDER BY id DESC", (session_id,)
         ).fetchall()
+        names = {a.ref: a.name for a in actions.list_actions(conn)}
+        note = notes.after_session(conn, session_id)
+        notes_now = notes.digest(note.text if note else None)
         pending = [
             PendingGeneration(
                 job_id=j.id,
                 action_ref=j.params.action_ref,
-                action_name=action_name(j.params.action_ref),
+                action_name=action_name(j.params.action_ref, names),
                 model=j.params.model,
                 state=j.state,
                 error=j.error,
@@ -104,7 +105,7 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
                     id=row["id"],
                     run_id=row["run_id"],
                     action_ref=row["action_ref"],
-                    action_name=action_name(row["action_ref"]),
+                    action_name=action_name(row["action_ref"], names),
                     model="?",
                     created_at=row["created_at"],
                     strategy="?",
@@ -134,7 +135,8 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
                 output=output_file.read_text(encoding="utf-8") if output_file.is_file() else None,
                 stale=prov.source_run_id != source
                 or prov.edit_ids != live
-                or prov.phases_run_id != (view.phases_run_id if view else None),
+                or prov.phases_run_id != (view.phases_run_id if view else None)
+                or prov.notes_digest != notes_now,
             )
         )
     return Generations(generations=found, pending=pending)

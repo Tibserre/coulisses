@@ -476,3 +476,25 @@ def set_space_action(
     finally:
         conn.close()
     return space_actions(data, space_id)
+
+
+def set_offered_action(data: DataDir, space_id: int, action_ref: str | None) -> list[SpaceAction]:
+    """The summary offered first in this space's sessions (ADR 0025), in one transaction:
+    only one, and the other settings of each action are left as they are."""
+    conn = connect(data)
+    try:
+        get_space(conn, space_id)
+        with conn:
+            conn.execute(
+                "UPDATE action_preference SET auto_run = 0 WHERE space_id = ?", (space_id,)
+            )
+            if action_ref is not None:
+                conn.execute(
+                    "INSERT INTO action_preference (space_id, action_ref, auto_run)"
+                    " VALUES (?, ?, 1)"
+                    " ON CONFLICT (space_id, action_ref) DO UPDATE SET auto_run = 1",
+                    (space_id, action_ref),
+                )
+    finally:
+        conn.close()
+    return space_actions(data, space_id)

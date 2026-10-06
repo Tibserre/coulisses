@@ -15,7 +15,7 @@ argument-hint: <nom de l'action> [ce qu'il faut changer]
   - interdire d'inventer (sujets, décisions, attributions) ;
   - garder l'attribution des idées aux personnes nommées, en distinguant personne et personnage ;
   - distinguer ce qui est décidé de ce qui reste une piste.
-- Les actions fournies vivent dans `actions/<id>.md` (dossier de configuration de l'application) : un en-tête (nom, description), puis le prompt.
+- Les actions fournies vivent dans `src/coulisses_app/prompting/textes/actions/<id>.md` : un en-tête (nom, description), puis le prompt. Celles de l'utilisateur, et ses versions modifiées, sont en base (table `action`).
 
 ## Comparer avant d'adopter
 Une nouvelle version ne remplace l'ancienne qu'après comparaison :

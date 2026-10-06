@@ -225,6 +225,18 @@
       "default": null,
       "title": "Phases Run Id"
     },
+    "notes_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notes Digest"
+    },
     "ollama_version": {
       "anyOf": [
         {
