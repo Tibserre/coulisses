@@ -164,6 +164,10 @@ def generate(
         # A summary is the answer itself: no reasoning trace (sent at the top of the call).
         "think": False,
     }
+    if is_title:
+        # The title is one line: the model is asked to stop there. Ollama's MLX runner
+        # ignores it, and models go on with a summary that the reserve cuts: see _check.
+        options["stop"] = ["\n"]
     edit_ids = sorted(e.id for e in view.edits if not e.reverted)
 
     run_id = f"{stage}-{secrets.token_hex(4)}"
@@ -220,7 +224,7 @@ def generate(
         record.done_reason = answer.done_reason
         record.response_file = f"calls/{index:02d}-response.md"
         _write_new(folder / record.response_file, answer.content)
-        _check(answer, estimated, cfg.num_ctx)
+        _check(answer, estimated, cfg.num_ctx, first_line_only=is_title)
         return answer.content.strip()
 
     try:
@@ -321,8 +325,13 @@ def generate(
     return prov
 
 
-def _check(answer: ChatAnswer, estimated: int, num_ctx: int) -> None:
-    """What Ollama reports decides whether the answer is kept: never a cut text (P8)."""
+def _check(
+    answer: ChatAnswer, estimated: int, num_ctx: int, *, first_line_only: bool = False
+) -> None:
+    """What Ollama reports decides whether the answer is kept: never a cut text (P8).
+
+    `first_line_only`: only the first line is kept (the title). A cut after it, once the
+    line is complete (a line break follows it), cuts nothing that is kept."""
     if answer.prompt_eval_count is None or answer.eval_count is None:
         raise GenerationFailedError(
             "Ollama n'a pas dit combien de tokens il a lus : impossible de vérifier que rien "
@@ -339,7 +348,8 @@ def _check(answer: ChatAnswer, estimated: int, num_ctx: int) -> None:
             f"Le prompt comptait {answer.prompt_eval_count} tokens, plus que les {estimated} "
             "estimés : baissez caracteres_par_token dans les réglages de génération."
         )
-    if answer.done_reason == "length":
+    first_line_whole = "\n" in answer.content.strip()
+    if answer.done_reason == "length" and not (first_line_only and first_line_whole):
         raise GenerationFailedError(
             "La réponse a été coupée à sa longueur maximale : elle n'est pas gardée."
         )
