@@ -863,8 +863,8 @@ button.cl-name {
   -webkit-user-select: text;
 }
 
-/* Hover tip of a word: a small label rises above it. For an unsure word, the engine's
-   confidence counts up from 0 (the number says how sure it was). Generated content, so it
+/* Hover tip of a word: a small label rises above it. For a word the transcription model
+   doubted, it says so and its certainty counts up from 0. Generated content, so it
    is never part of the text typed into or copied. Shown after a short wait. */
 @property --cl-pct {
   syntax: "<integer>";
@@ -906,7 +906,7 @@ button.cl-name {
 
 .cl-word[data-tip-kind="confidence"]:hover::before {
   counter-reset: cl-pct var(--cl-pct);
-  content: counter(cl-pct) " %";
+  content: "le modèle doutait · " counter(cl-pct) " %";
   color: var(--coulisses-word-uncertain);
   animation:
     cl-tip-rise var(--duration-medium) var(--ease-standard) 250ms both,

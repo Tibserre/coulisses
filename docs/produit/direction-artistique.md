@@ -108,7 +108,7 @@ La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/we
 - le texte d'une réplique se modifie directement, comme dans Notion : ni cadre, ni fond, ni contour, au survol comme pendant la saisie ; seul le curseur (brique) montre où l'on écrit ;
 - un titre de chapitre, centré entre deux filets, à chaque changement de chapitre ;
 - une note prise à la main s'intercale dans une ligne atténuée, en italique, avec son icône ;
-- un mot peu sûr est souligné en pointillé, avec sa confiance au survol ;
+- un mot peu sûr est souligné en pointillé ; au survol, « le modèle doutait » et sa certitude, qui compte depuis 0 ;
 - un mot ajouté à la main, sans temps mesuré, porte un petit « + » en exposant (ADR 0011 du moteur).
 
 **Colonne de droite : vue d'ensemble et résumé.** Largeur fixe d'environ 420 px.

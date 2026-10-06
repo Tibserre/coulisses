@@ -114,7 +114,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Édition du texte** : corriger un mot ou une phrase. Un mot corrigé garde son horodatage. Si la correction change le nombre de mots, la plage corrigée garde son début et sa fin mesurés ; les mots ajoutés n'ont pas de temps propre et sont marqués comme tels, jamais interpolés.
 - **Édition directe**, comme dans un document : je clique dans une réplique et je tape ; la correction s'enregistre quand je quitte la réplique ou appuie sur Entrée, Échap annule ma saisie. Un texte refusé reste à l'écran pour être corrigé. Cmd-Z et Maj-Cmd-Z annulent et rétablissent la dernière correction (texte, nom, fusion, scission) ; une réplique corrigée peut revenir à son texte d'origine. Rien n'est effacé : chaque annulation s'ajoute au journal.
 - **Glossaire en relecture** : une graphie fautive connue est signalée ; un clic applique les bonnes graphies du glossaire à toute la réplique.
-- **Mots peu sûrs** mis en évidence quand le moteur fournit une confiance.
+- **Mots peu sûrs** soulignés quand le modèle de transcription doutait (`asr_confidence` du moteur sous 0,3, depuis sa v1.4.0) et présentés comme « le modèle doutait » : ce score ne trouve qu'une partie des fautes, un mot non souligné n'est donc pas garanti juste. Le score d'alignement n'est jamais montré comme un doute.
 - Longues séances fluides (2 h, plusieurs milliers de tours).
 - **Corrections et retraitement** : relancer la transcription ou la diarisation produit une nouvelle version. L'app reporte automatiquement ce qu'elle peut (noms de locuteurs par recouvrement temporel, corrections de mots sur le même passage) et **liste ce qu'elle n'a pas pu reporter** (P8). L'ancienne version reste consultable.
 

@@ -94,7 +94,9 @@ class Word(BaseModel):
     text: str
     start: float | None
     end: float | None
-    confidence: float | None
+    asr_confidence: float | None
+    """How sure the transcription model was of the word (engine `asr_confidence`, ADR 0023
+    of the engine): below 0.3 it doubted. Absent on runs before engine v1.4.0."""
     uncertain: bool
     """The engine attributed it by a rule, not by a measured overlap."""
     corrected: bool = False
@@ -201,9 +203,11 @@ def _apply_text(words: list[Word], text: str) -> list[Word]:
         for k, token in enumerate(new):
             if k < len(old):
                 kept = old[k]
-                # Checked by hand: the engine's confidence no longer applies to it.
+                # Checked by hand: the model's doubt no longer applies to it.
                 out.append(
-                    kept.model_copy(update={"text": token, "corrected": True, "confidence": None})
+                    kept.model_copy(
+                        update={"text": token, "corrected": True, "asr_confidence": None}
+                    )
                 )
             else:
                 out.append(
@@ -211,7 +215,7 @@ def _apply_text(words: list[Word], text: str) -> list[Word]:
                         text=token,
                         start=None,
                         end=None,
-                        confidence=None,
+                        asr_confidence=None,
                         uncertain=False,
                         added=True,
                     )
@@ -306,7 +310,7 @@ def _replay(
                 text=w.text,
                 start=w.start,
                 end=w.end,
-                confidence=w.confidence,
+                asr_confidence=w.asr_confidence,
                 uncertain=w.uncertain,
             )
             for w in transcript.words[t.first_word : t.end_word]

@@ -7,12 +7,10 @@ import type { EditRequest, Person, Speaker, Word as WordData } from "../api.ts";
 import { formatClock } from "../format.ts";
 import { speakerInk } from "../theme/shared.ts";
 import type { ReviewModel, Row, TurnRow } from "../transcript.ts";
-import { speakerTitle } from "../transcript.ts";
+import { isDoubtful, speakerTitle, wordTip } from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
 import { NamePanel } from "./NamePanel.tsx";
 
-/** Below this confidence a word is underlined, when the engine gives one (spec §7.6). */
-const UNSURE_BELOW = 0.5;
 
 /** The art direction's curve: lively start, soft landing, no bounce. */
 const GLIDE = { duration: 0.16, ease: [0.22, 1, 0.36, 1] } as const;
@@ -39,29 +37,16 @@ export function inkOf(speaker: Speaker): string {
     : "var(--coulisses-speaker-unknown-ink)";
 }
 
-/** A word as text. Marks (current word, unsure, added, glossary) and their hover tip
+/** A word as text. Marks (current word, doubtful, added, glossary) and their hover tip
  *  are drawn with CSS, so that the line's text, typed into or copied, is exactly its
  *  words (a native title does not show inside an editable line). */
 function Word({ word, isCurrent }: { word: WordData; isCurrent: boolean }) {
-  const unsure = word.confidence != null && word.confidence < UNSURE_BELOW;
-  // One tip per word, the most useful first: what to write, then how it was written,
-  // then how sure the engine was. Screen readers get the same through aria-label.
-  const tip: { kind: string; text?: string; label: string; percent?: number } | null =
-    word.suggestion
-      ? { kind: "suggestion", text: `→ ${word.suggestion}`, label: `Peut-être « ${word.suggestion} »` }
-      : word.added
-        ? { kind: "added", text: "ajouté", label: "Ajouté à la main, sans horodatage mesuré" }
-        : unsure
-          ? {
-              kind: "confidence",
-              percent: Math.round((word.confidence ?? 0) * 100),
-              label: `Mot peu sûr, confiance ${Math.round((word.confidence ?? 0) * 100)} %`,
-            }
-          : null;
+  const doubtful = isDoubtful(word);
+  const tip = wordTip(word);
   return (
     <span
       className="cl-word"
-      data-unsure={unsure || undefined}
+      data-unsure={doubtful || undefined}
       data-added={word.added || undefined}
       data-suggestion={word.suggestion ? true : undefined}
       data-tip-kind={tip?.kind}

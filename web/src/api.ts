@@ -121,7 +121,8 @@ export interface Word {
   text: string;
   start: number | null;
   end: number | null;
-  confidence: number | null;
+  /** How sure the transcription model was (engine `asr_confidence`); absent on older runs. */
+  asr_confidence: number | null;
   uncertain: boolean;
   corrected: boolean;
   /** Added by hand: no measured time of its own. */

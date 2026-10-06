@@ -3,7 +3,7 @@
  * untranscribed stretches in between, each line with its voice. Times are the engine's,
  * measured or absent: nothing here estimates one (P2).
  */
-import type { CorrectedView, Speaker, Turn } from "./api.ts";
+import type { CorrectedView, Speaker, Turn, Word } from "./api.ts";
 
 export interface TurnRow {
   kind: "turn";
@@ -142,4 +142,33 @@ export function liveEditsKey(view: Pick<CorrectedView, "run_id" | "edits">): str
     .map((e) => e.id)
     .sort((a, b) => a - b);
   return `${view.run_id}:${live.join(",")}`;
+}
+
+/** Below this, the transcription model doubted the word (engine README, « Scores par mot » :
+ *  83 % of the words it marks are wrong, but it finds only some of the mistakes). */
+export const DOUBTFUL_BELOW = 0.3;
+
+export function isDoubtful(word: Pick<Word, "asr_confidence">): boolean {
+  return word.asr_confidence != null && word.asr_confidence < DOUBTFUL_BELOW;
+}
+
+export interface WordTip {
+  kind: "suggestion" | "added" | "confidence";
+  text?: string;
+  /** What screen readers get (aria-description). */
+  label: string;
+  percent?: number;
+}
+
+/** One tip per word, the most useful first: what to write, then how it was written, then
+ *  that the model doubted (never « sure » for the rest: the score misses some mistakes). */
+export function wordTip(word: Pick<Word, "asr_confidence" | "added" | "suggestion">): WordTip | null {
+  if (word.suggestion)
+    return { kind: "suggestion", text: `→ ${word.suggestion}`, label: `Peut-être « ${word.suggestion} »` };
+  if (word.added) return { kind: "added", text: "ajouté", label: "Ajouté à la main, sans horodatage mesuré" };
+  if (isDoubtful(word)) {
+    const percent = Math.round((word.asr_confidence ?? 0) * 100);
+    return { kind: "confidence", percent, label: `Le modèle doutait de ce mot (sûr à ${percent} %)` };
+  }
+  return null;
 }

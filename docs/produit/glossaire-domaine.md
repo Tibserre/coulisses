@@ -35,7 +35,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Empreinte vocale | `speaker_embedding` | Vecteur caractérisant la voix d'un locuteur. Conservée après purge. |
 | Transcription (sortie) | `transcript` | Sortie de `transcribe` ou `align` : les mots d'une séance, horodatés si mesurés. |
 | Diarisation (sortie) | `diarization` | Sortie de `diarize` : les segments de locuteurs et la liste des locuteurs. |
-| Mot | `word` | Unité du transcript : texte, début et fin (mesurés, ou absents avant alignement), confiance, locuteur. |
+| Mot | `word` | Unité du transcript : texte, début et fin (mesurés, ou absents avant alignement), confiance de la transcription (`asr_confidence`), locuteur. |
 | Segment de locuteur | `speaker_segment` | Intervalle où un locuteur parle, produit par la diarisation. Les segments peuvent se chevaucher. |
 | Tranche | `chunk` | Portion d'audio transcrite d'un seul tenant ; bornes = positions de coupe. À ne pas confondre avec un segment de locuteur. |
 | Part horodatée | `timed_share` | Part des mots d'un transcript qui portent un temps mesuré (ADR 0011). |
