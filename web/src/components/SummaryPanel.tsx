@@ -13,6 +13,7 @@ import {
   type Generation,
   type Generations,
   type ModelsInfo,
+  type SpaceAction,
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { formatDateTime, formatDuration } from "../format.ts";
@@ -77,8 +78,11 @@ export function SummaryPanel({
   const [copied, setCopied] = useState(false);
   const [prompts, setPrompts] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  /** The space's automatic summary comes first: the Résumé Impro for a troupe. */
-  const [preferred, setPreferred] = useState<string | null>(null);
+  /** The space's settings: the summary it offers first (the Résumé Impro for a troupe). */
+  const [spacePrefs, setSpacePrefs] = useState<SpaceAction[]>([]);
+  /** Two summaries to read side by side. */
+  const [compared, setCompared] = useState<number[]>([]);
+  const [comparing, setComparing] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -93,10 +97,7 @@ export function SummaryPanel({
     void refresh();
     api.actions().then(setActions, (e: Error) => setError(e.message));
     api.models().then(setModels, (e: Error) => setError(e.message));
-    api.spaceActions(spaceId).then(
-      (mine) => setPreferred(mine.find((a) => a.auto_run)?.action_ref ?? null),
-      (e: Error) => setError(e.message),
-    );
+    api.spaceActions(spaceId).then(setSpacePrefs, (e: Error) => setError(e.message));
   }, [refresh, spaceId]);
 
   const seenKey = useRef(transcriptKey);
@@ -118,6 +119,7 @@ export function SummaryPanel({
   const generations = data?.generations ?? [];
   const shown: Generation | undefined =
     generations.find((g) => g.id === shownId) ?? generations[0];
+  const preferred = spacePrefs.find((a) => a.auto_run)?.action_ref ?? null;
   const chosenAction = action ?? shown?.action_ref ?? preferred ?? actions[0]?.ref ?? null;
 
   const generate = async (ref: string) => {
@@ -250,7 +252,7 @@ export function SummaryPanel({
           {shown.stale && (
             <div className="cl-summary__stale">
               <Text type="supporting">
-                Le transcript a changé depuis ce résumé.
+                La séance a changé depuis ce résumé.
               </Text>
               <Button
                 size="sm"
@@ -292,7 +294,7 @@ export function SummaryPanel({
       ) : (
         !data?.pending.length && (
           <Text color="secondary" as="p">
-            Pas encore de résumé pour cette séance.
+            Pas encore de résumé : choisissez-en un et un modèle, puis « Générer ».
           </Text>
         )
       )}
@@ -330,27 +332,79 @@ export function SummaryPanel({
 
       {generations.length > 1 && (
         <section className="cl-summary__history">
-          <Text weight="medium">Résumés précédents</Text>
+          <Text weight="medium">Historique</Text>
+          <Text type="supporting">Cochez deux résumés pour les lire côte à côte.</Text>
           <ul>
-            {generations.map((g) => (
-              <li key={g.id}>
-                <button
-                  type="button"
-                  aria-current={g.id === shown?.id ? "true" : undefined}
-                  onClick={() => setShownId(g.id)}
-                >
-                  {g.action_name}
-                  <Text type="supporting">
-                    {" "}
-                    · {formatDateTime(g.created_at)}
-                  </Text>
-                  {g.stale && <Text type="supporting"> · périmé</Text>}
-                </button>
-              </li>
-            ))}
+            {generations.map((g) => {
+              const checked = compared.includes(g.id);
+              return (
+                <li key={g.id}>
+                  <input
+                    type="checkbox"
+                    className="cl-summary__pick"
+                    checked={checked}
+                    disabled={!checked && compared.length >= 2}
+                    aria-label={`Comparer ${g.action_name} du ${formatDateTime(g.created_at)}`}
+                    onChange={() =>
+                      setCompared((before) =>
+                        checked ? before.filter((id) => id !== g.id) : [...before, g.id],
+                      )
+                    }
+                  />
+                  <button
+                    type="button"
+                    aria-current={g.id === shown?.id ? "true" : undefined}
+                    onClick={() => setShownId(g.id)}
+                  >
+                    {g.action_name}
+                    <Text type="supporting">
+                      {" "}
+                      · {formatDateTime(g.created_at)}
+                    </Text>
+                    {g.stale && <Text type="supporting"> · périmé</Text>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+          {compared.length === 2 && (
+            <Button size="sm" label="Comparer les deux" clickAction={() => setComparing(true)} />
+          )}
         </section>
       )}
+
+      <Dialog
+        isOpen={comparing}
+        onOpenChange={(open) => !open && setComparing(false)}
+        width="min(1240px, 96vw)"
+      >
+        <DialogHeader title="Deux résumés côte à côte" onOpenChange={() => setComparing(false)} />
+        <div className="cl-compare">
+          {compared
+            .map((id) => generations.find((g) => g.id === id))
+            .filter((g): g is Generation => g !== undefined)
+            .map((g) => (
+              <article key={g.id} className="cl-compare__side">
+                <header>
+                  <Text weight="medium">{g.action_name}</Text>
+                  <Text type="supporting" as="p">
+                    {formatDateTime(g.created_at)} · {g.model}
+                    {g.stale ? " · périmé" : ""}
+                  </Text>
+                </header>
+                {g.output ? (
+                  <div className="cl-summary__body">
+                    <Markdown headingLevelStart={3} contentWidth="100%" components={SAFE_RENDERERS}>
+                      {g.output}
+                    </Markdown>
+                  </div>
+                ) : (
+                  <Text type="supporting">Texte introuvable dans le dossier de la séance.</Text>
+                )}
+              </article>
+            ))}
+        </div>
+      </Dialog>
 
       <Dialog
         isOpen={prompts !== null}

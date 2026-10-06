@@ -225,6 +225,40 @@
       "default": null,
       "title": "Phases Run Id"
     },
+    "input_kind": {
+      "default": "transcript",
+      "enum": [
+        "transcript",
+        "chapters",
+        "summary"
+      ],
+      "title": "Input Kind",
+      "type": "string"
+    },
+    "input_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Input Run Id"
+    },
+    "notes_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notes Digest"
+    },
     "ollama_version": {
       "anyOf": [
         {

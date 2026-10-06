@@ -5,6 +5,8 @@ export type JobState = "queued" | "running" | "done" | "failed";
 export interface Session {
   id: string;
   title: string | null;
+  /** Written by the user: a proposed title never replaces it. */
+  title_edited: boolean;
   recorded_at: string;
   created_at: string;
   space_id: number;
@@ -293,6 +295,23 @@ export interface ActionInfo {
   ref: string;
   name: string;
   description: string;
+  prompt: string;
+  /** Shipped with the application (possibly modified). */
+  provided: boolean;
+  /** Its modified version is in force: the original is restorable. */
+  modified: boolean;
+  updated_at: string | null;
+}
+
+export interface ActionDraft {
+  name: string;
+  description: string;
+  prompt: string;
+}
+
+export interface Note {
+  text: string;
+  updated_at: string;
 }
 
 export interface SpaceAction {
@@ -336,6 +355,7 @@ async function send<T>(
     );
   }
   if (!response.ok) throw await readError(response);
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -382,9 +402,22 @@ export const api = {
       auto_run: autoRun,
       model,
     }),
+  setOfferedAction: (spaceId: number, ref: string | null) =>
+    send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/resume-propose`, { action_ref: ref }),
   models: () => getJson<ModelsInfo>("/api/modeles"),
   setModel: (model: string) => send<ModelsInfo>("PUT", "/api/reglages/modele", { model }),
   actions: () => getJson<ActionInfo[]>("/api/actions"),
+  createAction: (draft: ActionDraft) => send<ActionInfo>("POST", "/api/actions", draft),
+  updateAction: (ref: string, draft: ActionDraft) =>
+    send<ActionInfo>("PUT", `/api/actions/${encodeURIComponent(ref)}`, draft),
+  restoreAction: (ref: string) =>
+    send<ActionInfo>("POST", `/api/actions/${encodeURIComponent(ref)}/restaurer`),
+  duplicateAction: (ref: string) =>
+    send<ActionInfo>("POST", `/api/actions/${encodeURIComponent(ref)}/dupliquer`),
+  archiveAction: (ref: string) =>
+    send<void>("POST", `/api/actions/${encodeURIComponent(ref)}/archiver`),
+  notes: (id: string) => getJson<Note | null>(`${sessionPath(id)}/notes`),
+  setNotes: (id: string, text: string) => send<Note>("PUT", `${sessionPath(id)}/notes`, { text }),
   generations: (id: string) => getJson<Generations>(`${sessionPath(id)}/resumes`),
   phases: (id: string) => getJson<PhasesStatus>(`${sessionPath(id)}/chapitres`),
   detectPhases: (id: string) => send<PhasesStatus>("POST", `${sessionPath(id)}/chapitres`),

@@ -195,6 +195,8 @@ def test_after_processing_the_chapters_are_detected_then_read_by_the_summary(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
+    run_all(data, fake_model)
     view = client.get(f"/api/seances/{session_id}/transcript").json()
     assert [(p["turn"], p["kind"], p["title"]) for p in view["phases"]] == [
         (0, "discussion", "Essai")
@@ -219,6 +221,8 @@ def test_changing_a_chapter_makes_the_summary_stale(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
+    run_all(data, fake_model)
     url = f"/api/seances/{session_id}"
     assert not client.get(f"{url}/resumes").json()["generations"][0]["stale"]
     response = client.post(
@@ -236,6 +240,8 @@ def test_detecting_again_keeps_the_users_changes_and_makes_the_summary_stale(
     fake_model: FakeModel,
 ) -> None:
     session_id = imported(client, recording)
+    run_all(data, fake_model)
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
     run_all(data, fake_model)
     url = f"/api/seances/{session_id}"
     client.post(f"{url}/corrections", json={"kind": "set_phase", "turn": 0, "title": "Mon titre"})
@@ -255,6 +261,8 @@ def test_a_detection_that_fails_says_why_and_the_summary_is_made_without_chapter
 ) -> None:
     fake_model.phases_answer = "pas du JSON"
     session_id = imported(client, recording)
+    run_all(data, fake_model)
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
     run_all(data, fake_model)
     status = client.get(f"/api/seances/{session_id}/chapitres").json()
     assert status["state"] == "failed"

@@ -46,7 +46,15 @@ export function KeyFigures({
   );
 }
 
-export function Participants({ model }: { model: ReviewModel }) {
+/** The voices, with their share of the time. Two voices named after the same person (the
+ *  engine split one person, P3) are offered a merge. */
+export function Participants({
+  model,
+  onMerge,
+}: {
+  model: ReviewModel;
+  onMerge: (source: string, target: string) => Promise<void>;
+}) {
   const total = model.speakers.reduce((sum, s) => sum + s.seconds, 0) || 1;
   const unnamed = model.speakers.filter(
     (s) => !s.named && s.label !== null,
@@ -60,28 +68,53 @@ export function Participants({ model }: { model: ReviewModel }) {
           : "Toutes les voix sont nommées."}
       </Text>
       <ul className="cl-participants">
-        {model.speakers.map((s) => (
-          <li key={s.label ?? "inconnu"}>
-            <span
-              className="cl-name"
-              data-unnamed={!s.named || undefined}
-              style={{ color: inkOf(s) }}
-            >
-              {speakerTitle(s)}
-            </span>
-            <span className="cl-share" aria-hidden>
+        {model.speakers.map((s, i) => {
+          const twin =
+            s.person_id != null && !s.character && s.label !== null
+              ? model.speakers
+                  .slice(0, i)
+                  .find(
+                    (o) =>
+                      o.person_id === s.person_id &&
+                      !o.character &&
+                      o.label !== null,
+                  )
+              : undefined;
+          return (
+            <li key={s.label ?? "inconnu"}>
               <span
-                style={{
-                  width: `${(100 * s.seconds) / total}%`,
-                  background: inkOf(s),
-                }}
-              />
-            </span>
-            <Text type="supporting">
-              {Math.round((100 * s.seconds) / total)} %
-            </Text>
-          </li>
-        ))}
+                className="cl-name"
+                data-unnamed={!s.named || undefined}
+                style={{ color: inkOf(s) }}
+              >
+                {speakerTitle(s)}
+              </span>
+              <span className="cl-share" aria-hidden>
+                <span
+                  style={{
+                    width: `${(100 * s.seconds) / total}%`,
+                    background: inkOf(s),
+                  }}
+                />
+              </span>
+              <Text type="supporting">
+                {Math.round((100 * s.seconds) / total)} %
+              </Text>
+              {twin && (
+                <button
+                  type="button"
+                  className="cl-participants__merge"
+                  title={`Deux voix portent le nom ${s.name} : les réunir en une seule (Cmd-Z pour annuler)`}
+                  onClick={() =>
+                    void onMerge(s.label!, twin.label!).catch(() => undefined)
+                  }
+                >
+                  Fusionner les deux {s.name}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

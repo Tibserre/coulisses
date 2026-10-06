@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import mimetypes
 import sqlite3
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -23,11 +23,10 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from coulisses_app import corrections, jobs, sessions, settings, spaces, summaries
+from coulisses_app import actions, corrections, jobs, notes, sessions, settings, spaces, summaries
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
-from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, ModelClient
 from coulisses_app.prompting.ollama import InstalledModel, OllamaClient, OllamaError
 from coulisses_app.status import StageView, stage_views
@@ -67,6 +66,10 @@ class SpaceRequest(BaseModel):
     """At creation only: impro, reunion or vide (ADR 0020)."""
 
 
+class OfferedActionRequest(BaseModel):
+    action_ref: str | None = None
+
+
 class SpaceActionRequest(BaseModel):
     auto_run: bool
     model: str | None = None
@@ -93,10 +96,14 @@ class ModelsInfo(BaseModel):
     models: list[InstalledModel]
 
 
-class ActionInfo(BaseModel):
-    ref: str
+class ActionRequest(BaseModel):
     name: str
-    description: str
+    description: str = ""
+    prompt: str
+
+
+class NoteRequest(BaseModel):
+    text: str
 
 
 class PersonRequest(BaseModel):
@@ -146,6 +153,14 @@ def create_app(
                 processor.stop()
 
     app = FastAPI(title="Coulisses", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+    @contextmanager
+    def _db() -> Generator[sqlite3.Connection]:
+        conn = connect(data)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     @app.exception_handler(spaces.SpaceError)
     async def refused(_: Request, exc: spaces.SpaceError) -> JSONResponse:
@@ -295,11 +310,19 @@ def create_app(
     def space_actions(space_id: int) -> list[spaces.SpaceAction]:
         return spaces.space_actions(data, space_id)
 
+    @app.put("/api/espaces/{space_id}/resume-propose")
+    def set_offered_action(
+        space_id: int, demande: OfferedActionRequest
+    ) -> list[spaces.SpaceAction]:
+        if demande.action_ref is not None:
+            _check_action(data, demande.action_ref)
+        return spaces.set_offered_action(data, space_id, demande.action_ref)
+
     @app.put("/api/espaces/{space_id}/actions/{action_ref}")
     def set_space_action(
         space_id: int, action_ref: str, demande: SpaceActionRequest
     ) -> list[spaces.SpaceAction]:
-        _check_action(action_ref)
+        _check_action(data, action_ref)
         return spaces.set_space_action(
             data, space_id, action_ref, auto_run=demande.auto_run, model=demande.model
         )
@@ -329,11 +352,45 @@ def create_app(
         return models()
 
     @app.get("/api/actions")
-    def actions() -> list[ActionInfo]:
-        return [
-            ActionInfo(ref=a.ref, name=a.name, description=a.description)
-            for a in assembly.provided_actions()
-        ]
+    def list_actions() -> list[actions.ActionInfo]:
+        with _db() as conn:
+            return actions.list_actions(conn)
+
+    @app.post("/api/actions", status_code=201)
+    def create_action(demande: ActionRequest) -> actions.ActionInfo:
+        with _db() as conn:
+            return actions.create(conn, demande.name, demande.description, demande.prompt)
+
+    @app.put("/api/actions/{ref}")
+    def update_action(ref: str, demande: ActionRequest) -> actions.ActionInfo:
+        with _db() as conn:
+            return actions.update(conn, ref, demande.name, demande.description, demande.prompt)
+
+    @app.post("/api/actions/{ref}/restaurer")
+    def restore_action(ref: str) -> actions.ActionInfo:
+        with _db() as conn:
+            return actions.restore(conn, ref)
+
+    @app.post("/api/actions/{ref}/dupliquer", status_code=201)
+    def duplicate_action(ref: str) -> actions.ActionInfo:
+        with _db() as conn:
+            return actions.duplicate(conn, ref)
+
+    @app.post("/api/actions/{ref}/archiver", status_code=204)
+    def archive_action(ref: str) -> Response:
+        with _db() as conn:
+            actions.archive(conn, ref)
+        return Response(status_code=204)
+
+    @app.get("/api/seances/{session_id}/notes")
+    def session_notes(session_id: str) -> notes.Note | None:
+        with _db() as conn:
+            return notes.after_session(conn, session_id)
+
+    @app.put("/api/seances/{session_id}/notes")
+    def write_notes(session_id: str, demande: NoteRequest) -> notes.Note:
+        with _db() as conn:
+            return notes.set_after_session(conn, session_id, demande.text)
 
     @app.get("/api/seances/{session_id}/resumes")
     def generations(session_id: str) -> summaries.Generations:
@@ -341,12 +398,13 @@ def create_app(
 
     @app.post("/api/seances/{session_id}/resumes", status_code=202)
     def request_generation(session_id: str, demande: GenerationRequest) -> summaries.Generations:
-        _check_action(demande.action_ref)
+        _check_action(data, demande.action_ref)
         if corrections.build_view(data, session_id) is None:
             raise HTTPException(status_code=409, detail="Le transcript n'est pas encore prêt.")
         conn = connect(data)
         try:
             if demande.model:
+                # Chosen by hand: it becomes the default (ADR 0022).
                 settings.set_default_model(conn, demande.model)
             model = demande.model or settings.default_model(conn)
             with conn:
@@ -496,13 +554,14 @@ def create_app(
     return app
 
 
-def _check_action(ref: str) -> None:
+def _check_action(data: DataDir, ref: str) -> None:
     if ref in (TITLE_REF, PHASES_REF):
         return  # the title and the chapters can be made again too
+    conn = connect(data)
     try:
-        assembly.action(ref)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Résumé inconnu.") from exc
+        actions.get_action(conn, ref)  # NotFoundError: 404, with its message
+    finally:
+        conn.close()
 
 
 def _corrected(data: DataDir, session_id: str) -> corrections.CorrectedView:

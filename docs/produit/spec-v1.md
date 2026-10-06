@@ -56,7 +56,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
    *Ou* importer un fichier enregistré ailleurs.
 3. **Traiter** : automatiquement à l'arrêt, en arrière-plan, progression par étape visible. Un seul réglage : la chaîne retenue du moteur (≈ 10 min de calcul par heure d'audio).
 4. **Relire** : transcript par locuteur, horodaté, découpé en phases. Cliquer une ligne rejoue l'audio à cet instant. Je renomme, fusionne, scinde des locuteurs, j'en marque un comme « personnage joué par Marie », je corrige un mot, je corrige une phase.
-5. **Résumer** : les résumés automatiques de l'espace sont déjà là (le Résumé Impro pour une troupe). Je peux lancer d'autres actions, relancer, comparer deux versions côte à côte. Mes corrections (noms, texte, phases) sont prises en compte.
+5. **Résumer** : à la demande. Les chapitres sont déjà là ; le titre se propose d'un clic ; je lance le résumé proposé par l'espace (le Résumé Impro pour une troupe) ou un autre, avec le modèle choisi dans la liste. Je peux relancer, comparer deux versions côte à côte (ADR 0025). Mes corrections (noms, texte, phases) sont prises en compte.
 6. **Retrouver et partager** : bibliothèque par espace et par projet, recherche plein texte, export Markdown, copie dans le presse-papiers.
 
 ## 7. Fonctionnalités V1
@@ -68,7 +68,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Invités** : ajoutés à la volée sur une séance, réutilisables ensuite dans le même espace.
 - **Projets** : groupent les séances d'un espace (un spectacle pour une troupe). Une séance appartient à un projet, ou à aucun.
 - **Présents** : cochés à la préparation ou après coup, plus un nombre de personnes non nommées si besoin. Leur total alimente le minimum de locuteurs (P3).
-- **Réglages d'un espace** : les résumés lancés automatiquement après le traitement, et la reconnaissance des voix d'une séance à l'autre (désactivée par défaut). À la création, un **modèle de départ** (« Troupe d'impro », « Réunions de travail », « Vide ») les remplit une fois ; tout reste modifiable. Il n'y a pas de type d'espace.
+- **Réglages d'un espace** : le résumé proposé en premier (aucun résumé ne se lance seul, ADR 0025), et la reconnaissance des voix d'une séance à l'autre (désactivée par défaut). À la création, un **modèle de départ** (« Troupe d'impro », « Réunions de travail », « Vide ») les remplit une fois ; tout reste modifiable. Il n'y a pas de type d'espace.
 
 ### 7.2 Enregistrement
 
@@ -101,7 +101,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.5 Phases (« chapitres » dans l'interface)
 
-- L'app **détecte automatiquement** les phases après le traitement, avant le titre et les résumés : le LLM local lit la transcription et propose des chapitres, chacun de type jeu (`scene`), discussion ou autre, avec un titre court (ADR 0024). Une séance de travail est découpée par sujet. Chaque chapitre commence à une réplique existante, jamais à une heure inventée.
+- L'app **détecte automatiquement** les phases après le traitement ; c'est le seul appel automatique au LLM (titre et résumés à la demande, ADR 0025 et 0026) : le LLM local lit la transcription et propose des chapitres, chacun de type jeu (`scene`), discussion ou autre, avec un titre court (ADR 0024). Une séance de travail est découpée par sujet. Chaque chapitre commence à une réplique existante, jamais à une heure inventée.
 - Les **marqueurs posés à la main priment** sur la détection (à l'étape de l'enregistrement).
 - Je corrige les chapitres en relecture : renommer en tapant directement dans le titre, changer le type, retirer une coupure (les répliques rejoignent le chapitre précédent), commencer un chapitre à une réplique (bouton ou touche C). Déplacer une frontière, c'est retirer la coupure puis recouper ailleurs. Cmd-Z et Maj-Cmd-Z annulent et rétablissent, comme les autres corrections. Une nouvelle détection garde mes corrections.
 - Sous le titre de la séance, une frise montre les chapitres, proportionnels à leur durée, avec le chapitre en cours et la tête de lecture ; un clic y amène la lecture. Dans le transcript, un chapitre se replie ; celui qu'on écoute reste ouvert.
@@ -112,7 +112,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 - Vue par **tours de parole** : une couleur par locuteur, horodatage, phases visibles, marqueurs et notes intercalés.
 - **Lecture audio synchronisée** : clic sur une ligne → lecture à cet instant ; le mot courant est suivi. Vitesse de lecture réglable.
-- **Locuteurs** : renommer (en choisissant un membre, un invité, ou un nom libre), fusionner, scinder, marquer « personnage joué par X ».
+- **Locuteurs** : renommer (en choisissant un membre, un invité, ou un nom libre), fusionner, scinder, marquer « personnage joué par X ». Nommer une voix d'après une personne qui a déjà une voix dans la séance les fusionne (le moteur avait coupé une personne en deux, P3) ; un personnage joué reste une voix à part. Deux voix déjà rattachées à la même personne de l'espace se voient dans les participants, avec « Fusionner » ; le service le signale au moment où un nommage devient une fusion.
 - **Édition du texte** : corriger un mot ou une phrase. Un mot corrigé garde son horodatage. Si la correction change le nombre de mots, la plage corrigée garde son début et sa fin mesurés ; les mots ajoutés n'ont pas de temps propre et sont marqués comme tels, jamais interpolés.
 - **Édition directe**, comme dans un document : je clique dans une réplique et je tape ; la correction s'enregistre quand je quitte la réplique ou appuie sur Entrée, Échap annule ma saisie. Un texte refusé reste à l'écran pour être corrigé. Cmd-Z et Maj-Cmd-Z annulent et rétablissent la dernière correction (texte, nom, fusion, scission, chapitre) ; une réplique corrigée peut revenir à son texte d'origine. Rien n'est effacé : chaque annulation s'ajoute au journal.
 - **Glossaire en relecture** : une graphie fautive connue est signalée ; un clic applique les bonnes graphies du glossaire à toute la réplique.
@@ -128,26 +128,27 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.8 Notes manuelles
 
-- Notes **pendant** la séance (horodatées) et **après** (libres, rattachées à la séance).
-- Injectées dans le contexte de chaque génération, comme le prévoit le prompt « Résumé Impro ».
+- Notes **pendant** la séance (horodatées, avec l'enregistrement) et **après** (libres, rattachées à la séance).
+- La note d'après séance s'écrit dans la Vue d'ensemble, directement, sans cadre, comme le reste ; elle s'enregistre quand on la quitte.
+- Injectées dans le contexte de chaque génération (« Notes prises après la séance »). Un résumé fait avant une modification de la note est signalé comme périmé.
 
 ### 7.9 Résumés (« actions »)
 
-- **Actions fournies** : Compte rendu de réunion (lancée automatiquement par le modèle « Réunions de travail », à écrire), Résumé Impro (lancée automatiquement par le modèle « Troupe d'impro » ; son prompt est réécrit pour Coulisses, le texte OpenWhispr servant de témoin), Retours de jeu par comédien, Idées de scènes et personnages, Prochaines étapes et logistique, Résumé court à envoyer à la troupe.
+- **Actions fournies** : Compte rendu de réunion (proposé par le modèle « Réunions de travail »), Résumé Impro (proposé par le modèle « Troupe d'impro » ; son prompt est réécrit pour Coulisses, le texte OpenWhispr servant de témoin), Retours de jeu par comédien, Idées de scènes et personnages, Prochaines étapes et logistique, Résumé court à envoyer à la troupe.
 - **Résumé court à envoyer à la troupe** : destiné à WhatsApp. Environ 10 lignes, sans titres Markdown, quelques puces, au plus un emoji. Il se colle tel quel dans le groupe. L'utilisateur le range aussi dans Google Drive, à partir de l'export (voir Q7).
-- **Actions modifiables et créables** dans l'app : nom, description, prompt. Les actions fournies peuvent être dupliquées ; l'original reste restaurable.
+- **Actions modifiables et créables** dans l'app (page « Actions ») : nom, description, prompt. Modifier une action fournie crée sa version modifiée, utilisée partout à sa place ; « Restaurer l'original » la met de côté sans l'effacer. Toute action se duplique. Une action à soi se retire (archivée, avec confirmation) : elle disparaît des listes et n'est plus proposée. Les actions sont communes à tous les espaces. Un résumé déjà fait garde le prompt exact qui l'a produit.
 - **Assemblage du prompt**, toujours dans cet ordre :
   1. cadre système : rôle, Markdown strict, pas de préambule ni de titre, ne rien inventer ;
   2. prompt de l'action ;
   3. règle de repli : si rien de substantiel, une phrase factuelle, jamais une réponse vide ;
   4. consigne de langue explicite (français) ;
   5. contexte de séance : espace, projet, date, présents et rôles, glossaire, locuteurs avec leur nom et les personnages identifiés, notes manuelles ;
-  6. transcript au format `[mm:ss] Nom : texte`, avec les marqueurs et les phases.
+  6. transcript au format `[mm:ss] Nom : texte`, avec les marqueurs et les phases (pour le titre : les chapitres, sinon le dernier résumé, ADR 0026).
 - **Pas de troncature silencieuse** : la taille du prompt est mesurée avant l'envoi. Si elle dépasse la fenêtre du modèle, l'app bascule sur un résumé par sections puis une consolidation, et l'indique. Chaque appel partiel et la consolidation passent par l'assemblage complet, consigne de langue comprise.
 - **Historique des générations** par séance. Chaque génération conserve le prompt complet envoyé, le modèle et ses réglages (P7).
-- **Comparaison côte à côte** de deux générations.
-- **Choix du modèle local** par action ou par génération.
-- **Titre de séance** généré automatiquement, modifiable.
+- **Comparaison côte à côte** de deux générations : on coche deux résumés de l'historique, puis « Comparer les deux ».
+- **Choix du modèle local** au moment de générer, dans la liste des modèles d'Ollama ; le dernier choisi devient le défaut (ADR 0025).
+- **Titre de séance** : proposé à la demande (« Proposer un titre », sous le titre), à partir des titres des chapitres, sinon du dernier résumé, sinon de la transcription ; modifiable ; un titre écrit à la main n'est jamais remplacé (ADR 0026).
 - Le copier-coller fonctionne partout, clic droit compris.
 
 ### 7.10 Conservation de l'audio

@@ -17,7 +17,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Audio dérivé | `derived_audio` | Audio produit par une étape (rééchantillonné, déréverbéré, mixé). Purgé avec l'original. |
 | Marqueur | `marker` | Repère horodaté posé à la main : `scene`, `discussion`, `key_moment`. |
-| Note | `note` | Texte libre de l'utilisateur, horodaté (pendant) ou non (après). |
+| Note | `note` | Texte libre de l'utilisateur, horodaté (pendant) ou non (après). La note d'après séance est lue par chaque génération. |
 | Phase | `phase` | Intervalle de la séance de type `scene`, `discussion` ou `other`. Détectée puis corrigeable. Dans l'interface : « chapitre », de type « Jeu », « Discussion » ou « Autre » (ADR 0024). |
 | Étape | `stage` | Un maillon du traitement : `prepare`, `dereverb`, `transcribe`, `align`, `diarize`, `attribute`, `segment_phases`, `title`, `summarize`. |
 | Exécution | `run` | Une exécution d'une étape sur une séance, avec ses entrées, sa sortie, sa provenance, son statut. Immuable une fois terminée. |
@@ -48,7 +48,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Vue corrigée | `corrected_view` | Sortie de l'exécution active avec les corrections appliquées. Ce qu'affiche l'app et ce que lisent les résumés. |
 | Report des corrections | `edit_carryover` | Réapplication des corrections sur une nouvelle exécution amont. Ce qui n'a pas pu être reporté est listé. |
 | Glossaire | `glossary` | Termes d'un espace : prénoms, jargon, formats, exercices, personnages récurrents, sigles. |
-| Action | `action` | Modèle de résumé : nom, description, prompt. Ex. « Résumé Impro ». |
+| Action | `action` | Modèle de résumé : nom, description, prompt. Ex. « Résumé Impro ». Fournie (fichier de l'application, clé = nom du fichier) ou à soi (en base, clé `perso-<id>`). Une action fournie modifiée garde sa clé ; sa version modifiée est en base (`based_on`), l'original reste restaurable. |
 | Assemblage | `prompt_assembly` | Construction du prompt complet dans l'ordre fixe de la spec §7.9. Seul chemin vers le LLM. |
 | Génération | `generation` | Un résultat d'action sur une séance, avec le prompt complet envoyé et la provenance. |
 | Conservation | `retention` | Politique de durée de vie de l'audio. |

@@ -137,6 +137,8 @@ class SessionContext:
     unnamed_attendees: int | None
     glossary: list[str]
     project: str | None = None
+    notes: str | None = None
+    """The note written by hand after the session."""
 
 
 def _voice(speaker: Speaker) -> str:
@@ -165,6 +167,8 @@ def context_block(ctx: SessionContext, view: CorrectedView) -> str:
         lines.append(f"- Voix de la transcription : {', '.join(voices)}")
     if ctx.glossary:
         lines.append(f"- Glossaire du groupe : {', '.join(ctx.glossary)}")
+    if ctx.notes:
+        lines += ["", "## Notes prises après la séance", ctx.notes]
     return "\n".join(lines)
 
 

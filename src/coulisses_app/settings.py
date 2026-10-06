@@ -24,15 +24,3 @@ def set_default_model(conn: sqlite3.Connection, model: str) -> None:
             " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
             (MODEL_KEY, json.dumps(model)),
         )
-
-
-def auto_actions(conn: sqlite3.Connection, space_id: int) -> list[tuple[str, str | None]]:
-    """(action, model or None for the default) run after processing, for a space."""
-    return [
-        (r["action_ref"], r["model"])
-        for r in conn.execute(
-            "SELECT action_ref, model FROM action_preference WHERE space_id = ? AND auto_run = 1"
-            " ORDER BY action_ref",
-            (space_id,),
-        )
-    ]

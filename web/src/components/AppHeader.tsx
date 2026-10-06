@@ -1,8 +1,8 @@
 import { Heading } from "@astryxdesign/core/Heading";
 import { AudioLines } from "lucide-react";
 
-/** The application's header: its name and the two places of the library. */
-export function AppHeader({ current }: { current: "library" | "spaces" }) {
+/** The application's header: its name and the places of the library. */
+export function AppHeader({ current }: { current: "library" | "spaces" | "actions" }) {
   return (
     <header className="cl-page__header">
       <a className="cl-brand" href="#/">
@@ -15,6 +15,9 @@ export function AppHeader({ current }: { current: "library" | "spaces" }) {
         </a>
         <a href="#/espaces" aria-current={current === "spaces" ? "page" : undefined}>
           Espaces
+        </a>
+        <a href="#/actions" aria-current={current === "actions" ? "page" : undefined}>
+          Actions
         </a>
       </nav>
     </header>

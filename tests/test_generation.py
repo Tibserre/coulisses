@@ -51,6 +51,16 @@ def imported(client: TestClient, recording: Path) -> str:
     return response.json()["id"]
 
 
+def summarized(client: TestClient, data: DataDir, recording: Path, fake: FakeModel) -> str:
+    """A processed session, then a Résumé Impro asked for (summaries are on demand)."""
+    session_id = imported(client, recording)
+    run_all(data, fake)
+    asked = client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
+    assert asked.status_code == 202
+    run_all(data, fake)
+    return session_id
+
+
 def test_the_assembly_keeps_its_order_and_always_asks_for_french() -> None:
     prompt = assembly.assemble("CONSIGNE DE L'ACTION", "CONTEXTE", "[0:00] Marie : bonjour")
     system = prompt.system
@@ -65,11 +75,15 @@ def test_the_assembly_keeps_its_order_and_always_asks_for_french() -> None:
     assert [m["role"] for m in prompt.messages()] == ["system", "user"]
 
 
-def test_both_provided_actions_are_read_with_their_names() -> None:
+def test_the_six_provided_actions_are_read_with_their_names() -> None:
     names = {a.ref: a.name for a in assembly.provided_actions()}
     assert names == {
         "resume-impro": "Résumé Impro",
         "compte-rendu-reunion": "Compte rendu de réunion",
+        "retours-de-jeu": "Retours de jeu par comédien",
+        "idees-scenes": "Idées de scènes et personnages",
+        "prochaines-etapes": "Prochaines étapes et logistique",
+        "resume-court": "Résumé court pour la troupe",
     }
     for action in assembly.provided_actions():
         # Their own text never repeats what the assembly adds (rules/prompts.md).
@@ -77,22 +91,54 @@ def test_both_provided_actions_are_read_with_their_names() -> None:
         assert "Aucun contenu substantiel" not in action.prompt
 
 
-def test_after_processing_the_title_and_the_space_summaries_are_made(
+def test_after_processing_only_the_chapters_are_made(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
     session_id = imported(client, recording)
+    run_all(data, fake_model)
+    # Only the chapters (JSON asked): the title and the summaries are on demand (ADR 0026).
+    assert len(fake_model.calls) == 1 and fake_model.formats[0] is not None
+    assert client.get(f"/api/seances/{session_id}").json()["session"]["title"] is None
+    listed = client.get(f"/api/seances/{session_id}/resumes").json()
+    assert listed == {"generations": [], "pending": []}
+
+
+def test_a_title_asked_for_reads_the_chapters_not_the_transcript(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
     fake_model.answer = "« Scène du marché. »"
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "titre"})
     run_all(data, fake_model)
     session = client.get(f"/api/seances/{session_id}").json()["session"]
     assert session["title"] == "Scène du marché"  # cleaned: no quotes, no final point
-    title_options = fake_model.calls[1][2]
-    assert title_options["stop"] == ["\n"]  # one line: never cut for going on (P8)
-    # The chapters (JSON asked), the title, then the space's Résumé Impro.
-    assert len(fake_model.calls) == 3
-    assert fake_model.formats[0] is not None and fake_model.formats[1:] == [None, None]
-    listed = client.get(f"/api/seances/{session_id}/resumes").json()
-    assert [g["action_ref"] for g in listed["generations"]] == ["resume-impro"]
-    assert listed["pending"] == []
+    _model, messages, options = fake_model.calls[-1]
+    assert options["stop"] == ["\n"]  # one line: never cut for going on (P8)
+    assert "# Chapitres de la séance\n- [0:00] Essai (discussion)" in messages[1]["content"]
+    assert "Locuteur 1 : bonjour" not in messages[1]["content"]  # not the transcript
+    assert assembly.FRENCH_INSTRUCTION in messages[0]["content"]  # the assembly still (P4)
+    view = client.get(f"/api/seances/{session_id}/transcript").json()
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert (prov.input_kind, prov.input_run_id) == ("chapters", view["phases_run_id"])
+
+
+def test_without_chapters_a_title_reads_the_latest_summary_then_the_transcript(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    fake_model.phases_answer = "pas du JSON"  # no chapters
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert prov.input_kind == "transcript"
+    assert "Locuteur 1 : bonjour" in fake_model.calls[-1][1][1]["content"]
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
+    run_all(data, fake_model)
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert prov.input_kind == "summary"
+    summary_run = client.get(f"/api/seances/{session_id}/resumes").json()["generations"][0]
+    assert prov.input_run_id == summary_run["run_id"]
+    assert "# Résumé de la séance\n## Décisions" in fake_model.calls[-1][1][1]["content"]
 
 
 def test_a_generation_keeps_every_prompt_and_its_provenance(
@@ -190,8 +236,7 @@ def test_ollama_down_is_said_plainly(
 def test_a_summary_goes_stale_when_the_transcript_is_corrected(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
-    session_id = imported(client, recording)
-    run_all(data, fake_model)
+    session_id = summarized(client, data, recording, fake_model)
     assert (
         client.get(f"/api/seances/{session_id}/resumes").json()["generations"][0]["stale"] is False
     )
@@ -240,8 +285,7 @@ def test_the_chosen_model_becomes_the_default(
 def test_markdown_export_holds_the_summary_and_the_corrected_transcript(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
-    session_id = imported(client, recording)
-    run_all(data, fake_model)
+    session_id = summarized(client, data, recording, fake_model)
     response = client.get(f"/api/seances/{session_id}/export", params={"contenu": "tout"})
     assert response.status_code == 200
     assert "attachment" in response.headers["content-disposition"]
@@ -377,8 +421,10 @@ def test_a_failed_title_can_be_asked_again_and_the_failure_then_goes(
     session_id = imported(client, recording)
     fake_model.down = True
     run_all(data, fake_model)
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "titre"})
+    run_all(data, fake_model)
     pending = client.get(f"/api/seances/{session_id}/resumes").json()["pending"]
-    assert {p["action_ref"] for p in pending} == {"titre", "resume-impro"}
+    assert [(p["action_ref"], p["state"]) for p in pending] == [("titre", "failed")]
     fake_model.down = False
     fake_model.answer = "Scène du marché"
     assert (
@@ -386,16 +432,14 @@ def test_a_failed_title_can_be_asked_again_and_the_failure_then_goes(
         == 202
     )
     run_all(data, fake_model)
-    pending = client.get(f"/api/seances/{session_id}/resumes").json()["pending"]
-    assert [p["action_ref"] for p in pending] == ["resume-impro"]  # only the one not redone
+    assert client.get(f"/api/seances/{session_id}/resumes").json()["pending"] == []
     assert client.get(f"/api/seances/{session_id}").json()["session"]["title"] == "Scène du marché"
 
 
 def test_a_summary_with_an_unreadable_provenance_is_listed_with_why(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
-    session_id = imported(client, recording)
-    run_all(data, fake_model)
+    session_id = summarized(client, data, recording, fake_model)
     listed = client.get(f"/api/seances/{session_id}/resumes").json()["generations"][0]
     (data.run_dir(session_id, listed["run_id"]) / "provenance.json").unlink()
     again = client.get(f"/api/seances/{session_id}/resumes").json()["generations"][0]
