@@ -3,6 +3,17 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.5.0 — 2026-10-06
+
+### Nouveautés
+
+- ajoute au Résumé Impro l'organisation hors plateau (resumes)
+- génère le titre et le Résumé Impro avec le LLM local (resumes)
+
+### Corrections
+
+- affiche la péremption du résumé dès qu'une correction change (resumes)
+
 ## v0.4.0 — 2026-10-06
 
 ### Nouveautés
