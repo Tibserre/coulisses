@@ -3,6 +3,17 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.8.0 — 2026-10-06
+
+### Nouveautés
+
+- propose le titre à la demande, à partir des chapitres (titre)
+- ajoute les quatre actions, leur page et la note d'après séance (actions)
+
+### Corrections
+
+- fusionne deux voix nommées d'après la même personne (relecture)
+
 ## v0.7.0 — 2026-10-06
 
 ### Nouveautés
