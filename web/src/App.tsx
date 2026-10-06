@@ -8,19 +8,22 @@ import { LibraryPage } from "./pages/LibraryPage.tsx";
 import { SessionPage } from "./pages/SessionPage.tsx";
 import { SpacesPage } from "./pages/SpacesPage.tsx";
 import { ActionsPage } from "./pages/ActionsPage.tsx";
+import { RecordingPage } from "./pages/RecordingPage.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 
 type Route =
   | { page: "library" }
   | { page: "session"; id: string }
   | { page: "spaces"; id: number | null }
-  | { page: "actions"; ref: string | null };
+  | { page: "actions"; ref: string | null }
+  | { page: "recording" };
 
 function parseRoute(hash: string): Route {
   const session = /^#\/seance\/([^/?#]+)/.exec(hash);
   if (session) return { page: "session", id: decodeURIComponent(session[1]) };
   const spaces = /^#\/espaces(?:\/(\d+))?/.exec(hash);
   if (spaces) return { page: "spaces", id: spaces[1] ? Number(spaces[1]) : null };
+  if (/^#\/enregistrement/.test(hash)) return { page: "recording" };
   const actions = /^#\/actions(?:\/([^/?#]+))?/.exec(hash);
   if (actions) return { page: "actions", ref: actions[1] ? decodeURIComponent(actions[1]) : null };
   return { page: "library" };
@@ -42,6 +45,8 @@ export function App() {
             <SessionPage id={route.id} />
           ) : route.page === "spaces" ? (
             <SpacesPage id={route.id} />
+          ) : route.page === "recording" ? (
+            <RecordingPage />
           ) : route.page === "actions" ? (
             <ActionsPage selectedRef={route.ref} />
           ) : (

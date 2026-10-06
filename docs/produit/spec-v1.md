@@ -74,11 +74,12 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 - Choix du micro.
 - **Captation brute** : pas de réduction de bruit, pas d'annulation d'écho, pas de gain automatique. WAV PCM 48 kHz, tel quel.
-- Vumètre, alertes de niveau (trop faible, saturation), pause et reprise.
+- Vumètre, alertes de niveau (trop faible, saturation, micro qui ne donne plus de son), pause et reprise. La pause coupe le son à l'instant où on la demande : le fichier ne contient que ce qui a été enregistré. Fermer la page n'arrête pas l'enregistrement ; la bibliothèque montre qu'il est en cours.
 - **Écriture continue sur disque** : une séance survit à un crash de l'interface, du service ou du Mac. Au redémarrage, l'enregistrement interrompu est récupéré et signalé.
-- **Pendant l'enregistrement, le Mac ne se met pas en veille.**
-- **Marqueurs** horodatés : scène, discussion, moment clé.
-- **Notes pendant la séance** : champ libre, chaque note horodatée.
+- **Pendant l'enregistrement, le Mac ne se met pas en veille**, ni pendant le traitement.
+- **À l'arrêt**, le traitement démarre si le Mac est branché. Sur batterie, il attend : la séance propose « Traiter maintenant », avec la durée estimée (ADR 0027).
+- **Marqueurs** horodatés, au temps de l'enregistrement (pauses exclues) : une **bascule** Jeu ⇄ Discussion qui montre le mode en cours (« Jeu depuis 3:40 ») et passe à l'autre d'un geste (touches J et D), et **★ Moment** pour un moment clé (M). Au départ, aucun mode : ce qui n'est pas marqué est laissé à la détection. Une frise se construit en direct, comme celle des chapitres en relecture.
+- **Notes pendant la séance** : une ligne sans cadre (touche N) ; la note prend l'heure de sa **première lettre**, pas celle de l'envoi. Un marqueur ou une note posés par erreur se retirent de la liste, pendant l'enregistrement.
 - **Import** : fichiers audio (wav, m4a, mp3, flac, ogg…) et vidéo (la piste audio est extraite). L'original est conservé tel quel.
 
 ### 7.3 Sources multiples (préparées en V1, exploitées plus tard)
@@ -102,7 +103,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 ### 7.5 Phases (« chapitres » dans l'interface)
 
 - L'app **détecte automatiquement** les phases après le traitement ; c'est le seul appel automatique au LLM (titre et résumés à la demande, ADR 0025 et 0026) : le LLM local lit la transcription et propose des chapitres, chacun de type jeu (`scene`), discussion ou autre, avec un titre court (ADR 0024). Une séance de travail est découpée par sujet. Chaque chapitre commence à une réplique existante, jamais à une heure inventée.
-- Les **marqueurs posés à la main priment** sur la détection (à l'étape de l'enregistrement).
+- Les **marqueurs posés à la main priment** sur la détection : une bascule Jeu ou Discussion coupe un chapitre sur la réplique qui la suit, avec ce type ; une coupure détectée à moins d'une minute est remplacée par elle, en gardant son titre ; le chapitre d'ouverture reste. Ces chapitres portent un petit drapeau « posé pendant la séance ». Les moments clés et les notes s'intercalent dans la transcription et sont envoyés au modèle à leur place ; les moments clés sont aussi sur la frise.
 - Je corrige les chapitres en relecture : renommer en tapant directement dans le titre, changer le type, retirer une coupure (les répliques rejoignent le chapitre précédent), commencer un chapitre à une réplique (bouton ou touche C). Déplacer une frontière, c'est retirer la coupure puis recouper ailleurs. Cmd-Z et Maj-Cmd-Z annulent et rétablissent, comme les autres corrections. Une nouvelle détection garde mes corrections.
 - Sous le titre de la séance, une frise montre les chapitres, proportionnels à leur durée, avec le chapitre en cours et la tête de lecture ; un clic y amène la lecture. Dans le transcript, un chapitre se replie ; celui qu'on écoute reste ouvert.
 - Si la détection échoue (Ollama absent, réponse illisible), l'échec s'affiche avec « Relancer » et les résumés se font sans chapitres.
@@ -205,7 +206,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 
 ## 11. Critères de réussite V1
 
-- Une vraie séance de 80 min enregistrée dans l'app donne un compte rendu sans intervention, avant le lendemain matin.
+- Une vraie séance de 80 min enregistrée dans l'app est traitée sans intervention (chapitres compris) avant le lendemain matin ; son compte rendu s'obtient ensuite en un clic (ADR 0025).
 - Sur l'extrait annoté, les tours de parole des phases de discussion sont majoritairement bien attribués, et nettement mieux qu'avec OpenWhispr sur le même audio (protocole : `evaluation.md`).
 - Je renomme un locuteur, je relance le résumé, et le bon nom apparaît.
 - Passer d'un modèle à un autre, à n'importe quelle étape, ne demande qu'un changement de configuration.

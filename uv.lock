@@ -300,8 +300,10 @@ source = { editable = "." }
 dependencies = [
     { name = "coulisses", extra = ["mlx-audio", "pyannote", "wav2vec2"] },
     { name = "fastapi" },
+    { name = "numpy" },
     { name = "pydantic" },
     { name = "python-multipart" },
+    { name = "sounddevice" },
     { name = "uvicorn" },
 ]
 
@@ -317,8 +319,10 @@ dev = [
 requires-dist = [
     { name = "coulisses", extras = ["mlx-audio", "pyannote", "wav2vec2"], git = "file:///Users/t.serre/Coulisses/Moteur?subdirectory=engine&tag=v1.4.0" },
     { name = "fastapi", specifier = ">=0.120" },
+    { name = "numpy", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.13" },
     { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "sounddevice", specifier = ">=0.5" },
     { name = "uvicorn", specifier = ">=0.38" },
 ]
 

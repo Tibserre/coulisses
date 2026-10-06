@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import sqlite3
 from collections.abc import AsyncGenerator, Generator
@@ -19,11 +20,29 @@ from coulisses.api import (
     read_provenance,
 )
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from coulisses_app import actions, corrections, jobs, notes, sessions, settings, spaces, summaries
+from coulisses_app import (
+    actions,
+    capture,
+    corrections,
+    jobs,
+    marks,
+    notes,
+    sessions,
+    settings,
+    spaces,
+    summaries,
+)
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -96,6 +115,30 @@ class ModelsInfo(BaseModel):
     models: list[InstalledModel]
 
 
+class RecordingRequest(BaseModel):
+    espace: int | None = None
+    presents: list[int] = []
+    non_nommes: int | None = None
+    micro: int | None = None
+    """Index of the input device; None: the system's default microphone."""
+
+
+class MarkerRequest(BaseModel):
+    kind: marks.MarkerKind
+    at_s: float | None = None
+    """None: now. A time already recorded: a marker taken back by mistake, put back."""
+
+
+class TimedNoteRequest(BaseModel):
+    text: str
+    at_s: float
+    """Recorded time when its first letter was typed."""
+
+
+class PowerInfo(BaseModel):
+    on_battery: bool
+
+
 class ActionRequest(BaseModel):
     name: str
     description: str = ""
@@ -137,10 +180,12 @@ def create_app(
     web_dir: Path | None,
     recovery_problems: list[str] | None = None,
     model_client: ModelClient | None = None,
+    recorder: capture.Recorder | None = None,
 ) -> FastAPI:
     """`processor` is started and stopped with the service; None in tests that drive it.
     `model_client` answers the list of installed models (Ollama by default)."""
     model_client = model_client or (processor.model_client if processor else OllamaClient())
+    recorder = recorder or capture.Recorder(data)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -149,8 +194,12 @@ def create_app(
         try:
             yield
         finally:
-            if processor is not None:
-                processor.stop()
+            try:
+                # A recording in progress is closed properly, never lost (spec §7.2).
+                recorder.shutdown(profile=profile)
+            finally:
+                if processor is not None:
+                    processor.stop()
 
     app = FastAPI(title="Coulisses", lifespan=lifespan, docs_url=None, redoc_url=None)
 
@@ -350,6 +399,88 @@ def create_app(
         finally:
             conn.close()
         return models()
+
+    # -- recording (step 6, ADR 0005) ---------------------------------------------------
+
+    @app.get("/api/micros")
+    def microphones() -> list[capture.InputDevice]:
+        try:
+            return capture.input_devices()
+        except Exception as exc:  # PortAudio could not list them: said, not hidden
+            raise HTTPException(
+                status_code=503, detail=f"Impossible de lister les micros : {exc}"
+            ) from exc
+
+    @app.get("/api/alimentation")
+    def power() -> PowerInfo:
+        return PowerInfo(on_battery=capture.on_battery())
+
+    @app.get("/api/enregistrement")
+    def recording() -> capture.RecordingState | None:
+        return recorder.state()
+
+    @app.post("/api/enregistrement", status_code=201)
+    def start_recording(demande: RecordingRequest) -> capture.RecordingState:
+        return recorder.start(
+            space_id=demande.espace,
+            attendee_ids=demande.presents,
+            unnamed_attendees=demande.non_nommes,
+            device_index=demande.micro,
+        )
+
+    @app.post("/api/enregistrement/pause")
+    def pause_recording() -> capture.RecordingState:
+        return recorder.pause()
+
+    @app.post("/api/enregistrement/reprise")
+    def resume_recording() -> capture.RecordingState:
+        return recorder.resume()
+
+    @app.post("/api/enregistrement/arret")
+    def stop_recording() -> capture.StopResult:
+        stopped = recorder.stop(profile=profile)
+        if processor is not None and stopped.processing:
+            processor.wake()
+        return stopped
+
+    @app.post("/api/enregistrement/marqueurs", status_code=201)
+    def mark(demande: MarkerRequest) -> capture.RecordingState:
+        return recorder.mark(demande.kind, demande.at_s)
+
+    @app.post("/api/enregistrement/marqueurs/{marker_id}/retirer")
+    def unmark(marker_id: int) -> capture.RecordingState:
+        return recorder.take_back("marker", marker_id)
+
+    @app.post("/api/enregistrement/notes", status_code=201)
+    def timed_note(demande: TimedNoteRequest) -> capture.RecordingState:
+        return recorder.note(demande.text, demande.at_s)
+
+    @app.post("/api/enregistrement/notes/{note_id}/retirer")
+    def unnote(note_id: int) -> capture.RecordingState:
+        return recorder.take_back("note", note_id)
+
+    @app.get("/api/enregistrement/niveaux")
+    async def recording_levels() -> StreamingResponse:
+        """The state ten times a second while recording (server-sent events), for the meter;
+        the stream ends with the recording."""
+
+        async def events() -> AsyncGenerator[str]:
+            while (state := recorder.state()) is not None:
+                yield f"data: {state.model_dump_json()}\n\n"
+                await asyncio.sleep(0.1)
+            yield "event: fin\ndata: {}\n\n"
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    @app.post("/api/seances/{session_id}/traiter", status_code=202)
+    def process_session(session_id: str) -> sessions.Session:
+        """Start the processing a recording left waiting (stopped on battery, or repaired)."""
+        sessions.start_processing(data, session_id, profile=profile)
+        if processor is not None:
+            processor.wake()
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
 
     @app.get("/api/actions")
     def list_actions() -> list[actions.ActionInfo]:

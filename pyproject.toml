@@ -8,6 +8,8 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "coulisses[mlx-audio,pyannote,wav2vec2]",
     "fastapi>=0.120",
+    "numpy>=2.0",
+    "sounddevice>=0.5",
     "pydantic>=2.13",
     "python-multipart>=0.0.20",
     "uvicorn>=0.38",

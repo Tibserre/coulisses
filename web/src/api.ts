@@ -62,6 +62,64 @@ export interface AudioSource {
   channels: number | null;
   codec: string | null;
   file_present: boolean;
+  /** A recording made in the application: being written, complete, or repaired after a
+   *  crash. Null for an imported file. */
+  capture_state: "recording" | "complete" | "recovered" | null;
+  device: string | null;
+}
+
+export interface InputDevice {
+  index: number;
+  name: string;
+  channels: number;
+  default: boolean;
+}
+
+export type MarkerKind = "scene" | "discussion" | "key_moment";
+
+/** Set while recording, at a recorded time (pauses left out). */
+export interface Marker {
+  id: number;
+  kind: MarkerKind;
+  at_s: number;
+}
+
+/** A note taken while recording, at the time its first letter was typed. */
+export interface TimedNote {
+  id: number;
+  at_s: number;
+  text: string;
+}
+
+export interface RecordingState {
+  session_id: string;
+  state: "recording" | "paused";
+  /** Recorded so far, pauses left out. */
+  elapsed_s: number;
+  device: string;
+  channels: number;
+  levels: { peak_db: number; rms_db: number };
+  too_quiet: boolean;
+  clipping: boolean;
+  /** Times the Mac could not keep up and lost some sound. */
+  dropouts: number;
+  error: string | null;
+  markers: Marker[];
+  notes: TimedNote[];
+}
+
+export interface StopResult {
+  session_id: string;
+  duration_s: number;
+  processing: boolean;
+  on_battery: boolean;
+}
+
+export interface RecordingRequest {
+  espace: number | null;
+  presents: number[];
+  non_nommes: number | null;
+  micro: number | null;
 }
 
 export type ErrorCode =
@@ -156,6 +214,8 @@ export interface Phase {
   kind: PhaseKind;
   title: string;
   edited: boolean;
+  /** Cut by a play or discussion marker set while recording. */
+  marked: boolean;
 }
 
 export interface PhasesStatus {
@@ -210,6 +270,12 @@ export interface CorrectedView {
   phases_run_id: string | null;
   /** Why the detected chapters could not be read, when they could not. */
   phases_problem: string | null;
+  /** Set while recording: play, discussion, key moment. */
+  markers: Marker[];
+  /** Notes taken while recording. */
+  timed_notes: TimedNote[];
+  /** Detected cuts a marker replaced, in words (developer mode). */
+  phases_by_markers: string[];
 }
 
 export type EditRequest =
@@ -386,6 +452,23 @@ export const api = {
       `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `${sessionPath(id)}/audio`,
+  microphones: () => getJson<InputDevice[]>("/api/micros"),
+  power: () => getJson<{ on_battery: boolean }>("/api/alimentation"),
+  recording: () => getJson<RecordingState | null>("/api/enregistrement"),
+  startRecording: (request: RecordingRequest) =>
+    send<RecordingState>("POST", "/api/enregistrement", request),
+  pauseRecording: () => send<RecordingState>("POST", "/api/enregistrement/pause"),
+  resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
+  stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
+  levelsUrl: "/api/enregistrement/niveaux",
+  mark: (kind: MarkerKind, atS?: number) =>
+    send<RecordingState>("POST", "/api/enregistrement/marqueurs", { kind, at_s: atS ?? null }),
+  unmark: (id: number) => send<RecordingState>("POST", `/api/enregistrement/marqueurs/${id}/retirer`),
+  addTimedNote: (text: string, atS: number) =>
+    send<RecordingState>("POST", "/api/enregistrement/notes", { text, at_s: atS }),
+  removeTimedNote: (id: number) =>
+    send<RecordingState>("POST", `/api/enregistrement/notes/${id}/retirer`),
+  processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   resume: (id: string, attendees?: number) =>
     send<Session>(
       "POST",

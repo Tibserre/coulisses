@@ -364,6 +364,10 @@ export function SessionPage({ id }: { id: string }) {
             await api.resume(id, attendees);
             await refresh();
           }}
+          onProcess={async () => {
+            await api.processSession(id);
+            await refresh();
+          }}
           onShowProvenance={setProvenanceOf}
         />
       )}
@@ -481,10 +485,12 @@ function ProcessingPanel({
   transcriptError,
   onResume,
   onShowProvenance,
+  onProcess,
 }: {
   detail: SessionDetail;
   transcriptError: string | null;
   onResume: (attendees?: number) => Promise<void>;
+  onProcess: () => Promise<void>;
   onShowProvenance: (s: StageView) => void;
 }) {
   const { session } = detail;
@@ -522,13 +528,7 @@ function ProcessingPanel({
               ? "Traitement en cours"
               : "Jamais traitée"}
       </Heading>
-      {session.job_state === null && (
-        <Banner
-          status="warning"
-          title="Aucun traitement n'a été demandé pour cet enregistrement"
-          description="Cela ne devrait pas arriver après un import : signalez-le."
-        />
-      )}
+      {session.job_state === null && <NotProcessed detail={detail} onProcess={onProcess} />}
       {running && (
         <Text color="secondary">
           Environ 10 minutes de calcul par heure d'audio. Vous pouvez fermer
@@ -637,5 +637,87 @@ function SourceInfo({ detail }: { detail: SessionDetail }) {
         </MetadataListItem>
       </MetadataList>
     </section>
+  );
+}
+
+/** A recording not processed yet: still being recorded, stopped on battery (spec §7.4:
+ *  the user decides), or repaired after a crash. Never an import, processed at once. */
+function NotProcessed({ detail, onProcess }: { detail: SessionDetail; onProcess: () => Promise<void> }) {
+  const source = detail.source;
+  const [battery, setBattery] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api.power().then(
+      (p) => setBattery(p.on_battery),
+      (e: Error) => setError(`Impossible de savoir si le Mac est branché : ${e.message}`),
+    );
+  }, []);
+  if (source?.capture_state === "recording") {
+    return (
+      <Banner
+        status="info"
+        title="Enregistrement en cours"
+        description="Cette séance est en train d'être enregistrée."
+        endContent={<Button size="sm" label="Y aller" onClick={() => (window.location.hash = "#/enregistrement")} />}
+      />
+    );
+  }
+  if (source?.origin !== "captured") {
+    return (
+      <Banner
+        status="warning"
+        title="Aucun traitement n'a été demandé pour cet enregistrement"
+        description="Cela ne devrait pas arriver après un import : signalez-le."
+      />
+    );
+  }
+  if (source.duration_s === null) {
+    return (
+      <Banner
+        status="error"
+        title="Fichier illisible"
+        description={`Le fichier de cet enregistrement (${source.file_name}) n'a pas pu être relu. Il reste dans le dossier de la séance ; rien n'a été effacé.`}
+      />
+    );
+  }
+  if (!source.duration_s) {
+    return (
+      <Banner
+        status="warning"
+        title="Rien n'a été enregistré"
+        description="Le micro n'a rien donné pendant cet enregistrement : il n'y a rien à traiter."
+      />
+    );
+  }
+  const minutes = Math.max(1, Math.round((source.duration_s / 3600) * 10));
+  return (
+    <div className="cl-notprocessed">
+      {source.capture_state === "recovered" && (
+        <Banner
+          status="warning"
+          title="Enregistrement interrompu, récupéré"
+          description={`Coulisses s'est arrêté pendant l'enregistrement. Les ${formatDuration(source.duration_s)} écrites sur le disque sont gardées ; au plus quelques secondes manquent à la fin.`}
+        />
+      )}
+      <Text>
+        Cette séance n'est pas encore traitée : environ {minutes} min de calcul.
+        {battery ? " Le Mac est sur batterie : mieux vaut le brancher avant de lancer le traitement." : ""}
+      </Text>
+      <div>
+        <Button
+          label="Traiter maintenant"
+          variant="primary"
+          clickAction={async () => {
+            try {
+              await onProcess();
+              setError(null);
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      </div>
+      {error && <Banner status="error" title="Refusé" description={error} />}
+    </div>
   );
 }
