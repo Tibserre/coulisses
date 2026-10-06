@@ -17,11 +17,13 @@ from coulisses_app.corrections import (
 from coulisses_app.spaces import Person
 
 
-def w(text: str, start: float | None, speaker: str) -> AttributedWord:
+def w(text: str, start: float | None, speaker: str, asr: float | None = None) -> AttributedWord:
     return AttributedWord(
         text=text,
         start=start,
         end=None if start is None else start + 0.4,
+        asr_confidence=asr,
+        alignment_score=0.05,  # low on most right words: never what the review shows
         speakers=(speaker,),
         speaker=speaker,
     )
@@ -32,7 +34,7 @@ TRANSCRIPT = AttributedTranscript(
     language="fr",
     words=(
         w("Bonjour", 0.0, "7"),
-        w("Kathy", 0.5, "7"),
+        w("Kathy", 0.5, "7", asr=0.12),
         w("ça", 2.0, "2"),
         w("va", 2.5, "2"),
         w("encore", 5.0, "7"),
@@ -128,12 +130,49 @@ def test_splitting_gives_lines_to_a_new_voice() -> None:
     assert new.name == "Nouvelle voix 1" and not new.named
 
 
+def test_words_carry_the_transcription_models_doubt_not_the_alignment_score() -> None:
+    words = view().turns[0].words
+    assert [x.asr_confidence for x in words] == [None, 0.12]
+
+
+def test_an_output_from_before_engine_1_4_reads_with_no_doubt_shown() -> None:
+    old = TRANSCRIPT.model_dump(mode="json", exclude={"words"})
+    old["words"] = [  # engine v1.3.0: only the alignment score, under its former name
+        {
+            "text": "Bonjour",
+            "start": 0.0,
+            "end": 0.4,
+            "confidence": 0.02,
+            "speakers": ["7"],
+            "speaker": "7",
+        },
+        {
+            "text": "Kathy",
+            "start": 0.5,
+            "end": 0.9,
+            "confidence": 0.01,
+            "speakers": ["7"],
+            "speaker": "7",
+        },
+    ] + old_tail()
+    transcript = AttributedTranscript.model_validate(old)
+    v = _replay(transcript, "attribute-a", [], PEOPLE, {})
+    assert all(x.asr_confidence is None for t in v.turns for x in t.words)
+
+
+def old_tail() -> list[dict[str, object]]:
+    return [
+        x.model_dump(mode="json", exclude={"asr_confidence", "alignment_score"})
+        for x in TRANSCRIPT.words[2:]
+    ]
+
+
 def test_a_corrected_word_keeps_its_measured_time() -> None:
     v = view(EditText(turn=0, text="Bonjour Cathy"))
     words = v.turns[0].words
     assert [x.text for x in words] == ["Bonjour", "Cathy"]
     assert (words[1].start, words[1].corrected, words[1].added) == (0.5, True, False)
-    assert words[1].confidence is None  # checked by hand: no longer « unsure »
+    assert words[1].asr_confidence is None  # checked by hand: the model's doubt is gone
     assert words[0].corrected is False
 
 
@@ -150,9 +189,9 @@ def test_added_words_have_no_time_of_their_own() -> None:
 
 def test_a_shorter_stretch_keeps_its_measured_end() -> None:
     original = [
-        Word(text="a", start=1.0, end=1.2, confidence=None, uncertain=False),
-        Word(text="b", start=1.3, end=1.5, confidence=None, uncertain=False),
-        Word(text="c", start=1.6, end=2.0, confidence=None, uncertain=False),
+        Word(text="a", start=1.0, end=1.2, asr_confidence=None, uncertain=False),
+        Word(text="b", start=1.3, end=1.5, asr_confidence=None, uncertain=False),
+        Word(text="c", start=1.6, end=2.0, asr_confidence=None, uncertain=False),
     ]
     out = _apply_text(original, "x")
     assert [(x.text, x.start, x.end) for x in out] == [("x", 1.0, 2.0)]

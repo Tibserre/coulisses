@@ -4,6 +4,8 @@ import { test } from "node:test";
 import type { CorrectedView, Speaker, Word } from "./api.ts";
 import {
   buildModel,
+  isDoubtful,
+  wordTip,
   liveEditsKey,
   speakerTitle,
   toggleSelection,
@@ -17,7 +19,7 @@ function word(text: string, start: number | null): Word {
     text,
     start,
     end: start == null ? null : start + 0.3,
-    confidence: null,
+    asr_confidence: null,
     uncertain: false,
     corrected: false,
     added: start == null,
@@ -151,4 +153,16 @@ test("the staleness key follows corrections, undo, redo and a new run", () => {
   assert.notEqual(undone, corrected);
   assert.notEqual(redone, corrected);
   assert.notEqual(rerun, before);
+});
+
+test("a word is underlined only when the transcription model doubted it (below 0.3)", () => {
+  assert.equal(isDoubtful({ asr_confidence: 0.29 }), true);
+  assert.equal(isDoubtful({ asr_confidence: 0.3 }), false);
+  assert.equal(isDoubtful({ asr_confidence: null }), false); // runs before engine v1.4.0
+  const tip = wordTip({ asr_confidence: 0.18, added: false, suggestion: null });
+  assert.equal(tip?.kind, "confidence");
+  assert.equal(tip?.percent, 18);
+  assert.match(tip?.label ?? "", /^Le modèle doutait/);
+  assert.equal(wordTip({ asr_confidence: 0.9, added: false, suggestion: null }), null);
+  assert.equal(wordTip({ asr_confidence: 0.1, added: false, suggestion: "Kathy" })?.kind, "suggestion");
 });
