@@ -36,7 +36,6 @@ from coulisses_app import jobs, settings
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.generate import (
     PHASES_REF,
-    TITLE_REF,
     GenerationFailedError,
     ModelClient,
     generate,
@@ -198,12 +197,11 @@ class Processor:
         return result
 
     def _queue_generations(self, conn: sqlite3.Connection, session_id: str) -> None:
-        """After a successful chain: the chapters, then the title, with the default model.
-        Summaries are made on demand only, with the model chosen then (ADR 0025)."""
+        """After a successful chain: the chapters, with the default model. The title and the
+        summaries are made on demand only (ADR 0025, 0026)."""
         default = settings.default_model(conn)
         with conn:
             jobs.enqueue_generation(conn, session_id, action_ref=PHASES_REF, model=default)
-            jobs.enqueue_generation(conn, session_id, action_ref=TITLE_REF, model=default)
         self._wake.set()
 
     def _run_generation_job(self, job: jobs.Job, params: jobs.GenerationParams) -> ChainJobResult:

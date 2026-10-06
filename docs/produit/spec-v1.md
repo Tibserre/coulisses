@@ -56,7 +56,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
    *Ou* importer un fichier enregistré ailleurs.
 3. **Traiter** : automatiquement à l'arrêt, en arrière-plan, progression par étape visible. Un seul réglage : la chaîne retenue du moteur (≈ 10 min de calcul par heure d'audio).
 4. **Relire** : transcript par locuteur, horodaté, découpé en phases. Cliquer une ligne rejoue l'audio à cet instant. Je renomme, fusionne, scinde des locuteurs, j'en marque un comme « personnage joué par Marie », je corrige un mot, je corrige une phase.
-5. **Résumer** : à la demande. Le titre et les chapitres sont déjà là ; je lance le résumé proposé par l'espace (le Résumé Impro pour une troupe) ou un autre, avec le modèle choisi dans la liste. Je peux relancer, comparer deux versions côte à côte (ADR 0025). Mes corrections (noms, texte, phases) sont prises en compte.
+5. **Résumer** : à la demande. Les chapitres sont déjà là ; le titre se propose d'un clic ; je lance le résumé proposé par l'espace (le Résumé Impro pour une troupe) ou un autre, avec le modèle choisi dans la liste. Je peux relancer, comparer deux versions côte à côte (ADR 0025). Mes corrections (noms, texte, phases) sont prises en compte.
 6. **Retrouver et partager** : bibliothèque par espace et par projet, recherche plein texte, export Markdown, copie dans le presse-papiers.
 
 ## 7. Fonctionnalités V1
@@ -101,7 +101,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.5 Phases (« chapitres » dans l'interface)
 
-- L'app **détecte automatiquement** les phases après le traitement, avant le titre (les résumés se lancent à la demande, ADR 0025) : le LLM local lit la transcription et propose des chapitres, chacun de type jeu (`scene`), discussion ou autre, avec un titre court (ADR 0024). Une séance de travail est découpée par sujet. Chaque chapitre commence à une réplique existante, jamais à une heure inventée.
+- L'app **détecte automatiquement** les phases après le traitement ; c'est le seul appel automatique au LLM (titre et résumés à la demande, ADR 0025 et 0026) : le LLM local lit la transcription et propose des chapitres, chacun de type jeu (`scene`), discussion ou autre, avec un titre court (ADR 0024). Une séance de travail est découpée par sujet. Chaque chapitre commence à une réplique existante, jamais à une heure inventée.
 - Les **marqueurs posés à la main priment** sur la détection (à l'étape de l'enregistrement).
 - Je corrige les chapitres en relecture : renommer en tapant directement dans le titre, changer le type, retirer une coupure (les répliques rejoignent le chapitre précédent), commencer un chapitre à une réplique (bouton ou touche C). Déplacer une frontière, c'est retirer la coupure puis recouper ailleurs. Cmd-Z et Maj-Cmd-Z annulent et rétablissent, comme les autres corrections. Une nouvelle détection garde mes corrections.
 - Sous le titre de la séance, une frise montre les chapitres, proportionnels à leur durée, avec le chapitre en cours et la tête de lecture ; un clic y amène la lecture. Dans le transcript, un chapitre se replie ; celui qu'on écoute reste ouvert.
@@ -143,12 +143,12 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
   3. règle de repli : si rien de substantiel, une phrase factuelle, jamais une réponse vide ;
   4. consigne de langue explicite (français) ;
   5. contexte de séance : espace, projet, date, présents et rôles, glossaire, locuteurs avec leur nom et les personnages identifiés, notes manuelles ;
-  6. transcript au format `[mm:ss] Nom : texte`, avec les marqueurs et les phases.
+  6. transcript au format `[mm:ss] Nom : texte`, avec les marqueurs et les phases (pour le titre : les chapitres, sinon le dernier résumé, ADR 0026).
 - **Pas de troncature silencieuse** : la taille du prompt est mesurée avant l'envoi. Si elle dépasse la fenêtre du modèle, l'app bascule sur un résumé par sections puis une consolidation, et l'indique. Chaque appel partiel et la consolidation passent par l'assemblage complet, consigne de langue comprise.
 - **Historique des générations** par séance. Chaque génération conserve le prompt complet envoyé, le modèle et ses réglages (P7).
 - **Comparaison côte à côte** de deux générations : on coche deux résumés de l'historique, puis « Comparer les deux ».
 - **Choix du modèle local** au moment de générer, dans la liste des modèles d'Ollama ; le dernier choisi devient le défaut (ADR 0025).
-- **Titre de séance** généré automatiquement, modifiable.
+- **Titre de séance** : proposé à la demande (« Proposer un titre », sous le titre), à partir des titres des chapitres, sinon du dernier résumé, sinon de la transcription ; modifiable ; un titre écrit à la main n'est jamais remplacé (ADR 0026).
 - Le copier-coller fonctionne partout, clic droit compris.
 
 ### 7.10 Conservation de l'audio

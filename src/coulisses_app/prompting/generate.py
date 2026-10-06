@@ -11,6 +11,7 @@ consolidated, and the generation says so; nothing is ever cut (P8).
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import sqlite3
 import time
@@ -18,17 +19,19 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal, NamedTuple, Protocol
 
 from pydantic import BaseModel
 
 from coulisses_app import actions, corrections, notes, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
-from coulisses_app.phases import ANSWER_SCHEMA, PhaseAnswerError, snap
+from coulisses_app.phases import ANSWER_SCHEMA, KIND_WORD, PhaseAnswerError, snap
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaError
 from coulisses_app.storage.db import connect, now_iso
+
+log = logging.getLogger(__name__)
 
 TITLE_REF = "titre"
 PHASES_REF = "chapitres"
@@ -94,6 +97,11 @@ class Provenance(BaseModel):
     phases_run_id: str | None = None
     """The chapter detection whose chapters were in the transcript sent (none for the
     detection itself): a summary is stale when the chapters come from another one."""
+    input_kind: Literal["transcript", "chapters", "summary"] = "transcript"
+    """What the model read after the context: the transcript, or for a title, the
+    chapters or a summary of the session (ADR 0026)."""
+    input_run_id: str | None = None
+    """For a title made from the chapters or a summary: the run they come from."""
     notes_digest: str | None = None
     """Of the note written after the session, as it was sent (none without one): a summary
     is stale when the note changed since."""
@@ -188,6 +196,8 @@ def generate(
     is_phases = action_ref == PHASES_REF
     stage: Stage = "title" if is_title else "segment_phases" if is_phases else "summarize"
     modified = False
+    input_kind: Literal["transcript", "chapters", "summary"] = "transcript"
+    input_run_id: str | None = None
     if is_title:
         chosen = assembly.TITLE
     elif is_phases:
@@ -226,6 +236,15 @@ def generate(
     phases_run_id = None if is_phases else view.phases_run_id
     answer_format = ANSWER_SCHEMA if is_phases else None
 
+    title_input = _title_input(data, session_id, view) if is_title else None
+    if (
+        title_input is not None
+        and assembly.estimate_tokens(
+            assembly.system_frame() + chosen.prompt + title_input.text, cfg.chars_per_token
+        )
+        > cfg.num_ctx - reserve - 2000
+    ):
+        title_input = None  # too long to read at once: the transcript path cuts in sections
     run_id = f"{stage}-{secrets.token_hex(4)}"
     folder = data.run_dir(session_id, run_id)
     conn = connect(data)
@@ -243,6 +262,11 @@ def generate(
                 "INSERT INTO run_upstream (run_id, upstream_run_id) VALUES (?, ?)",
                 (run_id, view.run_id),
             )
+            if title_input is not None and title_input.run_id is not None:
+                conn.execute(
+                    "INSERT INTO run_upstream (run_id, upstream_run_id) VALUES (?, ?)",
+                    (run_id, title_input.run_id),
+                )
     finally:
         conn.close()
 
@@ -309,64 +333,85 @@ def generate(
         )
         digest = next((m.digest for m in _models(client) if m.name == model), None)
         ollama_version = _version(client)
-        lines = assembly.transcript_lines(view, with_phases=not is_phases)
-        whole = "\n".join(line.text for line in lines)
-        prompt = assembly.assemble(chosen.prompt, context, whole)
-        budget = cfg.num_ctx - reserve
-        size = assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
-        cut_prompt = assembly.phases_section_prompt if is_phases else assembly.section_prompt
-        answers: list[str] = []
-        part_firsts: list[str] = []
-        if size <= budget:
-            output = call("unique", prompt, None)
-            answers.append(output)
-        else:
-            strategy = "sections"
-            fixed = assembly.estimate_tokens(
-                cut_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
-                + assembly.assemble("", context, "").system
-                + assembly.assemble("", context, "").user,
-                cfg.chars_per_token,
+        if title_input is not None:
+            # A title needs only the outline: the chapters, or a summary (ADR 0026).
+            input_kind = title_input.kind
+            input_run_id = title_input.run_id
+            prompt = assembly.assemble(
+                chosen.prompt, context, title_input.text, heading=title_input.heading
             )
-            parts: list[str] = []
-            chunks = _sections(lines, budget - fixed, cfg.chars_per_token)
-            for k, chunk in enumerate(chunks, start=1):
-                starts = [line.start for line in chunk if line.start is not None]
-                first = clock(starts[0]) if starts else "?"
-                last = clock(starts[-1]) if starts else "?"
-                part_prompt = assembly.assemble(
-                    cut_prompt(chosen.prompt, k, len(chunks), first, last),
-                    context,
-                    "\n".join(line.text for line in chunk),
-                )
-                parts.append(call("section", part_prompt, f"{first} à {last}"))
-                part_firsts.append(first)
-            answers = parts
-        if is_phases:
-            # Each part's chapters, put on the lines they name: no merging call needed.
-            detection = snap(answers, [(t.index, t.start) for t in view.turns])
-            for k, first in enumerate(part_firsts[1:], start=2):
-                detection.adjustments.append(
-                    f"Séance lue en {len(part_firsts)} parties : un chapitre commence à "
-                    f"{first} parce que la partie {k} y commence."
-                )
-            output = detection.model_dump_json(indent=2)
-        elif strategy == "sections":
-            merged = "\n\n".join(
-                f"## Partie {k} sur {len(answers)}\n\n{text}" for k, text in enumerate(answers, 1)
-            )
-            final = assembly.assemble(
-                assembly.consolidation_prompt(chosen.prompt, len(answers)),
-                context,
-                merged,
-                heading="Comptes rendus partiels",
-            )
-            if assembly.estimate_tokens(final.system + final.user, cfg.chars_per_token) > budget:
+            if (
+                assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
+                > cfg.num_ctx - reserve
+            ):
                 raise GenerationFailedError(
-                    "Même résumée par parties, la séance dépasse la fenêtre du modèle : "
-                    "augmentez num_ctx dans les réglages de génération."
+                    "Les chapitres et le contexte dépassent la fenêtre du modèle : augmentez "
+                    "num_ctx dans les réglages de génération."
                 )
-            output = call("consolidation", final, None)
+            output = call("unique", prompt, None)
+        else:
+            lines = assembly.transcript_lines(view, with_phases=not is_phases)
+            whole = "\n".join(line.text for line in lines)
+            prompt = assembly.assemble(chosen.prompt, context, whole)
+            budget = cfg.num_ctx - reserve
+            size = assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
+            cut_prompt = assembly.phases_section_prompt if is_phases else assembly.section_prompt
+            answers: list[str] = []
+            part_firsts: list[str] = []
+            if size <= budget:
+                output = call("unique", prompt, None)
+                answers.append(output)
+            else:
+                strategy = "sections"
+                fixed = assembly.estimate_tokens(
+                    cut_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
+                    + assembly.assemble("", context, "").system
+                    + assembly.assemble("", context, "").user,
+                    cfg.chars_per_token,
+                )
+                parts: list[str] = []
+                chunks = _sections(lines, budget - fixed, cfg.chars_per_token)
+                for k, chunk in enumerate(chunks, start=1):
+                    starts = [line.start for line in chunk if line.start is not None]
+                    first = clock(starts[0]) if starts else "?"
+                    last = clock(starts[-1]) if starts else "?"
+                    part_prompt = assembly.assemble(
+                        cut_prompt(chosen.prompt, k, len(chunks), first, last),
+                        context,
+                        "\n".join(line.text for line in chunk),
+                    )
+                    parts.append(call("section", part_prompt, f"{first} à {last}"))
+                    part_firsts.append(first)
+                answers = parts
+            if is_phases:
+                # Each part's chapters, put on the lines they name: no merging call needed.
+                detection = snap(answers, [(t.index, t.start) for t in view.turns])
+                for k, first in enumerate(part_firsts[1:], start=2):
+                    detection.adjustments.append(
+                        f"Séance lue en {len(part_firsts)} parties : un chapitre commence à "
+                        f"{first} parce que la partie {k} y commence."
+                    )
+                output = detection.model_dump_json(indent=2)
+            elif strategy == "sections":
+                merged = "\n\n".join(
+                    f"## Partie {k} sur {len(answers)}\n\n{text}"
+                    for k, text in enumerate(answers, 1)
+                )
+                final = assembly.assemble(
+                    assembly.consolidation_prompt(chosen.prompt, len(answers)),
+                    context,
+                    merged,
+                    heading="Comptes rendus partiels",
+                )
+                if (
+                    assembly.estimate_tokens(final.system + final.user, cfg.chars_per_token)
+                    > budget
+                ):
+                    raise GenerationFailedError(
+                        "Même résumée par parties, la séance dépasse la fenêtre du modèle : "
+                        "augmentez num_ctx dans les réglages de génération."
+                    )
+                output = call("consolidation", final, None)
         if is_title:
             output = _clean_title(output)
             if not output:
@@ -394,6 +439,8 @@ def generate(
             edit_ids=edit_ids,
             phases_run_id=phases_run_id,
             notes_digest=notes_digest,
+            input_kind=input_kind,
+            input_run_id=input_run_id,
             ollama_version=ollama_version,
             calls=calls,
             started_at=started,
@@ -452,6 +499,51 @@ def _version(client: ModelClient) -> str | None:
 
 
 NO_CONTENT_TITLE = "Séance sans contenu"
+
+
+class _TitleInput(NamedTuple):
+    kind: Literal["chapters", "summary"]
+    heading: str
+    text: str
+    run_id: str | None
+    """The run it comes from (the chapter detection, or the summary), kept in provenance."""
+
+
+def _title_input(
+    data: DataDir, session_id: str, view: corrections.CorrectedView
+) -> _TitleInput | None:
+    """What a title is made from, cheapest first: the chapters, else the latest summary;
+    None: the transcript itself."""
+    named = [p for p in view.phases if p.title]
+    if named:
+        return _TitleInput(
+            "chapters",
+            "Chapitres de la séance",
+            "\n".join(
+                f"- [{clock(p.start) if p.start is not None else '--:--'}] {p.title} "
+                f"({KIND_WORD[p.kind]})"
+                for p in named
+            ),
+            view.phases_run_id,
+        )
+    conn = connect(data)
+    try:
+        row = conn.execute(
+            "SELECT run_id FROM generation WHERE session_id = ? ORDER BY id DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is not None:
+        try:
+            text = (data.run_dir(session_id, row["run_id"]) / "output.md").read_text("utf-8")
+        except OSError as exc:
+            # The transcript then, which is always there; the anomaly is said, not hidden.
+            log.warning("summary %s unreadable for a title: %s", row["run_id"], exc)
+            return None
+        if text.strip():
+            return _TitleInput("summary", "Résumé de la séance", text.strip(), row["run_id"])
+    return None
 
 
 def _clean_title(text: str) -> str:

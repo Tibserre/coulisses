@@ -42,6 +42,8 @@ class AudioSource(BaseModel):
 class Session(BaseModel):
     id: str
     title: str | None
+    title_edited: bool = False
+    """Written by the user: a proposed title never replaces it."""
     recorded_at: str
     created_at: str
     space_id: int
@@ -180,6 +182,7 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
     return Session(
         id=row["id"],
         title=row["title"],
+        title_edited=bool(row["title_edited"]),
         recorded_at=row["recorded_at"],
         created_at=row["created_at"],
         space_id=row["space_id"],

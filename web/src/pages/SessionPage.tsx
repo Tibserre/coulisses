@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -120,6 +120,43 @@ export function SessionPage({ id }: { id: string }) {
       api.transcript(id).then(setView, (e: Error) => setTranscriptError(e.message));
     };
   }, [phasesWaiting, loadPhases, id]);
+
+  // The title is proposed on demand, from the chapters (ADR 0026): asked, then followed
+  // until it is there. A failure says why, next to the title.
+  const [titleState, setTitleState] = useState<"waiting" | string | null>(null);
+  const titleBefore = useRef<string | null>(null);
+  const askTitle = () => {
+    titleBefore.current = detail?.session.title ?? null;
+    setTitleState("waiting");
+    api.requestGeneration(id, "titre", null).catch((e: Error) => setTitleState(e.message));
+  };
+  useEffect(() => {
+    if (titleState !== "waiting") return;
+    const timer = window.setInterval(() => {
+      api.generations(id).then(
+        (g) => {
+          const job = g.pending.find((p) => p.action_ref === "titre");
+          if (job?.state === "failed") setTitleState(`Pas de titre proposé : ${job.error ?? "erreur inconnue"}`);
+          else if (!job) {
+            api.session(id).then(
+              (d) => {
+                setDetail(d);
+                // « Séance sans contenu » is never written as a title: said, not silent.
+                setTitleState(
+                  d.session.title === titleBefore.current
+                    ? "Pas de nouveau titre : le modèle n'a rien trouvé de substantiel, ou a proposé le même."
+                    : null,
+                );
+              },
+              (e: Error) => setTitleState(e.message),
+            );
+          }
+        },
+        (e: Error) => setTitleState(e.message),
+      );
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [titleState, id]);
 
   const loadPeople = useCallback(async () => {
     if (spaceId != null) setPeople(await api.people(spaceId));
@@ -283,7 +320,20 @@ export function SessionPage({ id }: { id: string }) {
             <Text color="secondary">
               {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
               {present ? ` · ${plural(present, "présent", "présents")}` : ""}
+              {!session.title_edited && attributeRun && (
+                <>
+                  {" · "}
+                  {titleState === "waiting" ? (
+                    <span>titre en préparation…</span>
+                  ) : (
+                    <button type="button" className="cl-linkbtn" onClick={askTitle}>
+                      {session.title ? "Proposer un autre titre" : "Proposer un titre"}
+                    </button>
+                  )}
+                </>
+              )}
             </Text>
+            {titleState && titleState !== "waiting" && <p className="cl-title__error">{titleState}</p>}
           </div>
         )}
         {session && view && (

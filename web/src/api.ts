@@ -5,6 +5,8 @@ export type JobState = "queued" | "running" | "done" | "failed";
 export interface Session {
   id: string;
   title: string | null;
+  /** Written by the user: a proposed title never replaces it. */
+  title_edited: boolean;
   recorded_at: string;
   created_at: string;
   space_id: number;
