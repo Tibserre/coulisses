@@ -127,11 +127,11 @@ def test_a_long_session_is_summarised_by_parts_then_merged(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    small = assembly.settings().model_copy(update={"num_ctx": 4000, "response_reserve": 500})
+    small = assembly.settings().model_copy(update={"num_ctx": 6000, "response_reserve": 500})
     monkeypatch.setattr(assembly, "settings", lambda: small)
     long_lines = [
         (float(i * 10), f"[{i // 6}:{i % 6}0] Marie : " + "on reprend la scène du marché " * 10)
-        for i in range(30)
+        for i in range(60)
     ]
     monkeypatch.setattr(assembly, "transcript_lines", lambda _view: long_lines)
     fake_model.prompt_tokens = 100
@@ -141,9 +141,10 @@ def test_a_long_session_is_summarised_by_parts_then_merged(
     assert prov.strategy == "sections"
     kinds = [c.kind for c in prov.calls]
     assert kinds[-1] == "consolidation" and set(kinds[:-1]) == {"section"}
+    assert kinds.count("section") >= 2
     for _, messages, options in fake_model.calls[calls_before:]:
         assert assembly.FRENCH_INSTRUCTION in messages[0]["content"]  # every call, P4
-        assert options["num_ctx"] == 4000
+        assert options["num_ctx"] == 6000
 
 
 def test_a_full_context_window_is_a_failure_not_a_cut(
@@ -313,7 +314,7 @@ def test_a_line_too_long_for_the_window_is_refused_not_cut(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    small = assembly.settings().model_copy(update={"num_ctx": 4000, "response_reserve": 500})
+    small = assembly.settings().model_copy(update={"num_ctx": 6000, "response_reserve": 500})
     monkeypatch.setattr(assembly, "settings", lambda: small)
     monkeypatch.setattr(
         assembly, "transcript_lines", lambda _view: [(0.0, "[0:00] Marie : " + "mot " * 5000)]

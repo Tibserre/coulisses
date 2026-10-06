@@ -12,9 +12,10 @@ Ce qu'il faut garder :
 - toute l'information utile au spectacle et l'intention de chacun ; supprime le remplissage, les hésitations et les échanges sans contenu ;
 - le vocabulaire de l'impro tel quel (catégories, formats, contraintes, noms d'exercices, jargon du groupe), sans le reformuler ni le traduire ;
 - l'attribution : quand une idée, un retour ou une proposition vient d'une personne nommée, dis qui ;
-- la différence entre ce qui est décidé et ce qui reste une piste, une envie ou une question.
+- la différence entre ce qui est décidé et ce qui reste une piste, une envie ou une question ;
+- les discussions hors plateau, autant que les scènes : organisation, communication, visuels, répartition des tâches, et surtout les dates et les délais annoncés. Elles se perdent facilement entre deux scènes : relis toute la transcription pour n'en oublier aucune.
 
-N'invente rien : ni sujet, ni décision, ni action, ni attribution. Si la séance ne contient rien de substantiel, applique la règle prévue pour ce cas plutôt que de remplir les sections.
+N'invente rien : ni sujet, ni décision, ni action, ni attribution, ni détail de logistique, de matériel ou de vocabulaire qui n'a pas été prononcé. Chaque élément de ta réponse doit pouvoir être retrouvé dans la transcription. Si la séance ne contient rien de substantiel, applique la règle prévue pour ce cas plutôt que de remplir les sections.
 
 Structure, avec seulement les sections qui ont du contenu, dans cet ordre :
 
@@ -33,11 +34,14 @@ Personnages récurrents (et qui les joue), situations, running gags, mécaniques
 ## Retours et notes de jeu
 Les conseils du coach et les retours entre comédiens : écoute, engagement, construction des scènes, points à travailler, collectifs ou pour une personne nommée.
 
+## Organisation et communication
+Ce qui a été dit hors plateau pour préparer le spectacle, et seulement cela : visuels, communication, délais, qui s'en charge quand c'est nommé.
+
 ## Décisions
-Ce qui est acté pour le spectacle, avec qui l'a proposé quand c'est clair.
+Ce que le groupe a explicitement acté, avec qui l'a proposé quand c'est clair. Une option évoquée, même avec enthousiasme, reste une piste.
 
 ## Pistes et questions ouvertes
 Les idées à creuser, les désaccords et les choix qui restent à faire.
 
 ## Prochaines étapes
-Ce que chacun doit préparer, ce qui sera travaillé la prochaine fois, la logistique (dates, lieu, répétitions), avec le responsable quand il est nommé.
+Ce que chacun doit préparer, ce qui sera travaillé la prochaine fois, les prochaines répétitions et ce qui doit être prêt pour quand, avec le responsable quand il est nommé.
