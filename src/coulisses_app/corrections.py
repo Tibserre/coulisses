@@ -725,6 +725,22 @@ def add(data: DataDir, session_id: str, raw: object) -> CorrectedView:
                     person_id = person.id
                 if request.character and request.person_id is None:
                     raise CorrectionError("Un personnage est joué par une personne de l'espace.")
+                if request.person_id is not None and not request.character:
+                    # The same person as another voice: one voice the engine split in two
+                    # (P3), so they become one, as the user means (undone like any merge).
+                    same = next(
+                        (
+                            v
+                            for v in view.speakers
+                            if v.label not in (None, request.speaker)
+                            and v.person_id == request.person_id
+                            and not v.character
+                        ),
+                        None,
+                    )
+                    if same is not None and same.label is not None:
+                        request = MergeSpeakers(source=request.speaker, target=same.label)
+                        person_id = None
             case MergeSpeakers():
                 if request.source not in labels or request.target not in labels:
                     raise CorrectionError("Ces voix n'existent pas dans le transcript.")

@@ -143,8 +143,13 @@ export function SessionPage({ id }: { id: string }) {
   const correct = useCallback(
     async (correction: EditRequest) => {
       try {
-        setView(await api.addEdit(id, correction));
+        const next = await api.addEdit(id, correction);
+        setView(next);
         setEditError(null);
+        // Naming a voice after a person who already has one merges them: said on screen.
+        const last = next.edits.at(-1);
+        if (correction.kind === "assign_speaker" && last?.kind === "merge_speakers")
+          setNotice(`${last.description}. Cmd-Z pour annuler.`);
       } catch (e) {
         setEditError((e as Error).message);
         throw e;
@@ -384,7 +389,10 @@ export function SessionPage({ id }: { id: string }) {
               ) : (
                 <>
               <KeyFigures view={view} model={model} duration={session.duration_s} dev={dev} />
-              <Participants model={model} />
+              <Participants
+                model={model}
+                onMerge={(source, target) => correct({ kind: "merge_speakers", source, target })}
+              />
               <NotesSection sessionId={id} />
               <Attendees
                 session={session}

@@ -257,3 +257,42 @@ def test_a_line_goes_back_to_the_engine_text_and_the_history_says_what_to_redo(
         view = client.post(f"{base}/corrections/{target['id']}/retablir").json()
     assert [w["text"] for w in view["turns"][0]["words"]] == ["bonsoir", "tous"]
     assert all(e["redone"] for e in view["edits"] if e["reverted"])
+
+
+def test_naming_a_voice_after_a_person_who_has_one_merges_them(
+    client: TestClient, data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coulisses_app import corrections
+
+    from .test_corrections import TRANSCRIPT  # voices 7, 2 and 4
+
+    session_id = processed_session(client, data, recording)
+    run_id = client.get(f"/api/seances/{session_id}/transcript").json()["run_id"]
+
+    def view_with_three_voices(data: DataDir, session_id: str) -> corrections.CorrectedView:
+        conn = connect(data)
+        try:
+            journal = corrections._journal(conn, session_id)
+            people = {p.id: p for p in corrections._people(conn, 1)}
+        finally:
+            conn.close()
+        return corrections._replay(TRANSCRIPT, run_id, journal, people, {})
+
+    monkeypatch.setattr(corrections, "build_view", view_with_three_voices)
+    marie = client.post("/api/espaces/1/personnes", json={"name": "Marie"}).json()["id"]
+    url = f"/api/seances/{session_id}/corrections"
+    client.post(url, json={"kind": "assign_speaker", "speaker": "7", "person_id": marie})
+    merged = client.post(url, json={"kind": "assign_speaker", "speaker": "2", "person_id": marie})
+    assert merged.status_code == 201, merged.text
+    view = merged.json()
+    assert [s["name"] for s in view["speakers"] if s["label"] in ("7", "2")] == ["Marie"]
+    assert view["edits"][-1]["kind"] == "merge_speakers"  # undone with Cmd-Z like any merge
+    undone = client.post(f"{url}/{view['edits'][-1]['id']}/annuler").json()
+    assert {s["label"] for s in undone["speakers"]} >= {"7", "2"}  # two voices again
+    client.post(f"{url}/{view['edits'][-1]['id']}/retablir")
+    # A character played by the same person stays a voice of its own.
+    played = client.post(
+        url,
+        json={"kind": "assign_speaker", "speaker": "4", "person_id": marie, "character": "Le roi"},
+    ).json()
+    assert {s["name"] for s in played["speakers"]} >= {"Marie", "Le roi"}
