@@ -4,6 +4,7 @@ import { test } from "node:test";
 import type { Marker } from "./api.ts";
 import { currentMode, liveSegments } from "./liveStrip.ts";
 import { meterValue } from "./meter.ts";
+import { PEAK_HOLD_S, step } from "./smoothLevel.ts";
 
 test("the meter runs from -60 dBFS (empty) to 0 dBFS (full), clamped", () => {
   assert.equal(meterValue(-120), 0);
@@ -32,4 +33,17 @@ test("play then discussion markers make the strip; key moments cut nothing", () 
 
 test("a marker at the very start leaves no empty stretch", () => {
   assert.deepEqual(liveSegments([m(1, "scene", 0)], 5), [{ kind: "scene", start: 0, end: 5 }]);
+});
+
+test("the needle rises fast, falls slowly, and the peak holds before falling", () => {
+  let needle = { level: 0, peak: 0, held: 0 };
+  for (let i = 0; i < 6; i++) needle = step(needle, 80, 90, 1 / 60); // 0.1 s
+  assert.ok(needle.level > 60, `rose to ${needle.level}`); // most of the way in 0.1 s
+  assert.equal(needle.peak, 90);
+  const top = needle.level;
+  for (let i = 0; i < 6; i++) needle = step(needle, 0, 0, 1 / 60);
+  assert.ok(needle.level > top * 0.6, `fell only to ${needle.level}`); // gently
+  assert.equal(needle.peak, 90); // still held
+  for (let i = 0; i < Math.ceil((PEAK_HOLD_S + 1) * 60); i++) needle = step(needle, 0, 0, 1 / 60);
+  assert.ok(needle.peak < 50 && needle.level < 5);
 });

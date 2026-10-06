@@ -1484,14 +1484,11 @@ a.cl-iconbtn {
   fill: none;
   stroke: var(--color-accent);
   stroke-width: 1.75;
-  transition:
-    r 120ms linear,
-    opacity var(--duration-medium) var(--ease-standard);
+  transition: opacity var(--duration-medium) var(--ease-standard);
 }
 
 .cl-recvisual__core {
   fill: var(--color-accent);
-  transition: r 120ms linear;
 }
 
 .cl-recvisual[data-paused] .cl-recvisual__core {
@@ -1513,7 +1510,6 @@ a.cl-iconbtn {
   inset: 0 auto 0 0;
   border-radius: var(--radius-full);
   background: var(--coulisses-chapter-quiet-ink);
-  transition: width 100ms linear;
 }
 
 .cl-meter__peak {
@@ -1523,7 +1519,6 @@ a.cl-iconbtn {
   width: 2px;
   margin-left: -1px;
   background: var(--color-text-primary);
-  transition: left 100ms linear;
 }
 
 .cl-meter[data-clipping] .cl-meter__level,

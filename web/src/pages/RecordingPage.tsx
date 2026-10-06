@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { api, type MarkerKind, type RecordingState } from "../api.ts";
+import { LevelMeter } from "../components/LevelMeter.tsx";
 import { RecordingVisual } from "../components/RecordingVisual.tsx";
 import { formatClock } from "../format.ts";
 import { currentMode, liveSegments, type Mode } from "../liveStrip.ts";
@@ -227,24 +228,7 @@ export function RecordingPage() {
                 <p className="cl-recording__time" aria-live="off">
                   {formatClock(elapsed)}
                 </p>
-                <div
-                  className="cl-meter"
-                  role="meter"
-                  aria-label="Niveau d'entrée"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={level}
-                  data-clipping={state.clipping || undefined}
-                >
-                  <span
-                    className="cl-meter__level"
-                    style={{ width: `${level}%` }}
-                  />
-                  <span
-                    className="cl-meter__peak"
-                    style={{ left: `${peak}%` }}
-                  />
-                </div>
+                <LevelMeter level={level} peak={peak} clipping={state.clipping} />
                 <div className="cl-recording__controls">
                   <Button
                     label={paused ? "Reprendre" : "Pause"}
