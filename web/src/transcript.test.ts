@@ -4,6 +4,7 @@ import { test } from "node:test";
 import type { CorrectedView, Speaker, Word } from "./api.ts";
 import {
   buildModel,
+  liveEditsKey,
   speakerTitle,
   toggleSelection,
   turnAt,
@@ -128,3 +129,26 @@ test("a click selects one line, Shift-click the whole range", () => {
   assert.deepEqual([...toggleSelection(range, order, 2, null)].sort(), [1, 3]);
 });
 
+
+test("the staleness key follows corrections, undo, redo and a new run", () => {
+  const edit = (id: number, reverted = false) => ({
+    id,
+    kind: "edit_text",
+    description: "",
+    created_at: "",
+    reverted,
+    undone_by: null,
+    redone: false,
+    turn: 0,
+  });
+  const before = liveEditsKey({ run_id: "r1", edits: [edit(1)] });
+  const corrected = liveEditsKey({ run_id: "r1", edits: [edit(1), edit(2)] });
+  const undone = liveEditsKey({ run_id: "r1", edits: [edit(1), edit(2, true)] });
+  const redone = liveEditsKey({ run_id: "r1", edits: [edit(1), edit(2, true), edit(4)] });
+  const rerun = liveEditsKey({ run_id: "r2", edits: [edit(1)] });
+  assert.notEqual(corrected, before);
+  assert.equal(undone, before);
+  assert.notEqual(undone, corrected);
+  assert.notEqual(redone, corrected);
+  assert.notEqual(rerun, before);
+});

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from coulisses.api import (
     ChainConfig,
@@ -18,14 +19,17 @@ from coulisses.api import (
     read_provenance,
 )
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from coulisses_app import corrections, jobs, sessions, spaces
+from coulisses_app import corrections, jobs, sessions, settings, spaces, summaries
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
+from coulisses_app.prompting import assembly
+from coulisses_app.prompting.generate import TITLE_REF, ModelClient
+from coulisses_app.prompting.ollama import InstalledModel, OllamaClient, OllamaError
 from coulisses_app.status import StageView, stage_views
 from coulisses_app.storage.db import connect
 
@@ -59,6 +63,40 @@ class SpaceRequest(BaseModel):
     name: str | None = None
     voice_recognition: bool | None = None
     archived: bool | None = None
+    template: str = "vide"
+    """At creation only: impro, reunion or vide (ADR 0020)."""
+
+
+class SpaceActionRequest(BaseModel):
+    auto_run: bool
+    model: str | None = None
+
+
+class GenerationRequest(BaseModel):
+    action_ref: str
+    model: str | None = None
+    """None: the default model (and a given one becomes the default)."""
+
+
+class ModelRequest(BaseModel):
+    model: str
+
+
+class TitleRequest(BaseModel):
+    title: str
+
+
+class ModelsInfo(BaseModel):
+    reachable: bool
+    error: str | None
+    default: str
+    models: list[InstalledModel]
+
+
+class ActionInfo(BaseModel):
+    ref: str
+    name: str
+    description: str
 
 
 class PersonRequest(BaseModel):
@@ -91,8 +129,11 @@ def create_app(
     processor: Processor | None,
     web_dir: Path | None,
     recovery_problems: list[str] | None = None,
+    model_client: ModelClient | None = None,
 ) -> FastAPI:
-    """`processor` is started and stopped with the service; None in tests that drive it."""
+    """`processor` is started and stopped with the service; None in tests that drive it.
+    `model_client` answers the list of installed models (Ollama by default)."""
+    model_client = model_client or (processor.model_client if processor else OllamaClient())
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -248,7 +289,114 @@ def create_app(
 
     @app.post("/api/espaces", status_code=201)
     def create_space(demande: SpaceRequest) -> spaces.Space:
-        return spaces.create_space(data, demande.name or "")
+        return spaces.create_space(data, demande.name or "", demande.template)
+
+    @app.get("/api/espaces/{space_id}/actions")
+    def space_actions(space_id: int) -> list[spaces.SpaceAction]:
+        return spaces.space_actions(data, space_id)
+
+    @app.put("/api/espaces/{space_id}/actions/{action_ref}")
+    def set_space_action(
+        space_id: int, action_ref: str, demande: SpaceActionRequest
+    ) -> list[spaces.SpaceAction]:
+        _check_action(action_ref)
+        return spaces.set_space_action(
+            data, space_id, action_ref, auto_run=demande.auto_run, model=demande.model
+        )
+
+    # -- summaries --------------------------------------------------------------------
+
+    @app.get("/api/modeles")
+    def models() -> ModelsInfo:
+        conn = connect(data)
+        try:
+            default = settings.default_model(conn)
+        finally:
+            conn.close()
+        try:
+            found = model_client.models()
+        except OllamaError as exc:
+            return ModelsInfo(reachable=False, error=str(exc), default=default, models=[])
+        return ModelsInfo(reachable=True, error=None, default=default, models=found)
+
+    @app.put("/api/reglages/modele")
+    def set_model(demande: ModelRequest) -> ModelsInfo:
+        conn = connect(data)
+        try:
+            settings.set_default_model(conn, demande.model)
+        finally:
+            conn.close()
+        return models()
+
+    @app.get("/api/actions")
+    def actions() -> list[ActionInfo]:
+        return [
+            ActionInfo(ref=a.ref, name=a.name, description=a.description)
+            for a in assembly.provided_actions()
+        ]
+
+    @app.get("/api/seances/{session_id}/resumes")
+    def generations(session_id: str) -> summaries.Generations:
+        return summaries.list_generations(data, session_id)
+
+    @app.post("/api/seances/{session_id}/resumes", status_code=202)
+    def request_generation(session_id: str, demande: GenerationRequest) -> summaries.Generations:
+        _check_action(demande.action_ref)
+        if corrections.build_view(data, session_id) is None:
+            raise HTTPException(status_code=409, detail="Le transcript n'est pas encore prêt.")
+        conn = connect(data)
+        try:
+            if demande.model:
+                settings.set_default_model(conn, demande.model)
+            model = demande.model or settings.default_model(conn)
+            with conn:
+                jobs.enqueue_generation(
+                    conn, session_id, action_ref=demande.action_ref, model=model
+                )
+        finally:
+            conn.close()
+        if processor is not None:
+            processor.wake()
+        return summaries.list_generations(data, session_id)
+
+    @app.get("/api/seances/{session_id}/resumes/{generation_id}/prompts")
+    def generation_prompts(session_id: str, generation_id: int) -> PlainTextResponse:
+        try:
+            return PlainTextResponse(summaries.prompts_of(data, session_id, generation_id))
+        except KeyError as exc:
+            raise _not_found("Résumé introuvable.") from exc
+
+    @app.patch("/api/seances/{session_id}")
+    def rename_session(session_id: str, demande: TitleRequest) -> sessions.Session:
+        if sessions.get_session(data, session_id) is None:
+            raise _not_found("Séance introuvable.")
+        try:
+            summaries.set_title(data, session_id, demande.title)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
+
+    @app.get("/api/seances/{session_id}/export")
+    def export(session_id: str, contenu: str = "tout", resume: int | None = None) -> Response:
+        if contenu not in ("resume", "transcript", "tout"):
+            raise HTTPException(status_code=422, detail="Contenu inconnu.")
+        try:
+            name, text = summaries.export_markdown(
+                data,
+                session_id,
+                summary=contenu in ("resume", "tout"),
+                transcript=contenu in ("transcript", "tout"),
+                generation_id=resume,
+            )
+        except KeyError as exc:
+            raise _not_found("Séance introuvable.") from exc
+        return Response(
+            text,
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
+        )
 
     @app.patch("/api/espaces/{space_id}")
     def update_space(space_id: int, demande: SpaceRequest) -> spaces.Space:
@@ -325,6 +473,15 @@ def create_app(
 
     _mount_interface(app, web_dir)
     return app
+
+
+def _check_action(ref: str) -> None:
+    if ref == TITLE_REF:
+        return  # the title can be made again too
+    try:
+        assembly.action(ref)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Résumé inconnu.") from exc
 
 
 def _corrected(data: DataDir, session_id: str) -> corrections.CorrectedView:

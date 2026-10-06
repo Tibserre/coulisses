@@ -1,0 +1,21 @@
+# Réglages de génération livrés avec l'application. Changer de modèle par défaut se fait
+# ici, ou dans l'interface (le choix y est retenu) : jamais dans le code (P6).
+
+# Modèle Ollama proposé tant que l'utilisateur n'en a pas choisi un autre (2026-10-06).
+modele_par_defaut = "qwen3.6:35b-mlx"
+
+# Fenêtre de contexte demandée à Ollama à chaque appel (toujours explicite : Ollama
+# tronque en silence sans elle). Elle reste sous le maximum du modèle.
+num_ctx = 65536
+
+# Place gardée pour la réponse, en tokens : le prompt doit tenir dans num_ctx moins cela.
+reserve_reponse = 6144
+reserve_titre = 128
+
+# Caractères par token, volontairement bas pour surestimer la taille du prompt : Ollama
+# ne permet pas de compter les tokens avant l'envoi (ADR 0022). Mesuré le 2026-10-06 avec
+# qwen3.6 sur une vraie séance : 3,0 en moyenne, 2,1 sur les répliques courtes.
+caracteres_par_token = 1.8
+
+temperature = 0.3
+graine = 42

@@ -200,7 +200,7 @@ SELECT s.*, a.duration_s, j.state AS job_state, j.error AS job_error, j.params A
 FROM session s
 JOIN space sp ON sp.id = s.space_id
 LEFT JOIN audio_source a ON a.session_id = s.id AND a.source_id = s.reference_source_id
-LEFT JOIN job j ON j.id = (SELECT MAX(id) FROM job WHERE session_id = s.id)
+LEFT JOIN job j ON j.id = (SELECT MAX(id) FROM job WHERE session_id = s.id AND kind = 'chain')
 """
 
 

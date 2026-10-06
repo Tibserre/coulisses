@@ -120,13 +120,28 @@ def default_space_id(conn: sqlite3.Connection) -> int:
     return row[0]
 
 
-def create_space(data: DataDir, name: str) -> Space:
+TEMPLATES: dict[str, list[str]] = {
+    "impro": ["resume-impro"],
+    "reunion": ["compte-rendu-reunion"],
+    "vide": [],
+}
+"""Starting templates (ADR 0020): the summaries a new space runs after processing. They
+fill the settings once; there is no space type afterwards."""
+
+
+def create_space(data: DataDir, name: str, template: str = "vide") -> Space:
+    if template not in TEMPLATES:
+        raise SpaceError("Modèle de départ inconnu.")
     conn = connect(data)
     try:
         with conn:
             cursor = conn.execute(
                 "INSERT INTO space (name, created_at) VALUES (?, ?)",
                 (_clean(name, "Le nom de l'espace"), now_iso()),
+            )
+            conn.executemany(
+                "INSERT INTO action_preference (space_id, action_ref, auto_run) VALUES (?, ?, 1)",
+                [(cursor.lastrowid, ref) for ref in TEMPLATES[template]],
             )
         assert cursor.lastrowid is not None
         return get_space(conn, cursor.lastrowid)
@@ -418,3 +433,46 @@ def attendee_ids(conn: sqlite3.Connection, session_id: str) -> list[int]:
             (session_id,),
         )
     ]
+
+
+# -- summaries run by the space -----------------------------------------------------------
+
+
+class SpaceAction(BaseModel):
+    action_ref: str
+    auto_run: bool
+    model: str | None
+    """None: the default model."""
+
+
+def space_actions(data: DataDir, space_id: int) -> list[SpaceAction]:
+    conn = connect(data)
+    try:
+        get_space(conn, space_id)
+        return [
+            SpaceAction(action_ref=r["action_ref"], auto_run=bool(r["auto_run"]), model=r["model"])
+            for r in conn.execute(
+                "SELECT * FROM action_preference WHERE space_id = ? ORDER BY action_ref",
+                (space_id,),
+            )
+        ]
+    finally:
+        conn.close()
+
+
+def set_space_action(
+    data: DataDir, space_id: int, action_ref: str, *, auto_run: bool, model: str | None
+) -> list[SpaceAction]:
+    conn = connect(data)
+    try:
+        get_space(conn, space_id)
+        with conn:
+            conn.execute(
+                "INSERT INTO action_preference (space_id, action_ref, auto_run, model)"
+                " VALUES (?, ?, ?, ?) ON CONFLICT (space_id, action_ref)"
+                " DO UPDATE SET auto_run = excluded.auto_run, model = excluded.model",
+                (space_id, action_ref, int(auto_run), model),
+            )
+    finally:
+        conn.close()
+    return space_actions(data, space_id)
