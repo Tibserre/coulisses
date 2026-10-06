@@ -12,19 +12,17 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from coulisses.api import (
-    AttributedTranscript,
     ChainConfig,
     ErrorCode,
     RunNotSucceededError,
-    read_output,
     read_provenance,
 )
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from coulisses_app import jobs, sessions
+from coulisses_app import corrections, jobs, sessions, spaces
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -50,6 +48,31 @@ class SessionDetail(BaseModel):
 
 class ResumeRequest(BaseModel):
     presents: int | None = Field(default=None, ge=1)
+
+
+class AttendeesRequest(BaseModel):
+    person_ids: list[int] = []
+    unnamed: int | None = None
+
+
+class SpaceRequest(BaseModel):
+    name: str | None = None
+    voice_recognition: bool | None = None
+    archived: bool | None = None
+
+
+class PersonRequest(BaseModel):
+    name: str | None = None
+    kind: str | None = None
+    role: str | None = None
+    archived: bool | None = None
+
+
+class GlossaryRequest(BaseModel):
+    term: str | None = None
+    category: str | None = None
+    variants: list[str] | None = None
+    archived: bool | None = None
 
 
 class Imported(BaseModel):
@@ -82,6 +105,13 @@ def create_app(
                 processor.stop()
 
     app = FastAPI(title="Coulisses", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+    @app.exception_handler(spaces.SpaceError)
+    async def refused(_: Request, exc: spaces.SpaceError) -> JSONResponse:
+        """Requests that cannot be honoured, with the French reason (spaces, corrections)."""
+        status = 404 if isinstance(exc, spaces.NotFoundError) else 422
+        return JSONResponse(status_code=status, content={"detail": str(exc)})
+
     problems = recovery_problems or []
 
     @app.get("/api/etat")
@@ -102,9 +132,13 @@ def create_app(
     @app.post("/api/seances", status_code=201)
     def import_session(
         fichier: Annotated[UploadFile, File()],
-        presents: Annotated[int | None, Form()] = None,
+        espace: Annotated[int | None, Form()] = None,
+        presents: Annotated[list[int] | None, Form()] = None,
+        non_nommes: Annotated[int | None, Form()] = None,
         date_fichier_ms: Annotated[int | None, Form()] = None,
     ) -> Imported:
+        """`presents`: the people checked (repeated field); `non_nommes`: people present
+        whom nobody names, added to them as a minimum of voices (P3)."""
         recorded_at = (
             datetime.fromtimestamp(date_fichier_ms / 1000, tz=UTC) if date_fichier_ms else None
         )
@@ -113,7 +147,9 @@ def create_app(
                 data,
                 fichier.file,
                 fichier.filename or "enregistrement",
-                attendee_count=presents,
+                space_id=espace,
+                attendee_ids=presents or [],
+                unnamed_attendees=non_nommes,
                 recorded_at=recorded_at,
                 profile=profile,
             )
@@ -177,23 +213,102 @@ def create_app(
         return prov.model_dump(mode="json")
 
     @app.get("/api/seances/{session_id}/transcript")
-    def transcript(session_id: str) -> dict[str, Any]:
-        conn = connect(data)
-        try:
-            row = conn.execute(
-                "SELECT run_id FROM active_run WHERE session_id = ? AND stage = 'attribute'",
-                (session_id,),
-            ).fetchone()
-        finally:
-            conn.close()
-        if row is None:
-            raise _not_found("Le transcript n'est pas encore prêt.")
-        folder = _run_folder(data, session_id, row["run_id"])
-        try:
-            result = read_output(folder, AttributedTranscript)
-        except RunNotSucceededError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return {"run_id": row["run_id"], **result.model_dump(mode="json")}
+    def transcript(session_id: str) -> corrections.CorrectedView:
+        """The corrected view: the active run with the user's corrections applied."""
+        return _corrected(data, session_id)
+
+    @app.post("/api/seances/{session_id}/corrections", status_code=201)
+    def add_correction(session_id: str, demande: corrections.Request) -> corrections.CorrectedView:
+        return corrections.add(data, session_id, demande.model_dump())
+
+    @app.post("/api/seances/{session_id}/corrections/{edit_id}/annuler")
+    def undo_correction(session_id: str, edit_id: int) -> corrections.CorrectedView:
+        return corrections.undo(data, session_id, edit_id)
+
+    @app.post("/api/seances/{session_id}/corrections/{edit_id}/retablir")
+    def redo_correction(session_id: str, edit_id: int) -> corrections.CorrectedView:
+        return corrections.redo(data, session_id, edit_id)
+
+    @app.post("/api/seances/{session_id}/repliques/{turn}/texte-d-origine")
+    def reset_text(session_id: str, turn: int) -> corrections.CorrectedView:
+        return corrections.reset_text(data, session_id, turn)
+
+    @app.put("/api/seances/{session_id}/presents")
+    def set_attendees(session_id: str, demande: AttendeesRequest) -> sessions.Session:
+        spaces.set_attendees(data, session_id, demande.person_ids, demande.unnamed)
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
+
+    # -- spaces, people, glossary ---------------------------------------------------
+
+    @app.get("/api/espaces")
+    def list_spaces() -> list[spaces.Space]:
+        return spaces.list_spaces(data)
+
+    @app.post("/api/espaces", status_code=201)
+    def create_space(demande: SpaceRequest) -> spaces.Space:
+        return spaces.create_space(data, demande.name or "")
+
+    @app.patch("/api/espaces/{space_id}")
+    def update_space(space_id: int, demande: SpaceRequest) -> spaces.Space:
+        return spaces.update_space(
+            data,
+            space_id,
+            name=demande.name,
+            voice_recognition=demande.voice_recognition,
+            archived=demande.archived,
+        )
+
+    @app.get("/api/espaces/{space_id}/personnes")
+    def list_people(space_id: int) -> list[spaces.Person]:
+        return spaces.list_people(data, space_id)
+
+    @app.post("/api/espaces/{space_id}/personnes", status_code=201)
+    def add_person(space_id: int, demande: PersonRequest) -> spaces.Person:
+        return spaces.add_person(
+            data,
+            space_id,
+            kind=demande.kind or "member",
+            name=demande.name or "",
+            role=demande.role,
+        )
+
+    @app.patch("/api/personnes/{person_id}")
+    def update_person(person_id: int, demande: PersonRequest) -> spaces.Person:
+        return spaces.update_person(
+            data,
+            person_id,
+            name=demande.name,
+            role=demande.role,
+            kind=demande.kind,
+            archived=demande.archived,
+        )
+
+    @app.get("/api/espaces/{space_id}/glossaire")
+    def list_glossary(space_id: int) -> list[spaces.GlossaryEntry]:
+        return spaces.list_glossary(data, space_id)
+
+    @app.post("/api/espaces/{space_id}/glossaire", status_code=201)
+    def add_entry(space_id: int, demande: GlossaryRequest) -> spaces.GlossaryEntry:
+        return spaces.add_entry(
+            data,
+            space_id,
+            term=demande.term or "",
+            category=demande.category,
+            variants=demande.variants,
+        )
+
+    @app.patch("/api/glossaire/{entry_id}")
+    def update_entry(entry_id: int, demande: GlossaryRequest) -> spaces.GlossaryEntry:
+        return spaces.update_entry(
+            data,
+            entry_id,
+            term=demande.term,
+            category=demande.category,
+            variants=demande.variants,
+            archived=demande.archived,
+        )
 
     @app.get("/api/seances/{session_id}/audio")
     def audio(session_id: str) -> FileResponse:
@@ -210,6 +325,21 @@ def create_app(
 
     _mount_interface(app, web_dir)
     return app
+
+
+def _corrected(data: DataDir, session_id: str) -> corrections.CorrectedView:
+    try:
+        view = corrections.build_view(data, session_id)
+    except RunNotSucceededError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise _not_found(
+            "Le résultat du traitement est introuvable. "
+            "A-t-il été déplacé ou supprimé dans le Finder ?"
+        ) from exc
+    if view is None:
+        raise _not_found("Le transcript n'est pas encore prêt.")
+    return view
 
 
 def _refused_for_too_few_voices(data: DataDir, session_id: str, job_id: int) -> bool:

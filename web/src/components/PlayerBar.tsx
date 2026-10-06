@@ -38,14 +38,14 @@ export function PlayerBar({
 
   const previous = () => {
     // Back to the start of the line being heard if it began more than 2 s ago.
-    if (current?.start != null && pb.time - current.start > 2)
-      pb.seek(current.start);
-    else if (position > 0) pb.seek(timed[position - 1].start ?? 0);
-    else if (timed.length) pb.seek(timed[0].start ?? 0);
+    const start = current?.turn.start;
+    if (start != null && pb.time - start > 2) pb.seek(start);
+    else if (position > 0) pb.seek(timed[position - 1].turn.start ?? 0);
+    else if (timed.length) pb.seek(timed[0].turn.start ?? 0);
   };
   const next = () => {
-    const target = timed.find((r) => (r.start ?? 0) > pb.time + 0.05);
-    if (target?.start != null) pb.seek(target.start);
+    const target = timed.find((r) => (r.turn.start ?? 0) > pb.time + 0.05);
+    if (target?.turn.start != null) pb.seek(target.turn.start);
   };
 
   useEffect(() => {

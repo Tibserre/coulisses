@@ -28,9 +28,14 @@ class Job(BaseModel):
 
 
 def enqueue_chain(
-    conn: sqlite3.Connection, session_id: str, *, profile: str, attendees: int | None
+    conn: sqlite3.Connection,
+    session_id: str,
+    *,
+    profile: str,
+    attendees: int | None,
+    glossary: list[str] | None = None,
 ) -> int:
-    params = ChainParams(profile=profile, attendees=attendees)
+    params = ChainParams(profile=profile, attendees=attendees, glossary=glossary or [])
     cursor = conn.execute(
         "INSERT INTO job (session_id, kind, state, params, requested_at)"
         " VALUES (?, 'chain', 'queued', ?, ?)",
@@ -87,16 +92,14 @@ def requeue(conn: sqlite3.Connection, job_id: int) -> None:
 def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> None:
     """Resume a failed job asking for another minimum of voices, only after a diarization
     refused with `too_few_speakers` (checked by the caller). The former minimum stays in
-    that run's provenance (`error.details.expected`): nothing is lost."""
+    that run's provenance (`error.details.expected`): nothing is lost. Who was present is
+    not changed: people can be present without speaking."""
     params = job.params.model_copy(update={"attendees": attendees})
     with conn:
         conn.execute(
             "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL, params = ?"
             " WHERE id = ?",
             (params.model_dump_json(), job.id),
-        )
-        conn.execute(
-            "UPDATE session SET attendee_count = ? WHERE id = ?", (attendees, job.session_id)
         )
 
 

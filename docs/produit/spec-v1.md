@@ -112,6 +112,8 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Lecture audio synchronisée** : clic sur une ligne → lecture à cet instant ; le mot courant est suivi. Vitesse de lecture réglable.
 - **Locuteurs** : renommer (en choisissant un membre, un invité, ou un nom libre), fusionner, scinder, marquer « personnage joué par X ».
 - **Édition du texte** : corriger un mot ou une phrase. Un mot corrigé garde son horodatage. Si la correction change le nombre de mots, la plage corrigée garde son début et sa fin mesurés ; les mots ajoutés n'ont pas de temps propre et sont marqués comme tels, jamais interpolés.
+- **Édition directe**, comme dans un document : je clique dans une réplique et je tape ; la correction s'enregistre quand je quitte la réplique ou appuie sur Entrée, Échap annule ma saisie. Un texte refusé reste à l'écran pour être corrigé. Cmd-Z et Maj-Cmd-Z annulent et rétablissent la dernière correction (texte, nom, fusion, scission) ; une réplique corrigée peut revenir à son texte d'origine. Rien n'est effacé : chaque annulation s'ajoute au journal.
+- **Glossaire en relecture** : une graphie fautive connue est signalée ; un clic applique les bonnes graphies du glossaire à toute la réplique.
 - **Mots peu sûrs** mis en évidence quand le moteur fournit une confiance.
 - Longues séances fluides (2 h, plusieurs milliers de tours).
 - **Corrections et retraitement** : relancer la transcription ou la diarisation produit une nouvelle version. L'app reporte automatiquement ce qu'elle peut (noms de locuteurs par recouvrement temporel, corrections de mots sur le même passage) et **liste ce qu'elle n'a pas pu reporter** (P8). L'ancienne version reste consultable.

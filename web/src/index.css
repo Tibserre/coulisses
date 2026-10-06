@@ -170,13 +170,13 @@ body {
 }
 
 .cl-transcript > div {
-  max-width: calc(70ch + 4.5rem + var(--spacing-5) + var(--spacing-4));
+  max-width: calc(70ch + 6rem + var(--spacing-5) + var(--spacing-4));
   margin: 0 auto;
 }
 
 .cl-turn {
   display: grid;
-  grid-template-columns: 4.5rem 1fr;
+  grid-template-columns: 6rem 1fr;
   column-gap: var(--spacing-5);
   align-items: baseline;
   padding: var(--spacing-2) 0;
@@ -188,14 +188,8 @@ body {
   flex-direction: column;
   gap: var(--spacing-1);
   padding-inline-start: var(--spacing-4);
-  box-shadow: inset 1px 0 0 0 var(--color-border);
-  transition: box-shadow var(--duration-medium) var(--ease-standard);
 }
 
-/* The line being heard carries a brick rail on its left. */
-.cl-turn[data-current] .cl-turn__body {
-  box-shadow: inset 2px 0 0 0 var(--color-accent);
-}
 
 .cl-name {
   font-weight: var(--font-weight-semibold);
@@ -288,7 +282,7 @@ button.cl-time {
 
 .cl-gap {
   display: grid;
-  grid-template-columns: 4.5rem 1fr;
+  grid-template-columns: 6rem 1fr;
   column-gap: var(--spacing-5);
   align-items: baseline;
   padding: var(--spacing-3) 0;
@@ -432,4 +426,509 @@ button.cl-time {
 .cl-player__seek {
   flex: 1;
   accent-color: var(--color-accent);
+}
+
+/* ------------------------------------------------------------ Navigation --- */
+
+.cl-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-6);
+}
+
+.cl-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.cl-nav {
+  display: flex;
+  gap: var(--spacing-5);
+}
+
+.cl-nav a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  padding-block: var(--spacing-1);
+  border-bottom: 2px solid transparent;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.cl-nav a:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-nav a[aria-current="page"] {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-accent);
+}
+
+.cl-select {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  font-size: var(--font-size-sm);
+}
+
+.cl-select select {
+  font: inherit;
+  padding: var(--spacing-1-5, 6px) var(--spacing-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+}
+
+.cl-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-checklist--columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.cl-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- Spaces --- */
+
+.cl-spaces {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--spacing-8);
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--spacing-4) var(--spacing-8) var(--spacing-10);
+}
+
+.cl-spaces__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-spaces__list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cl-spaces__list a {
+  display: block;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-element);
+  color: inherit;
+  text-decoration: none;
+}
+
+.cl-spaces__list a[aria-current="page"] {
+  background: var(--color-background-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-spaces__list a[data-archived] {
+  color: var(--color-text-secondary);
+}
+
+.cl-space,
+.cl-spaces__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+}
+
+.cl-space__head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+}
+
+.cl-space__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cl-rows__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding-block: var(--spacing-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-rows__item[data-archived] {
+  opacity: 0.55;
+}
+
+.cl-rows__add {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+}
+
+/* ------------------------------------------------------------- Corrections --- */
+
+.cl-review__main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cl-review__main .cl-transcript {
+  flex: 1;
+}
+
+.cl-turn__margin {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--spacing-2);
+}
+
+.cl-turn__check {
+  opacity: 0;
+  accent-color: var(--color-accent);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cl-turn:hover .cl-turn__check,
+.cl-turn__check:checked,
+.cl-turn__check:focus-visible {
+  opacity: 1;
+}
+
+.cl-turn[data-selected] .cl-turn__body {
+  background: var(--color-background-muted);
+  border-radius: var(--radius-inner);
+}
+
+.cl-turn__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+}
+
+button.cl-name {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: start;
+}
+
+button.cl-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cl-name__played {
+  font-variant-caps: normal;
+  letter-spacing: 0;
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+}
+
+.cl-turn__nommer {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-xsm);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.cl-turn__actions {
+  margin-inline-start: auto;
+  display: inline-flex;
+  gap: var(--spacing-1);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cl-turn:hover .cl-turn__actions,
+.cl-turn__actions:focus-within {
+  opacity: 1;
+}
+
+.cl-iconbtn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-iconbtn:hover {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+
+
+.cl-word[data-suggestion] {
+  text-decoration: underline wavy var(--color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+
+
+
+
+
+
+
+.cl-selection {
+  position: absolute;
+  left: 50%;
+  bottom: var(--spacing-4);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-med);
+}
+
+.cl-namepanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-namepanel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.cl-namepanel__person {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  padding: var(--spacing-1-5, 6px) var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cl-namepanel__person:hover,
+.cl-namepanel__person[data-current] {
+  background: var(--color-background-muted);
+}
+
+.cl-namepanel__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}
+
+.cl-namepanel__more summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-namepanel__character {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-2);
+}
+
+.cl-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-history li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-history__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-history li[data-reverted] .cl-history__text {
+  color: var(--color-text-secondary);
+}
+
+/* Controls stay out of a copied passage of the transcript. */
+.cl-turn__nommer,
+.cl-turn__actions,
+.cl-turn__check {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cl-crash {
+  max-width: 40rem;
+  margin: 10vh auto;
+  padding: var(--spacing-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-crash pre {
+  white-space: pre-wrap;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------- Typed into lines --- */
+
+/* Lines are typed into directly, like a document (Notion): no box, no ground, no
+   outline, while hovering or typing. Only the caret shows where one writes. */
+.cl-words[contenteditable] {
+  outline: none;
+  cursor: text;
+  caret-color: var(--color-accent);
+}
+
+/* The line being heard: its time in brick and its current word lit; nothing else. */
+.cl-turn[data-current] .cl-time {
+  color: var(--color-accent);
+}
+
+/* Marks drawn by CSS stay out of the text a line is typed into or copied from. */
+.cl-word[data-added]::after {
+  content: "+";
+  color: var(--color-text-secondary);
+  font-size: 0.6em;
+  vertical-align: super;
+  margin-inline-start: 1px;
+}
+
+.cl-notice {
+  position: absolute;
+  left: 50%;
+  bottom: var(--spacing-4);
+  transform: translateX(-50%);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-med);
+  font-size: var(--font-size-sm);
+}
+
+/* Copy and paste work everywhere (rules/web.md): names stay text. */
+button.cl-name {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Hover tip of a word: a small label rises above it. For an unsure word, the engine's
+   confidence counts up from 0 (the number says how sure it was). Generated content, so it
+   is never part of the text typed into or copied. Shown after a short wait. */
+@property --cl-pct {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+
+.cl-word[data-tip-kind]:hover::before {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: var(--radius-inner);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-low), 0 0 0 1px var(--color-border);
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-xsm);
+  font-weight: var(--font-weight-semibold);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: cl-tip-rise var(--duration-medium) var(--ease-standard) 250ms both;
+}
+
+.cl-word[data-tip-kind="suggestion"]:hover::before {
+  content: attr(data-tip);
+  color: var(--color-accent);
+}
+
+.cl-word[data-tip-kind="added"]:hover::before {
+  content: attr(data-tip);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-word[data-tip-kind="confidence"]:hover::before {
+  counter-reset: cl-pct var(--cl-pct);
+  content: counter(cl-pct) " %";
+  color: var(--coulisses-word-uncertain);
+  animation:
+    cl-tip-rise var(--duration-medium) var(--ease-standard) 250ms both,
+    cl-count var(--duration-medium) var(--ease-standard) 250ms both;
+}
+
+@keyframes cl-tip-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes cl-count {
+  from {
+    --cl-pct: 0;
+  }
+  to {
+    --cl-pct: var(--cl-conf);
+  }
 }

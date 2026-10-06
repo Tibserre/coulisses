@@ -2,38 +2,54 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
-import {
-  MetadataList,
-  MetadataListItem,
-} from "@astryxdesign/core/MetadataList";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
+import { Popover } from "@astryxdesign/core/Popover";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
 import { ArrowLeft } from "lucide-react";
 import {
   api,
-  type AttributedTranscript,
+  type EditRequest,
+  type CorrectedView,
+  type Person,
   type SessionDetail,
   type StageView,
 } from "../api.ts";
 import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
+import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../components/ReviewSide.tsx";
 import { StageList } from "../components/StageList.tsx";
-import { TranscriptView } from "../components/TranscriptView.tsx";
+import { GiveToPanel, TranscriptView, type Editing } from "../components/TranscriptView.tsx";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
-import { buildModel, turnAt, wordAt, type ReviewModel } from "../transcript.ts";
+import { buildModel, toggleSelection, turnAt, wordAt } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
 
+/** Keys typed into a text field keep their meaning; on a button or a checkbox, N and E
+ *  still work. */
+function isTyping(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return true;
+  if (target instanceof HTMLInputElement) return !["checkbox", "radio", "range", "button"].includes(target.type);
+  return false;
+}
+
 export function SessionPage({ id }: { id: string }) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
-  const [transcript, setTranscript] = useState<AttributedTranscript | null>(
-    null,
-  );
+  const [view, setView] = useState<CorrectedView | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [provenanceOf, setProvenanceOf] = useState<StageView | null>(null);
+  const [editingTurn, setEditingTurn] = useState<number | null>(null);
+  const [namingTurn, setNamingTurn] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [lastSelected, setLastSelected] = useState<number | null>(null);
+  const [giving, setGiving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const pb = usePlayback();
   const dev = useDevMode();
 
@@ -47,9 +63,9 @@ export function SessionPage({ id }: { id: string }) {
   }, [id]);
 
   const jobState = detail?.session.job_state;
+  const spaceId = detail?.session.space_id;
   const attribute = detail?.stages.find((s) => s.stage === "attribute");
-  const attributeRun =
-    attribute?.state === "succeeded" ? attribute.run_id : null;
+  const attributeRun = attribute?.state === "succeeded" ? attribute.run_id : null;
 
   useEffect(() => {
     void refresh();
@@ -66,27 +82,129 @@ export function SessionPage({ id }: { id: string }) {
     if (!attributeRun) return;
     api.transcript(id).then(
       (t) => {
-        setTranscript(t);
+        setView(t);
         setTranscriptError(null);
       },
       (e: Error) => setTranscriptError(e.message),
     );
   }, [id, attributeRun]);
 
-  const model = useMemo(
-    () => (transcript ? buildModel(transcript) : null),
-    [transcript],
-  );
+  const loadPeople = useCallback(async () => {
+    if (spaceId != null) setPeople(await api.people(spaceId));
+  }, [spaceId]);
+  useEffect(() => {
+    void loadPeople().catch((e: Error) => setError(e.message));
+  }, [loadPeople]);
+
+  const model = useMemo(() => (view ? buildModel(view) : null), [view]);
   const currentRow = model ? turnAt(model, pb.time) : null;
-  const current = currentRow
-    ? { row: currentRow, word: wordAt(currentRow, pb.time) }
-    : null;
+  const current = currentRow ? { row: currentRow, word: wordAt(currentRow, pb.time) } : null;
+
+  const correct = useCallback(
+    async (correction: EditRequest) => {
+      try {
+        setView(await api.addEdit(id, correction));
+        setEditError(null);
+      } catch (e) {
+        setEditError((e as Error).message);
+        throw e;
+      }
+    },
+    [id],
+  );
+
+  const editing: Editing = useMemo(
+    () => ({
+      people,
+      correct,
+      addGuest: async (name: string) => {
+        const guest = await api.addPerson(spaceId!, { name, kind: "guest" });
+        await loadPeople();
+        return guest;
+      },
+      resetText: async (turn: number) => {
+        try {
+          setView(await api.resetText(id, turn));
+          setEditError(null);
+        } catch (e) {
+          setEditError((e as Error).message);
+          throw e;
+        }
+      },
+      editingTurn,
+      setEditingTurn,
+      namingTurn,
+      setNamingTurn,
+      selected,
+      toggleSelected: (turn: number, extend: boolean) => {
+        const order = model ? model.rows.flatMap((r) => (r.kind === "turn" ? [r.turn.index] : [])) : [];
+        setSelected((before) => toggleSelection(before, order, turn, extend ? lastSelected : null));
+        setLastSelected(turn);
+      },
+    }),
+    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, model],
+  );
+
+  /** Cmd-Z undoes the last correction still in force; Cmd-Shift-Z redoes the last one
+   *  undone. Both go through the journal: nothing is erased (P5). */
+  const history = useCallback(
+    async (redo: boolean) => {
+      const edits = view?.edits ?? [];
+      try {
+        if (redo) {
+          const target = edits
+            .filter((e) => e.reverted && !e.redone && e.undone_by != null)
+            .sort((a, b) => (b.undone_by ?? 0) - (a.undone_by ?? 0))[0];
+          if (!target) return setNotice("Rien à rétablir.");
+          setView(await api.redo(id, target.id));
+          setNotice(`Rétabli : ${target.description}`);
+        } else {
+          const target = edits.filter((e) => !e.reverted).sort((a, b) => b.id - a.id)[0];
+          if (!target) return setNotice("Rien à annuler.");
+          setView(await api.undo(id, target.id));
+          setNotice(`Annulé : ${target.description}`);
+        }
+        setEditError(null);
+      } catch (e) {
+        setEditError((e as Error).message);
+      }
+    },
+    [id, view],
+  );
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  // N names the voice of the line being heard, E puts the cursor in its text; Cmd-Z and
+  // Cmd-Shift-Z undo and redo corrections (inside a line being typed into, they undo the
+  // typing, as anywhere).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e.target)) return;
+      if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        void history(e.shiftKey);
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || !currentRow) return;
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        setNamingTurn(currentRow.turn.index);
+      } else if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        setEditingTurn(currentRow.turn.index);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [currentRow, history]);
 
   const session = detail?.session;
-  const title = session
-    ? (session.title ??
-      `Séance du ${formatDate(session.recorded_at).toLowerCase()}`)
-    : "";
+  const title = session ? (session.title ?? `Séance du ${formatDate(session.recorded_at).toLowerCase()}`) : "";
+  const present = session ? session.attendee_ids.length + (session.unnamed_attendees ?? 0) : 0;
 
   return (
     <div className="cl-review">
@@ -98,17 +216,12 @@ export function SessionPage({ id }: { id: string }) {
         {session && (
           <div>
             <Text type="supporting">
-              {detail?.source?.origin === "captured"
-                ? "Enregistrement capté"
-                : "Enregistrement importé"}
+              {session.space_name} · {detail?.source?.origin === "captured" ? "enregistrement capté" : "enregistrement importé"}
             </Text>
             <Heading level={1}>{title}</Heading>
             <Text color="secondary">
-              {formatDate(session.recorded_at)} ·{" "}
-              {formatDuration(session.duration_s)}
-              {session.attendee_count
-                ? ` · ${plural(session.attendee_count, "présent", "présents")}`
-                : ""}
+              {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
+              {present ? ` · ${plural(present, "présent", "présents")}` : ""}
             </Text>
           </div>
         )}
@@ -130,16 +243,81 @@ export function SessionPage({ id }: { id: string }) {
           onShowProvenance={setProvenanceOf}
         />
       )}
-      {detail && model && (
+      {detail && model && view && session && (
         <>
           <div className="cl-review__columns">
-            <TranscriptView model={model} pb={pb} current={current} />
+            <div className="cl-review__main">
+              {editError && (
+                <div className="cl-review__notice">
+                  <Banner
+                    status="error"
+                    title="EditRequest refusée"
+                    description={editError}
+                    isDismissable
+                    onDismiss={() => setEditError(null)}
+                  />
+                </div>
+              )}
+              {view.other_run_edits > 0 && (
+                <div className="cl-review__notice">
+                  <Banner
+                    status="warning"
+                    title={`${plural(view.other_run_edits, "correction faite", "corrections faites")} sur un traitement précédent`}
+                    description="Elles sont gardées, mais pas encore reportées sur ce traitement."
+                  />
+                </div>
+              )}
+              <TranscriptView model={model} pb={pb} current={current} editing={editing} />
+              {notice && (
+                <div className="cl-notice" role="status">
+                  {notice}
+                </div>
+              )}
+              {selected.size > 0 && (
+                <div className="cl-selection" role="toolbar" aria-label="Répliques sélectionnées">
+                  <Text>{plural(selected.size, "réplique sélectionnée", "répliques sélectionnées")}</Text>
+                  <Popover
+                    isOpen={giving}
+                    onOpenChange={setGiving}
+                    label="Donner les répliques à"
+                    width={280}
+                    content={
+                      <GiveToPanel
+                        voices={model.speakers}
+                        except={null}
+                        onGive={(target) => {
+                          setGiving(false);
+                          void correct({ kind: "reassign_turns", turns: [...selected], target }).then(
+                            () => setSelected(new Set()),
+                            () => undefined,
+                          );
+                        }}
+                      />
+                    }
+                  >
+                    <Button size="sm" variant="primary" label="Donner à…" />
+                  </Popover>
+                  <Button size="sm" variant="ghost" label="Désélectionner" onClick={() => setSelected(new Set())} />
+                </div>
+              )}
+            </div>
             <aside className="cl-side">
-              <KeyFigures model={model} duration={session?.duration_s ?? null} dev={dev} />
+              <KeyFigures view={view} model={model} duration={session.duration_s} dev={dev} />
               <Participants model={model} />
-              {(dev || detail.stages.some(
-                  (s) => s.state === "failed" || s.state === "stalled" || s.folder_missing,
-                )) && (
+              <Attendees
+                session={session}
+                people={people}
+                onSave={async (ids, unnamed) => {
+                  await api.setAttendees(id, ids, unnamed);
+                  await refresh();
+                }}
+              />
+              <CorrectionsHistory
+                edits={view.edits}
+                onUndo={async (editId) => setView(await api.undo(id, editId))}
+                onRedo={async (editId) => setView(await api.redo(id, editId))}
+              />
+              {(dev || detail.stages.some((s) => s.state === "failed" || s.state === "stalled" || s.folder_missing)) && (
                 <section>
                   <Heading level={3}>Traitement</Heading>
                   <StageList stages={detail.stages} onShowProvenance={setProvenanceOf} />
@@ -151,11 +329,7 @@ export function SessionPage({ id }: { id: string }) {
           <PlayerBar model={model} pb={pb} current={currentRow} />
         </>
       )}
-      <ProvenanceDialog
-        sessionId={id}
-        stage={provenanceOf}
-        onClose={() => setProvenanceOf(null)}
-      />
+      <ProvenanceDialog sessionId={id} stage={provenanceOf} onClose={() => setProvenanceOf(null)} />
     </div>
   );
 }
@@ -289,69 +463,6 @@ function ProcessingPanel({
         />
       )}
     </main>
-  );
-}
-
-function KeyFigures({
-  model,
-  duration,
-  dev,
-}: {
-  model: ReviewModel;
-  duration: number | null;
-  dev: boolean;
-}) {
-  const voices = model.speakers.filter((s) => s.label !== null).length;
-  return (
-    <dl className="cl-figures">
-      <div>
-        <dt>Durée</dt>
-        <dd>{formatDuration(duration)}</dd>
-      </div>
-      <div>
-        <dt>Voix</dt>
-        <dd>{voices}</dd>
-      </div>
-      <div>
-        <dt>Répliques</dt>
-        <dd>
-          {model.rows.filter((r) => r.kind === "turn").length}
-        </dd>
-      </div>
-      {dev && (
-        <div>
-          <dt>Mots horodatés</dt>
-          <dd>{Math.round(model.timedShare * 100)} %</dd>
-        </div>
-      )}
-    </dl>
-  );
-}
-
-function Participants({ model }: { model: ReviewModel }) {
-  const total = model.speakers.reduce((sum, s) => sum + s.seconds, 0) || 1;
-  return (
-    <section>
-      <Heading level={3}>Participants</Heading>
-      <Text type="supporting">
-        Les voix trouvées, numérotées dans l'ordre où elles prennent la parole.
-      </Text>
-      <ul className="cl-participants">
-        {model.speakers.map((s) => (
-          <li key={s.label ?? "inconnu"}>
-            <span className="cl-name" data-unnamed>
-              {s.name}
-            </span>
-            <span className="cl-share" aria-hidden>
-              <span style={{ width: `${(100 * s.seconds) / total}%` }} />
-            </span>
-            <Text type="supporting">
-              {Math.round((100 * s.seconds) / total)} %
-            </Text>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 

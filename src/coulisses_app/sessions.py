@@ -13,7 +13,7 @@ from typing import BinaryIO
 
 from pydantic import BaseModel
 
-from coulisses_app import jobs
+from coulisses_app import jobs, spaces
 from coulisses_app.media import probe
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect, now_iso
@@ -44,7 +44,14 @@ class Session(BaseModel):
     title: str | None
     recorded_at: str
     created_at: str
-    attendee_count: int | None
+    space_id: int
+    space_name: str
+    attendee_ids: list[int]
+    """People checked as present (members and guests of the session's space)."""
+    unnamed_attendees: int | None
+    """People present whom nobody named, in addition to the checked ones."""
+    min_voices: int | None
+    """Minimum of voices asked of the engine by the latest processing (P3)."""
     reference_source_id: str
     duration_s: float | None
     job_state: str | None
@@ -63,7 +70,9 @@ def import_recording(
     stream: BinaryIO,
     original_name: str,
     *,
-    attendee_count: int | None,
+    space_id: int | None = None,
+    attendee_ids: list[int] | None = None,
+    unnamed_attendees: int | None = None,
     recorded_at: datetime | None,
     profile: str,
 ) -> str:
@@ -71,8 +80,18 @@ def import_recording(
 
     The file is first received in `imports-en-cours/`; if ffmpeg cannot read it, that copy
     is removed and `UnreadableAudioError` says why (the user's original is untouched)."""
-    if attendee_count is not None and attendee_count < 1:
-        raise ValueError("Le nombre de présents doit être au moins 1.")
+    if unnamed_attendees is not None and unnamed_attendees < 1:
+        raise ValueError("Le nombre de présents non nommés doit être au moins 1.")
+    present = list(dict.fromkeys(attendee_ids or []))
+    conn = connect(data)
+    try:
+        space = space_id if space_id is not None else spaces.default_space_id(conn)
+        spaces.get_space(conn, space)
+        spaces.check_attendees(conn, space, present)
+        glossary = spaces.glossary_terms(conn, space)
+    finally:
+        conn.close()
+    minimum = len(present) + (unnamed_attendees or 0) or None
     data.incoming.mkdir(parents=True, exist_ok=True)
     suffix = Path(original_name).suffix.lower()
     received = data.incoming / f"{secrets.token_hex(8)}{suffix}"
@@ -102,16 +121,21 @@ def import_recording(
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
-            "INSERT INTO session (id, troupe_id, title, recorded_at, created_at,"
-            " reference_source_id, attendee_count)"
-            " VALUES (?, (SELECT MIN(id) FROM troupe), NULL, ?, ?, ?, ?)",
+            "INSERT INTO session (id, space_id, title, recorded_at, created_at,"
+            " reference_source_id, unnamed_attendees)"
+            " VALUES (?, ?, NULL, ?, ?, ?, ?)",
             (
                 session_id,
+                space,
                 (recorded_at or now).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 stamp,
                 REFERENCE_SOURCE_ID,
-                attendee_count,
+                unnamed_attendees,
             ),
+        )
+        conn.executemany(
+            "INSERT INTO attendee (session_id, person_id) VALUES (?, ?)",
+            [(session_id, p) for p in present],
         )
         conn.execute(
             "INSERT INTO audio_source (session_id, source_id, origin, original_name,"
@@ -131,7 +155,7 @@ def import_recording(
                 stamp,
             ),
         )
-        jobs.enqueue_chain(conn, session_id, profile=profile, attendees=attendee_count)
+        jobs.enqueue_chain(conn, session_id, profile=profile, attendees=minimum, glossary=glossary)
         sources.mkdir(parents=True)
         shutil.move(received, stored)
         moved = True
@@ -151,13 +175,18 @@ def import_recording(
     return session_id
 
 
-def _session(row: sqlite3.Row) -> Session:
+def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
+    params = row["job_params"]
     return Session(
         id=row["id"],
         title=row["title"],
         recorded_at=row["recorded_at"],
         created_at=row["created_at"],
-        attendee_count=row["attendee_count"],
+        space_id=row["space_id"],
+        space_name=row["space_name"],
+        attendee_ids=spaces.attendee_ids(conn, row["id"]),
+        unnamed_attendees=row["unnamed_attendees"],
+        min_voices=jobs.ChainParams.model_validate_json(params).attendees if params else None,
         reference_source_id=row["reference_source_id"],
         duration_s=row["duration_s"],
         job_state=row["job_state"],
@@ -166,8 +195,10 @@ def _session(row: sqlite3.Row) -> Session:
 
 
 _SESSION_QUERY = """
-SELECT s.*, a.duration_s, j.state AS job_state, j.error AS job_error
+SELECT s.*, a.duration_s, j.state AS job_state, j.error AS job_error, j.params AS job_params,
+    sp.name AS space_name
 FROM session s
+JOIN space sp ON sp.id = s.space_id
 LEFT JOIN audio_source a ON a.session_id = s.id AND a.source_id = s.reference_source_id
 LEFT JOIN job j ON j.id = (SELECT MAX(id) FROM job WHERE session_id = s.id)
 """
@@ -177,7 +208,7 @@ def list_sessions(data: DataDir) -> list[Session]:
     conn = connect(data)
     try:
         rows = conn.execute(_SESSION_QUERY + " ORDER BY s.recorded_at DESC, s.id DESC")
-        return [_session(r) for r in rows]
+        return [_session(conn, r) for r in rows]
     finally:
         conn.close()
 
@@ -186,7 +217,7 @@ def get_session(data: DataDir, session_id: str) -> Session | None:
     conn = connect(data)
     try:
         row = conn.execute(_SESSION_QUERY + " WHERE s.id = ?", (session_id,)).fetchone()
-        return _session(row) if row else None
+        return _session(conn, row) if row else None
     finally:
         conn.close()
 

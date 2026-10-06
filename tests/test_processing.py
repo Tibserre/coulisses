@@ -37,7 +37,7 @@ REFUSED_DIARIZATION = FAKE_CHAIN.model_copy(
 def import_(data: DataDir, recording: Path, attendees: int = 2) -> str:
     with recording.open("rb") as f:
         return sessions.import_recording(
-            data, f, recording.name, attendee_count=attendees, recorded_at=None, profile="essai"
+            data, f, recording.name, unnamed_attendees=attendees, recorded_at=None, profile="essai"
         )
 
 

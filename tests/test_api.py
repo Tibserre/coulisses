@@ -49,7 +49,7 @@ def test_the_service_reports_where_its_data_lives(client: TestClient, data: Data
 
 
 def test_import_then_follow_then_read(client: TestClient, data: DataDir, recording: Path) -> None:
-    session_id = upload(client, recording, presents="2", date_fichier_ms="1759600000000")
+    session_id = upload(client, recording, non_nommes="2", date_fichier_ms="1759600000000")
     listed = client.get("/api/seances").json()
     assert [s["id"] for s in listed] == [session_id]
     assert listed[0]["job_state"] == "queued"
@@ -66,8 +66,8 @@ def test_import_then_follow_then_read(client: TestClient, data: DataDir, recordi
     assert detail["session"]["job_state"] == "done"
 
     transcript = client.get(f"/api/seances/{session_id}/transcript").json()
-    assert transcript["words"][0]["text"] == "bonjour"
-    assert transcript["turns"]
+    assert transcript["turns"][0]["words"][0]["text"] == "bonjour"
+    assert transcript["speakers"][0]["name"] == "Locuteur 1"
 
     run_id = detail["stages"][0]["run_id"]
     prov = client.get(f"/api/seances/{session_id}/executions/{run_id}/provenance").json()
@@ -99,7 +99,7 @@ def test_an_unreadable_file_gets_a_french_message(client: TestClient, tmp_path: 
 def test_zero_attendees_is_refused(client: TestClient, recording: Path) -> None:
     with recording.open("rb") as f:
         response = client.post(
-            "/api/seances", files={"fichier": ("a.wav", f, "audio/wav")}, data={"presents": "0"}
+            "/api/seances", files={"fichier": ("a.wav", f, "audio/wav")}, data={"non_nommes": "0"}
         )
     assert response.status_code == 422
 
@@ -144,7 +144,7 @@ def test_the_whole_journey_opens_no_network_connection(
 
     monkeypatch.setattr("socket.socket.connect", refuse)
     monkeypatch.setattr("socket.socket.connect_ex", refuse)
-    session_id = upload(client, recording, presents="2")
+    session_id = upload(client, recording, non_nommes="2")
     process_next(data)
     assert client.get(f"/api/seances/{session_id}/transcript").status_code == 200
     assert client.get(f"/api/seances/{session_id}/audio").status_code == 200
@@ -160,7 +160,7 @@ def test_after_too_few_voices_the_processing_resumes_with_fewer_attendees(
         update={"diarize": StageConfig(engine="fake_under_segmenting")}
     )  # finds one voice whatever the attendees
     client = TestClient(create_app(data, refused, profile="essai", processor=None, web_dir=None))
-    session_id = upload(client, recording, presents="3")
+    session_id = upload(client, recording, non_nommes="3")
 
     def run_next() -> None:
         conn = connect(data)
@@ -181,7 +181,8 @@ def test_after_too_few_voices_the_processing_resumes_with_fewer_attendees(
     )
     resumed = client.post(f"/api/seances/{session_id}/reprendre", json={"presents": 1})
     assert resumed.status_code == 200
-    assert resumed.json()["attendee_count"] == 1
+    assert resumed.json()["min_voices"] == 1
+    assert resumed.json()["unnamed_attendees"] == 3  # who was there does not change
     run_next()
     detail = client.get(f"/api/seances/{session_id}").json()
     assert detail["session"]["job_state"] == "done"
@@ -192,12 +193,12 @@ def test_after_too_few_voices_the_processing_resumes_with_fewer_attendees(
 def test_the_attendees_cannot_change_after_another_failure(
     client: TestClient, data: DataDir, recording: Path
 ) -> None:
-    session_id = upload(client, recording, presents="2")
+    session_id = upload(client, recording, non_nommes="2")
     (data.sources_dir(session_id) / "ref.wav").unlink()  # fails before any diarization
     process_next(data)
     refused = client.post(f"/api/seances/{session_id}/reprendre", json={"presents": 1})
     assert refused.status_code == 409
     assert "trop peu de voix" in refused.json()["detail"]
     detail = client.get(f"/api/seances/{session_id}").json()
-    assert detail["session"]["attendee_count"] == 2  # untouched
+    assert detail["session"]["min_voices"] == 2  # untouched
     assert detail["session"]["job_state"] == "failed"

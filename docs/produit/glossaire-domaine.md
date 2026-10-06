@@ -29,7 +29,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Référence de modèle | `model_ref` | Dépôt et révision épinglée d'un modèle, choisis par un profil, jamais par un moteur. |
 | Profil | `profile` | Choix d'un moteur + réglages pour chaque étape. Un seul en V1 : `chaine-retenue`, défini par le moteur. |
 | Provenance | `provenance` | Moteur, version, modèle, réglages, durée, mémoire max, date d'une exécution. |
-| Locuteur | `speaker` | Voix distincte trouvée par la diarisation dans une séance (« Locuteur 3 »). Pas encore une personne. |
+| Locuteur | `speaker` | Voix distincte trouvée par la diarisation dans une séance (« Locuteur 3 »). Pas encore une personne. Dans l'interface, on dit « voix » pour le désigner (« Nommer cette voix », « Une nouvelle voix »). |
 | Rattachement | `speaker_assignment` | Lien d'un locuteur vers une personne, ou vers un personnage joué par une personne. |
 | Personnage | `character` | Rôle joué pendant une scène. Un locuteur peut être « personnage joué par Marie ». |
 | Empreinte vocale | `speaker_embedding` | Vecteur caractérisant la voix d'un locuteur. Conservée après purge. |
@@ -44,7 +44,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Tour bien attribué | `turns_correct` | Mesure du banc : tour de référence (≥ 1 s) dont la majorité des mots va à la bonne personne. |
 | Tour de parole | `turn` | Suite de mots consécutifs du même locuteur. Unité d'affichage. |
 | Référence de mesure | `annotation` | Ce qu'une personne a entendu sur une fenêtre d'une séance (texte et personne par tour, cochés « vérifié »), pour mesurer le moteur (`coulisses-banc juger`). Distincte des corrections : elle ne modifie aucun résultat et ne sert qu'à la mesure. |
-| Correction | `edit` | Modification utilisateur (texte, locuteur, phase). Stockée à part des sorties de moteurs. |
+| Correction | `edit` | Modification utilisateur (texte, locuteur, phase). Stockée à part des sorties de moteurs. Dans le code de l'interface : `EditRequest` (ce qu'on demande), `EditInfo` (l'historique). |
 | Vue corrigée | `corrected_view` | Sortie de l'exécution active avec les corrections appliquées. Ce qu'affiche l'app et ce que lisent les résumés. |
 | Report des corrections | `edit_carryover` | Réapplication des corrections sur une nouvelle exécution amont. Ce qui n'a pas pu être reporté est listé. |
 | Glossaire | `glossary` | Termes d'un espace : prénoms, jargon, formats, exercices, personnages récurrents, sigles. |
