@@ -1,78 +1,134 @@
 // Run with `npm test` (Node's own test runner, no extra dependency).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AttributedTranscript, AttributedWord } from "./api.ts";
-import { buildModel, turnAt, wordAt, type TurnRow } from "./transcript.ts";
+import type { CorrectedView, Speaker, Word } from "./api.ts";
+import {
+  buildModel,
+  replaceWord,
+  speakerTitle,
+  toggleSelection,
+  turnAt,
+  wordAt,
+  type TurnRow,
+} from "./transcript.ts";
 
-function word(
-  text: string,
-  start: number | null,
-  speaker: string | null,
-): AttributedWord {
+function word(text: string, start: number | null): Word {
   return {
     text,
     start,
     end: start == null ? null : start + 0.3,
     confidence: null,
-    speakers: speaker ? [speaker] : [],
-    speaker,
     uncertain: false,
+    corrected: false,
+    added: start == null,
+    suggestion: null,
   };
 }
 
-const TRANSCRIPT: AttributedTranscript = {
+function speaker(
+  label: string,
+  name: string,
+  extra: Partial<Speaker> = {},
+): Speaker {
+  return {
+    label,
+    number: null,
+    name,
+    named: false,
+    person_id: null,
+    character: null,
+    played_by: null,
+    color_slot: null,
+    seconds: 0,
+    turns: 0,
+    ...extra,
+  };
+}
+
+const VIEW: CorrectedView = {
   run_id: "attribute-1",
-  reference_source: "ref",
-  language: "fr",
-  words: [
-    word("bonjour", 0.0, "SPEAKER_07"),
-    word("à", 0.4, "SPEAKER_07"),
-    word("tous", 0.6, "SPEAKER_07"),
-    word("oui", 5.0, "SPEAKER_02"),
-    word("sans", null, "SPEAKER_02"),
-    word("temps", 5.8, "SPEAKER_02"),
-    word("encore", 9.0, "SPEAKER_07"),
-  ],
   turns: [
-    { speaker: "SPEAKER_07", first_word: 0, end_word: 3, start: 0.0, end: 0.9 },
-    { speaker: "SPEAKER_02", first_word: 3, end_word: 6, start: 5.0, end: 6.1 },
-    { speaker: "SPEAKER_07", first_word: 6, end_word: 7, start: 9.0, end: 9.3 },
+    {
+      index: 0,
+      speaker: "7",
+      start: 0.0,
+      end: 0.9,
+      edited: false,
+      words: [word("bonjour", 0), word("à", 0.4), word("tous", 0.6)],
+    },
+    {
+      index: 1,
+      speaker: "2",
+      start: 5.0,
+      end: 6.1,
+      edited: true,
+      words: [word("oui", 5.0), word("sans", null), word("temps", 5.8)],
+    },
+    {
+      index: 2,
+      speaker: "7",
+      start: 9.0,
+      end: 9.3,
+      edited: false,
+      words: [word("encore", 9.0)],
+    },
   ],
-  speakers: ["SPEAKER_02", "SPEAKER_07"],
-  untranscribed: [{ start: 2.0, end: 4.0, reason: "decoding loop" }],
+  speakers: [
+    speaker("7", "Locuteur 1"),
+    speaker("2", "Marie", { named: true, color_slot: 3 }),
+  ],
+  untranscribed: [{ start: 2.0, end: 4.0 }],
+  edits: [],
+  other_run_edits: 0,
+  word_count: 7,
+  timed_share: 6 / 7,
 };
 
-test("speakers are numbered by order of appearance, not by the engine's label", () => {
-  const model = buildModel(TRANSCRIPT);
-  assert.deepEqual(
-    model.speakers.map((s) => [s.label, s.name]),
-    [
-      ["SPEAKER_07", "Locuteur 1"],
-      ["SPEAKER_02", "Locuteur 2"],
-    ],
-  );
-  assert.equal(model.speakers[0].turns, 2);
+test("each line carries its voice from the corrected view", () => {
+  const model = buildModel(VIEW);
+  const names = model.rows
+    .filter((r): r is TurnRow => r.kind === "turn")
+    .map((r) => r.speaker.name);
+  assert.deepEqual(names, ["Locuteur 1", "Marie", "Locuteur 1"]);
 });
 
-test("an untranscribed stretch sits between the turns around it", () => {
-  const kinds = buildModel(TRANSCRIPT).rows.map((r) => r.kind);
+test("an untranscribed stretch sits between the lines around it", () => {
+  const kinds = buildModel(VIEW).rows.map((r) => r.kind);
   assert.deepEqual(kinds, ["turn", "untranscribed", "turn", "turn"]);
 });
 
-test("the share of timed words counts only measured times", () => {
-  assert.equal(buildModel(TRANSCRIPT).timedShare, 6 / 7);
-});
-
-test("the turn heard is the last one started, none in a long silence", () => {
-  const model = buildModel(TRANSCRIPT);
-  assert.equal(turnAt(model, 0.5)?.index, 0);
-  assert.equal(turnAt(model, 5.2)?.index, 1);
+test("the line heard is the last one started, none in a long silence", () => {
+  const model = buildModel(VIEW);
+  assert.equal(turnAt(model, 0.5)?.turn.index, 0);
+  assert.equal(turnAt(model, 5.2)?.turn.index, 1);
   assert.equal(turnAt(model, 3.5), null);
 });
 
 test("a word without a measured time is never the current word (P2)", () => {
-  const row = buildModel(TRANSCRIPT).rows[2] as TurnRow;
-  assert.equal(row.words[1].text, "sans");
+  const row = buildModel(VIEW).rows[2] as TurnRow;
+  assert.equal(row.turn.words[1].text, "sans");
   assert.equal(wordAt(row, 5.5), 0); // still "oui": "sans" has no time to be placed at
   assert.equal(wordAt(row, 5.9), 2);
+});
+
+test("a character shows who plays it", () => {
+  assert.equal(
+    speakerTitle(
+      speaker("4", "Le marchand", { played_by: "Marie", named: true }),
+    ),
+    "Le marchand · joué par Marie",
+  );
+});
+
+test("a click selects one line, Shift-click the whole range", () => {
+  const order = [0, 1, 2, 3, 4];
+  const one = toggleSelection(new Set(), order, 1, null);
+  assert.deepEqual([...one], [1]);
+  const range = toggleSelection(one, order, 3, 1);
+  assert.deepEqual([...range].sort(), [1, 2, 3]);
+  assert.deepEqual([...toggleSelection(range, order, 2, null)].sort(), [1, 3]);
+});
+
+test("accepting a suggestion replaces only that word", () => {
+  assert.equal(replaceWord([{ text: "Bonjour" }, { text: "Kathy" }], 1, "Cathy"), "Bonjour Cathy");
 });

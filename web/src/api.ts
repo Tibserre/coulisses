@@ -7,11 +7,45 @@ export interface Session {
   title: string | null;
   recorded_at: string;
   created_at: string;
-  attendee_count: number | null;
+  space_id: number;
+  space_name: string;
+  /** People checked as present. */
+  attendee_ids: number[];
+  /** People present whom nobody named, in addition to the checked ones. */
+  unnamed_attendees: number | null;
+  /** Minimum of voices asked of the engine by the latest processing (P3). */
+  min_voices: number | null;
   reference_source_id: string;
   duration_s: number | null;
   job_state: JobState | null;
   job_error: string | null;
+}
+
+export interface Space {
+  id: number;
+  name: string;
+  voice_recognition: boolean;
+  archived: boolean;
+}
+
+export interface Person {
+  id: number;
+  space_id: number;
+  kind: "member" | "guest";
+  name: string;
+  role: string | null;
+  /** Palette slot, the same from one session to the next. */
+  color_slot: number;
+  archived: boolean;
+}
+
+export interface GlossaryEntry {
+  id: number;
+  space_id: number;
+  term: string;
+  category: string | null;
+  variants: string[];
+  archived: boolean;
 }
 
 export interface AudioSource {
@@ -81,41 +115,75 @@ export interface AppInfo {
   processing_error: string | null;
 }
 
-/** Engine output (attributed-transcript.schema.json). Times in seconds, or null when
- *  not measured: never estimated (P2). */
-export interface AttributedWord {
+/** The corrected view: the engine's « who said what » with the user's corrections
+ *  applied by the service. Times are measured or null, never estimated (P2). */
+export interface Word {
   text: string;
   start: number | null;
   end: number | null;
   confidence: number | null;
-  speakers: string[];
-  speaker: string | null;
   uncertain: boolean;
+  corrected: boolean;
+  /** Added by hand: no measured time of its own. */
+  added: boolean;
+  /** A glossary term this word is a known wrong spelling of. */
+  suggestion: string | null;
 }
 
 export interface Turn {
+  /** Index in the engine's run: what corrections point at. */
+  index: number;
   speaker: string | null;
-  first_word: number;
-  end_word: number;
   start: number | null;
   end: number | null;
+  words: Word[];
+  edited: boolean;
 }
 
-export interface UntranscribedSpan {
-  start: number;
-  end: number;
-  reason: string;
+export interface Speaker {
+  label: string | null;
+  number: number | null;
+  name: string;
+  named: boolean;
+  person_id: number | null;
+  character: string | null;
+  played_by: string | null;
+  color_slot: number | null;
+  seconds: number;
+  turns: number;
 }
 
-export interface AttributedTranscript {
+export interface EditInfo {
+  id: number;
+  kind: string;
+  description: string;
+  created_at: string;
+  reverted: boolean;
+}
+
+export interface CorrectedView {
   run_id: string;
-  reference_source: string;
-  language: string;
-  words: AttributedWord[];
   turns: Turn[];
-  speakers: string[];
-  untranscribed: UntranscribedSpan[];
+  speakers: Speaker[];
+  untranscribed: { start: number; end: number }[];
+  edits: EditInfo[];
+  /** Corrections made on another run, not carried over yet: shown, never dropped. */
+  other_run_edits: number;
+  word_count: number;
+  timed_share: number;
 }
+
+export type EditRequest =
+  | {
+      kind: "assign_speaker";
+      speaker: string;
+      person_id?: number | null;
+      name?: string | null;
+      character?: string | null;
+    }
+  | { kind: "merge_speakers"; source: string; target: string }
+  | { kind: "reassign_turns"; turns: number[]; target?: string | null }
+  | { kind: "edit_text"; turn: number; text: string };
 
 export type Provenance = Record<string, unknown> & {
   run_id: string;
@@ -148,10 +216,19 @@ async function readError(response: Response): Promise<ServiceError> {
   );
 }
 
-async function getJson<T>(path: string): Promise<T> {
+async function send<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path);
+    response = await fetch(path, {
+      method,
+      headers:
+        body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
   } catch {
     throw new ServiceError(
       "Le service Coulisses ne répond pas. Est-il lancé ?",
@@ -161,39 +238,83 @@ async function getJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+const getJson = <T>(path: string) => send<T>("GET", path);
+const sessionPath = (id: string) => `/api/seances/${encodeURIComponent(id)}`;
+
 export const api = {
   info: () => getJson<AppInfo>("/api/etat"),
   sessions: () => getJson<Session[]>("/api/seances"),
-  session: (id: string) =>
-    getJson<SessionDetail>(`/api/seances/${encodeURIComponent(id)}`),
+  session: (id: string) => getJson<SessionDetail>(sessionPath(id)),
   transcript: (id: string) =>
-    getJson<AttributedTranscript>(
-      `/api/seances/${encodeURIComponent(id)}/transcript`,
-    ),
+    getJson<CorrectedView>(`${sessionPath(id)}/transcript`),
+  addEdit: (id: string, edit: EditRequest) =>
+    send<CorrectedView>("POST", `${sessionPath(id)}/corrections`, edit),
+  undo: (id: string, editId: number) =>
+    send<CorrectedView>("POST", `${sessionPath(id)}/corrections/${editId}/annuler`),
+  redo: (id: string, editId: number) =>
+    send<CorrectedView>("POST", `${sessionPath(id)}/corrections/${editId}/retablir`),
+  setAttendees: (id: string, personIds: number[], unnamed: number | null) =>
+    send<Session>("PUT", `${sessionPath(id)}/presents`, {
+      person_ids: personIds,
+      unnamed,
+    }),
   provenance: (id: string, runId: string) =>
     getJson<Provenance>(
-      `/api/seances/${encodeURIComponent(id)}/executions/${encodeURIComponent(runId)}/provenance`,
+      `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
-  audioUrl: (id: string) => `/api/seances/${encodeURIComponent(id)}/audio`,
-  async resume(id: string, attendees?: number): Promise<Session> {
-    const response = await fetch(`/api/seances/${encodeURIComponent(id)}/reprendre`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(attendees != null ? { presents: attendees } : {}),
-    });
-    if (!response.ok) throw await readError(response);
-    return (await response.json()) as Session;
-  },
+  audioUrl: (id: string) => `${sessionPath(id)}/audio`,
+  resume: (id: string, attendees?: number) =>
+    send<Session>(
+      "POST",
+      `${sessionPath(id)}/reprendre`,
+      attendees != null ? { presents: attendees } : {},
+    ),
+
+  spaces: () => getJson<Space[]>("/api/espaces"),
+  createSpace: (name: string) => send<Space>("POST", "/api/espaces", { name }),
+  updateSpace: (
+    id: number,
+    changes: Partial<Pick<Space, "name" | "voice_recognition" | "archived">>,
+  ) => send<Space>("PATCH", `/api/espaces/${id}`, changes),
+  people: (spaceId: number) =>
+    getJson<Person[]>(`/api/espaces/${spaceId}/personnes`),
+  addPerson: (
+    spaceId: number,
+    person: { name: string; kind: Person["kind"]; role?: string | null },
+  ) => send<Person>("POST", `/api/espaces/${spaceId}/personnes`, person),
+  updatePerson: (
+    id: number,
+    changes: Partial<Pick<Person, "name" | "role" | "kind" | "archived">>,
+  ) => send<Person>("PATCH", `/api/personnes/${id}`, changes),
+  glossary: (spaceId: number) =>
+    getJson<GlossaryEntry[]>(`/api/espaces/${spaceId}/glossaire`),
+  addEntry: (
+    spaceId: number,
+    entry: { term: string; category?: string | null; variants?: string[] },
+  ) => send<GlossaryEntry>("POST", `/api/espaces/${spaceId}/glossaire`, entry),
+  updateEntry: (
+    id: number,
+    changes: Partial<
+      Pick<GlossaryEntry, "term" | "category" | "variants" | "archived">
+    >,
+  ) => send<GlossaryEntry>("PATCH", `/api/glossaire/${id}`, changes),
+
   /** Upload with progress: recordings of two hours weigh hundreds of megabytes. */
   importRecording(
     file: File,
-    attendees: number | null,
+    who: {
+      spaceId: number | null;
+      personIds: number[];
+      unnamed: number | null;
+    },
     onProgress: (fraction: number) => void,
   ): Promise<{ id: string }> {
     return new Promise((resolve, reject) => {
       const form = new FormData();
       form.append("fichier", file, file.name);
-      if (attendees != null) form.append("presents", String(attendees));
+      if (who.spaceId != null) form.append("espace", String(who.spaceId));
+      for (const id of who.personIds) form.append("presents", String(id));
+      if (who.unnamed != null) form.append("non_nommes", String(who.unnamed));
       form.append("date_fichier_ms", String(file.lastModified));
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/seances");
