@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
@@ -54,8 +54,18 @@ function ModelSelect({
   );
 }
 
-/** The « Résumé » tab: the latest summary, the ones before it, and how to make another. */
-export function SummaryPanel({ sessionId, spaceId }: { sessionId: string; spaceId: number }) {
+/** The « Résumé » tab: the latest summary, the ones before it, and how to make another.
+ *  `transcriptKey` changes with the corrections in force (or a new run): staleness is computed
+ *  by the service, so the list is asked again each time. */
+export function SummaryPanel({
+  sessionId,
+  spaceId,
+  transcriptKey,
+}: {
+  sessionId: string;
+  spaceId: number;
+  transcriptKey: string;
+}) {
   const dev = useDevMode();
   const [data, setData] = useState<Generations | null>(null);
   const [actions, setActions] = useState<ActionInfo[]>([]);
@@ -88,6 +98,13 @@ export function SummaryPanel({ sessionId, spaceId }: { sessionId: string; spaceI
       (e: Error) => setError(e.message),
     );
   }, [refresh, spaceId]);
+
+  const seenKey = useRef(transcriptKey);
+  useEffect(() => {
+    if (seenKey.current === transcriptKey) return;
+    seenKey.current = transcriptKey;
+    void refresh();
+  }, [transcriptKey, refresh]);
 
   const waiting =
     data?.pending.some((p) => p.state === "queued" || p.state === "running") ??

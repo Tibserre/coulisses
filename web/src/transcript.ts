@@ -133,3 +133,13 @@ export function toggleSelection(
   return next;
 }
 
+
+/** What a summary's staleness depends on, built as the service builds it (`_live_edits`):
+ *  the run, and the corrections in force. It changes on a correction, an undo and a redo. */
+export function liveEditsKey(view: Pick<CorrectedView, "run_id" | "edits">): string {
+  const live = view.edits
+    .filter((e) => !e.reverted)
+    .map((e) => e.id)
+    .sort((a, b) => a - b);
+  return `${view.run_id}:${live.join(",")}`;
+}

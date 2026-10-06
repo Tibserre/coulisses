@@ -25,7 +25,7 @@ import { SummaryPanel } from "../components/SummaryPanel.tsx";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
-import { buildModel, toggleSelection, turnAt, wordAt } from "../transcript.ts";
+import { buildModel, liveEditsKey, toggleSelection, turnAt, wordAt } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
@@ -317,7 +317,11 @@ export function SessionPage({ id }: { id: string }) {
                 <Tab value="summary" label="Résumé" />
               </TabList>
               {tab === "summary" ? (
-                <SummaryPanel sessionId={id} spaceId={session.space_id} />
+                <SummaryPanel
+                  sessionId={id}
+                  spaceId={session.space_id}
+                  transcriptKey={liveEditsKey(view)}
+                />
               ) : (
                 <>
               <KeyFigures view={view} model={model} duration={session.duration_s} dev={dev} />
