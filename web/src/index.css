@@ -863,33 +863,72 @@ button.cl-name {
   -webkit-user-select: text;
 }
 
-/* Hover tip of a word (confidence, glossary, added by hand): generated content, so it is
-   never part of the text typed into or copied. Shown after a short wait. */
-.cl-word[data-tip]:hover::before {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
-  padding: 4px 8px;
-  border-radius: var(--radius-inner);
-  background: var(--color-text-primary);
-  color: var(--color-background-body);
-  font-size: var(--font-size-xsm);
-  font-weight: var(--font-weight-normal);
-  font-style: normal;
-  line-height: 1.4;
-  white-space: nowrap;
-  pointer-events: none;
-  animation: cl-tip-in var(--duration-fast) var(--ease-standard) 300ms both;
+/* Hover tip of a word: a small label rises above it. For an unsure word, the engine's
+   confidence counts up from 0 (the number says how sure it was). Generated content, so it
+   is never part of the text typed into or copied. Shown after a short wait. */
+@property --cl-pct {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
 }
 
-@keyframes cl-tip-in {
+.cl-word[data-tip-kind]:hover::before {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 2;
+  padding: 1px 7px;
+  border-radius: var(--radius-inner);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-low), 0 0 0 1px var(--color-border);
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-xsm);
+  font-weight: var(--font-weight-semibold);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: cl-tip-rise var(--duration-medium) var(--ease-standard) 250ms both;
+}
+
+.cl-word[data-tip-kind="suggestion"]:hover::before {
+  content: attr(data-tip);
+  color: var(--color-accent);
+}
+
+.cl-word[data-tip-kind="added"]:hover::before {
+  content: attr(data-tip);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-word[data-tip-kind="confidence"]:hover::before {
+  counter-reset: cl-pct var(--cl-pct);
+  content: counter(cl-pct) " %";
+  color: var(--coulisses-word-uncertain);
+  animation:
+    cl-tip-rise var(--duration-medium) var(--ease-standard) 250ms both,
+    cl-count var(--duration-medium) var(--ease-standard) 250ms both;
+}
+
+@keyframes cl-tip-rise {
   from {
     opacity: 0;
+    transform: translate(-50%, 4px);
   }
   to {
     opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes cl-count {
+  from {
+    --cl-pct: 0;
+  }
+  to {
+    --cl-pct: var(--cl-conf);
   }
 }

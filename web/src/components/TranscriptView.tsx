@@ -44,28 +44,33 @@ export function inkOf(speaker: Speaker): string {
  *  words (a native title does not show inside an editable line). */
 function Word({ word, isCurrent }: { word: WordData; isCurrent: boolean }) {
   const unsure = word.confidence != null && word.confidence < UNSURE_BELOW;
-  const title = word.suggestion
-    ? `Peut-être « ${word.suggestion} » (glossaire)`
-    : word.added
-      ? "Ajouté à la main, sans horodatage mesuré"
-      : unsure
-        ? `Mot peu sûr, confiance ${Math.round((word.confidence ?? 0) * 100)} %`
-        : undefined;
+  // One tip per word, the most useful first: what to write, then how it was written,
+  // then how sure the engine was. Screen readers get the same through aria-label.
+  const tip: { kind: string; text?: string; label: string; percent?: number } | null =
+    word.suggestion
+      ? { kind: "suggestion", text: `→ ${word.suggestion}`, label: `Peut-être « ${word.suggestion} »` }
+      : word.added
+        ? { kind: "added", text: "ajouté", label: "Ajouté à la main, sans horodatage mesuré" }
+        : unsure
+          ? {
+              kind: "confidence",
+              percent: Math.round((word.confidence ?? 0) * 100),
+              label: `Mot peu sûr, confiance ${Math.round((word.confidence ?? 0) * 100)} %`,
+            }
+          : null;
   return (
     <span
       className="cl-word"
       data-unsure={unsure || undefined}
       data-added={word.added || undefined}
       data-suggestion={word.suggestion ? true : undefined}
-      data-tip={title}
+      data-tip-kind={tip?.kind}
+      data-tip={tip?.text}
+      aria-description={tip?.label}
+      style={tip?.percent != null ? ({ "--cl-conf": tip.percent } as React.CSSProperties) : undefined}
     >
       {isCurrent && (
-        <motion.span
-          layoutId="mot-courant"
-          className="cl-word__current"
-          transition={GLIDE}
-          aria-hidden
-        />
+        <motion.span layoutId="mot-courant" className="cl-word__current" transition={GLIDE} aria-hidden />
       )}
       {word.text}
     </span>
