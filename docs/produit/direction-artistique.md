@@ -105,7 +105,7 @@ La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/we
 - le nom en petites capitales dans l'encre du participant, puis la réplique ;
 - pas de pastille ni d'avatar dans le texte ;
 - la réplique en cours a son horodatage en brique ; le mot en cours est surligné. Aucun trait de couleur sur le bord (retour de l'utilisateur du 2026-10-06) ;
-- le texte d'une réplique se modifie directement, comme dans un document : un fond très léger au survol et pendant la saisie ;
+- le texte d'une réplique se modifie directement, comme dans Notion : ni cadre, ni fond, ni contour, au survol comme pendant la saisie ; seul le curseur (brique) montre où l'on écrit ;
 - un titre de chapitre, centré entre deux filets, à chaque changement de chapitre ;
 - une note prise à la main s'intercale dans une ligne atténuée, en italique, avec son icône ;
 - un mot peu sûr est souligné en pointillé, avec sa confiance au survol ;

@@ -823,24 +823,12 @@ button.cl-name:hover {
 
 /* --------------------------------------------------------- Typed into lines --- */
 
-/* Lines are typed into directly, like a document: a faint ground on hover and while
-   typing, never a coloured edge (art direction: no accent bar on one side). */
+/* Lines are typed into directly, like a document (Notion): no box, no ground, no
+   outline, while hovering or typing. Only the caret shows where one writes. */
 .cl-words[contenteditable] {
-  margin-inline: calc(-1 * var(--spacing-2));
-  padding-inline: var(--spacing-2);
-  border-radius: var(--radius-inner);
   outline: none;
   cursor: text;
-  transition: background-color var(--duration-fast) var(--ease-standard);
-}
-
-.cl-words[contenteditable]:hover {
-  background: var(--color-background-muted);
-}
-
-.cl-words[contenteditable]:focus {
-  background: var(--color-background-surface);
-  box-shadow: 0 0 0 1px var(--color-border), var(--shadow-low);
+  caret-color: var(--color-accent);
 }
 
 /* The line being heard: its time in brick and its current word lit; nothing else. */
