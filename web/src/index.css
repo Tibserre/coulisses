@@ -932,3 +932,119 @@ button.cl-name {
     --cl-pct: var(--cl-conf);
   }
 }
+
+/* -------------------------------------------------------------- Summaries --- */
+
+.cl-side .astryx-tab-list,
+.cl-side [role="tablist"] {
+  margin-bottom: calc(-1 * var(--spacing-4));
+}
+
+.cl-title {
+  margin: 0;
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-3xl, 2rem);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  outline: none;
+  cursor: text;
+  caret-color: var(--color-accent);
+}
+
+.cl-title__error {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+}
+
+.cl-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+}
+
+.cl-summary__doc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-summary__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+.cl-summary__head p {
+  margin: 0;
+}
+
+.cl-summary__tools {
+  display: flex;
+  gap: var(--spacing-1);
+}
+
+a.cl-iconbtn {
+  color: var(--color-text-secondary);
+}
+
+.cl-summary__stale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+}
+
+.cl-summary__body {
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+.cl-summary__new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-summary__new p {
+  margin: 0;
+}
+
+.cl-summary__history ul {
+  list-style: none;
+  margin: var(--spacing-2) 0 0;
+  padding: 0;
+}
+
+.cl-summary__history button {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: var(--spacing-1-5, 6px) var(--spacing-2);
+  border-radius: var(--radius-inner);
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cl-summary__history button:hover,
+.cl-summary__history button[aria-current="true"] {
+  background: var(--color-background-muted);
+}
+
+.cl-prompts {
+  margin: 0;
+  padding: var(--spacing-4) var(--spacing-5);
+  max-height: 70dvh;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: var(--font-size-xsm);
+}

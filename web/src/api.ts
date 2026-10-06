@@ -208,6 +208,68 @@ export type Provenance = Record<string, unknown> & {
   error: { type: string; message: string; traceback: string } | null;
 };
 
+export interface Generation {
+  id: number;
+  run_id: string;
+  action_ref: string;
+  action_name: string;
+  model: string;
+  created_at: string;
+  /** "unique", or "sections": summarised in parts, then merged. */
+  strategy: string;
+  calls: number;
+  duration_s: number;
+  /** null when the output file is missing (moved or deleted in the Finder). */
+  output: string | null;
+  /** Corrections were made, or the transcript changed, since it was generated. */
+  stale: boolean;
+  /** Why it cannot be read as usual (missing or unreadable files). */
+  problem: string | null;
+}
+
+export interface PendingGeneration {
+  job_id: number;
+  action_ref: string;
+  action_name: string;
+  model: string;
+  state: JobState;
+  error: string | null;
+}
+
+export interface Generations {
+  generations: Generation[];
+  pending: PendingGeneration[];
+}
+
+export interface InstalledModel {
+  name: string;
+  size_bytes: number;
+  digest: string;
+  family: string | null;
+  parameter_size: string | null;
+}
+
+export interface ModelsInfo {
+  reachable: boolean;
+  error: string | null;
+  default: string;
+  models: InstalledModel[];
+}
+
+export interface ActionInfo {
+  ref: string;
+  name: string;
+  description: string;
+}
+
+export interface SpaceAction {
+  action_ref: string;
+  auto_run: boolean;
+  model: string | null;
+}
+
+export type SpaceTemplate = "impro" | "reunion" | "vide";
+
 export class ServiceError extends Error {}
 
 async function readError(response: Response): Promise<ServiceError> {
@@ -279,7 +341,28 @@ export const api = {
     ),
 
   spaces: () => getJson<Space[]>("/api/espaces"),
-  createSpace: (name: string) => send<Space>("POST", "/api/espaces", { name }),
+  createSpace: (name: string, template: SpaceTemplate) =>
+    send<Space>("POST", "/api/espaces", { name, template }),
+  spaceActions: (spaceId: number) => getJson<SpaceAction[]>(`/api/espaces/${spaceId}/actions`),
+  setSpaceAction: (spaceId: number, ref: string, autoRun: boolean, model: string | null) =>
+    send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/actions/${encodeURIComponent(ref)}`, {
+      auto_run: autoRun,
+      model,
+    }),
+  models: () => getJson<ModelsInfo>("/api/modeles"),
+  setModel: (model: string) => send<ModelsInfo>("PUT", "/api/reglages/modele", { model }),
+  actions: () => getJson<ActionInfo[]>("/api/actions"),
+  generations: (id: string) => getJson<Generations>(`${sessionPath(id)}/resumes`),
+  requestGeneration: (id: string, actionRef: string, model: string | null) =>
+    send<Generations>("POST", `${sessionPath(id)}/resumes`, { action_ref: actionRef, model }),
+  async generationPrompts(id: string, generationId: number): Promise<string> {
+    const response = await fetch(`${sessionPath(id)}/resumes/${generationId}/prompts`);
+    if (!response.ok) throw await readError(response);
+    return response.text();
+  },
+  renameSession: (id: string, title: string) => send<Session>("PATCH", sessionPath(id), { title }),
+  exportUrl: (id: string, contenu: "resume" | "transcript" | "tout", generationId?: number) =>
+    `${sessionPath(id)}/export?contenu=${contenu}${generationId != null ? `&resume=${generationId}` : ""}`,
   updateSpace: (
     id: number,
     changes: Partial<Pick<Space, "name" | "voice_recognition" | "archived">>,

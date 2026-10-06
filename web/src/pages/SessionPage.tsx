@@ -21,6 +21,9 @@ import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../components/ReviewSide.tsx";
 import { StageList } from "../components/StageList.tsx";
 import { GiveToPanel, TranscriptView, type Editing } from "../components/TranscriptView.tsx";
+import { SummaryPanel } from "../components/SummaryPanel.tsx";
+import { EditableTitle } from "../components/EditableTitle.tsx";
+import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
 import { buildModel, toggleSelection, turnAt, wordAt } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
@@ -50,6 +53,7 @@ export function SessionPage({ id }: { id: string }) {
   const [lastSelected, setLastSelected] = useState<number | null>(null);
   const [giving, setGiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<"overview" | "summary">("summary");
   const pb = usePlayback();
   const dev = useDevMode();
 
@@ -218,7 +222,13 @@ export function SessionPage({ id }: { id: string }) {
             <Text type="supporting">
               {session.space_name} · {detail?.source?.origin === "captured" ? "enregistrement capté" : "enregistrement importé"}
             </Text>
-            <Heading level={1}>{title}</Heading>
+            <EditableTitle
+              title={title}
+              onSave={async (value) => {
+                await api.renameSession(id, value);
+                await refresh();
+              }}
+            />
             <Text color="secondary">
               {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
               {present ? ` · ${plural(present, "présent", "présents")}` : ""}
@@ -302,6 +312,14 @@ export function SessionPage({ id }: { id: string }) {
               )}
             </div>
             <aside className="cl-side">
+              <TabList value={tab} onChange={(v) => setTab(v as "overview" | "summary")} hasDivider>
+                <Tab value="overview" label="Vue d'ensemble" />
+                <Tab value="summary" label="Résumé" />
+              </TabList>
+              {tab === "summary" ? (
+                <SummaryPanel sessionId={id} spaceId={session.space_id} />
+              ) : (
+                <>
               <KeyFigures view={view} model={model} duration={session.duration_s} dev={dev} />
               <Participants model={model} />
               <Attendees
@@ -324,6 +342,8 @@ export function SessionPage({ id }: { id: string }) {
                 </section>
               )}
               {dev && <SourceInfo detail={detail} />}
+                </>
+              )}
             </aside>
           </div>
           <PlayerBar model={model} pb={pb} current={currentRow} />

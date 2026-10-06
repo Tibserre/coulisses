@@ -5,7 +5,15 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { api, type GlossaryEntry, type Person, type Space } from "../api.ts";
+import {
+  api,
+  type ActionInfo,
+  type GlossaryEntry,
+  type Person,
+  type Space,
+  type SpaceAction,
+  type SpaceTemplate,
+} from "../api.ts";
 import { AppHeader } from "../components/AppHeader.tsx";
 import { speakerInk } from "../theme/shared.ts";
 
@@ -15,6 +23,7 @@ export function SpacesPage({ id }: { id: number | null }) {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [template, setTemplate] = useState<SpaceTemplate>("impro");
 
   const load = useCallback(async () => {
     try {
@@ -33,7 +42,7 @@ export function SpacesPage({ id }: { id: number | null }) {
 
   const create = async () => {
     try {
-      const space = await api.createSpace(newName);
+      const space = await api.createSpace(newName, template);
       setNewName("");
       await load();
       window.location.hash = `#/espaces/${space.id}`;
@@ -69,6 +78,14 @@ export function SpacesPage({ id }: { id: number | null }) {
             onChange={setNewName}
             onEnter={() => void create()}
           />
+          <label className="cl-select">
+            <span>Modèle de départ</span>
+            <select value={template} onChange={(e) => setTemplate(e.target.value as SpaceTemplate)}>
+              <option value="impro">Troupe d'impro : Résumé Impro après chaque séance</option>
+              <option value="reunion">Réunions de travail : compte rendu de réunion</option>
+              <option value="vide">Vide : aucun résumé automatique</option>
+            </select>
+          </label>
           <Button
             label="Créer l'espace"
             onClick={() => void create()}
@@ -177,7 +194,49 @@ function SpaceDetail({
         act={act}
       />
       <GlossarySection spaceId={space.id} entries={glossary} act={act} />
+      <AutoSummaries spaceId={space.id} onError={onError} />
     </div>
+  );
+}
+
+/** The summaries made after each processing in this space (ADR 0020). */
+function AutoSummaries({ spaceId, onError }: { spaceId: number; onError: (m: string | null) => void }) {
+  const [actions, setActions] = useState<ActionInfo[]>([]);
+  const [chosen, setChosen] = useState<SpaceAction[]>([]);
+  useEffect(() => {
+    Promise.all([api.actions(), api.spaceActions(spaceId)]).then(
+      ([all, mine]) => {
+        setActions(all);
+        setChosen(mine);
+      },
+      (e: Error) => onError(e.message),
+    );
+  }, [spaceId, onError]);
+  return (
+    <section className="cl-space__section">
+      <Heading level={3}>Résumés automatiques</Heading>
+      <Text type="supporting">Faits après chaque traitement d'une séance de cet espace, avec le modèle choisi dans le résumé.</Text>
+      {actions.map((a) => {
+        const current = chosen.find((c) => c.action_ref === a.ref);
+        return (
+          <Switch
+            key={a.ref}
+            label={a.name}
+            description={a.description}
+            value={current?.auto_run ?? false}
+            onChange={(on) =>
+              void api.setSpaceAction(spaceId, a.ref, on, current?.model ?? null).then(
+                (updated) => {
+                  setChosen(updated);
+                  onError(null);
+                },
+                (e: Error) => onError(e.message),
+              )
+            }
+          />
+        );
+      })}
+    </section>
   );
 }
 

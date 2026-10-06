@@ -32,8 +32,15 @@ from coulisses.api import (
 )
 from pydantic import BaseModel
 
-from coulisses_app import jobs
+from coulisses_app import jobs, settings
 from coulisses_app.paths import DataDir
+from coulisses_app.prompting.generate import (
+    TITLE_REF,
+    GenerationFailedError,
+    ModelClient,
+    generate,
+)
+from coulisses_app.prompting.ollama import OllamaClient
 from coulisses_app.sessions import reference_audio_path
 from coulisses_app.storage.db import connect, now_iso
 
@@ -106,8 +113,10 @@ class Processor:
         *,
         models: Path | None = None,
         engine_stage: Callable[[str, Path | None], RunStage] = execute_stage,
+        model_client: ModelClient | None = None,
     ) -> None:
         self.data = data
+        self.model_client: ModelClient = model_client or OllamaClient()
         self.chain = chain
         self.models = models
         self._engine_stage = engine_stage
@@ -161,6 +170,8 @@ class Processor:
     # -- one job ------------------------------------------------------------------------
 
     def run_job(self, job: jobs.Job) -> ChainJobResult:
+        if isinstance(job.params, jobs.GenerationParams):
+            return self._run_generation_job(job, job.params)
         log.info("job %s: chain for session %s", job.id, job.session_id)
         interrupted: list[str] = []
         try:
@@ -176,6 +187,51 @@ class Processor:
                 # interrupted runs keep their provenance (Interrupted).
                 jobs.requeue(conn, job.id)
                 log.info("job %s back in the queue (application stopping)", job.id)
+            else:
+                jobs.finish(conn, job.id, error=result.error)
+                if result.error is None:
+                    self._queue_generations(conn, job.session_id)
+        finally:
+            conn.close()
+        return result
+
+    def _queue_generations(self, conn: sqlite3.Connection, session_id: str) -> None:
+        """After a successful chain: the title, then the summaries the space runs
+        automatically (ADR 0020), with the model chosen for each or the default one."""
+        space_id = conn.execute(
+            "SELECT space_id FROM session WHERE id = ?", (session_id,)
+        ).fetchone()[0]
+        default = settings.default_model(conn)
+        with conn:
+            jobs.enqueue_generation(conn, session_id, action_ref=TITLE_REF, model=default)
+            for action_ref, model in settings.auto_actions(conn, space_id):
+                jobs.enqueue_generation(
+                    conn, session_id, action_ref=action_ref, model=model or default
+                )
+        self._wake.set()
+
+    def _run_generation_job(self, job: jobs.Job, params: jobs.GenerationParams) -> ChainJobResult:
+        log.info("job %s: %s for session %s", job.id, params.action_ref, job.session_id)
+        try:
+            prov = generate(
+                self.data,
+                job.session_id,
+                params.action_ref,
+                params.model,
+                self.model_client,
+                job_id=job.id,
+            )
+            result = ChainJobResult(error=prov.error.message if prov.error else None)
+        except GenerationFailedError as exc:
+            result = ChainJobResult(error=str(exc))
+        # A job never takes the processing down: its error is recorded and shown (P8).
+        except Exception as exc:
+            log.exception("job %s failed", job.id)
+            result = ChainJobResult(error=f"{type(exc).__name__} : {exc}")
+        conn = connect(self.data)
+        try:
+            if self._stopping.is_set() and result.error:
+                jobs.requeue(conn, job.id)
             else:
                 jobs.finish(conn, job.id, error=result.error)
         finally:
@@ -265,6 +321,7 @@ class Processor:
             return prov, used
 
         params = job.params
+        assert isinstance(params, jobs.ChainParams)
         runs = run_chain(
             self.chain,
             ChainInput(audio=audio, attendees=params.attendees, glossary=tuple(params.glossary)),
@@ -315,6 +372,21 @@ class Processor:
 
     def _close(self, conn: sqlite3.Connection, session_id: str, run_id: str) -> str | None:
         folder = self.data.run_dir(session_id, run_id)
+        producer = conn.execute("SELECT producer FROM run WHERE id = ?", (run_id,)).fetchone()
+        if producer is not None and producer[0] == "app":
+            # The application's own run (a generation): its folder stays as it was left,
+            # the database says it was interrupted; the job runs it again.
+            with conn:
+                conn.execute(
+                    "UPDATE run SET status = 'failed', finished_at = ?, error_summary = ?"
+                    " WHERE id = ?",
+                    (
+                        now_iso(),
+                        "Interrompue : Coulisses s'est arrêté pendant la génération",
+                        run_id,
+                    ),
+                )
+            return None
         prov = read_provenance(folder) if folder.is_dir() else None
         if prov is None and not (folder / "spec.json").is_file():
             with conn:

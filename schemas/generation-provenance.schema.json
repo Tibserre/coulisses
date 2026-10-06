@@ -1,0 +1,281 @@
+{
+  "$defs": {
+    "Call": {
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "unique",
+            "section",
+            "consolidation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "covers": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covers"
+        },
+        "prompt_file": {
+          "title": "Prompt File",
+          "type": "string"
+        },
+        "response_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response File"
+        },
+        "estimated_prompt_tokens": {
+          "title": "Estimated Prompt Tokens",
+          "type": "integer"
+        },
+        "prompt_eval_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Eval Count"
+        },
+        "eval_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Eval Count"
+        },
+        "done_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Done Reason"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        }
+      },
+      "required": [
+        "index",
+        "kind",
+        "prompt_file",
+        "estimated_prompt_tokens"
+      ],
+      "title": "Call",
+      "type": "object"
+    },
+    "GenerationError": {
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "title": "GenerationError",
+      "type": "object"
+    }
+  },
+  "description": "Published as `schemas/generation-provenance.schema.json`.",
+  "properties": {
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "stage": {
+      "enum": [
+        "summarize",
+        "title"
+      ],
+      "title": "Stage",
+      "type": "string"
+    },
+    "producer": {
+      "const": "app",
+      "default": "app",
+      "title": "Producer",
+      "type": "string"
+    },
+    "app_version": {
+      "title": "App Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "action_ref": {
+      "title": "Action Ref",
+      "type": "string"
+    },
+    "action_name": {
+      "title": "Action Name",
+      "type": "string"
+    },
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "model_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Model Digest"
+    },
+    "options": {
+      "additionalProperties": true,
+      "title": "Options",
+      "type": "object"
+    },
+    "strategy": {
+      "enum": [
+        "unique",
+        "sections"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    },
+    "source_run_id": {
+      "title": "Source Run Id",
+      "type": "string"
+    },
+    "edits_applied": {
+      "title": "Edits Applied",
+      "type": "integer"
+    },
+    "edit_ids": {
+      "default": [],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Edit Ids",
+      "type": "array"
+    },
+    "ollama_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ollama Version"
+    },
+    "calls": {
+      "items": {
+        "$ref": "#/$defs/Call"
+      },
+      "title": "Calls",
+      "type": "array"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "duration_s": {
+      "title": "Duration S",
+      "type": "number"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GenerationError"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "run_id",
+    "session_id",
+    "stage",
+    "app_version",
+    "status",
+    "action_ref",
+    "action_name",
+    "model",
+    "model_digest",
+    "options",
+    "strategy",
+    "source_run_id",
+    "edits_applied",
+    "calls",
+    "started_at",
+    "finished_at",
+    "duration_s"
+  ],
+  "title": "Provenance",
+  "type": "object"
+}

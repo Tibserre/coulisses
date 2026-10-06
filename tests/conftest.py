@@ -15,6 +15,7 @@ import pytest
 from coulisses.api import ChainConfig, StageConfig
 
 from coulisses_app.paths import DataDir
+from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaError
 from coulisses_app.storage.db import migrate
 
 FAKE_CHAIN = ChainConfig(
@@ -51,3 +52,50 @@ def data(tmp_path: Path) -> DataDir:
     data = DataDir(tmp_path / "donnees")
     migrate(data)
     return data
+
+
+class FakeModel:
+    """Stands for Ollama in the tests: no model, no network. Records every call."""
+
+    def __init__(self, answer: str = "## Décisions\n- On garde la fin.", *, down: bool = False):
+        self.answer = answer
+        self.down = down
+        self.calls: list[tuple[str, list[dict[str, str]], dict[str, object]]] = []
+        self.prompt_tokens = 1000
+        self.done_reason: str | None = "stop"
+        self.counted = True
+
+    def version(self) -> str | None:
+        return "0.0-essai"
+
+    def models(self) -> list[InstalledModel]:
+        if self.down:
+            raise OllamaError(
+                "Ollama ne répond pas sur 127.0.0.1:11434 : lancez l'application Ollama."
+            )
+        return [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
+
+    def chat(
+        self, model: str, messages: list[dict[str, str]], options: dict[str, object]
+    ) -> ChatAnswer:
+        if self.down:
+            raise OllamaError(
+                "Ollama ne répond pas sur 127.0.0.1:11434 : lancez l'application Ollama."
+            )
+        self.calls.append((model, messages, options))
+        return ChatAnswer(
+            content=self.answer,
+            prompt_eval_count=self.prompt_tokens if self.counted else None,
+            eval_count=50 if self.counted else None,
+            done_reason=self.done_reason,
+            total_duration_s=0.1,
+        )
+
+
+@pytest.fixture(autouse=True)
+def fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
+    """No test talks to the real Ollama: the processing gets this fake by default."""
+    fake = FakeModel()
+    monkeypatch.setattr("coulisses_app.processing.OllamaClient", lambda: fake)
+    monkeypatch.setattr("coulisses_app.api.OllamaClient", lambda: fake)
+    return fake

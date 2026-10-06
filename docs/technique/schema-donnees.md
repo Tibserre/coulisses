@@ -52,13 +52,13 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `marker` | `id`, `session_id*`, `kind*` (`scene`, `discussion`, `key_moment`), `at_s*`, `created_at*` | 4 (pose en direct : 6) |
 | `note` | `id`, `session_id*`, `at_s` (nul : note d'après séance), `text*`, `created_at*`, `updated_at*` | 5 (en direct : 6) |
 | `action` | `id`, `name*`, `description*`, `prompt*`, `based_on` (clé d'une action fournie ou id), `created_at*`, `updated_at*`, `archived_at` | 5 |
-| `generation` | `id`, `session_id*`, `run_id*`, `action_ref*` (clé d'action fournie ou id), `created_at*` | 3 |
+| `generation` | `id`, `session_id*`, `run_id*`, `action_ref*` (clé d'action fournie ou id), `created_at*` (migration 0003 ; provenance : `schemas/generation-provenance.schema.json`, ADR 0022) | 3 |
 | `action_preference` | `space_id*`, `action_ref*`, `model` (modèle local choisi pour l'action dans cet espace), `auto_run*` (lancée à la fin du traitement) | 3 |
 | `project` + `session.project_id` | `id`, `space_id*`, `name*`, `created_at*`, `archived_at` | 8 |
 | `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind`, `ref`, `text`. Cache reconstructible, jamais une source de vérité | 8 |
 | `session` (conservation) | `pinned*`, `retain_until` (prolongation), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) | 9 |
 | `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion`), `session_id*` (sans clé étrangère : la trace survit à la séance), `session_title`, `detail*` (JSON : fichiers supprimés, tailles) | 9 |
-| `app_setting` | `key*`, `value*` (JSON) : durée de conservation, préavis, dossier d'export | 8 |
+| `app_setting` | `key*`, `value*` (JSON) : modèle de génération choisi (étape 3), puis durée de conservation, préavis, dossier d'export | 3 |
 
 ## Ce qui n'est pas en base
 
