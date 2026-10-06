@@ -1,9 +1,9 @@
 /**
  * From the service's corrected view to what the review screen shows: one row per line,
- * untranscribed stretches in between, each line with its voice. Times are the engine's,
- * measured or absent: nothing here estimates one (P2).
+ * untranscribed stretches in between, a heading at each chapter, each line with its voice.
+ * Times are the engine's, measured or absent: nothing here estimates one (P2).
  */
-import type { CorrectedView, Speaker, Turn, Word } from "./api.ts";
+import type { CorrectedView, Phase, PhaseKind, Speaker, Turn, Word } from "./api.ts";
 
 export interface TurnRow {
   kind: "turn";
@@ -19,11 +19,23 @@ export interface GapRow {
   end: number;
 }
 
-export type Row = TurnRow | GapRow;
+export interface PhaseRow {
+  kind: "phase";
+  key: string;
+  phase: Phase;
+  /** 1 for the first chapter. */
+  number: number;
+  folded: boolean;
+  /** It starts at the session's first line: its cut cannot be removed. */
+  opensSession: boolean;
+}
+
+export type Row = TurnRow | GapRow | PhaseRow;
 
 export interface ReviewModel {
   rows: Row[];
   speakers: Speaker[];
+  phases: Phase[];
   /** Turn rows with a measured start, sorted, for finding the line being heard. */
   timed: TurnRow[];
   /** Speaker by label, for the lines. */
@@ -43,7 +55,20 @@ const UNKNOWN: Speaker = {
   turns: 0,
 };
 
-export function buildModel(view: CorrectedView): ReviewModel {
+/** How a chapter's kind is said in the interface. */
+export const KIND_LABEL: Record<PhaseKind, string> = {
+  scene: "Jeu",
+  discussion: "Discussion",
+  other: "Autre",
+};
+
+/** The chapter a line belongs to, if any. */
+export function phaseOf(phases: readonly Phase[], turn: number): Phase | null {
+  return phases.find((p) => p.turn <= turn && turn < p.end_turn) ?? null;
+}
+
+/** `folded`: first lines of the chapters shown folded (their lines are left out). */
+export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = new Set()): ReviewModel {
   const speakerOf = new Map<string | null, Speaker>(
     view.speakers.map((s) => [s.label, s]),
   );
@@ -59,23 +84,44 @@ export function buildModel(view: CorrectedView): ReviewModel {
     start: g.start,
     end: g.end,
   }));
+  const phases = view.phases ?? [];
+  const startOf = new Map(phases.map((p, i) => [p.turn, { phase: p, number: i + 1 }]));
   // Gaps go before the first line that starts after them; lines without a time keep
-  // their place in the engine's order.
+  // their place in the engine's order. A folded chapter shows its heading only.
   const rows: Row[] = [];
   let g = 0;
+  let hidden = false;
   for (const row of turnRows) {
     while (
       g < gaps.length &&
       row.turn.start != null &&
       gaps[g].start <= row.turn.start
-    )
-      rows.push(gaps[g++]);
-    rows.push(row);
+    ) {
+      const gap = gaps[g++];
+      if (!hidden) rows.push(gap);
+    }
+    const starts = startOf.get(row.turn.index);
+    if (starts) {
+      hidden = folded.has(starts.phase.turn);
+      rows.push({
+        kind: "phase",
+        key: `c${starts.phase.turn}`,
+        phase: starts.phase,
+        number: starts.number,
+        folded: hidden,
+        opensSession: starts.phase.turn === view.turns[0]?.index,
+      });
+    }
+    if (!hidden) rows.push(row);
   }
-  while (g < gaps.length) rows.push(gaps[g++]);
+  while (g < gaps.length) {
+    const gap = gaps[g++];
+    if (!hidden) rows.push(gap);
+  }
   return {
     rows,
     speakers: view.speakers,
+    phases,
     timed: turnRows.filter((r) => r.turn.start != null),
     speakerOf,
   };
@@ -134,14 +180,17 @@ export function toggleSelection(
 }
 
 
-/** What a summary's staleness depends on, built as the service builds it (`_live_edits`):
- *  the run, and the corrections in force. It changes on a correction, an undo and a redo. */
-export function liveEditsKey(view: Pick<CorrectedView, "run_id" | "edits">): string {
+/** What a summary's staleness depends on, built as the service compares it: the run, the
+ *  corrections in force and the chapter detection. It changes on a correction, an undo, a
+ *  redo and a new detection. */
+export function liveEditsKey(
+  view: Pick<CorrectedView, "run_id" | "edits"> & Partial<Pick<CorrectedView, "phases_run_id">>,
+): string {
   const live = view.edits
     .filter((e) => !e.reverted)
     .map((e) => e.id)
     .sort((a, b) => a - b);
-  return `${view.run_id}:${live.join(",")}`;
+  return `${view.run_id}:${live.join(",")}:${view.phases_run_id ?? ""}`;
 }
 
 /** Below this, the transcription model doubted the word (engine README, « Scores par mot » :
@@ -171,4 +220,30 @@ export function wordTip(word: Pick<Word, "asr_confidence" | "added" | "suggestio
     return { kind: "confidence", percent, label: `Le modèle doutait de ce mot (sûr à ${percent} %)` };
   }
   return null;
+}
+
+export interface PhaseSpan {
+  phase: Phase;
+  number: number;
+  start: number;
+  end: number;
+}
+
+/** Each chapter's stretch of the recording, for the strip: from its first measured line
+ *  to the next chapter's (the last one to the end). A chapter none of whose lines has a
+ *  time has no place on it. */
+export function phaseSpans(view: Pick<CorrectedView, "phases" | "turns">, duration: number): PhaseSpan[] {
+  const firsts = view.phases.map((p) => {
+    if (p.start != null) return p.start;
+    const timed = view.turns.slice(p.turn, p.end_turn).find((t) => t.start != null);
+    return timed?.start ?? null;
+  });
+  const spans: PhaseSpan[] = [];
+  view.phases.forEach((phase, i) => {
+    const start = firsts[i];
+    if (start == null) return;
+    const next = firsts.slice(i + 1).find((s): s is number => s != null);
+    spans.push({ phase, number: i + 1, start, end: Math.max(start, next ?? duration) });
+  });
+  return spans;
 }

@@ -17,7 +17,7 @@
 | M4 | La déréverbération aide-t-elle la diarisation ? Et la transcription ? |
 | M5 | Le glossaire améliore-t-il vraiment la transcription des prénoms et du jargon (selon le moteur) ? |
 | M6 | Modèle de génération par défaut, `num_ctx` nécessaire, et seuil de bascule vers le résumé par sections. |
-| M7 | Méthode de détection des phases (règles sur le rythme des tours, classement par le LLM, mixte). |
+| M7 | ~~Méthode de détection des phases.~~ Tranché : le LLM local, en un appel (ADR 0024, 2026-10-06) ; à revoir si les corrections de chapitres sont nombreuses. |
 | M8 | Faut-il des réglages de diarisation différents en scène et en discussion ? |
 
 ## Risques identifiés

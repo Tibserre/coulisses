@@ -85,7 +85,11 @@ def test_after_processing_the_title_and_the_space_summaries_are_made(
     run_all(data, fake_model)
     session = client.get(f"/api/seances/{session_id}").json()["session"]
     assert session["title"] == "Scène du marché"  # cleaned: no quotes, no final point
-    assert len(fake_model.calls) == 2  # the title, then the space's Résumé Impro
+    title_options = fake_model.calls[1][2]
+    assert title_options["stop"] == ["\n"]  # one line: never cut for going on (P8)
+    # The chapters (JSON asked), the title, then the space's Résumé Impro.
+    assert len(fake_model.calls) == 3
+    assert fake_model.formats[0] is not None and fake_model.formats[1:] == [None, None]
     listed = client.get(f"/api/seances/{session_id}/resumes").json()
     assert [g["action_ref"] for g in listed["generations"]] == ["resume-impro"]
     assert listed["pending"] == []
@@ -130,10 +134,12 @@ def test_a_long_session_is_summarised_by_parts_then_merged(
     small = assembly.settings().model_copy(update={"num_ctx": 6000, "response_reserve": 500})
     monkeypatch.setattr(assembly, "settings", lambda: small)
     long_lines = [
-        (float(i * 10), f"[{i // 6}:{i % 6}0] Marie : " + "on reprend la scène du marché " * 10)
+        assembly.Line(
+            float(i * 10), f"[{i // 6}:{i % 6}0] Marie : " + "on reprend la scène du marché " * 10
+        )
         for i in range(60)
     ]
-    monkeypatch.setattr(assembly, "transcript_lines", lambda _view: long_lines)
+    monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: long_lines)
     fake_model.prompt_tokens = 100
     calls_before = len(fake_model.calls)
     prov = generate(data, session_id, "resume-impro", "modele-essai", fake_model)
@@ -317,7 +323,9 @@ def test_a_line_too_long_for_the_window_is_refused_not_cut(
     small = assembly.settings().model_copy(update={"num_ctx": 6000, "response_reserve": 500})
     monkeypatch.setattr(assembly, "settings", lambda: small)
     monkeypatch.setattr(
-        assembly, "transcript_lines", lambda _view: [(0.0, "[0:00] Marie : " + "mot " * 5000)]
+        assembly,
+        "transcript_lines",
+        lambda _view, **_: [assembly.Line(0.0, "[0:00] Marie : " + "mot " * 5000)],
     )
     prov = generate(data, session_id, "resume-impro", "modele-essai", fake_model)
     assert (
@@ -393,3 +401,19 @@ def test_a_summary_with_an_unreadable_provenance_is_listed_with_why(
     again = client.get(f"/api/seances/{session_id}/resumes").json()["generations"][0]
     assert again["problem"] and "provenance" in again["problem"]
     assert again["output"]  # the summary itself is still shown
+
+
+def test_a_title_followed_by_more_is_kept_even_when_the_rest_is_cut(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    fake_model.done_reason = "length"
+    fake_model.answer = "Le marché et la fin\n\n## Résumé\nLa séance a commencé par"
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    assert client.get(f"/api/seances/{session_id}").json()["session"]["title"] == (
+        "Le marché et la fin"
+    )
+    fake_model.answer = "Le marché et la f"  # the title itself cut: refused (P8)
+    assert generate(data, session_id, "titre", "modele-essai", fake_model).status == "failed"

@@ -248,7 +248,7 @@ def test_the_retained_chain_processes_a_real_recording(data: DataDir, recording:
     text = " ".join(w.text for w in transcript.words).lower()
     assert "bonjour" in text
     assert all(w.start is None or w.end is not None for w in transcript.words)
-    # The review underlines what the transcription model doubted (engine v1.4.0, ADR 0023).
+    # The review underlines what the model doubted (engine v1.4.0, its ADR 0023).
     assert any(w.asr_confidence is not None for w in transcript.words)
 
 

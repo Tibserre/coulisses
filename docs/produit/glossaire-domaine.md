@@ -18,7 +18,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Audio dérivé | `derived_audio` | Audio produit par une étape (rééchantillonné, déréverbéré, mixé). Purgé avec l'original. |
 | Marqueur | `marker` | Repère horodaté posé à la main : `scene`, `discussion`, `key_moment`. |
 | Note | `note` | Texte libre de l'utilisateur, horodaté (pendant) ou non (après). |
-| Phase | `phase` | Intervalle de la séance de type `scene`, `discussion` ou `other`. Détectée puis corrigeable. |
+| Phase | `phase` | Intervalle de la séance de type `scene`, `discussion` ou `other`. Détectée puis corrigeable. Dans l'interface : « chapitre », de type « Jeu », « Discussion » ou « Autre » (ADR 0024). |
 | Étape | `stage` | Un maillon du traitement : `prepare`, `dereverb`, `transcribe`, `align`, `diarize`, `attribute`, `segment_phases`, `title`, `summarize`. |
 | Exécution | `run` | Une exécution d'une étape sur une séance, avec ses entrées, sa sortie, sa provenance, son statut. Immuable une fois terminée. |
 | Exécution active | `active_run` | Pour une séance et une étape, l'exécution affichée et utilisée en aval. |

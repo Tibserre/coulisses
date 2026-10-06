@@ -1,13 +1,21 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Popover } from "@astryxdesign/core/Popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowRightLeft, Play, RotateCcw, SpellCheck } from "lucide-react";
+import {
+  ArrowRightLeft,
+  BookmarkPlus,
+  ChevronRight,
+  Ellipsis,
+  Play,
+  RotateCcw,
+  SpellCheck,
+} from "lucide-react";
 import { motion } from "motion/react";
-import type { EditRequest, Person, Speaker, Word as WordData } from "../api.ts";
-import { formatClock } from "../format.ts";
+import type { EditRequest, Person, PhaseKind, Speaker, Word as WordData } from "../api.ts";
+import { formatClock, plural } from "../format.ts";
 import { speakerInk } from "../theme/shared.ts";
-import type { ReviewModel, Row, TurnRow } from "../transcript.ts";
-import { isDoubtful, speakerTitle, wordTip } from "../transcript.ts";
+import type { PhaseRow, ReviewModel, Row, TurnRow } from "../transcript.ts";
+import { KIND_LABEL, isDoubtful, speakerTitle, wordTip } from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
 import { NamePanel } from "./NamePanel.tsx";
 
@@ -29,6 +37,8 @@ export interface Editing {
   setNamingTurn: (turn: number | null) => void;
   selected: ReadonlySet<number>;
   toggleSelected: (turn: number, extend: boolean) => void;
+  /** Fold or unfold a chapter, by its first line. */
+  toggleFolded: (turn: number) => void;
 }
 
 export function inkOf(speaker: Speaker): string {
@@ -260,8 +270,11 @@ const TurnLine = memo(function TurnLine({
   onSeek,
   editing,
   voices,
+  startsChapter,
 }: {
   row: TurnRow;
+  /** A chapter already starts at this line. */
+  startsChapter: boolean;
   /** Index of the word being heard in this line; null if it is not being heard. */
   currentWord: number | null;
   onSeek: (t: number) => void;
@@ -365,6 +378,19 @@ const TurnLine = memo(function TurnLine({
                 <SpellCheck size={14} strokeWidth={1.75} />
               </button>
             )}
+            {!startsChapter && (
+              <button
+                type="button"
+                className="cl-iconbtn"
+                aria-label="Commencer un chapitre ici"
+                title="Commencer un chapitre ici (C)"
+                onClick={() =>
+                  void editing.correct({ kind: "set_phase", turn: turn.index }).catch(() => undefined)
+                }
+              >
+                <BookmarkPlus size={14} strokeWidth={1.75} />
+              </button>
+            )}
             {turn.edited && (
               <button
                 type="button"
@@ -417,6 +443,152 @@ const TurnLine = memo(function TurnLine({
   );
 });
 
+const KINDS: PhaseKind[] = ["scene", "discussion", "other"];
+
+/** A chapter's title, typed into directly (no box): Enter or leaving it saves, Escape
+ *  gives back what was there. Refused, what was typed stays on screen (P8). */
+function PhaseTitle({ turn, title, correct }: { turn: number; title: string; correct: Editing["correct"] }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const cancel = useRef(false);
+  const typing = useRef(false);
+
+  // The text is set here, not rendered by React: typing changes the DOM.
+  useEffect(() => {
+    if (!typing.current && ref.current && ref.current.innerText !== title) ref.current.innerText = title;
+  }, [title]);
+
+  const finish = async () => {
+    typing.current = false;
+    const typed = (ref.current?.innerText ?? "").replace(/\s+/g, " ").trim();
+    if (cancel.current || typed === title) {
+      cancel.current = false;
+      if (ref.current) ref.current.innerText = title;
+      return;
+    }
+    await correct({ kind: "set_phase", turn, title: typed }).catch(() => undefined);
+  };
+
+  return (
+    <span
+      ref={ref}
+      className="cl-chapter__title"
+      contentEditable="plaintext-only"
+      suppressContentEditableWarning
+      spellCheck
+      lang="fr"
+      role="textbox"
+      aria-label="Titre du chapitre, modifiable"
+      data-placeholder="Nommer ce chapitre"
+      onFocus={() => {
+        typing.current = true;
+      }}
+      onBlur={() => void finish()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          ref.current?.blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancel.current = true;
+          ref.current?.blur();
+        } else if ((e.metaKey || e.ctrlKey) && e.key === "a" && ref.current) {
+          // Cmd-A selects the title, not the page (an inline editable does not on its own).
+          e.preventDefault();
+          const range = document.createRange();
+          range.selectNodeContents(ref.current);
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+      }}
+    />
+  );
+}
+
+/** A chapter's heading, centred between two rules: fold, title, kind, and its menu. */
+const PhaseHeading = memo(function PhaseHeading({
+  row,
+  onSeek,
+  editing,
+}: {
+  row: PhaseRow;
+  onSeek: (t: number) => void;
+  editing: Editing;
+}) {
+  const { phase, folded, opensSession } = row;
+  const [menu, setMenu] = useState(false);
+  const lines = phase.end_turn - phase.turn;
+  const change = (request: EditRequest) => {
+    setMenu(false);
+    void editing.correct(request).catch(() => undefined);
+  };
+  return (
+    <div className="cl-chapter" data-kind={phase.kind} data-folded={folded || undefined}>
+      <div className="cl-turn__margin">
+        <button
+          type="button"
+          className="cl-chapter__fold"
+          aria-expanded={!folded}
+          aria-label={folded ? "Déplier ce chapitre" : "Replier ce chapitre"}
+          title={folded ? "Déplier ce chapitre" : "Replier ce chapitre"}
+          onClick={() => editing.toggleFolded(phase.turn)}
+        >
+          <ChevronRight size={14} strokeWidth={2} aria-hidden />
+        </button>
+        <TimeLink t={phase.start} isCurrent={false} onSeek={onSeek} />
+      </div>
+      <div className="cl-chapter__body">
+        <span className="cl-chapter__rule" aria-hidden />
+        <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>
+        <PhaseTitle turn={phase.turn} title={phase.title} correct={editing.correct} />
+        {folded && <span className="cl-chapter__count">{plural(lines, "réplique", "répliques")}</span>}
+        <span className="cl-chapter__rule" aria-hidden />
+        <Popover
+          isOpen={menu}
+          onOpenChange={setMenu}
+          label="Ce chapitre"
+          width={260}
+          content={
+            <ul className="cl-namepanel__list" aria-label="Ce chapitre">
+              {KINDS.map((kind) => (
+                <li key={kind}>
+                  <button
+                    type="button"
+                    className="cl-namepanel__person"
+                    aria-current={kind === phase.kind || undefined}
+                    disabled={kind === phase.kind}
+                    onClick={() => change({ kind: "set_phase", turn: phase.turn, phase_kind: kind })}
+                  >
+                    <span className="cl-chapter__swatch" data-kind={kind} aria-hidden />
+                    <span>{KIND_LABEL[kind]}</span>
+                  </button>
+                </li>
+              ))}
+              {!opensSession && (
+                <li>
+                  <button
+                    type="button"
+                    className="cl-namepanel__person"
+                    onClick={() => change({ kind: "remove_phase", turn: phase.turn })}
+                    title="Ses répliques rejoignent le chapitre précédent"
+                  >
+                    <span />
+                    <span>Retirer cette coupure</span>
+                  </button>
+                </li>
+              )}
+            </ul>
+          }
+        >
+          <button type="button" className="cl-iconbtn cl-chapter__menu" aria-label="Changer ce chapitre" title="Changer ce chapitre">
+            <Ellipsis size={14} strokeWidth={1.75} />
+          </button>
+        </Popover>
+      </div>
+    </div>
+  );
+});
+
 /** The whole transcript, virtualised: two hours are thousands of lines (rules/web.md). */
 export function TranscriptView({
   model,
@@ -439,6 +611,7 @@ export function TranscriptView({
   });
 
   const currentIndex = current ? model.rows.indexOf(current.row) : -1;
+  const starts = new Set(model.phases.map((p) => p.turn));
 
   // An explicit move (click on a time, previous / next) brings the line to the centre.
   const lastMoves = useRef(pb.moves);
@@ -498,7 +671,10 @@ export function TranscriptView({
                   onSeek={pb.seek}
                   editing={editing}
                   voices={model.speakers}
+                  startsChapter={starts.has(row.turn.index)}
                 />
+              ) : row.kind === "phase" ? (
+                <PhaseHeading row={row} onSeek={pb.seek} editing={editing} />
               ) : (
                 <div className="cl-gap">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />

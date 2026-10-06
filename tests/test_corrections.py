@@ -154,7 +154,8 @@ def test_an_output_from_before_engine_1_4_reads_with_no_doubt_shown() -> None:
             "speakers": ["7"],
             "speaker": "7",
         },
-    ] + old_tail()
+        *old_tail(),
+    ]
     transcript = AttributedTranscript.model_validate(old)
     v = _replay(transcript, "attribute-a", [], PEOPLE, {})
     assert all(x.asr_confidence is None for t in v.turns for x in t.words)

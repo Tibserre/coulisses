@@ -202,3 +202,15 @@ def test_the_attendees_cannot_change_after_another_failure(
     detail = client.get(f"/api/seances/{session_id}").json()
     assert detail["session"]["min_voices"] == 2  # untouched
     assert detail["session"]["job_state"] == "failed"
+
+
+def test_the_page_is_checked_again_at_each_load_so_a_new_build_shows(
+    data: DataDir, tmp_path: Path
+) -> None:
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text("<!doctype html><title>Coulisses</title>")
+    (web / "assets" / "index-abc.js").write_text("console.log(1)")
+    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=web))
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert "cache-control" not in client.get("/assets/index-abc.js").headers

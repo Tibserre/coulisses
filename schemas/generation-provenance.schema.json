@@ -137,7 +137,8 @@
     "stage": {
       "enum": [
         "summarize",
-        "title"
+        "title",
+        "segment_phases"
       ],
       "title": "Stage",
       "type": "string"
@@ -211,6 +212,18 @@
       },
       "title": "Edit Ids",
       "type": "array"
+    },
+    "phases_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Phases Run Id"
     },
     "ollama_version": {
       "anyOf": [
