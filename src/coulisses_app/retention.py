@@ -407,6 +407,12 @@ def delete_session(data: DataDir, session_id: str) -> list[str]:
             files = _files(folder)
             log_id = _log(conn, "session_deletion", session_id, None, files, folder)
             conn.execute("DELETE FROM session WHERE id = ?", (session_id,))
+            # The search index is a cache, but it holds the session's text (no foreign key
+            # on a virtual table): it goes too.
+            conn.execute("DELETE FROM search_index WHERE session_id = ?", (session_id,))
+            # FTS5 keeps the words of deleted rows in its own pages until they are merged:
+            # merged now, so that no word of the session stays in the file.
+            conn.execute("INSERT INTO search_index (search_index) VALUES ('optimize')")
             conn.commit()
         except BaseException:
             conn.rollback()
@@ -443,6 +449,14 @@ def _forget_in_backups(data: DataDir, session_id: str) -> list[str]:
                 copy.execute("PRAGMA foreign_keys = ON")
                 with copy:
                     found = copy.execute("DELETE FROM session WHERE id = ?", (session_id,)).rowcount
+                    # Copies made since migration 0008 hold the search index too.
+                    if copy.execute(
+                        "SELECT 1 FROM sqlite_master WHERE name = 'search_index'"
+                    ).fetchone():
+                        found += copy.execute(
+                            "DELETE FROM search_index WHERE session_id = ?", (session_id,)
+                        ).rowcount
+                        copy.execute("INSERT INTO search_index (search_index) VALUES ('optimize')")
                 if found:
                     copy.execute("VACUUM")
             finally:

@@ -4,15 +4,17 @@ import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Text } from "@astryxdesign/core/Text";
-import { api, type PurgeAnnouncement, type RetentionInfo } from "../api.ts";
-import { AppHeader } from "../components/AppHeader.tsx";
+import { api, type AppInfo, type PurgeAnnouncement, type RetentionInfo } from "../api.ts";
+import { Switch } from "@astryxdesign/core/Switch";
+import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
+import { setDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
 import { useDevMode } from "../devMode.ts";
 
 /** Settings (spec §7.12), for now the audio's keeping (§7.10): how long, the notice, what
  *  is about to be purged, the log of every purge and deletion, the backups of the base. */
-export function SettingsPage() {
+export function SettingsPage({ info: about }: { info: AppInfo | null }) {
   const dev = useDevMode();
   const [info, setInfo] = useState<RetentionInfo | null>(null);
   const [days, setDays] = useState<number | null>(null);
@@ -50,7 +52,6 @@ export function SettingsPage() {
 
   return (
     <div className="cl-page">
-      <AppHeader current="settings" />
       <main className="cl-settings">
         <Heading level={2}>Réglages</Heading>
         {error && <Banner status="error" title="Refusé" description={error} isDismissable onDismiss={() => setError(null)} />}
@@ -138,6 +139,8 @@ export function SettingsPage() {
           </ul>
         </section>
 
+        <ExportFolderSection />
+
         <section className="cl-settings__section">
           <Heading level={3}>Sauvegardes de la base</Heading>
           <Text color="secondary">
@@ -157,6 +160,20 @@ export function SettingsPage() {
               </li>
             ))}
           </ul>
+        </section>
+        <section className="cl-settings__section">
+          <Heading level={3}>Mode développeur</Heading>
+          <Switch
+            label="Afficher les détails techniques"
+            description="Provenance des étapes, durées de calcul, mémoire, versions, erreurs brutes."
+            value={dev}
+            onChange={setDevMode}
+          />
+          {dev && about && (
+            <Text type="supporting">
+              Données : {about.data_dir} · Coulisses {about.app_version} · moteur {about.engine_version} · chaîne « {about.profile} »
+            </Text>
+          )}
         </section>
       </main>
     </div>

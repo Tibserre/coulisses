@@ -126,7 +126,7 @@ body {
 /* ----------------------------------------------------------- Review screen --- */
 
 .cl-review {
-  height: 100dvh;
+  height: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
@@ -2069,4 +2069,466 @@ a.cl-iconbtn {
   align-items: center;
   gap: var(--spacing-3);
   align-self: flex-start;
+}
+
+/* ------------------------------------------------------------------ Shell --- */
+/* The application's frame (ADR 0030): the bar at the top, the side column, the main pane;
+   only the side column and the main pane scroll. */
+
+.cl-shell {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.cl-topbar {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-topbar .cl-brand span {
+  font-family: var(--font-family-heading);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.03em;
+}
+
+.cl-shell__body {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.cl-shell[data-sidebar="fermee"] .cl-shell__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cl-shell__main {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.cl-shell__notice {
+  padding: var(--spacing-3) var(--spacing-6) 0;
+}
+
+/* -- the side column -- */
+
+.cl-sidebar {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding: var(--spacing-3) var(--spacing-2);
+  border-inline-end: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.cl-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-1) var(--spacing-2);
+  min-height: 30px;
+  border-radius: var(--radius-inner);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.cl-sidebar__link:hover,
+.cl-sidebar__link[aria-current="page"] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-sidebar__bottom {
+  margin-top: auto;
+}
+
+.cl-sidebar__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-3) var(--spacing-2) var(--spacing-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xsm);
+}
+
+.cl-sidebar__archived summary {
+  padding: var(--spacing-1) var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xsm);
+  cursor: pointer;
+}
+
+.cl-tree,
+.cl-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cl-tree__row {
+  --cl-indent: 0px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  min-height: 30px;
+  padding-inline: calc(var(--spacing-1) + var(--cl-indent)) var(--spacing-1);
+  border-radius: var(--radius-inner);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.cl-tree__row[data-level="1"] {
+  --cl-indent: 14px;
+}
+
+.cl-tree__row[data-level="2"] {
+  --cl-indent: 34px;
+}
+
+.cl-tree__row:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-tree__row[data-strong] {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-tree__row[data-muted] {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xsm);
+}
+
+.cl-tree__row[aria-current="page"],
+.cl-tree__row[data-current] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-tree__session[aria-current="page"] .cl-tree__label {
+  font-weight: var(--font-weight-medium);
+}
+
+/* A session dragged over a project: the whole row says it, never one side of it. */
+.cl-tree__row[data-drop] {
+  outline: 1px dashed var(--color-accent);
+  outline-offset: -1px;
+}
+
+.cl-tree__toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cl-tree__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cl-tree__session {
+  padding-inline-start: calc(var(--spacing-1) + var(--cl-indent) + 18px);
+}
+
+.cl-tree__count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xsm);
+}
+
+.cl-tree__actions {
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cl-tree__row:hover .cl-tree__actions,
+.cl-tree__row:focus-within .cl-tree__actions {
+  opacity: 1;
+}
+
+.cl-tree__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-inline: var(--spacing-1);
+  border-radius: var(--radius-full);
+  background: var(--color-text-secondary);
+}
+
+.cl-tree__dot[data-dot="processing"] {
+  background: var(--coulisses-chapter-main-ink);
+}
+
+.cl-tree__dot[data-dot="recording"] {
+  background: var(--color-accent);
+}
+
+.cl-tree__dot[data-dot="failed"] {
+  background: var(--color-warning);
+}
+
+.cl-tree__empty {
+  padding: var(--spacing-1) var(--spacing-2) var(--spacing-1) 34px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xsm);
+}
+
+.cl-tree__input {
+  width: calc(100% - 28px);
+  margin: 2px 0 2px 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-inner);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  outline: none;
+}
+
+.cl-tree__input:focus {
+  border-color: var(--color-accent);
+}
+
+/* -- the search -- */
+
+.cl-search {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  justify-self: center;
+}
+
+.cl-search__field {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 5px var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+  color: var(--color-text-secondary);
+}
+
+.cl-search__field:focus-within {
+  border-color: var(--color-accent);
+}
+
+.cl-search__field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.cl-search__field kbd {
+  font: inherit;
+  font-size: var(--font-size-xsm);
+  color: var(--color-text-secondary);
+}
+
+.cl-search__results {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  inset-inline: 0;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: var(--spacing-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  box-shadow: var(--shadow-med);
+}
+
+.cl-search__session {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-2) var(--spacing-1);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-search__meta {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-xsm);
+}
+
+.cl-search__hit {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--spacing-3);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-inner);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+}
+
+.cl-search__hit[aria-selected="true"] {
+  background: var(--color-background-muted);
+}
+
+.cl-search__where {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xsm);
+  padding-top: 2px;
+}
+
+.cl-search__excerpt mark {
+  background: var(--coulisses-word-current);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.cl-search__empty {
+  margin: 0;
+  padding: var(--spacing-2);
+  color: var(--color-text-secondary);
+}
+
+/* -- the main pane's pages -- */
+
+.cl-home,
+.cl-spacepage {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: var(--spacing-6) var(--spacing-8) var(--spacing-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.cl-home .cl-purge-banner {
+  padding: 0;
+}
+
+.cl-crumb {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-crumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cl-crumb a:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-crumb__select {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.cl-crumb__select:hover {
+  color: var(--color-text-primary);
+}
+
+/* -- new session, new space -- */
+
+.cl-newsession {
+  padding: var(--spacing-2) var(--spacing-5) var(--spacing-5);
+}
+
+.cl-newsession[data-dragging] {
+  background: var(--color-background-muted);
+}
+
+.cl-newsession__where {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-4);
+}
+
+.cl-newsession__ways {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-5);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-newsession__ways section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-newsession__buttons,
+.cl-settings__buttons,
+.cl-newspace__actions {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.cl-newspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  padding: var(--spacing-2) var(--spacing-5) var(--spacing-5);
+}
+
+.cl-newspace__actions {
+  justify-content: flex-end;
+}
+
+.cl-path {
+  font-family: var(--font-family-code);
+  font-size: var(--font-size-sm);
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .cl-shell__body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .cl-newsession__where,
+  .cl-newsession__ways {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cl-tree__row a.cl-tree__label {
+  color: inherit;
+  text-decoration: none;
 }

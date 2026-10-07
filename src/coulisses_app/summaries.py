@@ -180,19 +180,22 @@ def set_title(data: DataDir, session_id: str, title: str) -> None:
 
 def export_markdown(
     data: DataDir, session_id: str, *, summary: bool, transcript: bool, generation_id: int | None
-) -> tuple[str, str]:
-    """(file name, Markdown) of the summary and/or the corrected transcript."""
+) -> tuple[str, str, str | None]:
+    """(file name, Markdown, the summary written in it: its action's name, or None) of the
+    summary and/or the corrected transcript."""
     session = sessions.get_session(data, session_id)
     if session is None:
         raise KeyError(session_id)
     when = datetime.fromisoformat(session.recorded_at.replace("Z", "+00:00")).astimezone()
     title = session.title or f"Séance du {when.strftime('%d/%m/%Y')}"
     lines = [f"# {title}", "", f"_{session.space_name} · {when.strftime('%d/%m/%Y')}_", ""]
+    written: str | None = None
     if summary:
         found = list_generations(data, session_id).generations
         chosen = next((g for g in found if generation_id is None or g.id == generation_id), None)
         if chosen and chosen.output:
             lines += [f"## {chosen.action_name}", "", chosen.output.strip(), ""]
+            written = chosen.action_name
     if transcript:
         view = corrections.build_view(data, session_id)
         if view is not None:
@@ -207,7 +210,7 @@ def export_markdown(
                 lines.append(f"**{stamp}] {name}** : {text}" if text else line.text)
                 lines.append("")
     name = f"{when.strftime('%Y-%m-%d')} {title}".replace("/", "-")
-    return f"{name}.md", "\n".join(lines).rstrip() + "\n"
+    return f"{name}.md", "\n".join(lines).rstrip() + "\n", written
 
 
 class PhasesStatus(BaseModel):

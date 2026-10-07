@@ -11,6 +11,8 @@ export interface Session {
   created_at: string;
   space_id: number;
   space_name: string;
+  /** Its project in its space, or none. */
+  project_id: number | null;
   /** People checked as present. */
   attendee_ids: number[];
   /** People present whom nobody named, in addition to the checked ones. */
@@ -23,6 +25,40 @@ export interface Session {
   job_error: string | null;
   /** Kept, removed (when, why), or when its purge is due (spec §7.10). */
   audio: AudioStatus;
+}
+
+export interface Project {
+  id: number;
+  space_id: number;
+  name: string;
+  archived: boolean;
+}
+
+export interface SearchPart {
+  text: string;
+  hit: boolean;
+}
+
+export interface SearchHit {
+  kind: "title" | "turn" | "note" | "summary";
+  /** The line's index, the note's id, the generation's id; empty for the title. */
+  ref: string;
+  at_s: number | null;
+  excerpt: SearchPart[];
+}
+
+export interface SearchResults {
+  query: string;
+  sessions: { session_id: string; hits: SearchHit[] }[];
+  /** Some hits are not shown: said, so that the search is made more precise. */
+  more: boolean;
+  problems: string[];
+}
+
+export interface ExportFolder {
+  folder: string | null;
+  /** There and writable (a disk unplugged, a Drive logged out: no). */
+  present: boolean;
 }
 
 export interface AudioStatus {
@@ -164,6 +200,7 @@ export interface StopResult {
 
 export interface RecordingRequest {
   espace: number | null;
+  projet: number | null;
   presents: number[];
   non_nommes: number | null;
   micro: number | null;
@@ -603,6 +640,31 @@ export const api = {
   processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   versions: (id: string) => getJson<Versions>(`${sessionPath(id)}/versions`),
   retention: () => getJson<RetentionInfo>("/api/conservation"),
+  projects: () => getJson<Project[]>("/api/projets"),
+  createProject: (spaceId: number, name: string) =>
+    send<Project>("POST", `/api/espaces/${spaceId}/projets`, { name }),
+  updateProject: (id: number, changes: { name?: string; archived?: boolean }) =>
+    send<Project>("PATCH", `/api/projets/${id}`, changes),
+  setSessionProject: (id: string, projectId: number | null) =>
+    send<Session>("PUT", `${sessionPath(id)}/projet`, { projet: projectId }),
+  search: (query: string) =>
+    getJson<SearchResults>(`/api/recherche?q=${encodeURIComponent(query)}`),
+  exportFolder: () => getJson<ExportFolder>("/api/export"),
+  setExportFolder: (folder: string | null) =>
+    send<ExportFolder>("PUT", "/api/export", { dossier: folder }),
+  /** Opens the Finder's own window on the Mac; resolves once chosen or cancelled. */
+  chooseExportFolder: () => send<ExportFolder>("POST", "/api/export/choisir"),
+  exportToFolder: (
+    id: string,
+    content: "resume" | "transcript" | "tout",
+    generationId: number | null,
+    replace: boolean,
+  ) =>
+    send<{ fichier: string; resume: string | null }>("POST", `${sessionPath(id)}/exporter-dossier`, {
+      contenu: content,
+      resume: generationId,
+      remplacer: replace,
+    }),
   setRetention: (settings: RetentionSettings) =>
     send<RetentionInfo>("PUT", "/api/conservation", settings),
   keepAudio: (id: string, keep: boolean) =>
@@ -694,6 +756,7 @@ export const api = {
     file: File,
     who: {
       spaceId: number | null;
+      projectId: number | null;
       personIds: number[];
       unnamed: number | null;
     },
@@ -703,6 +766,7 @@ export const api = {
       const form = new FormData();
       form.append("fichier", file, file.name);
       if (who.spaceId != null) form.append("espace", String(who.spaceId));
+      if (who.projectId != null) form.append("projet", String(who.projectId));
       for (const id of who.personIds) form.append("presents", String(id));
       if (who.unnamed != null) form.append("non_nommes", String(who.unnamed));
       form.append("date_fichier_ms", String(file.lastModified));

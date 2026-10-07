@@ -14,7 +14,7 @@ from typing import BinaryIO
 
 from pydantic import BaseModel
 
-from coulisses_app import jobs, retention, spaces
+from coulisses_app import jobs, projects, retention, spaces
 from coulisses_app.media import probe
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect, now_iso
@@ -54,6 +54,8 @@ class Session(BaseModel):
     created_at: str
     space_id: int
     space_name: str
+    project_id: int | None = None
+    """Its project in its space, or none."""
     attendee_ids: list[int]
     """People checked as present (members and guests of the session's space)."""
     unnamed_attendees: int | None
@@ -81,6 +83,7 @@ def import_recording(
     original_name: str,
     *,
     space_id: int | None = None,
+    project_id: int | None = None,
     attendee_ids: list[int] | None = None,
     unnamed_attendees: int | None = None,
     recorded_at: datetime | None,
@@ -97,6 +100,7 @@ def import_recording(
     try:
         space = space_id if space_id is not None else spaces.default_space_id(conn)
         spaces.get_space(conn, space)
+        projects.check(conn, space, project_id)
         spaces.check_attendees(conn, space, present)
         glossary = spaces.glossary_terms(conn, space)
     finally:
@@ -131,12 +135,13 @@ def import_recording(
     try:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
-            "INSERT INTO session (id, space_id, title, recorded_at, created_at,"
+            "INSERT INTO session (id, space_id, project_id, title, recorded_at, created_at,"
             " reference_source_id, unnamed_attendees)"
-            " VALUES (?, ?, NULL, ?, ?, ?, ?)",
+            " VALUES (?, ?, ?, NULL, ?, ?, ?, ?)",
             (
                 session_id,
                 space,
+                project_id,
                 (recorded_at or now).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 stamp,
                 REFERENCE_SOURCE_ID,
@@ -195,6 +200,7 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
         created_at=row["created_at"],
         space_id=row["space_id"],
         space_name=row["space_name"],
+        project_id=row["project_id"],
         attendee_ids=spaces.attendee_ids(conn, row["id"]),
         unnamed_attendees=row["unnamed_attendees"],
         min_voices=jobs.ChainParams.model_validate_json(params).attendees if params else None,
@@ -304,6 +310,7 @@ def start_capture(
     data: DataDir,
     *,
     space_id: int | None,
+    project_id: int | None = None,
     attendee_ids: list[int],
     unnamed_attendees: int | None,
     device: str,
@@ -325,12 +332,21 @@ def start_capture(
     try:
         space = space_id if space_id is not None else spaces.default_space_id(conn)
         spaces.get_space(conn, space)
+        projects.check(conn, space, project_id)
         spaces.check_attendees(conn, space, present)
         with conn:
             conn.execute(
-                "INSERT INTO session (id, space_id, title, recorded_at, created_at,"
-                " reference_source_id, unnamed_attendees) VALUES (?, ?, NULL, ?, ?, ?, ?)",
-                (session_id, space, stamp, stamp, REFERENCE_SOURCE_ID, unnamed_attendees),
+                "INSERT INTO session (id, space_id, project_id, title, recorded_at, created_at,"
+                " reference_source_id, unnamed_attendees) VALUES (?, ?, ?, NULL, ?, ?, ?, ?)",
+                (
+                    session_id,
+                    space,
+                    project_id,
+                    stamp,
+                    stamp,
+                    REFERENCE_SOURCE_ID,
+                    unnamed_attendees,
+                ),
             )
             conn.executemany(
                 "INSERT INTO attendee (session_id, person_id) VALUES (?, ?)",

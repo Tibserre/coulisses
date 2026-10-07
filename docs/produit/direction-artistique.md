@@ -98,6 +98,8 @@ La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/we
 
 ## L'écran de relecture : deux colonnes
 
+Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à droite de la colonne des espaces et des séances, qui se masque pour relire au large. Elle reste sobre : texte secondaire, la séance ouverte sur un fond atténué, jamais un trait de couleur sur un côté ; un point seulement pour ce qui se passe (enregistrement, traitement, échec).
+
 **En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture.
 
 **Colonne de gauche : la transcription entière.** Elle se lit comme un texte édité :

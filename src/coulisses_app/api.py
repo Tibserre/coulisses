@@ -36,10 +36,13 @@ from coulisses_app import (
     actions,
     capture,
     corrections,
+    exports,
     jobs,
     marks,
     notes,
+    projects,
     retention,
+    search,
     sessions,
     settings,
     spaces,
@@ -133,6 +136,7 @@ class ModelsInfo(BaseModel):
 
 class RecordingRequest(BaseModel):
     espace: int | None = None
+    projet: int | None = None
     presents: list[int] = []
     non_nommes: int | None = None
     micro: int | None = None
@@ -164,6 +168,34 @@ class RetentionInfo(BaseModel):
 class RetentionRequest(BaseModel):
     retention_days: int
     notice_days: int
+
+
+class ProjectRequest(BaseModel):
+    name: str | None = None
+    archived: bool | None = None
+
+
+class SessionProjectRequest(BaseModel):
+    projet: int | None
+    """None: no project."""
+
+
+class ExportFolderRequest(BaseModel):
+    dossier: str | None
+
+
+class FolderExportRequest(BaseModel):
+    contenu: str = "tout"
+    """resume, transcript or tout."""
+    resume: int | None = None
+    remplacer: bool = False
+    """Replace a file of the same name already in the folder (asked to the user first)."""
+
+
+class FolderExported(BaseModel):
+    fichier: str
+    resume: str | None
+    """The summary written in it (its action's name); None: the transcript only."""
 
 
 class KeepAudioRequest(BaseModel):
@@ -295,6 +327,7 @@ def create_app(
     def import_session(
         fichier: Annotated[UploadFile, File()],
         espace: Annotated[int | None, Form()] = None,
+        projet: Annotated[int | None, Form()] = None,
         presents: Annotated[list[int] | None, Form()] = None,
         non_nommes: Annotated[int | None, Form()] = None,
         date_fichier_ms: Annotated[int | None, Form()] = None,
@@ -310,6 +343,7 @@ def create_app(
                 fichier.file,
                 fichier.filename or "enregistrement",
                 space_id=espace,
+                project_id=projet,
                 attendee_ids=presents or [],
                 unnamed_attendees=non_nommes,
                 recorded_at=recorded_at,
@@ -528,6 +562,7 @@ def create_app(
     def start_recording(demande: RecordingRequest) -> capture.RecordingState:
         return recorder.start(
             space_id=demande.espace,
+            project_id=demande.projet,
             attendee_ids=demande.presents,
             unnamed_attendees=demande.non_nommes,
             device_index=demande.micro,
@@ -698,7 +733,7 @@ def create_app(
         if contenu not in ("resume", "transcript", "tout"):
             raise HTTPException(status_code=422, detail="Contenu inconnu.")
         try:
-            name, text = summaries.export_markdown(
+            name, text, _ = summaries.export_markdown(
                 data,
                 session_id,
                 summary=contenu in ("resume", "tout"),
@@ -788,6 +823,74 @@ def create_app(
             )
         media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         return FileResponse(path, media_type=media_type)
+
+    # -- projects, search, export to a folder (step 8, ADR 0030) -----------------------
+
+    @app.get("/api/projets")
+    def list_projects() -> list[projects.Project]:
+        return projects.list_projects(data)
+
+    @app.post("/api/espaces/{space_id}/projets", status_code=201)
+    def create_project(space_id: int, demande: ProjectRequest) -> projects.Project:
+        return projects.create(data, space_id, demande.name or "")
+
+    @app.patch("/api/projets/{project_id}")
+    def update_project(project_id: int, demande: ProjectRequest) -> projects.Project:
+        return projects.update(data, project_id, name=demande.name, archived=demande.archived)
+
+    @app.put("/api/seances/{session_id}/projet")
+    def set_session_project(session_id: str, demande: SessionProjectRequest) -> sessions.Session:
+        projects.set_session_project(data, session_id, demande.projet)
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
+
+    @app.get("/api/recherche")
+    def search_sessions(q: str = "") -> search.Results:
+        return search.search(data, q)
+
+    @app.get("/api/export")
+    def export_folder() -> exports.ExportFolder:
+        conn = connect(data)
+        try:
+            return exports.get_folder(conn)
+        finally:
+            conn.close()
+
+    @app.put("/api/export")
+    def set_export_folder(demande: ExportFolderRequest) -> exports.ExportFolder:
+        conn = connect(data)
+        try:
+            return exports.set_folder(conn, demande.dossier)
+        finally:
+            conn.close()
+
+    @app.post("/api/export/choisir")
+    def choose_export_folder() -> exports.ExportFolder:
+        """The Finder's window to choose the folder; cancelled, nothing changes."""
+        chosen = exports.choose_folder()
+        conn = connect(data)
+        try:
+            return exports.set_folder(conn, chosen) if chosen else exports.get_folder(conn)
+        finally:
+            conn.close()
+
+    @app.post("/api/seances/{session_id}/exporter-dossier")
+    def export_to_folder(session_id: str, demande: FolderExportRequest) -> FolderExported:
+        if demande.contenu not in ("resume", "transcript", "tout"):
+            raise HTTPException(status_code=422, detail="Contenu inconnu.")
+        try:
+            name, written = exports.export_to_folder(
+                data,
+                session_id,
+                summary=demande.contenu in ("resume", "tout"),
+                transcript=demande.contenu in ("transcript", "tout"),
+                generation_id=demande.resume,
+                replace=demande.remplacer,
+            )
+        except exports.FileExistsInFolderError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return FolderExported(fichier=name, resume=written)
 
     # -- keeping the audio, deleting (step 9, ADR 0029) --------------------------------
 

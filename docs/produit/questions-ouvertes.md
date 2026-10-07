@@ -6,7 +6,6 @@
 | # | Question | Quand | Piste |
 |---|---|---|---|
 | Q3 | Nom définitif de l'app | Avant la PWA | « Coulisses » provisoire |
-| Q7 | Rangement des comptes rendus dans Google Drive : copie à la main depuis l'export, ou export automatique vers un dossier local synchronisé par Google Drive pour ordinateur ? L'app n'envoie jamais rien elle-même (P1). | Phase interface | Export Markdown vers un dossier choisi |
 
 ## À trancher par la mesure (banc d'essai)
 | # | Question |

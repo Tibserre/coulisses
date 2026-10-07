@@ -10,7 +10,9 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
 | Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |
-| Projet | `project` | Regroupe des séances d'un espace (un spectacle pour une troupe). |
+| Projet | `project` | Regroupe des séances d'un espace (un spectacle pour une troupe). Une séance appartient à un projet de son espace, ou à aucun ; un projet s'archive, ses séances y restent. |
+| Dossier d'export | `export_folder` | Dossier du Mac choisi une fois, où « Exporter vers le dossier » écrit le compte rendu d'une séance (ADR 0030). |
+| Index de recherche | `search_index` | Cache plein texte des transcriptions corrigées, notes, résumés et titres ; reconstruit à la demande, jamais une source de vérité. |
 | Séance | `session` | Un enregistrement (répétition, atelier, réunion), de 1 h à 2 h. Unité de traitement. Appartient à un espace. |
 | Présents | `attendees` | Personnes présentes à une séance. Leur nombre donne le minimum de locuteurs. |
 | Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). 1 en V1, N plus tard. |

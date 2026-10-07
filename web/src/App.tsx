@@ -1,36 +1,26 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Button } from "@astryxdesign/core/Button";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { InternationalizationProvider } from "@astryxdesign/core/i18n";
 import frFR from "@astryxdesign/core/locales/fr-FR.generated.js";
 import { Theme } from "@astryxdesign/core/theme";
+import { AudioLines, PanelLeft, Plus } from "lucide-react";
 import { MotionConfig } from "motion/react";
-import { coulissesTheme } from "./theme/coulisses.js";
-import { LibraryPage } from "./pages/LibraryPage.tsx";
-import { SessionPage } from "./pages/SessionPage.tsx";
-import { SpacesPage } from "./pages/SpacesPage.tsx";
-import { ActionsPage } from "./pages/ActionsPage.tsx";
-import { RecordingPage } from "./pages/RecordingPage.tsx";
-import { SettingsPage } from "./pages/SettingsPage.tsx";
+import { api, type AppInfo, type Project, type RecordingState, type Session, type Space } from "./api.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
-
-type Route =
-  | { page: "library" }
-  | { page: "session"; id: string }
-  | { page: "spaces"; id: number | null }
-  | { page: "actions"; ref: string | null }
-  | { page: "recording" }
-  | { page: "settings" };
-
-function parseRoute(hash: string): Route {
-  const session = /^#\/seance\/([^/?#]+)/.exec(hash);
-  if (session) return { page: "session", id: decodeURIComponent(session[1]) };
-  const spaces = /^#\/espaces(?:\/(\d+))?/.exec(hash);
-  if (spaces) return { page: "spaces", id: spaces[1] ? Number(spaces[1]) : null };
-  if (hash.startsWith("#/enregistrement")) return { page: "recording" };
-  if (hash.startsWith("#/reglages")) return { page: "settings" };
-  const actions = /^#\/actions(?:\/([^/?#]+))?/.exec(hash);
-  if (actions) return { page: "actions", ref: actions[1] ? decodeURIComponent(actions[1]) : null };
-  return { page: "library" };
-}
+import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
+import { SearchBox } from "./components/SearchBox.tsx";
+import { Sidebar } from "./components/Sidebar.tsx";
+import { buildTree, onLibraryChanged, parseRoute, sessionHref, type Route } from "./library.ts";
+import { ActionsPage } from "./pages/ActionsPage.tsx";
+import { HomePage } from "./pages/HomePage.tsx";
+import { RecordingPage } from "./pages/RecordingPage.tsx";
+import { SessionPage } from "./pages/SessionPage.tsx";
+import { SettingsPage } from "./pages/SettingsPage.tsx";
+import { NewSpaceForm, SpacePage } from "./pages/SpacesPage.tsx";
+import { coulissesTheme } from "./theme/coulisses.js";
 
 export function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
@@ -43,23 +33,198 @@ export function App() {
     <InternationalizationProvider locale="fr-FR" messages={{ "fr-FR": frFR }}>
       <Theme theme={coulissesTheme}>
         <MotionConfig reducedMotion="user">
-          <ErrorBoundary key={window.location.hash}>
-            {route.page === "settings" ? (
-            <SettingsPage />
-          ) : route.page === "session" ? (
-            <SessionPage id={route.id} />
-          ) : route.page === "spaces" ? (
-            <SpacesPage id={route.id} />
-          ) : route.page === "recording" ? (
-            <RecordingPage />
-          ) : route.page === "actions" ? (
-            <ActionsPage selectedRef={route.ref} />
-          ) : (
-            <LibraryPage />
-          )}
-          </ErrorBoundary>
+          <Shell route={route} />
         </MotionConfig>
       </Theme>
     </InternationalizationProvider>
+  );
+}
+
+const SIDEBAR_KEY = "coulisses.colonne";
+
+function readSidebar(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) !== "fermee";
+  } catch {
+    return true;
+  }
+}
+
+/** The application's frame (ADR 0030): the search and « Nouvelle séance » at the top, the
+ *  spaces and their sessions in the side column, what is open in the main pane. */
+function Shell({ route }: { route: Route }) {
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [info, setInfo] = useState<AppInfo | null>(null);
+  const [recording, setRecording] = useState<RecordingState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sideError, setSideError] = useState<string | null>(null);
+  const [sidebar, setSidebar] = useState(readSidebar);
+  const [asking, setAsking] = useState<{ spaceId: number | null; projectId: number | null } | null>(null);
+  const [newSpace, setNewSpace] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [s, p, list, about, current] = await Promise.all([
+        api.spaces(),
+        api.projects(),
+        api.sessions(),
+        api.info(),
+        api.recording(),
+      ]);
+      setSpaces(s);
+      setProjects(p);
+      setSessions(list);
+      setInfo(about);
+      setRecording(current);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 4000);
+    const stop = onLibraryChanged(() => void refresh());
+    return () => {
+      window.clearInterval(timer);
+      stop();
+    };
+  }, [refresh]);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebar((open) => {
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, open ? "fermee" : "ouverte");
+      } catch {
+        // Storage blocked: for this page only.
+      }
+      return !open;
+    });
+  }, []);
+
+  const openSession = route.page === "session" ? sessions?.find((s) => s.id === route.id) : undefined;
+  const askNew = useCallback(
+    () => setAsking({ spaceId: openSession?.space_id ?? null, projectId: openSession?.project_id ?? null }),
+    [openSession],
+  );
+
+  // ⌘N: a new session (where the open one is); ⌘\ : the side column.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        askNew();
+      } else if (e.key === "\\") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [askNew, toggleSidebar]);
+
+  const tree = buildTree(spaces, projects, sessions ?? []);
+  const mainKey =
+    route.page === "session" ? `session:${route.id}` : route.page === "space" ? `space:${route.id}` : route.page;
+
+  return (
+    <div className="cl-shell" data-sidebar={sidebar ? "ouverte" : "fermee"}>
+      <header className="cl-topbar">
+        <IconButton
+          label={sidebar ? "Masquer la colonne (⌘\\)" : "Afficher la colonne (⌘\\)"}
+          icon={<PanelLeft size={18} strokeWidth={1.75} />}
+          variant="ghost"
+          onClick={toggleSidebar}
+        />
+        <a className="cl-brand" href="#/">
+          <AudioLines size={20} strokeWidth={1.75} color="var(--color-accent)" aria-hidden />
+          <span>Coulisses</span>
+        </a>
+        <SearchBox sessions={sessions ?? []} />
+        <Button
+          variant="primary"
+          size="sm"
+          label="Nouvelle séance"
+          icon={<Plus size={16} strokeWidth={1.75} />}
+          onClick={askNew}
+        />
+      </header>
+      <div className="cl-shell__body">
+        {sidebar && (
+          <Sidebar
+            tree={tree.filter((n) => !n.space.archived)}
+            archived={tree.filter((n) => n.space.archived)}
+            recordingId={recording?.session_id ?? null}
+            current={{
+              sessionId: route.page === "session" ? route.id : route.page === "recording" ? (recording?.session_id ?? null) : null,
+              spaceId: route.page === "space" ? route.id : null,
+              page: route.page,
+            }}
+            onNewSession={(spaceId, projectId) => setAsking({ spaceId, projectId })}
+            onNewSpace={() => setNewSpace(true)}
+            onChanged={refresh}
+            onError={setSideError}
+          />
+        )}
+        <div className="cl-shell__main">
+          {sideError && (
+            <div className="cl-shell__notice">
+              <Banner status="error" title="Refusé" description={sideError} isDismissable onDismiss={() => setSideError(null)} />
+            </div>
+          )}
+          <ErrorBoundary key={mainKey}>
+            {route.page === "session" ? (
+              <SessionPage id={route.id} at={route.at} tab={route.tab} projects={projects} />
+            ) : route.page === "space" ? (
+              <SpacePage id={route.id} onChanged={refresh} />
+            ) : route.page === "recording" ? (
+              <RecordingPage />
+            ) : route.page === "actions" ? (
+              <ActionsPage selectedRef={route.ref} />
+            ) : route.page === "settings" ? (
+              <SettingsPage info={info} />
+            ) : (
+              <HomePage
+                sessions={sessions}
+                projects={projects}
+                info={info}
+                recording={recording}
+                error={error}
+                onNewSession={askNew}
+              />
+            )}
+          </ErrorBoundary>
+        </div>
+      </div>
+      <NewSessionDialog
+        isOpen={asking !== null}
+        onClose={() => setAsking(null)}
+        spaces={spaces}
+        projects={projects}
+        initial={asking ?? { spaceId: null, projectId: null }}
+        recording={recording !== null}
+        onImported={(id) => {
+          void refresh();
+          window.location.hash = sessionHref(id);
+        }}
+      />
+      <Dialog isOpen={newSpace} onOpenChange={(open) => !open && setNewSpace(false)} width={480}>
+        <DialogHeader title="Nouvel espace" onOpenChange={() => setNewSpace(false)} />
+        {newSpace && (
+          <NewSpaceForm
+            onCancel={() => setNewSpace(false)}
+            onCreated={(space) => {
+              setNewSpace(false);
+              void refresh();
+              window.location.hash = `#/espaces/${space.id}`;
+            }}
+          />
+        )}
+      </Dialog>
+    </div>
   );
 }
