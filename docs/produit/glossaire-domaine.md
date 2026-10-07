@@ -21,8 +21,10 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Phase | `phase` | Intervalle de la séance de type `scene`, `discussion` ou `other`. Détectée puis corrigeable. Dans l'interface : « chapitre », de type « Jeu », « Discussion » ou « Autre » (ADR 0024). |
 | Étape | `stage` | Un maillon du traitement : `prepare`, `dereverb`, `transcribe`, `align`, `diarize`, `attribute`, `segment_phases`, `title`, `summarize`. |
 | Exécution | `run` | Une exécution d'une étape sur une séance, avec ses entrées, sa sortie, sa provenance, son statut. Immuable une fois terminée. |
-| Exécution active | `active_run` | Pour une séance et une étape, l'exécution affichée et utilisée en aval. |
-| Statut d'exécution | `run_status` | `queued`, `running`, `succeeded`, `failed`, `stale` (périmée : une entrée amont n'est plus l'exécution active ; état calculé, le statut enregistré d'une exécution finie ne change jamais). |
+| Exécution active | `active_run` | Pour une séance et une étape, l'exécution affichée et utilisée en aval. Les exécutions d'une version deviennent actives ensemble. |
+| Version (du traitement) | `version` | Une exécution « qui a dit quoi » réussie, avec les exécutions dont elle vient. Chaque version a ses propres corrections ; une seule est affichée. |
+| Relance | `rerun` | Refaire une étape (la transcription ou la séparation des voix) depuis la version affichée, pour en faire une nouvelle. |
+| Statut d'exécution | `run_status` | `queued`, `running`, `succeeded`, `failed`, `stale` (périmée : l'exécution affichée d'une étape qu'une relance refait ; état calculé, le statut enregistré d'une exécution finie ne change jamais). |
 | Tâche | `job` | Travail mis en file pour une séance (une chaîne à lancer, une étape à relancer, une génération). Produit une ou plusieurs exécutions. La file survit à un redémarrage. |
 | Capacité | `capability` | Ce qu'un moteur déclare savoir faire (ex. horodatage mesuré au mot, nombre minimal de locuteurs, glossaire). |
 | Moteur | `engine` | Implémentation interchangeable d'une étape (ex. un modèle de transcription donné). |
@@ -46,7 +48,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Référence de mesure | `annotation` | Ce qu'une personne a entendu sur une fenêtre d'une séance (texte et personne par tour, cochés « vérifié »), pour mesurer le moteur (`coulisses-banc juger`). Distincte des corrections : elle ne modifie aucun résultat et ne sert qu'à la mesure. |
 | Correction | `edit` | Modification utilisateur (texte, locuteur, phase). Stockée à part des sorties de moteurs. Dans le code de l'interface : `EditRequest` (ce qu'on demande), `EditInfo` (l'historique). |
 | Vue corrigée | `corrected_view` | Sortie de l'exécution active avec les corrections appliquées. Ce qu'affiche l'app et ce que lisent les résumés. |
-| Report des corrections | `edit_carryover` | Réapplication des corrections sur une nouvelle exécution amont. Ce qui n'a pas pu être reporté est listé. |
+| Report des corrections | `edit_carryover` | Réapplication des corrections de la version remplacée sur la nouvelle, par le temps mesuré (ADR 0028). Ce qui n'a pas pu être reporté est listé avec sa raison. |
 | Glossaire | `glossary` | Termes d'un espace : prénoms, jargon, formats, exercices, personnages récurrents, sigles. |
 | Action | `action` | Modèle de résumé : nom, description, prompt. Ex. « Résumé Impro ». Fournie (fichier de l'application, clé = nom du fichier) ou à soi (en base, clé `perso-<id>`). Une action fournie modifiée garde sa clé ; sa version modifiée est en base (`based_on`), l'original reste restaurable. |
 | Assemblage | `prompt_assembly` | Construction du prompt complet dans l'ordre fixe de la spec §7.9. Seul chemin vers le LLM. |

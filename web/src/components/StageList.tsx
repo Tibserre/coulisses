@@ -15,6 +15,9 @@ const STATE_TEXT: Record<StageView["state"], string> = {
   failed: "En échec",
 };
 
+/** Of the version shown, made again by a rerun: kept, and shown until the new one is complete. */
+const STALE_TEXT = "Périmée : refaite par la relance";
+
 const DOT: Record<StageView["state"], "neutral" | "accent" | "warning" | "success" | "error"> = {
   pending: "neutral",
   running: "accent",
@@ -46,13 +49,17 @@ export function StageList({
   return (
     <ol className="cl-stages">
       {stages.map((s) => (
-        <li key={s.stage} className="cl-stages__item" data-state={s.state}>
-          <StatusDot variant={DOT[s.state]} label={STATE_TEXT[s.state]} isPulsing={s.state === "running"} />
+        <li key={s.stage} className="cl-stages__item" data-state={s.state} data-stale={s.stale || undefined}>
+          <StatusDot
+            variant={s.stale ? "neutral" : DOT[s.state]}
+            label={s.stale ? STALE_TEXT : STATE_TEXT[s.state]}
+            isPulsing={s.state === "running"}
+          />
           <div className="cl-stages__body">
             <div className="cl-stages__head">
               <Text weight="medium">{s.label}</Text>
               <Text type="supporting">
-                {STATE_TEXT[s.state]}
+                {s.stale ? STALE_TEXT : STATE_TEXT[s.state]}
                 {dev && s.duration_s != null && ` · ${formatDuration(s.duration_s)} de calcul`}
                 {dev &&
                   s.max_rss_bytes != null &&

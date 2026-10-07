@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -10,6 +10,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { ArrowLeft } from "lucide-react";
 import {
   api,
+  ServiceError,
   type EditRequest,
   type CorrectedView,
   type Person,
@@ -25,6 +26,8 @@ import { StageList } from "../components/StageList.tsx";
 import { GiveToPanel, TranscriptView, type Editing } from "../components/TranscriptView.tsx";
 import { SummaryPanel } from "../components/SummaryPanel.tsx";
 import { NotesSection } from "../components/NotesSection.tsx";
+import { VersionsSection } from "../components/VersionsSection.tsx";
+import { RERUN_NAME } from "../versions.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
@@ -74,8 +77,9 @@ export function SessionPage({ id }: { id: string }) {
 
   const jobState = detail?.session.job_state;
   const spaceId = detail?.session.space_id;
-  const attribute = detail?.stages.find((s) => s.stage === "attribute");
-  const attributeRun = attribute?.state === "succeeded" ? attribute.run_id : null;
+  // The version shown: it changes when a rerun completes, or when another one is shown.
+  const attributeRun = detail?.version ?? null;
+  const busy = jobState === "queued" || jobState === "running";
 
   useEffect(() => {
     void refresh();
@@ -88,8 +92,13 @@ export function SessionPage({ id }: { id: string }) {
     return () => window.clearInterval(timer);
   }, [jobState, refresh]);
 
+  // The version on screen. A new one (a rerun completed, another shown) is read once no
+  // line is being typed into: never pulled from under the cursor. A correction typed for
+  // the former one is refused by the service, and its text given back (`refused`).
+  const viewRun = view?.run_id ?? null;
+  const [typing, setTyping] = useState(false);
   useEffect(() => {
-    if (!attributeRun) return;
+    if (!attributeRun || typing || viewRun === attributeRun) return;
     api.transcript(id).then(
       (t) => {
         setView(t);
@@ -97,7 +106,18 @@ export function SessionPage({ id }: { id: string }) {
       },
       (e: Error) => setTranscriptError(e.message),
     );
-  }, [id, attributeRun]);
+  }, [id, attributeRun, typing, viewRun]);
+
+  // Another version has other lines: what pointed at them no longer does.
+  const shownRun = useRef<string | null>(null);
+  useEffect(() => {
+    if (shownRun.current !== null && shownRun.current !== viewRun) {
+      setFolded(new Set());
+      setSelected(new Set());
+      setNamingTurn(null);
+    }
+    shownRun.current = viewRun;
+  }, [viewRun]);
 
   // The chapters: detected after the processing (or asked again), followed while they are.
   const loadPhases = useCallback(async () => {
@@ -177,10 +197,28 @@ export function SessionPage({ id }: { id: string }) {
   const currentRow = model ? turnAt(model, pb.time) : null;
   const current = currentRow ? { row: currentRow, word: wordAt(currentRow, pb.time) } : null;
 
+  /** A correction refused. Meant for a version no longer shown (409): nothing was
+   *  written; the page reads the version now shown, and a typed text is given back. */
+  const refused = useCallback(
+    (e: unknown, typed?: string) => {
+      const error = e as Error;
+      if (error instanceof ServiceError && error.status === 409) {
+        setEditingTurn(null);
+        setTyping(false);
+        setEditError(`${error.message}${typed ? ` Votre texte, à reprendre : « ${typed} »` : ""}`);
+        void refresh();
+        return;
+      }
+      setEditError(error.message);
+    },
+    [refresh],
+  );
+
   const correct = useCallback(
     async (correction: EditRequest) => {
+      if (!viewRun) return;
       try {
-        const next = await api.addEdit(id, correction);
+        const next = await api.addEdit(id, correction, viewRun);
         setView(next);
         setEditError(null);
         // Naming a voice after a person who already has one merges them: said on screen.
@@ -188,11 +226,18 @@ export function SessionPage({ id }: { id: string }) {
         if (correction.kind === "assign_speaker" && last?.kind === "merge_speakers")
           setNotice(`${last.description}. Cmd-Z pour annuler.`);
       } catch (e) {
-        setEditError((e as Error).message);
+        refused(
+          e,
+          correction.kind === "edit_text"
+            ? correction.text
+            : correction.kind === "set_phase"
+              ? (correction.title ?? undefined)
+              : undefined,
+        );
         throw e;
       }
     },
-    [id],
+    [id, viewRun, refused],
   );
 
   const editing: Editing = useMemo(
@@ -205,11 +250,12 @@ export function SessionPage({ id }: { id: string }) {
         return guest;
       },
       resetText: async (turn: number) => {
+        if (!viewRun) return;
         try {
-          setView(await api.resetText(id, turn));
+          setView(await api.resetText(id, turn, viewRun));
           setEditError(null);
         } catch (e) {
-          setEditError((e as Error).message);
+          refused(e);
           throw e;
         }
       },
@@ -223,6 +269,7 @@ export function SessionPage({ id }: { id: string }) {
         setSelected((before) => toggleSelection(before, order, turn, extend ? lastSelected : null));
         setLastSelected(turn);
       },
+      setTyping,
       toggleFolded: (turn: number) =>
         setFolded((before) => {
           const next = new Set(before);
@@ -230,7 +277,7 @@ export function SessionPage({ id }: { id: string }) {
           return next;
         }),
     }),
-    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, model],
+    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, model, viewRun, refused],
   );
 
   /** Cmd-Z undoes the last correction still in force; Cmd-Shift-Z redoes the last one
@@ -238,26 +285,27 @@ export function SessionPage({ id }: { id: string }) {
   const history = useCallback(
     async (redo: boolean) => {
       const edits = view?.edits ?? [];
+      if (!viewRun) return;
       try {
         if (redo) {
           const target = edits
             .filter((e) => e.reverted && !e.redone && e.undone_by != null)
             .sort((a, b) => (b.undone_by ?? 0) - (a.undone_by ?? 0))[0];
           if (!target) return setNotice("Rien à rétablir.");
-          setView(await api.redo(id, target.id));
+          setView(await api.redo(id, target.id, viewRun));
           setNotice(`Rétabli : ${target.description}`);
         } else {
           const target = edits.filter((e) => !e.reverted).sort((a, b) => b.id - a.id)[0];
           if (!target) return setNotice("Rien à annuler.");
-          setView(await api.undo(id, target.id));
+          setView(await api.undo(id, target.id, viewRun));
           setNotice(`Annulé : ${target.description}`);
         }
         setEditError(null);
       } catch (e) {
-        setEditError((e as Error).message);
+        refused(e);
       }
     },
-    [id, view],
+    [id, view, viewRun, refused],
   );
 
   useEffect(() => {
@@ -386,15 +434,22 @@ export function SessionPage({ id }: { id: string }) {
                   />
                 </div>
               )}
-              {view.other_run_edits > 0 && (
-                <div className="cl-review__notice">
-                  <Banner
-                    status="warning"
-                    title={`${plural(view.other_run_edits, "correction faite", "corrections faites")} sur un traitement précédent`}
-                    description="Elles sont gardées, mais pas encore reportées sur ce traitement."
-                  />
-                </div>
-              )}
+              <RerunNotices
+                detail={detail}
+                view={view}
+                onResume={async (attendees) => {
+                  await api.resume(id, attendees);
+                  await refresh();
+                }}
+                onShowList={() => {
+                  setTab("overview");
+                  // Once the tab is drawn: the list, in view.
+                  window.setTimeout(
+                    () => document.getElementById("non-reportees")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                    50,
+                  );
+                }}
+              />
               <TranscriptView model={model} pb={pb} current={current} editing={editing} />
               {notice && (
                 <div className="cl-notice" role="status">
@@ -458,10 +513,36 @@ export function SessionPage({ id }: { id: string }) {
               />
               <CorrectionsHistory
                 edits={view.edits}
-                onUndo={async (editId) => setView(await api.undo(id, editId))}
-                onRedo={async (editId) => setView(await api.redo(id, editId))}
+                onUndo={async (editId) => {
+                  try {
+                    setView(await api.undo(id, editId, view.run_id));
+                  } catch (e) {
+                    refused(e);
+                  }
+                }}
+                onRedo={async (editId) => {
+                  try {
+                    setView(await api.redo(id, editId, view.run_id));
+                  } catch (e) {
+                    refused(e);
+                  }
+                }}
               />
-              {(dev || detail.stages.some((s) => s.state === "failed" || s.state === "stalled" || s.folder_missing)) && (
+              <VersionsSection
+                sessionId={id}
+                version={attributeRun}
+                busy={busy}
+                carryover={view.carryover}
+                duration={session.duration_s}
+                dev={dev}
+                onChanged={refresh}
+                onSeek={pb.seek}
+              />
+              {(dev ||
+                busy ||
+                detail.stages.some(
+                  (s) => s.state === "failed" || s.state === "stalled" || s.folder_missing || s.stale,
+                )) && (
                 <section>
                   <Heading level={3}>Traitement</Heading>
                   <StageList stages={detail.stages} onShowProvenance={setProvenanceOf} />
@@ -478,6 +559,128 @@ export function SessionPage({ id }: { id: string }) {
       <ProvenanceDialog sessionId={id} stage={provenanceOf} onClose={() => setProvenanceOf(null)} />
     </div>
   );
+}
+
+const SEEN_KEY = "coulisses.report-vu.";
+
+function carryoverSeen(runId: string): boolean {
+  try {
+    return window.localStorage.getItem(SEEN_KEY + runId) === "1";
+  } catch {
+    return false; // storage blocked: the notice shows again, nothing is lost
+  }
+}
+
+/** Above the transcript, while a stage is run again and once it is: the version shown
+ *  stays until the new one is complete (in progress, or stopped with its error and
+ *  « Reprendre »), then what was carried over to the new one, and what was not (P8). */
+function RerunNotices({
+  detail,
+  view,
+  onResume,
+  onShowList,
+}: {
+  detail: SessionDetail;
+  view: CorrectedView;
+  onResume: (attendees?: number) => Promise<void>;
+  onShowList: () => void;
+}) {
+  const dev = useDevMode();
+  const [seen, setSeen] = useState(() => carryoverSeen(view.run_id));
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => setSeen(carryoverSeen(view.run_id)), [view.run_id]);
+  const { session, rerun } = detail;
+  const notices: ReactNode[] = [];
+
+  if (rerun && (session.job_state === "queued" || session.job_state === "running")) {
+    const running = detail.stages.find((s) => s.state === "running");
+    const progress =
+      running?.progress && running.progress.total > 0
+        ? ` (${Math.round((100 * running.progress.done) / running.progress.total)} %)`
+        : "";
+    // A rerun going as it should: said quietly, not as an alert.
+    notices.push(
+      <div key="running" className="cl-rerunning" role="status">
+        <Spinner size="sm" shade="subtle" aria-label="Relance en cours" />
+        <div>
+          <Text weight="medium">
+            Relance de {RERUN_NAME[rerun]} en cours
+            {session.job_state === "queued" ? " : en file d'attente" : running ? ` : « ${running.label} »${progress}` : ""}
+          </Text>
+          <Text as="p" type="supporting">
+            La version affichée reste en place ; à la fin, vos corrections sont reportées sur la
+            nouvelle.
+          </Text>
+        </div>
+      </div>,
+    );
+  }
+  if (rerun && session.job_state === "failed") {
+    const failed = detail.stages.find((s) => s.state === "failed");
+    const why = dev
+      ? (session.job_error ?? "Erreur inconnue")
+      : failed
+        ? `« ${failed.label} » : ${describeStageError(failed) ?? "échec"}`
+        : (session.job_error ?? "Erreur inconnue");
+    const found = Number(failed?.error_details?.found);
+    const fewer = failed?.error_code === "too_few_speakers" && Number.isFinite(found) && found >= 1;
+    const resume = async () => {
+      try {
+        await onResume(fewer ? found : undefined);
+        setError(null);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    };
+    notices.push(
+      <Banner
+        key="failed"
+        status="error"
+        title={`La relance de ${RERUN_NAME[rerun]} n'est pas allée au bout`}
+        description={`${why.replace(/\.?$/, ".")} La version affichée n'a pas changé.${error ? ` ${error}` : ""}`}
+        endContent={
+          <Button
+            size="sm"
+            variant="primary"
+            label={fewer ? `Reprendre avec ${plural(found, "présent", "présents")}` : "Reprendre"}
+            clickAction={resume}
+          />
+        }
+      />,
+    );
+  }
+  const carried = view.carryover;
+  if (carried && !seen) {
+    const missing = carried.not_carried.length;
+    const done = plural(carried.carried, "correction reportée", "corrections reportées");
+    const dismiss = () => {
+      try {
+        window.localStorage.setItem(SEEN_KEY + view.run_id, "1");
+      } catch {
+        // Storage blocked: hidden for this page only.
+      }
+      setSeen(true);
+    };
+    notices.push(
+      <Banner
+        key="carried"
+        status={missing ? "warning" : "success"}
+        title="Nouvelle version"
+        description={
+          missing
+            ? `${done} depuis la version précédente ; ${plural(missing, "est", "sont")} à reprendre à la main.`
+            : `${done} depuis la version précédente.`
+        }
+        isDismissable
+        onDismiss={dismiss}
+        endContent={
+          missing ? <Button size="sm" label="Voir la liste" onClick={onShowList} /> : undefined
+        }
+      />,
+    );
+  }
+  if (!notices.length) return null;
+  return <div className="cl-review__notice cl-review__notices">{notices}</div>;
 }
 
 function ProcessingPanel({

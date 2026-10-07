@@ -158,12 +158,76 @@ export interface StageView {
   error_code: ErrorCode | null;
   error_details: Record<string, unknown> | null;
   folder_missing: boolean;
+  /** The run of the version shown, which a rerun under way (or stopped) is making
+   *  again: kept and still shown until the new version is complete. */
+  stale: boolean;
 }
 
 export interface SessionDetail {
   session: Session;
   source: AudioSource | null;
   stages: StageView[];
+  /** The « who said what » run of the version shown; null before the first one. */
+  version: string | null;
+  /** What the latest processing runs again; null for the first one. */
+  rerun: Rerun | null;
+}
+
+export type Rerun = "transcribe" | "diarize";
+
+export interface Version {
+  run_id: string;
+  /** 1 for the first processing, then in the order they were made. */
+  number: number;
+  finished_at: string | null;
+  shown: boolean;
+  origin: "first" | Rerun;
+  min_voices: number | null;
+  engine_version: string | null;
+  /** Corrections in force on it. */
+  corrections: number;
+  /** When it replaced another version: corrections carried over, and not. */
+  carried: number | null;
+  not_carried: number | null;
+}
+
+export interface RerunFacts {
+  possible: boolean;
+  why_not: string | null;
+  /** Measured computing time of the shown version's transcription. */
+  transcribe_s: number | null;
+  /** Measured computing time of its voice separation. */
+  diarize_s: number | null;
+  /** Glossary terms its transcription did not have. */
+  glossary_added: string[];
+  engine_updated: boolean;
+  min_voices: number | null;
+  attendees_now: number | null;
+}
+
+export interface Versions {
+  /** Newest first. */
+  versions: Version[];
+  rerun: RerunFacts;
+}
+
+export interface NotCarried {
+  edit_id: number;
+  description: string;
+  reason: string;
+  at_s: number | null;
+  /** For a text correction: the corrected text, to take back by hand. */
+  text: string | null;
+  /** Carried for some of its lines only; the reason says how many. */
+  partial: boolean;
+}
+
+export interface Carryover {
+  from_run_id: string;
+  /** Carried over in full. */
+  carried: number;
+  /** Not carried, or only in part: to take back by hand. */
+  not_carried: NotCarried[];
 }
 
 export interface AppInfo {
@@ -260,8 +324,8 @@ export interface CorrectedView {
   speakers: Speaker[];
   untranscribed: { start: number; end: number }[];
   edits: EditInfo[];
-  /** Corrections made on another run, not carried over yet: shown, never dropped. */
-  other_run_edits: number;
+  /** When this version replaced another: what was carried over from it, and what not. */
+  carryover: Carryover | null;
   word_count: number;
   timed_share: number;
   /** Empty until the chapters are detected (or the user cuts one). */
@@ -388,17 +452,26 @@ export interface SpaceAction {
 
 export type SpaceTemplate = "impro" | "reunion" | "vide";
 
-export class ServiceError extends Error {}
+export class ServiceError extends Error {
+  /** The HTTP status, when the service answered: 409 for a correction meant for a version
+   *  no longer shown. */
+  readonly status: number | null;
+  constructor(message: string, status: number | null = null) {
+    super(message);
+    this.status = status;
+  }
+}
 
 async function readError(response: Response): Promise<ServiceError> {
   try {
     const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") return new ServiceError(body.detail);
+    if (typeof body.detail === "string") return new ServiceError(body.detail, response.status);
   } catch {
     // Not JSON: fall through to the generic message, which keeps the HTTP status.
   }
   return new ServiceError(
     `Le service a répondu ${response.status} ${response.statusText}.`,
+    response.status,
   );
 }
 
@@ -427,6 +500,7 @@ async function send<T>(
 
 const getJson = <T>(path: string) => send<T>("GET", path);
 const sessionPath = (id: string) => `/api/seances/${encodeURIComponent(id)}`;
+const versionQuery = (version: string) => `?version=${encodeURIComponent(version)}`;
 
 export const api = {
   info: () => getJson<AppInfo>("/api/etat"),
@@ -434,14 +508,25 @@ export const api = {
   session: (id: string) => getJson<SessionDetail>(sessionPath(id)),
   transcript: (id: string) =>
     getJson<CorrectedView>(`${sessionPath(id)}/transcript`),
-  addEdit: (id: string, edit: EditRequest) =>
-    send<CorrectedView>("POST", `${sessionPath(id)}/corrections`, edit),
-  undo: (id: string, editId: number) =>
-    send<CorrectedView>("POST", `${sessionPath(id)}/corrections/${editId}/annuler`),
-  redo: (id: string, editId: number) =>
-    send<CorrectedView>("POST", `${sessionPath(id)}/corrections/${editId}/retablir`),
-  resetText: (id: string, turn: number) =>
-    send<CorrectedView>("POST", `${sessionPath(id)}/repliques/${turn}/texte-d-origine`),
+  // `version`: the « who said what » run the page shows. A correction meant for another
+  // one is refused (409) rather than written on other lines.
+  addEdit: (id: string, edit: EditRequest, version: string) =>
+    send<CorrectedView>("POST", `${sessionPath(id)}/corrections${versionQuery(version)}`, edit),
+  undo: (id: string, editId: number, version: string) =>
+    send<CorrectedView>(
+      "POST",
+      `${sessionPath(id)}/corrections/${editId}/annuler${versionQuery(version)}`,
+    ),
+  redo: (id: string, editId: number, version: string) =>
+    send<CorrectedView>(
+      "POST",
+      `${sessionPath(id)}/corrections/${editId}/retablir${versionQuery(version)}`,
+    ),
+  resetText: (id: string, turn: number, version: string) =>
+    send<CorrectedView>(
+      "POST",
+      `${sessionPath(id)}/repliques/${turn}/texte-d-origine${versionQuery(version)}`,
+    ),
   setAttendees: (id: string, personIds: number[], unnamed: number | null) =>
     send<Session>("PUT", `${sessionPath(id)}/presents`, {
       person_ids: personIds,
@@ -469,6 +554,11 @@ export const api = {
   removeTimedNote: (id: number) =>
     send<RecordingState>("POST", `/api/enregistrement/notes/${id}/retirer`),
   processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
+  versions: (id: string) => getJson<Versions>(`${sessionPath(id)}/versions`),
+  showVersion: (id: string, runId: string) =>
+    send<Versions>("POST", `${sessionPath(id)}/versions/${encodeURIComponent(runId)}/afficher`),
+  rerun: (id: string, stage: Rerun, attendees: number | null) =>
+    send<Session>("POST", `${sessionPath(id)}/relancer`, { etape: stage, presents: attendees }),
   resume: (id: string, attendees?: number) =>
     send<Session>(
       "POST",

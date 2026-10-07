@@ -106,6 +106,11 @@ Request = Annotated[AnyRequest, Field(discriminator="kind")]
 _REQUEST: TypeAdapter[AnyRequest] = TypeAdapter(Request)
 
 
+def parse_request(payload: str) -> AnyRequest:
+    """A correction as the journal keeps it."""
+    return _REQUEST.validate_json(payload)
+
+
 # -- what the review shows ---------------------------------------------------------------
 
 
@@ -189,15 +194,40 @@ class Untranscribed(BaseModel):
     end: float
 
 
+class NotCarried(BaseModel):
+    """A correction of the replaced version that could not be carried over (P8)."""
+
+    edit_id: int
+    description: str
+    """What it was, as it read on its own version."""
+    reason: str
+    at_s: float | None
+    """Measured time of the passage it corrected, when it has one."""
+    text: str | None = None
+    """For a text correction: the corrected text, to take back by hand."""
+    partial: bool = False
+    """Carried for some of its lines only; the reason says how many."""
+
+
+class Carryover(BaseModel):
+    """How the corrections of the version this one replaced were carried over to it."""
+
+    from_run_id: str
+    carried: int
+    """Carried over in full."""
+    not_carried: list[NotCarried]
+    """Not carried, or only in part."""
+
+
 class CorrectedView(BaseModel):
     run_id: str
     turns: list[Turn]
     speakers: list[Speaker]
     untranscribed: list[Untranscribed]
     edits: list[EditInfo]
-    other_run_edits: int
-    """Corrections made on another run of this session, not carried over (step 7 of the
-    plan): counted and shown, never dropped (P8)."""
+    carryover: Carryover | None = None
+    """When this version replaced another: what was carried over from it, and what was not
+    (step 7 of the plan). The other version keeps its own corrections."""
     word_count: int
     timed_share: float
     phases: list[Phase] = []
@@ -216,6 +246,23 @@ class CorrectedView(BaseModel):
 
 class CorrectionError(SpaceError):
     """A correction that cannot apply; the message is shown to the user."""
+
+
+class VersionChangedError(CorrectionError):
+    """The correction was meant for another version than the one now shown (a rerun ended,
+    or another version was shown meanwhile): nothing is written, the page reloads."""
+
+
+def _guard(conn: sqlite3.Connection, session_id: str, checked_on: str, version: str | None) -> None:
+    """Inside the write transaction (BEGIN IMMEDIATE, as the carrying over of a new version
+    is): the version the correction was checked against, and the one the page showed, are
+    still the version shown. Otherwise a correction could land on another version's line,
+    or on a version just replaced, after its corrections were carried over."""
+    shown = _active_attribute_run(conn, session_id)
+    if shown != checked_on or (version is not None and version != shown):
+        raise VersionChangedError(
+            "La version affichée vient de changer : rien n'a été enregistré. La page se met à jour."
+        )
 
 
 # -- building the view -------------------------------------------------------------------
@@ -308,12 +355,15 @@ def _journal(conn: sqlite3.Connection, session_id: str) -> list[_Journal]:
     ]
 
 
-def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
-    """The corrected view of the session's active « who said what » run; None before it
-    exists."""
+def build_view(
+    data: DataDir, session_id: str, *, run_id: str | None = None
+) -> CorrectedView | None:
+    """The corrected view of the session's active « who said what » run (or of another of
+    its runs, with that run's own corrections); None before it exists."""
     conn = connect(data)
     try:
-        run_id = _active_attribute_run(conn, session_id)
+        if run_id is None:
+            run_id = _active_attribute_run(conn, session_id)
         if run_id is None:
             return None
         transcript = read_output(data.run_dir(session_id, run_id), AttributedTranscript)
@@ -326,6 +376,7 @@ def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
         detection_run = _active_detection(conn, session_id, run_id)
         marked = marks.markers(conn, session_id)
         notes_taken = marks.timed_notes(conn, session_id)
+        carried = _carryover(conn, run_id)
     finally:
         conn.close()
     detection: PhaseDetection | None = None
@@ -339,7 +390,7 @@ def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
                 f"Les chapitres détectés ({detection_run}/output.json) sont illisibles : "
                 f"{type(exc).__name__}. A-t-il été modifié ou supprimé dans le Finder ?"
             )
-    return _replay(
+    view = _replay(
         transcript,
         run_id,
         journal,
@@ -350,6 +401,39 @@ def build_view(data: DataDir, session_id: str) -> CorrectedView | None:
         detection_problem=problem,
         markers=marked,
         timed_notes=notes_taken,
+    )
+    view.carryover = carried
+    return view
+
+
+def _carryover(conn: sqlite3.Connection, run_id: str) -> Carryover | None:
+    rows = conn.execute(
+        "SELECT c.edit_id, c.outcome, c.reason, c.description, e.run_id, e.kind, e.payload,"
+        " e.anchor_start_s FROM edit_carryover c JOIN edit e ON e.id = c.edit_id"
+        " WHERE c.target_run_id = ? ORDER BY e.id",
+        (run_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    missing: list[NotCarried] = []
+    for row in rows:
+        if row["outcome"] == "applied":
+            continue
+        request = parse_request(row["payload"])
+        missing.append(
+            NotCarried(
+                edit_id=row["edit_id"],
+                description=row["description"],
+                reason=row["reason"] or "",
+                at_s=row["anchor_start_s"],
+                text=request.text if isinstance(request, EditText) else None,
+                partial=row["outcome"] == "partial",
+            )
+        )
+    return Carryover(
+        from_run_id=rows[0]["run_id"],
+        carried=sum(1 for r in rows if r["outcome"] == "applied"),
+        not_carried=missing,
     )
 
 
@@ -418,13 +502,11 @@ def _replay(
     undone_by = {e.reverts: e.id for e in journal if e.kind == EditKind.REVERT and e.reverts}
     reverted = set(undone_by)
     infos: list[EditInfo] = []
-    other_run = 0
     for entry in journal:
         if entry.kind == EditKind.REVERT:
             continue
         if entry.run_id != run_id:
-            other_run += 1
-            continue
+            continue  # another version's: carried over or listed (Carryover), or its own
         request = _REQUEST.validate_json(entry.payload)
         live = entry.id not in reverted
         description = _describe(request, numbers, new_voices, assigned, people, transcript)
@@ -518,7 +600,6 @@ def _replay(
         speakers=speakers,
         untranscribed=[Untranscribed(start=u.start, end=u.end) for u in transcript.untranscribed],
         edits=infos,
-        other_run_edits=other_run,
         word_count=len(all_words),
         timed_share=timed / len(all_words) if all_words else 0.0,
         phases=phases,
@@ -726,7 +807,10 @@ def _describe(
                 return f"{before} : {request.name}"
             return f"{before} : sans nom"
         case MergeSpeakers():
-            return f"{voice(request.source)} fusionné avec {voice(request.target)}"
+            source, target = voice(request.source), voice(request.target)
+            if source == target:
+                return f"Les deux voix de {source} réunies"
+            return f"{source} fusionné avec {target}"
         case ReassignTurns():
             count = len(request.turns)
             lines = "1 réplique donnée" if count == 1 else f"{count} répliques données"
@@ -766,8 +850,11 @@ def _session_space(conn: sqlite3.Connection, session_id: str) -> int:
     return row["space_id"]
 
 
-def add(data: DataDir, session_id: str, raw: object) -> CorrectedView:
-    """Check a correction against the current corrected view, then record it."""
+def add(
+    data: DataDir, session_id: str, raw: object, *, version: str | None = None
+) -> CorrectedView:
+    """Check a correction against the current corrected view, then record it. `version`:
+    the « who said what » run the page showed when the user made it."""
     request = _REQUEST.validate_python(raw)
     view = build_view(data, session_id)
     conn = connect(data)
@@ -882,6 +969,8 @@ def add(data: DataDir, session_id: str, raw: object) -> CorrectedView:
                 turn = view.turns[request.turn]
                 anchor = (turn.start, turn.end)
         with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _guard(conn, session_id, view.run_id, version)
             conn.execute(
                 "INSERT INTO edit (session_id, run_id, kind, payload, person_id,"
                 " anchor_start_s, anchor_end_s, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -926,14 +1015,19 @@ def _edit_row(conn: sqlite3.Connection, session_id: str, edit_id: int) -> sqlite
     return row
 
 
-def undo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:
-    """Undo a correction: an entry pointing at it is added; nothing is erased."""
+def undo(
+    data: DataDir, session_id: str, edit_id: int, *, version: str | None = None
+) -> CorrectedView:
+    """Undo a correction of the version shown: an entry pointing at it is added; nothing is
+    erased."""
     conn = connect(data)
     try:
         row = _edit_row(conn, session_id, edit_id)
         if conn.execute("SELECT 1 FROM edit WHERE reverts_edit_id = ?", (edit_id,)).fetchone():
             raise CorrectionError("Cette correction est déjà annulée.")
         with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _guard(conn, session_id, row["run_id"], version)
             conn.execute(
                 "INSERT INTO edit (session_id, run_id, kind, payload, reverts_edit_id,"
                 " created_at) VALUES (?, ?, ?, '{}', ?, ?)",
@@ -946,7 +1040,9 @@ def undo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:
     return view
 
 
-def reset_text(data: DataDir, session_id: str, turn: int) -> CorrectedView:
+def reset_text(
+    data: DataDir, session_id: str, turn: int, *, version: str | None = None
+) -> CorrectedView:
     """Back to the engine's text for one line: every text correction of it still in force
     is undone (each one by an entry of its own, so it can be redone)."""
     view = build_view(data, session_id)
@@ -958,6 +1054,8 @@ def reset_text(data: DataDir, session_id: str, turn: int) -> CorrectedView:
     conn = connect(data)
     try:
         with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _guard(conn, session_id, view.run_id, version)
             conn.executemany(
                 "INSERT INTO edit (session_id, run_id, kind, payload, reverts_edit_id,"
                 " created_at) VALUES (?, ?, ?, '{}', ?, ?)",
@@ -974,18 +1072,22 @@ def reset_text(data: DataDir, session_id: str, turn: int) -> CorrectedView:
     return result
 
 
-def redo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:
-    """Apply an undone correction again, as a new entry (checked against today's view)."""
+def redo(
+    data: DataDir, session_id: str, edit_id: int, *, version: str | None = None
+) -> CorrectedView:
+    """Apply an undone correction of the version shown again, as a new entry (checked
+    against today's view)."""
     conn = connect(data)
     try:
         row = _edit_row(conn, session_id, edit_id)
         undone = conn.execute("SELECT 1 FROM edit WHERE reverts_edit_id = ?", (edit_id,)).fetchone()
         # Already redone: a later copy of it that is still in force.
+        # (On the same version: a copy carried over to another one is not a redo.)
         redone = conn.execute(
-            "SELECT 1 FROM edit e WHERE e.session_id = ? AND e.id > ? AND e.kind = ?"
-            " AND e.payload = ? AND NOT EXISTS"
+            "SELECT 1 FROM edit e WHERE e.session_id = ? AND e.run_id = ? AND e.id > ?"
+            " AND e.kind = ? AND e.payload = ? AND NOT EXISTS"
             " (SELECT 1 FROM edit r WHERE r.reverts_edit_id = e.id)",
-            (session_id, edit_id, row["kind"], row["payload"]),
+            (session_id, row["run_id"], edit_id, row["kind"], row["payload"]),
         ).fetchone()
     finally:
         conn.close()
@@ -993,4 +1095,5 @@ def redo(data: DataDir, session_id: str, edit_id: int) -> CorrectedView:
         raise CorrectionError("Cette correction n'est pas annulée.")
     if redone:
         raise CorrectionError("Cette correction est déjà rétablie.")
-    return add(data, session_id, json.loads(row["payload"]))
+    # Its line numbers are those of its own version: replayed on that version only.
+    return add(data, session_id, json.loads(row["payload"]), version=version or row["run_id"])

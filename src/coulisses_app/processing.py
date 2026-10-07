@@ -3,6 +3,10 @@
 Each stage is a run of the engine in its own folder (`sessions/<id>/runs/<run_id>/`),
 recorded in the database. A job resumes after a stop or a crash: the runs it already
 finished successfully are reused, the others start again in a new folder (P5, ADR 0018).
+
+A job's runs become the session's version all at once, when every stage has succeeded: a
+rerun that stops halfway leaves the version shown as it was. The corrections of the
+version shown until then are carried over to the new one in the same transaction (step 7).
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ from coulisses.api import (
 )
 from pydantic import BaseModel
 
-from coulisses_app import jobs, settings
+from coulisses_app import carryover, jobs, settings
 from coulisses_app.capture import KeepAwake
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.generate import (
@@ -83,8 +87,9 @@ def _record_finished(conn: sqlite3.Connection, run_id: str, prov: Provenance) ->
     )
 
 
-def _activate(conn: sqlite3.Connection, session_id: str, stage: str, run_id: str) -> None:
-    """A successful run becomes the one shown and used downstream for its stage."""
+def activate(conn: sqlite3.Connection, session_id: str, stage: str, run_id: str) -> None:
+    """A successful run becomes the one shown and used downstream for its stage. Only ever
+    with the rest of its version (`_complete`, `versions.show`)."""
     conn.execute(
         "INSERT INTO active_run (session_id, stage, run_id) VALUES (?, ?, ?)"
         " ON CONFLICT (session_id, stage) DO UPDATE SET run_id = excluded.run_id",
@@ -257,7 +262,26 @@ class Processor:
         runs_dir = self.data.runs_dir(job.session_id)
         runs_dir.mkdir(parents=True, exist_ok=True)
 
+        params = job.params
+        assert isinstance(params, jobs.ChainParams)
+
+        # A rerun keeps stages of the version it starts from: never made again in silence.
+        for stage, kept in params.reuse.items():
+            kept_dir = runs_dir / kept
+            done = read_provenance(kept_dir) if kept_dir.is_dir() else None
+            if done is None or done.status != "succeeded":
+                return ChainJobResult(
+                    error=f"L'étape « {STAGE_LABELS.get(stage, stage)} » de la version de "
+                    "départ est introuvable dans le dossier de la séance. A-t-elle été "
+                    "supprimée dans le Finder ? La relance s'arrête ; la version affichée n'a "
+                    "pas changé."
+                )
+
         def folder_of(stage: StageName) -> Path:
+            kept = params.reuse.get(stage.value)
+            if kept is not None:
+                # A rerun: this stage is the one of the version it starts from.
+                return runs_dir / kept
             conn = connect(self.data)
             try:
                 row = conn.execute(
@@ -322,14 +346,10 @@ class Processor:
             try:
                 with conn:
                     _record_finished(conn, folder.name, prov)
-                    if prov.status == "succeeded":
-                        _activate(conn, job.session_id, stage.value, folder.name)
             finally:
                 conn.close()
             return prov, used
 
-        params = job.params
-        assert isinstance(params, jobs.ChainParams)
         runs = run_chain(
             self.chain,
             ChainInput(audio=audio, attendees=params.attendees, glossary=tuple(params.glossary)),
@@ -347,7 +367,45 @@ class Processor:
         missing = [s.value for s in planned_stages(self.chain) if not _ran(runs, s)]
         if missing:
             return ChainJobResult(error=f"Étapes non lancées : {', '.join(missing)}")
+        try:
+            self._complete(job.session_id, runs)
+        except Exception as exc:
+            # The details go to the log; the user reads what happened and what to do.
+            log.exception("job %s: the new version could not be put in place: %s", job.id, exc)
+            return ChainJobResult(
+                error="Le report des corrections sur la nouvelle version a échoué. La version "
+                "affichée n'a pas changé ; reprendre le traitement réessaie."
+            )
         return ChainJobResult(error=None)
+
+    def _complete(self, session_id: str, runs: ChainRuns) -> None:
+        """The job's runs become the session's version, all at once; the corrections of the
+        version shown until then are carried over to it first, in the same transaction.
+        Done again after a crash, it changes nothing."""
+        target = runs.attribute.folder.name if runs.attribute is not None else None
+        conn = connect(self.data)
+        try:
+            with conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT run_id FROM active_run WHERE session_id = ? AND stage = 'attribute'",
+                    (session_id,),
+                ).fetchone()
+                source = row["run_id"] if row else None
+                if target is not None and source is not None and source != target:
+                    carried = carryover.carry(conn, self.data, session_id, source, target)
+                    log.info(
+                        "session %s: %d correction(s) considered for %s, %d not carried",
+                        session_id,
+                        len(carried),
+                        target,
+                        sum(1 for c in carried if not c.applied),
+                    )
+                for run in runs.all:
+                    if run.succeeded:
+                        activate(conn, session_id, run.provenance.stage, run.folder.name)
+        finally:
+            conn.close()
 
     # -- after a crash ------------------------------------------------------------------
 
@@ -413,9 +471,9 @@ class Processor:
                     conn.execute("UPDATE run SET error_summary = ? WHERE id = ?", (message, run_id))
                 return message
         with conn:
+            # Succeeded or not, it becomes part of a version only when its job ends
+            # (`_complete`): the job goes back in the queue and reuses it.
             _record_finished(conn, run_id, prov)
-            if prov.status == "succeeded":
-                _activate(conn, session_id, prov.stage, run_id)
         return None
 
 
