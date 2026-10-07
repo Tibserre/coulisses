@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import mimetypes
 import sqlite3
 from collections.abc import AsyncGenerator, Generator
@@ -38,6 +39,7 @@ from coulisses_app import (
     jobs,
     marks,
     notes,
+    retention,
     sessions,
     settings,
     spaces,
@@ -51,6 +53,8 @@ from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, ModelClient
 from coulisses_app.prompting.ollama import InstalledModel, OllamaClient, OllamaError
 from coulisses_app.status import StageView, stage_views
 from coulisses_app.storage.db import connect
+
+log = logging.getLogger(__name__)
 
 
 class AppInfo(BaseModel):
@@ -147,6 +151,36 @@ class TimedNoteRequest(BaseModel):
     """Recorded time when its first letter was typed."""
 
 
+class RetentionInfo(BaseModel):
+    settings: retention.RetentionSettings
+    coming: list[retention.Announcement]
+    """Purges announced and not done yet: the banner."""
+    journal: list[retention.LogEntry]
+    backups: list[retention.Backup]
+    problems: list[str]
+    """What the last check could not do."""
+
+
+class RetentionRequest(BaseModel):
+    retention_days: int
+    notice_days: int
+
+
+class KeepAudioRequest(BaseModel):
+    keep: bool
+
+
+class AudioRemoved(BaseModel):
+    session: sessions.Session
+    problems: list[str]
+    """What stayed on the disk; the audio is gone from Coulisses anyway."""
+
+
+class Deleted(BaseModel):
+    problems: list[str]
+    """What could not be done on the disk; the session is gone from Coulisses anyway."""
+
+
 class PowerInfo(BaseModel):
     on_battery: bool
 
@@ -193,6 +227,7 @@ def create_app(
     recovery_problems: list[str] | None = None,
     model_client: ModelClient | None = None,
     recorder: capture.Recorder | None = None,
+    watcher: retention.Watcher | None = None,
 ) -> FastAPI:
     """`processor` is started and stopped with the service; None in tests that drive it.
     `model_client` answers the list of installed models (Ollama by default)."""
@@ -203,9 +238,13 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         if processor is not None:
             processor.start()
+        if watcher is not None:
+            watcher.start()
         try:
             yield
         finally:
+            if watcher is not None:
+                watcher.stop()
             try:
                 # A recording in progress is closed properly, never lost (spec §7.2).
                 recorder.shutdown(profile=profile)
@@ -342,6 +381,8 @@ def create_app(
                 raise HTTPException(
                     status_code=409, detail="Le traitement de cette séance n'est pas en échec."
                 )
+            if retention.audio_status(data, session_id).state == "removed":
+                raise HTTPException(status_code=409, detail=versions.AUDIO_GONE)
             if demande is not None and demande.presents is not None:
                 # Only a diarization refused for too few voices may be redone with another
                 # minimum: after any other failure, the successful runs (diarization
@@ -737,13 +778,78 @@ def create_app(
         path = sessions.reference_audio_path(data, session_id)
         if path is None:
             raise _not_found("Séance introuvable.")
+        status = retention.audio_status(data, session_id)
+        if status.state == "removed":
+            raise _not_found("L'audio de cette séance a été supprimé.")
         if not path.is_file():
             raise _not_found(
-                f"L'enregistrement est introuvable ({path}). "
+                "L'enregistrement est introuvable dans le dossier de la séance. "
                 "A-t-il été déplacé ou supprimé dans le Finder ?"
             )
         media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         return FileResponse(path, media_type=media_type)
+
+    # -- keeping the audio, deleting (step 9, ADR 0029) --------------------------------
+
+    def _retention_info() -> RetentionInfo:
+        conn = connect(data)
+        try:
+            settings_now = retention.get_settings(conn)
+        finally:
+            conn.close()
+        return RetentionInfo(
+            settings=settings_now,
+            coming=retention.coming(data),
+            journal=retention.journal(data),
+            backups=retention.backups(data),
+            problems=watcher.problems if watcher is not None else [],
+        )
+
+    @app.get("/api/conservation")
+    def retention_info() -> RetentionInfo:
+        return _retention_info()
+
+    @app.put("/api/conservation")
+    def set_retention(demande: RetentionRequest) -> RetentionInfo:
+        conn = connect(data)
+        try:
+            retention.set_settings(conn, demande.retention_days, demande.notice_days)
+        finally:
+            conn.close()
+        if watcher is not None:
+            # Announced at once with the new delays; a failed check is said, the settings
+            # are saved all the same.
+            try:
+                watcher.run_once()
+            except Exception as exc:
+                log.exception("retention check after a change of settings")
+                watcher.problems = [f"La vérification de la conservation a échoué : {exc}"]
+        return _retention_info()
+
+    def _session_now(session_id: str) -> sessions.Session:
+        session = sessions.get_session(data, session_id)
+        if session is None:
+            raise _not_found("Séance introuvable.")
+        return session
+
+    @app.put("/api/seances/{session_id}/garder-audio")
+    def keep_audio(session_id: str, demande: KeepAudioRequest) -> sessions.Session:
+        retention.keep_audio(data, session_id, demande.keep)
+        return _session_now(session_id)
+
+    @app.post("/api/seances/{session_id}/prolonger")
+    def extend_audio(session_id: str) -> sessions.Session:
+        retention.extend(data, session_id)
+        return _session_now(session_id)
+
+    @app.post("/api/seances/{session_id}/supprimer-audio")
+    def remove_audio(session_id: str) -> AudioRemoved:
+        left = retention.remove_audio(data, session_id, "audio_deletion")
+        return AudioRemoved(session=_session_now(session_id), problems=left)
+
+    @app.delete("/api/seances/{session_id}")
+    def delete_session(session_id: str) -> Deleted:
+        return Deleted(problems=retention.delete_session(data, session_id))
 
     _mount_interface(app, web_dir)
     return app

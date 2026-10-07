@@ -18,6 +18,7 @@ from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
+from coulisses_app.retention import Watcher
 from coulisses_app.sessions import interrupted_imports
 from coulisses_app.storage.db import migrate
 
@@ -72,6 +73,7 @@ def main(argv: list[str] | None = None) -> None:
         web_dir=default_web_dir(),
         recovery_problems=problems,
         recorder=Recorder(data, keep_awake=awake),
+        watcher=Watcher(data),
     )
     url = f"http://{HOST}:{args.port}/"
     if not args.sans_navigateur:

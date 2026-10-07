@@ -56,9 +56,9 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `action_preference` | `space_id*`, `action_ref*`, `model` (inutilisée depuis l'ADR 0025), `auto_run*` (depuis l'ADR 0025 : le résumé proposé en premier dans l'espace ; rien ne se lance seul) | 3 |
 | `project` + `session.project_id` | `id`, `space_id*`, `name*`, `created_at*`, `archived_at` | 8 |
 | `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind`, `ref`, `text`. Cache reconstructible, jamais une source de vérité | 8 |
-| `session` (conservation) | `pinned*`, `retain_until` (prolongation), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) | 9 |
-| `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion`), `session_id*` (sans clé étrangère : la trace survit à la séance), `session_title`, `detail*` (JSON : fichiers supprimés, tailles) | 9 |
-| `app_setting` | `key*`, `value*` (JSON) : modèle de génération choisi (étape 3), puis durée de conservation, préavis, dossier d'export | 3 |
+| `session` (conservation) | `keep_audio*` (bool : « Garder l'audio »), `retain_until` (prolongation), `purge_announced_at` (purge annoncée ; elle n'a lieu qu'une fois le préavis écoulé depuis), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) (migration 0007, ADR 0029) | 9 |
+| `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion`), `session_id*` (sans clé étrangère : la trace survit à la séance), `session_title` (vide pour une séance supprimée : aucun texte n'en reste), `detail*` (JSON : fichiers supprimés, tailles, problèmes) (migration 0007) | 9 |
+| `app_setting` | `key*`, `value*` (JSON) : modèle de génération choisi (étape 3), durée de conservation (`conservation_jours`) et préavis (`preavis_jours`) (étape 9), puis dossier d'export | 3 |
 
 ## Ce qui n'est pas en base
 
@@ -74,5 +74,5 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 - **Périmée** (`stale`) est un état calculé, jamais stocké. Pour les étapes du moteur : l'exécution active d'une étape qu'une relance en cours (ou arrêtée) refait. Pour les générations : faites sur une autre version, d'autres corrections, d'autres chapitres ou une autre note.
 - Une correction n'est jamais effacée : l'annuler ajoute une correction qui la désigne (`reverts_edit_id`).
 - Un fichier attendu et absent (supprimé dans le Finder) se signale à l'affichage ; la base n'est pas modifiée en silence.
-- La suppression d'une séance entière efface sa ligne et son dossier. Les sauvegardes de migration, elles, gardent une copie de la base : la confirmation le dit, et l'application liste ces sauvegardes ; l'utilisateur les supprime lui-même s'il le souhaite (étape 9, choix de l'utilisateur du 2026-10-05).
+- La suppression d'une séance entière efface ses lignes (en `secure_delete`, journal de la base vidé), son dossier, et ses lignes dans chaque sauvegarde de migration, compactée ensuite (ADR 0029, choix de l'utilisateur du 2026-10-07).
 - Le minimum de voix transmis au moteur : le nombre de présents cochés plus `unnamed_attendees` (rien si les deux sont nuls).

@@ -14,7 +14,7 @@ from typing import BinaryIO
 
 from pydantic import BaseModel
 
-from coulisses_app import jobs, spaces
+from coulisses_app import jobs, retention, spaces
 from coulisses_app.media import probe
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect, now_iso
@@ -65,6 +65,8 @@ class Session(BaseModel):
     job_state: str | None
     """State of the latest job: queued, running, done, failed; None if never processed."""
     job_error: str | None
+    audio: retention.AudioStatus
+    """Kept, removed (when, why), or when its purge is due (spec §7.10)."""
 
 
 def new_session_id(when: datetime) -> str:
@@ -200,6 +202,7 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
         duration_s=row["duration_s"],
         job_state=row["job_state"],
         job_error=row["job_error"],
+        audio=retention.status_of(conn, row, retention.get_settings(conn), datetime.now(UTC)),
     )
 
 
@@ -430,7 +433,8 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
     conn = connect(data)
     try:
         row = conn.execute(
-            "SELECT s.space_id, s.unnamed_attendees, a.capture_state, a.duration_s FROM session s"
+            "SELECT s.space_id, s.unnamed_attendees, s.audio_removed_at, a.capture_state,"
+            " a.duration_s FROM session s"
             " JOIN audio_source a ON a.session_id = s.id AND a.source_id = s.reference_source_id"
             " WHERE s.id = ?",
             (session_id,),
@@ -439,6 +443,8 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
             raise spaces.NotFoundError("Séance introuvable.")
         if row["capture_state"] == "recording":
             raise AlreadyProcessedError("L'enregistrement n'est pas terminé.")
+        if row["audio_removed_at"]:
+            raise AlreadyProcessedError("L'audio de cette séance a été supprimé : rien à traiter.")
         if row["capture_state"] is not None and row["duration_s"] is None:
             raise AlreadyProcessedError(
                 "Le fichier de cet enregistrement est illisible : il n'y a rien à traiter."

@@ -21,6 +21,8 @@ import {
 import { AppFooter } from "../components/AppFooter.tsx";
 import { AppHeader } from "../components/AppHeader.tsx";
 import { JobBadge } from "../components/JobBadge.tsx";
+import { Badge } from "@astryxdesign/core/Badge";
+import { formatDay, takeMessage } from "../retention.ts";
 import { formatBytes, formatClock, formatDate, formatDuration, plural } from "../format.ts";
 
 const ACCEPT =
@@ -31,6 +33,8 @@ export function LibraryPage() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [recording, setRecording] = useState<RecordingState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Left by a session page that just deleted its session (what stayed on the disk).
+  const [message, setMessage] = useState<string | null>(() => takeMessage());
 
   const refresh = useCallback(async () => {
     try {
@@ -74,6 +78,9 @@ export function LibraryPage() {
               title="Le traitement en tâche de fond a rencontré une erreur"
               description={`${info.processing_error}. Il réessaie toutes les deux secondes ; si le message reste, relancez Coulisses.`}
             />
+          )}
+          {message && (
+            <Banner status="warning" title="Suppression incomplète" description={message} isDismissable onDismiss={() => setMessage(null)} />
           )}
           {info && info.recovery_problems.length > 0 && (
             <Banner
@@ -144,7 +151,14 @@ export function LibraryPage() {
                             ? ` · ${plural(present, "présent", "présents")}`
                             : ""}
                         </Text>
-                        <JobBadge state={s.job_state} />
+                        <span className="cl-sessions__badges">
+                          {s.audio.state === "announced" && s.audio.purge_on && (
+                            <Badge variant="warning" label={`Suppression de l'audio le ${formatDay(s.audio.purge_on)}`} />
+                          )}
+                          {s.audio.state === "removed" && <Badge variant="neutral" label="Audio supprimé" />}
+                          {s.audio.state === "kept" && <Badge variant="neutral" label="Audio gardé" />}
+                          <JobBadge state={s.job_state} />
+                        </span>
                       </a>
                     </li>
                   );

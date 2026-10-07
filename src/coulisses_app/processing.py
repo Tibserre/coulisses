@@ -252,6 +252,18 @@ class Processor:
         return result
 
     def _run_chain_job(self, job: jobs.Job, interrupted: list[str]) -> ChainJobResult:
+        conn = connect(self.data)
+        try:
+            removed = conn.execute(
+                "SELECT audio_removed_at FROM session WHERE id = ?", (job.session_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+        if removed is not None and removed["audio_removed_at"]:
+            return ChainJobResult(
+                error="L'audio de cette séance a été supprimé : le traitement ne peut plus "
+                "reprendre."
+            )
         audio = reference_audio_path(self.data, job.session_id)
         if audio is None or not audio.is_file():
             return ChainJobResult(

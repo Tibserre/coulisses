@@ -9,6 +9,7 @@ import { SessionPage } from "./pages/SessionPage.tsx";
 import { SpacesPage } from "./pages/SpacesPage.tsx";
 import { ActionsPage } from "./pages/ActionsPage.tsx";
 import { RecordingPage } from "./pages/RecordingPage.tsx";
+import { SettingsPage } from "./pages/SettingsPage.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 
 type Route =
@@ -16,14 +17,16 @@ type Route =
   | { page: "session"; id: string }
   | { page: "spaces"; id: number | null }
   | { page: "actions"; ref: string | null }
-  | { page: "recording" };
+  | { page: "recording" }
+  | { page: "settings" };
 
 function parseRoute(hash: string): Route {
   const session = /^#\/seance\/([^/?#]+)/.exec(hash);
   if (session) return { page: "session", id: decodeURIComponent(session[1]) };
   const spaces = /^#\/espaces(?:\/(\d+))?/.exec(hash);
   if (spaces) return { page: "spaces", id: spaces[1] ? Number(spaces[1]) : null };
-  if (/^#\/enregistrement/.test(hash)) return { page: "recording" };
+  if (hash.startsWith("#/enregistrement")) return { page: "recording" };
+  if (hash.startsWith("#/reglages")) return { page: "settings" };
   const actions = /^#\/actions(?:\/([^/?#]+))?/.exec(hash);
   if (actions) return { page: "actions", ref: actions[1] ? decodeURIComponent(actions[1]) : null };
   return { page: "library" };
@@ -41,7 +44,9 @@ export function App() {
       <Theme theme={coulissesTheme}>
         <MotionConfig reducedMotion="user">
           <ErrorBoundary key={window.location.hash}>
-            {route.page === "session" ? (
+            {route.page === "settings" ? (
+            <SettingsPage />
+          ) : route.page === "session" ? (
             <SessionPage id={route.id} />
           ) : route.page === "spaces" ? (
             <SpacesPage id={route.id} />
