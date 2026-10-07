@@ -19,7 +19,7 @@ Le moteur (`coulisses-traiter`) range une séance dans un `session.json` et un d
 - `docs/technique/schema-donnees.md` est la référence. Une migration et sa mise à jour vont dans le même commit.
 - Le moteur garde son format pour ses propres outils. L'application ne lit de lui que ses dossiers d'exécution, selon ses schémas.
 - Le moteur garantit depuis la v1.2.0 qu'une exécution finie ne contient pas d'audio : la purge ne supprime que `sources/`.
-- Les copies de sauvegarde gardent le texte d'une séance supprimée : la confirmation de suppression le dit, et l'utilisateur supprime lui-même les sauvegardes s'il le veut (choix du 2026-10-05).
+- ~~Les copies de sauvegarde gardent le texte d'une séance supprimée : la confirmation de suppression le dit, et l'utilisateur supprime lui-même les sauvegardes s'il le veut (choix du 2026-10-05).~~ Remplacé par l'ADR 0029 : supprimer une séance l'efface aussi des sauvegardes.
 - La recherche plein texte (FTS5) est un cache reconstructible, pas une source de vérité.
 - Un fichier supprimé à la main dans le Finder se signale à l'affichage. La base n'est jamais « réparée » en silence.
 - Le glossaire gagne deux termes : tâche (`job`) et journal des suppressions (`deletion_log`).

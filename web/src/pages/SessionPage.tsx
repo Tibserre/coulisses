@@ -15,6 +15,7 @@ import {
   type CorrectedView,
   type Person,
   type PhasesStatus,
+  type Session,
   type SessionDetail,
   type StageView,
 } from "../api.ts";
@@ -27,6 +28,8 @@ import { GiveToPanel, TranscriptView, type Editing } from "../components/Transcr
 import { SummaryPanel } from "../components/SummaryPanel.tsx";
 import { NotesSection } from "../components/NotesSection.tsx";
 import { VersionsSection } from "../components/VersionsSection.tsx";
+import { SessionMenu } from "../components/SessionMenu.tsx";
+import { audioLine } from "../retention.ts";
 import { RERUN_NAME } from "../versions.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
@@ -59,6 +62,8 @@ export function SessionPage({ id }: { id: string }) {
   const [lastSelected, setLastSelected] = useState<number | null>(null);
   const [giving, setGiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [menuError, setMenuError] = useState<string | null>(null);
+  const [incomplete, setIncomplete] = useState<string | null>(null);
   const [tab, setTab] = useState<"overview" | "summary">("summary");
   /** Chapters folded by the user, by their first line. */
   const [folded, setFolded] = useState<Set<number>>(new Set());
@@ -346,13 +351,30 @@ export function SessionPage({ id }: { id: string }) {
   const title = session ? (session.title ?? `Séance du ${formatDate(session.recorded_at).toLowerCase()}`) : "";
   const present = session ? session.attendee_ids.length + (session.unnamed_attendees ?? 0) : 0;
 
+  const audioGone = session?.audio.state === "removed";
+  const audioText = session ? audioLine(session.audio) : null;
+  const sessionChanged = (next: Session) => setDetail((d) => (d ? { ...d, session: next } : d));
+  const audioAction = (action: () => Promise<Session>) => () =>
+    action().then(sessionChanged, (e: Error) => setMenuError(e.message));
+
   return (
-    <div className="cl-review">
-      <audio ref={pb.audioRef} src={api.audioUrl(id)} preload="metadata" />
+    <div className="cl-review" data-audio-gone={audioGone || undefined}>
+      {/* Once the audio is deleted there is nothing to load (spec §7.10). */}
+      <audio ref={pb.audioRef} src={audioGone ? undefined : api.audioUrl(id)} preload="metadata" />
       <header className="cl-review__header">
-        <a className="cl-back" href="#/">
-          <ArrowLeft size={16} strokeWidth={1.75} aria-hidden /> Enregistrements
-        </a>
+        <div className="cl-review__top">
+          <a className="cl-back" href="#/">
+            <ArrowLeft size={16} strokeWidth={1.75} aria-hidden /> Enregistrements
+          </a>
+          {session && (
+            <SessionMenu
+              session={session}
+              onChanged={sessionChanged}
+              onError={setMenuError}
+              onIncomplete={setIncomplete}
+            />
+          )}
+        </div>
         {session && (
           <div>
             <Text type="supporting">
@@ -368,6 +390,26 @@ export function SessionPage({ id }: { id: string }) {
             <Text color="secondary">
               {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
               {present ? ` · ${plural(present, "présent", "présents")}` : ""}
+              {audioText && (
+                <>
+                  {" · "}
+                  <span data-announced={session.audio.state === "announced" || undefined} className="cl-audio-note">
+                    {audioText}
+                  </span>
+                  {session.audio.state === "announced" && (
+                    <>
+                      {" · "}
+                      <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.keepAudio(id, true))}>
+                        Garder l'audio
+                      </button>
+                      {" · "}
+                      <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.extendAudio(id))}>
+                        Prolonger
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
               {!session.title_edited && attributeRun && (
                 <>
                   {" · "}
@@ -402,6 +444,16 @@ export function SessionPage({ id }: { id: string }) {
       {error && (
         <div className="cl-review__notice">
           <Banner status="error" title="Séance illisible" description={error} />
+        </div>
+      )}
+      {incomplete && (
+        <div className="cl-review__notice">
+          <Banner status="warning" title="Suppression incomplète" description={incomplete} isDismissable onDismiss={() => setIncomplete(null)} />
+        </div>
+      )}
+      {menuError && (
+        <div className="cl-review__notice">
+          <Banner status="error" title="Refusé" description={menuError} isDismissable onDismiss={() => setMenuError(null)} />
         </div>
       )}
       {detail && !model && (
@@ -553,7 +605,15 @@ export function SessionPage({ id }: { id: string }) {
               )}
             </aside>
           </div>
-          <PlayerBar model={model} pb={pb} current={currentRow} />
+          {audioGone ? (
+            <div className="cl-player-gone" role="status">
+              <Text color="secondary">
+                L'audio de cette séance a été supprimé{audioText ? ` (${audioText.replace("audio supprimé ", "")})` : ""} : la lecture n'est plus possible. Le texte reste modifiable.
+              </Text>
+            </div>
+          ) : (
+            <PlayerBar model={model} pb={pb} current={currentRow} />
+          )}
         </>
       )}
       <ProvenanceDialog sessionId={id} stage={provenanceOf} onClose={() => setProvenanceOf(null)} />
@@ -615,7 +675,8 @@ function RerunNotices({
       </div>,
     );
   }
-  if (rerun && session.job_state === "failed") {
+  // The audio deleted since: the rerun cannot be resumed, nothing is offered (spec §7.10).
+  if (rerun && session.job_state === "failed" && session.audio.state !== "removed") {
     const failed = detail.stages.find((s) => s.state === "failed");
     const why = dev
       ? (session.job_error ?? "Erreur inconnue")
@@ -712,6 +773,8 @@ function ProcessingPanel({
   const [attendees, setAttendees] = useState<number | null>(null);
   const proposed = attendees ?? (Number.isFinite(found) && found >= 1 ? found : 1);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  // The audio deleted (by hand, or never processed and deleted): nothing can be resumed.
+  const gone = session.audio.state === "removed";
   const resume = async (withAttendees?: number) => {
     setResumeError(null);
     try {
@@ -731,7 +794,15 @@ function ProcessingPanel({
               ? "Traitement en cours"
               : "Jamais traitée"}
       </Heading>
-      {session.job_state === null && <NotProcessed detail={detail} onProcess={onProcess} />}
+      {gone ? (
+        <Banner
+          status="info"
+          title="Audio supprimé"
+          description="L'audio de cette séance a été supprimé avant la fin de son traitement : il n'y a plus rien à traiter. La séance peut être supprimée depuis le menu « … »."
+        />
+      ) : (
+        session.job_state === null && <NotProcessed detail={detail} onProcess={onProcess} />
+      )}
       {running && (
         <Text color="secondary">
           Environ 10 minutes de calcul par heure d'audio. Vous pouvez fermer
@@ -745,7 +816,7 @@ function ProcessingPanel({
           traitement.
         </Text>
       )}
-      {failed && (
+      {failed && !gone && (
         <Banner
           status="error"
           title="Une étape a échoué"
@@ -762,7 +833,7 @@ function ProcessingPanel({
           }
         />
       )}
-      {failed && tooFew && (
+      {failed && tooFew && !gone && (
         <div className="cl-retry">
           <div style={{ width: 200 }}>
             <NumberInput
@@ -782,7 +853,7 @@ function ProcessingPanel({
       {resumeError && (
         <Banner status="error" title="La reprise a échoué" description={resumeError} />
       )}
-      {detail.source && !detail.source.file_present && (
+      {detail.source && !detail.source.file_present && !gone && (
         <Banner
           status="error"
           title="Enregistrement introuvable"

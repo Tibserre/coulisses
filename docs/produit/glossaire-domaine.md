@@ -57,7 +57,10 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Purge | `purge` | Suppression de tout l'audio d'une séance à échéance. Le texte reste. |
 | Suppression | `deletion` | Suppression manuelle et confirmée : de l'audio seul, ou de la séance entière, texte compris. Distincte de la purge. |
 | Journal des suppressions | `deletion_log` | Trace de chaque purge et de chaque suppression : quand, quoi, quelle séance. |
-| Épinglée | `pinned` | Séance soustraite à la purge. |
+| Audio gardé | `keep_audio` | Option d'une séance : son audio n'est jamais purgé (ADR 0029). Remplace « épinglée ». |
+| Préavis | `notice` | Délai entre l'annonce d'une purge et la purge elle-même (7 jours par défaut). |
+| Annonce de purge | `purge_announcement` | Avertissement (bandeau, notification macOS) qu'une purge aura lieu ; le préavis court à partir de lui. |
+| Prolonger | `extend` | Garder l'audio d'une séance une durée de conservation entière à partir d'aujourd'hui. |
 | Banc d'essai | `bench` | Outillage de mesure des moteurs sur mes données (`evaluation.md`). |
 | Campagne | `campaign` | Une série de tests du banc : des systèmes × les fichiers d'un jeu de test, avec son rapport. |
 | Système | `system` | Dans une campagne, une combinaison testée : moteur de transcription, modèle, réglages, et alignement si besoin. |

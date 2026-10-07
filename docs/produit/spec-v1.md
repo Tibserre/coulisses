@@ -156,20 +156,21 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.10 Conservation de l'audio
 
-- **Durée réglable**, 90 jours par défaut.
+- **Durée réglable**, 90 jours par défaut, comptés depuis l'entrée de la séance dans l'app (import ou enregistrement), jamais depuis la date du fichier (ADR 0029).
 - À échéance, l'audio est supprimé : l'original **et** toutes ses versions dérivées (rééchantillonnée, déréverbérée…). Les sorties textuelles de chaque étape sont gardées, ainsi que les empreintes vocales que le moteur a écrites dans ses exécutions. Elles ne servent à reconnaître les voix que dans un espace qui l'a activé.
 - **Aucune purge** d'une séance dont le traitement n'a pas abouti (transcription, alignement quand il est requis, diarisation et attribution réussis).
-- **Épingler** une séance la soustrait à la purge (extrait annoté pour l'évaluation, séance charnière).
-- **Avertissement à l'avance** (7 jours par défaut, réglable) des séances bientôt purgées, par un **bandeau dans l'app** et une **notification macOS**. Je peux prolonger.
-- **Suppression manuelle immédiate**, après confirmation, au choix :
+- **« Garder l'audio »**, option de chaque séance, la soustrait à la purge (extrait annoté pour l'évaluation, séance charnière).
+- **Avertissement à l'avance** (7 jours par défaut, réglable) des séances bientôt purgées, par un **bandeau dans l'app** et une **notification macOS**. Je peux prolonger ou garder l'audio. La purge n'a lieu qu'une fois le préavis écoulé depuis l'avertissement : rien ne disparaît sans avoir été annoncé, même si je n'ouvre pas l'app pendant des mois.
+- **Suppression manuelle immédiate et définitive**, après confirmation, depuis le menu « … » de la séance, au choix :
   - de l'**audio seul** : la séance devient une séance purgée ;
-  - de la **séance entière**, texte compris (transcript, corrections, notes, résumés). C'est la seule façon de supprimer du texte. L'app rappelle ce qui sera perdu avant de confirmer.
-- **Après purge** : plus de lecture audio ni de retraitement de la transcription, de l'alignement, de la diarisation ou des phases. Renommer les locuteurs, éditer le texte, relancer les résumés restent possibles. La séance l'indique clairement (« Audio supprimé le … »).
+  - de la **séance entière**, traitée ou non, texte compris (transcript, corrections, notes, chapitres, résumés), y compris dans les sauvegardes de la base. C'est la seule façon de supprimer du texte. L'app rappelle ce qui sera perdu avant de confirmer.
+- **Après purge** : plus de lecture audio ni de retraitement de la transcription, de l'alignement ou de la diarisation. Renommer les locuteurs, éditer le texte, redétecter les chapitres (ils ne lisent que le texte) et relancer les résumés restent possibles. La séance l'indique clairement (« audio supprimé le … »).
+- **Journal des suppressions**, dans les réglages : chaque purge et chaque suppression, avec sa date, ses fichiers et leur taille ; aucun texte d'une séance supprimée.
 
 ### 7.11 Bibliothèque
 
 - Séances groupées par espace et par projet, triées par date.
-- État visible de chaque séance : en traitement, prête, en erreur, audio bientôt purgé, audio purgé, épinglée.
+- État visible de chaque séance : en traitement, prête, en erreur, audio bientôt purgé, audio purgé, audio gardé.
 - **Recherche plein texte** dans les transcripts, les notes et les résumés (insensible aux accents et à la casse).
 - **Export Markdown** (résumé, transcript, ou les deux) et copie dans le presse-papiers.
 
@@ -212,7 +213,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture audio systèm
 - Sur l'extrait annoté, les tours de parole des phases de discussion sont majoritairement bien attribués, et nettement mieux qu'avec OpenWhispr sur le même audio (protocole : `evaluation.md`).
 - Je renomme un locuteur, je relance le résumé, et le bon nom apparaît.
 - Passer d'un modèle à un autre, à n'importe quelle étape, ne demande qu'un changement de configuration.
-- À échéance, la purge supprime l'audio et laisse intacts le transcript, les locuteurs et les résumés. Les séances épinglées ne sont pas touchées.
+- À échéance, la purge supprime l'audio et laisse intacts le transcript, les locuteurs et les résumés. Les séances dont l'audio est gardé ne sont pas touchées.
 - L'app fonctionne entièrement hors ligne.
 - Je juge le compte rendu au moins équivalent à celui d'OpenWhispr.
 

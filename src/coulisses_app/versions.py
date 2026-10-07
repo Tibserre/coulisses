@@ -92,6 +92,19 @@ def _ancestors(conn: sqlite3.Connection, run_id: str) -> dict[str, str]:
     return found
 
 
+AUDIO_GONE = (
+    "L'audio de cette séance a été supprimé : la transcription et les voix ne peuvent plus "
+    "être refaites. Le texte, les noms et les résumés restent modifiables."
+)
+
+
+def _audio_removed(conn: sqlite3.Connection, session_id: str) -> bool:
+    row = conn.execute(
+        "SELECT audio_removed_at FROM session WHERE id = ?", (session_id,)
+    ).fetchone()
+    return row is not None and row["audio_removed_at"] is not None
+
+
 def _chain_busy(conn: sqlite3.Connection, session_id: str) -> bool:
     return (
         conn.execute(
@@ -163,6 +176,8 @@ def request_rerun(
             raise SpaceError("Cette séance n'a pas encore été traitée jusqu'au bout.")
         if _chain_busy(conn, session_id):
             raise SpaceError("Un traitement de cette séance est déjà en cours.")
+        if _audio_removed(conn, session_id):
+            raise SpaceError(AUDIO_GONE)
         chain = _ancestors(conn, shown)
         reuse = {
             stage: run_id
@@ -237,6 +252,7 @@ def list_versions(data: DataDir, session_id: str) -> Versions:
         )
         transcribed_with = _engine_version(conn, chain.get("transcribe")) if chain else None
         busy = _chain_busy(conn, session_id)
+        gone = _audio_removed(conn, session_id)
         glossary_now = spaces.glossary_terms(conn, session["space_id"])
         attendees_now = len(spaces.attendee_ids(conn, session_id)) + (
             session["unnamed_attendees"] or 0
@@ -268,8 +284,12 @@ def list_versions(data: DataDir, session_id: str) -> Versions:
         facts = RerunFacts(possible=False, why_not="La séance n'a pas encore de version.")
     else:
         facts = RerunFacts(
-            possible=not busy,
-            why_not="Un traitement de cette séance est déjà en cours." if busy else None,
+            possible=not busy and not gone,
+            why_not=AUDIO_GONE
+            if gone
+            else "Un traitement de cette séance est déjà en cours."
+            if busy
+            else None,
             transcribe_s=_duration(data, session_id, [chain.get("transcribe"), chain.get("align")]),
             diarize_s=_duration(data, session_id, [chain.get("diarize"), chain.get("attribute")]),
             glossary_added=[t for t in glossary_now if t.casefold() not in had],

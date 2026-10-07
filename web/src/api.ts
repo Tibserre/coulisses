@@ -21,6 +21,53 @@ export interface Session {
   duration_s: number | null;
   job_state: JobState | null;
   job_error: string | null;
+  /** Kept, removed (when, why), or when its purge is due (spec §7.10). */
+  audio: AudioStatus;
+}
+
+export interface AudioStatus {
+  /** kept: « Garder l'audio » ; removed: gone ; never_processed: never purged until its
+   *  processing succeeds ; scheduled: due on `purge_on` ; announced: the purge was
+   *  announced and happens on `purge_on`. */
+  state: "kept" | "removed" | "scheduled" | "announced" | "never_processed";
+  purge_on: string | null;
+  removed_at: string | null;
+  removed_reason: "purge" | "audio_deletion" | null;
+}
+
+export interface RetentionSettings {
+  retention_days: number;
+  notice_days: number;
+}
+
+export interface PurgeAnnouncement {
+  session_id: string;
+  title: string | null;
+  recorded_at: string;
+  purge_on: string;
+}
+
+export interface DeletionLogEntry {
+  id: number;
+  at: string;
+  kind: "purge" | "audio_deletion" | "session_deletion";
+  session_id: string;
+  /** None for a deleted session: nothing of its text is kept. */
+  session_title: string | null;
+  files: number;
+  bytes: number;
+  /** What could not be done: an incomplete deletion is said, never shown as done. */
+  problems: string[];
+}
+
+export interface RetentionInfo {
+  settings: RetentionSettings;
+  /** Purges announced and not done yet. */
+  coming: PurgeAnnouncement[];
+  journal: DeletionLogEntry[];
+  /** `name` only in developer mode; `made_on` reads « 7 octobre 2026 ». */
+  backups: { name: string; made_on: string; bytes: number }[];
+  problems: string[];
 }
 
 export interface Space {
@@ -555,6 +602,17 @@ export const api = {
     send<RecordingState>("POST", `/api/enregistrement/notes/${id}/retirer`),
   processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   versions: (id: string) => getJson<Versions>(`${sessionPath(id)}/versions`),
+  retention: () => getJson<RetentionInfo>("/api/conservation"),
+  setRetention: (settings: RetentionSettings) =>
+    send<RetentionInfo>("PUT", "/api/conservation", settings),
+  keepAudio: (id: string, keep: boolean) =>
+    send<Session>("PUT", `${sessionPath(id)}/garder-audio`, { keep }),
+  extendAudio: (id: string) => send<Session>("POST", `${sessionPath(id)}/prolonger`),
+  /** `problems`: what stayed on the disk; the audio is gone from Coulisses anyway. */
+  removeAudio: (id: string) =>
+    send<{ session: Session; problems: string[] }>("POST", `${sessionPath(id)}/supprimer-audio`),
+  /** `problems`: what stayed on the disk; the session is gone from Coulisses anyway. */
+  deleteSession: (id: string) => send<{ problems: string[] }>("DELETE", sessionPath(id)),
   showVersion: (id: string, runId: string) =>
     send<Versions>("POST", `${sessionPath(id)}/versions/${encodeURIComponent(runId)}/afficher`),
   rerun: (id: string, stage: Rerun, attendees: number | null) =>

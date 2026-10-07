@@ -1531,6 +1531,98 @@ a.cl-iconbtn {
   gap: var(--spacing-3);
 }
 
+/* ----------------------------------------------------------- Conservation --- */
+
+.cl-review__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+.cl-audio-note[data-announced] {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-medium);
+}
+
+/* No audio left: the times are only times, nothing to play from them. */
+.cl-review[data-audio-gone] .cl-time {
+  pointer-events: none;
+}
+
+.cl-review[data-audio-gone] .cl-time__play {
+  display: none;
+}
+
+.cl-player-gone {
+  padding: var(--spacing-3) var(--spacing-8);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+}
+
+.cl-purge-banner {
+  padding: var(--spacing-3) var(--spacing-8) 0;
+}
+
+.cl-sessions__badges {
+  display: inline-flex;
+  gap: var(--spacing-2);
+  align-items: center;
+}
+
+.cl-settings {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: var(--spacing-6) var(--spacing-6) var(--spacing-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+}
+
+.cl-settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-settings__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 14rem));
+  gap: var(--spacing-5);
+}
+
+.cl-settings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-settings__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) 0;
+}
+
+.cl-settings__list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-settings__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 640px) {
+  .cl-settings__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ------------------------------------------------------------- Recording --- */
 
 .cl-recording__head {
