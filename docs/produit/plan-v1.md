@@ -12,7 +12,7 @@
 | 6 | Enregistrement | 6a : captation par le service (choix du micro, vumètre, alertes, pause, reprise après un crash, anti-veille), traitement à l'arrêt sauf sur batterie (ADR 0027). 6b : marqueurs et notes pendant la séance, marqueurs prioritaires sur les chapitres | Livrée (v0.9.0) |
 | 7 | Relancer une étape | Relance de la transcription ou de la séparation des voix depuis la version affichée, nouvelle version activée seulement entière, étapes refaites périmées, report des corrections par le temps mesuré et liste de ce qui n'a pas pu l'être, anciennes versions réaffichables (ADR 0028) | Livrée (v0.10.0) |
 | 8 | Bibliothèque | Spectacles, états des séances, recherche plein texte, export vers un dossier (Q7) | |
-| 9 | Conservation et purge | Durée, « Garder l'audio », préavis (bandeau et notification), prolonger, suppression de l'audio ou de la séance (totale, sauvegardes comprises), journal des suppressions, page Réglages (ADR 0029) | |
+| 9 | Conservation et purge | Durée, « Garder l'audio », préavis (bandeau et notification), prolonger, suppression de l'audio ou de la séance (totale, sauvegardes comprises), journal des suppressions, page Réglages (ADR 0029) | Livrée (v0.11.0) |
 | 10 | App au quotidien | Lanceur du Dock, PWA, réglages et modèles, test du parcours complet réseau coupé (nom définitif, Q3) | |
 
 Tranché à l'étape 7 (ADR 0028) : en V1, on relance la transcription (glossaire enrichi, moteur mis à jour) ou la séparation des voix (autre nombre de présents) ; « un autre moteur » viendra avec les profils du moteur.
