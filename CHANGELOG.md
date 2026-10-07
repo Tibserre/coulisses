@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.11.0 — 2026-10-07
+
+### Nouveautés
+
+- garde ou purge l'audio et supprime une séance pour de bon (conservation)
+
 ## v0.10.0 — 2026-10-07
 
 ### Nouveautés
