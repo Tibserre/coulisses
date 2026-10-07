@@ -112,6 +112,7 @@ def recorder(
         keep_awake=awake,
         battery=lambda: battery,
         clock=clock,
+        retry_wait_s=0.0,
     )
 
 
@@ -252,7 +253,7 @@ def test_one_recording_at_a_time_and_a_microphone_that_cannot_open_leaves_nothin
         data, stream_factory=refusing, devices=lambda: [MIC], keep_awake=awake
     )
     before = len(sessions.list_sessions(data))
-    with pytest.raises(capture.RecordingError, match="occupé"):
+    with pytest.raises(capture.RecordingError, match="n'a pas pu s'ouvrir"):
         start(broken)
     assert len(sessions.list_sessions(data)) == before and awake.held == 0
     nothing = capture.Recorder(data, stream_factory=mic.factory, devices=list, keep_awake=awake)
@@ -510,3 +511,274 @@ def test_a_note_taken_back_can_never_be_the_note_after_the_session_and_a_marker_
         assert after_notes.after_session(conn, session_id).text == "Après la séance"  # type: ignore[union-attr]
     finally:
         conn.close()
+
+
+# -- a second microphone (ADR 0031) -------------------------------------------------------
+
+PHONE = capture.InputDevice(index=7, name="Micro de « iPhone »", channels=1, default=False)
+
+
+class TwoMics:
+    """The Mac's microphone and the iPhone's, each its own fake stream."""
+
+    def __init__(self) -> None:
+        self.mac = FakeMic()
+        self.phone = FakeMic()
+
+    def factory(
+        self, device: int, channels: int, on_block: Callable[[NDArray[np.float32], bool], None]
+    ) -> FakeMic:
+        mic = self.phone if device == PHONE.index else self.mac
+        return mic.factory(device, channels, on_block)
+
+
+def two_recorder(
+    data: DataDir, mics: TwoMics, awake: CountingAwake, clock: Clock
+) -> capture.Recorder:
+    return capture.Recorder(
+        data,
+        stream_factory=mics.factory,
+        devices=lambda: [MIC, PHONE],
+        keep_awake=awake,
+        battery=lambda: False,
+        clock=clock,
+        retry_wait_s=0.0,
+    )
+
+
+def start_both(rec: capture.Recorder) -> capture.RecordingState:
+    return rec.start(
+        space_id=None,
+        attendee_ids=[],
+        unnamed_attendees=2,
+        device_index=MIC.index,
+        second_device_index=PHONE.index,
+    )
+
+
+def test_two_microphones_record_two_files_paused_together(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    state = start_both(rec)
+    assert state.second is not None and state.second.device == PHONE.name
+    session_id = state.session_id
+    mics.mac.push(tone(1.0, 0.3))
+    mics.phone.push(tone(1.0, 0.2))
+    rec.pause()
+    mics.mac.push(tone(0.5, 0.3))  # heard while paused: written nowhere
+    mics.phone.push(tone(0.5, 0.2))
+    rec.resume()
+    mics.mac.push(tone(1.0, 0.3))
+    mics.phone.push(tone(1.0, 0.2))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 2.0)  # type: ignore[union-attr]
+    second_file = data.sources_dir(session_id) / "mic2.wav"
+    result = rec.stop(profile="essai")
+    assert result.duration_s == pytest.approx(2.0)
+
+    [phone] = sessions.other_sources(data, session_id)
+    assert (phone.source_id, phone.device, phone.capture_state) == ("mic2", PHONE.name, "complete")
+    assert phone.duration_s == pytest.approx(2.0)
+    assert sf.info(str(second_file)).frames == 2 * capture.SAMPLE_RATE
+    reference = sessions.reference_source(data, session_id)
+    assert reference is not None and reference.file_name == "ref.wav"  # processed alone
+    assert awake.held == 0
+
+
+def test_the_phone_going_away_never_stops_the_mac(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    session_id = start_both(rec).session_id
+    mics.mac.push(tone(1.0, 0.3))
+    mics.phone.push(tone(0.5, 0.2))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    clock.now += capture.SILENT_STREAM_S + 1  # the phone said nothing since; the Mac goes on
+    mics.mac.push(tone(0.1, 0.3))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.1)  # type: ignore[union-attr]
+    state = rec.state()
+    assert state is not None and state.error is None
+    assert state.second is not None and state.second.error is not None
+    mics.phone.refuse_stop = True  # and it vanished for good
+    result = rec.stop(profile="essai")
+    assert result.duration_s == pytest.approx(1.1)
+    [phone] = sessions.other_sources(data, session_id)
+    assert phone.duration_s == pytest.approx(0.5)  # what it recorded is kept
+
+
+def test_a_second_microphone_that_will_not_start_leaves_nothing(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    mics.phone.refuse_start = True
+    rec = two_recorder(data, mics, awake, clock)
+    with pytest.raises(capture.RecordingError, match="iPhone"):
+        start_both(rec)
+    assert mics.mac.closed
+    assert sessions.list_sessions(data) == []
+    with pytest.raises(capture.RecordingError, match="autre micro"):
+        rec.start(
+            space_id=None,
+            attendee_ids=[],
+            unnamed_attendees=None,
+            device_index=MIC.index,
+            second_device_index=MIC.index,
+        )
+
+
+def test_both_files_are_repaired_after_a_crash(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    session_id = start_both(rec).session_id
+    mics.mac.push(tone(1.5, 0.3))
+    mics.phone.push(tone(1.5, 0.2))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.5)  # type: ignore[union-attr]
+    # The service dies here: the next start finds both still « recording ».
+    told = capture.recover_interrupted(data)
+    assert len(told) == 2 and "Deuxième micro" in told[1]
+    [phone] = sessions.other_sources(data, session_id)
+    assert phone.capture_state == "recovered" and phone.duration_s is not None
+
+
+def test_a_second_track_that_fails_to_write_leaves_the_main_one_going(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    start_both(rec)
+    current = rec._current  # pyright: ignore[reportPrivateUsage]
+    assert current is not None
+
+    def full(_block: NDArray[np.float32]) -> None:
+        raise OSError(28, "No space left on device")
+
+    current.tracks[1].writer.write = full  # type: ignore[method-assign]
+    mics.mac.push(tone(1.0, 0.3))
+    mics.phone.push(tone(1.0, 0.2))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    wait_for(lambda: rec.state().second.error is not None)  # type: ignore[union-attr]
+    state = rec.state()
+    assert state is not None and state.error is None
+    assert rec.stop(profile="essai").duration_s == pytest.approx(1.0)
+
+
+def test_a_second_track_unreadable_at_stop_is_said_and_the_main_one_processed(
+    data: DataDir, awake: CountingAwake, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    session_id = start_both(rec).session_id
+    mics.mac.push(tone(1.0, 0.3))
+    mics.phone.push(tone(1.0, 0.2))
+    real_repair = wav.repair
+
+    def repair(path: Path) -> int:
+        if path.name == "mic2.wav":
+            raise OSError("en-tête illisible")
+        return real_repair(path)
+
+    monkeypatch.setattr(wav, "repair", repair)
+    result = rec.stop(profile="essai")
+    assert result.processing and result.duration_s == pytest.approx(1.0)
+    assert result.second_problem is not None and "n'a pas pu être relue" in result.second_problem
+    [phone] = sessions.other_sources(data, session_id)
+    assert phone.duration_s is None and phone.capture_state == "complete"
+    assert sessions.reference_source(data, session_id).capture_state == "complete"  # type: ignore[union-attr]
+
+
+def test_a_microphone_that_came_back_is_found_by_name_and_tried_again(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    """The iPhone woke up: macOS gave it another number; and its first opening fails."""
+    mics = TwoMics()
+    listing = [[MIC, PHONE]]
+    refreshed: list[bool] = []
+
+    def refresh() -> None:
+        refreshed.append(True)
+        listing[0] = [MIC, PHONE.model_copy(update={"index": 9})]
+
+    tries = {"n": 0}
+    real_factory = mics.factory
+
+    def flaky(
+        device: int, channels: int, on_block: Callable[[NDArray[np.float32], bool], None]
+    ) -> FakeMic:
+        if device == 9:
+            tries["n"] += 1
+            if tries["n"] == 1:
+                raise OSError("Error opening InputStream: Internal")
+            return mics.phone.factory(device, channels, on_block)
+        return real_factory(device, channels, on_block)
+
+    rec = capture.Recorder(
+        data,
+        stream_factory=flaky,
+        devices=lambda: listing[0],
+        keep_awake=awake,
+        battery=lambda: False,
+        clock=clock,
+        refresh=refresh,
+        retry_wait_s=0.0,
+    )
+    state = start_both(rec)  # asked with the old number, 7
+    assert refreshed and tries["n"] == 2
+    assert state.second is not None and state.second.device == PHONE.name
+    rec.stop(profile="essai")
+
+
+def test_the_list_is_read_again_only_with_no_microphone_open(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mic = FakeMic()
+    refreshed: list[str] = []
+    rec = capture.Recorder(
+        data,
+        stream_factory=mic.factory,
+        devices=lambda: [MIC],
+        keep_awake=awake,
+        battery=lambda: False,
+        clock=clock,
+        refresh=lambda: refreshed.append("relue"),
+        retry_wait_s=0.0,
+    )
+    rec.list_devices()
+    assert refreshed == ["relue"]
+    start(rec)  # read again once more, before opening
+    assert refreshed == ["relue", "relue"]
+    rec.list_devices()  # recording: never
+    seen_while_closing: list[int] = []
+    real_stop = mic.stop
+
+    def stop_and_ask() -> None:
+        rec.list_devices()  # the interface asks while the microphone is being closed
+        seen_while_closing.append(len(refreshed))
+        real_stop()
+
+    mic.stop = stop_and_ask  # type: ignore[method-assign]
+    mic.push(tone(0.2, 0.3))
+    rec.stop(profile="essai")
+    assert seen_while_closing == [2] and refreshed == ["relue", "relue"]
+    rec.list_devices()  # closed: read again
+    assert len(refreshed) == 3
+
+
+def test_a_list_that_cannot_be_read_again_is_said_in_french(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    def broken() -> None:
+        raise OSError("Error initializing PortAudio")
+
+    rec = capture.Recorder(
+        data,
+        stream_factory=FakeMic().factory,
+        devices=lambda: [MIC],
+        keep_awake=awake,
+        refresh=broken,
+    )
+    with pytest.raises(capture.RecordingError, match="n'a pas pu être relue"):
+        rec.list_devices()

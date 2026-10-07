@@ -78,6 +78,8 @@ class SessionDetail(BaseModel):
     """The « who said what » run of the version shown; None before the first is complete."""
     rerun: jobs.Rerun | None = None
     """What the latest processing of the session runs again; None for the first one."""
+    other_sources: list[sessions.AudioSource] = []
+    """A second microphone's track, kept beside the reference (not processed yet)."""
 
 
 class RerunRequest(BaseModel):
@@ -141,6 +143,8 @@ class RecordingRequest(BaseModel):
     non_nommes: int | None = None
     micro: int | None = None
     """Index of the input device; None: the system's default microphone."""
+    micro2: int | None = None
+    """A second microphone recording at the same time (often the iPhone), or none."""
 
 
 class MarkerRequest(BaseModel):
@@ -374,6 +378,7 @@ def create_app(
             source=sessions.reference_source(data, session_id),
             stages=stage_views(data, chain, session_id),
             version=shown["run_id"] if shown else None,
+            other_sources=sessions.other_sources(data, session_id),
             rerun=latest.params.rerun
             if latest is not None and isinstance(latest.params, jobs.ChainParams)
             else None,
@@ -544,10 +549,13 @@ def create_app(
     @app.get("/api/micros")
     def microphones() -> list[capture.InputDevice]:
         try:
-            return capture.input_devices()
-        except Exception as exc:  # PortAudio could not list them: said, not hidden
+            return recorder.list_devices()
+        except capture.RecordingError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:  # PortAudio could not list them: said, the cause logged
+            log.exception("listing the microphones")
             raise HTTPException(
-                status_code=503, detail=f"Impossible de lister les micros : {exc}"
+                status_code=503, detail="Les micros n'ont pas pu être listés."
             ) from exc
 
     @app.get("/api/alimentation")
@@ -566,6 +574,7 @@ def create_app(
             attendee_ids=demande.presents,
             unnamed_attendees=demande.non_nommes,
             device_index=demande.micro,
+            second_device_index=demande.micro2,
         )
 
     @app.post("/api/enregistrement/pause")

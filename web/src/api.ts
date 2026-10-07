@@ -189,6 +189,15 @@ export interface RecordingState {
   error: string | null;
   markers: Marker[];
   notes: TimedNote[];
+  /** A second microphone recording at the same time, with its own alerts. */
+  second: {
+    device: string;
+    levels: { peak_db: number; rms_db: number };
+    too_quiet: boolean;
+    clipping: boolean;
+    dropouts: number;
+    error: string | null;
+  } | null;
 }
 
 export interface StopResult {
@@ -196,11 +205,15 @@ export interface StopResult {
   duration_s: number;
   processing: boolean;
   on_battery: boolean;
+  /** The second microphone's file could not be read back. */
+  second_problem: string | null;
 }
 
 export interface RecordingRequest {
   espace: number | null;
   projet: number | null;
+  /** A second microphone recording at the same time (often the iPhone), or none. */
+  micro2: number | null;
   presents: number[];
   non_nommes: number | null;
   micro: number | null;
@@ -255,6 +268,8 @@ export interface SessionDetail {
   version: string | null;
   /** What the latest processing runs again; null for the first one. */
   rerun: Rerun | null;
+  /** A second microphone's track, kept beside the reference (not processed yet). */
+  other_sources: AudioSource[];
 }
 
 export type Rerun = "transcribe" | "diarize";

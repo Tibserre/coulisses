@@ -228,6 +228,16 @@ export function RecordingPage() {
                   {formatClock(elapsed)}
                 </p>
                 <LevelMeter level={level} peak={peak} clipping={state.clipping} />
+                {state.second && (
+                  <div className="cl-recording__second">
+                    <span>{state.second.device}</span>
+                    <LevelMeter
+                      level={meterValue(state.second.levels.rms_db)}
+                      peak={meterValue(state.second.levels.peak_db)}
+                      clipping={state.second.clipping}
+                    />
+                  </div>
+                )}
                 <div className="cl-recording__controls">
                   <Button
                     label={paused ? "Reprendre" : "Pause"}
@@ -277,6 +287,27 @@ export function RecordingPage() {
                   status="warning"
                   title="Saturation"
                   description="Le son est trop fort : éloignez un peu le micro, ou baissez le niveau d'entrée dans Réglages Système, Son."
+                />
+              )}
+              {state.second?.error && (
+                <Banner
+                  status="warning"
+                  title={`Le deuxième micro (${state.second.device})`}
+                  description={`${state.second.error} L'enregistrement principal continue.`}
+                />
+              )}
+              {state.second && state.second.dropouts > 0 && (
+                <Banner
+                  status="warning"
+                  title="Deuxième micro : du son a été perdu"
+                  description={`Le Mac n'a pas suivi ${state.second.dropouts === 1 ? "une fois" : `${state.second.dropouts} fois`} sur ce micro : quelques millisecondes y manquent.`}
+                />
+              )}
+              {state.second && !state.second.error && state.second.too_quiet && (
+                <Banner
+                  status="warning"
+                  title="Deuxième micro : niveau très faible"
+                  description="Presque rien n'arrive du deuxième micro : le téléphone est-il toujours près du Mac, et son micro libre ?"
                 />
               )}
               {state.too_quiet && (
