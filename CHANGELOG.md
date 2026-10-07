@@ -3,6 +3,16 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.13.0 — 2026-10-07
+
+### Nouveautés
+
+- enregistre avec deux micros à la fois, le Mac et l'iPhone (enregistrement)
+
+### Corrections
+
+- relit les micros avant d'ouvrir l'iPhone, qui change d'identité en se réveillant (enregistrement)
+
 ## v0.12.0 — 2026-10-07
 
 ### Nouveautés
