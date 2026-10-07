@@ -15,4 +15,4 @@
 | 9 | Conservation et purge | Durée, épinglage, préavis, suppression de l'audio ou de la séance, journal des suppressions | |
 | 10 | App au quotidien | Lanceur du Dock, PWA, réglages et modèles, test du parcours complet réseau coupé (nom définitif, Q3) | |
 
-À trancher avant l'étape 7 : la spec parle de relancer une étape « avec un autre moteur » (§7.4, §11), alors que la V1 n'a qu'un profil, défini par le moteur. En pratique, une relance changera le nombre de présents ou la version du moteur.
+Tranché à l'étape 7 (ADR 0028) : en V1, on relance la transcription (glossaire enrichi, moteur mis à jour) ou la séparation des voix (autre nombre de présents) ; « un autre moteur » viendra avec les profils du moteur.

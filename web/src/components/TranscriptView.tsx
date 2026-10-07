@@ -14,6 +14,7 @@ import {
   SpellCheck,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { ServiceError } from "../api.ts";
 import type { EditRequest, Person, PhaseKind, Speaker, Word as WordData } from "../api.ts";
 import { formatClock, plural } from "../format.ts";
 import { speakerInk } from "../theme/shared.ts";
@@ -42,6 +43,15 @@ export interface Editing {
   toggleSelected: (turn: number, extend: boolean) => void;
   /** Fold or unfold a chapter, by its first line. */
   toggleFolded: (turn: number) => void;
+  /** A line's text or a chapter title is being typed into: the page keeps the version on
+   *  screen until it is left (a newer one would put other lines under the cursor). */
+  setTyping: (on: boolean) => void;
+}
+
+/** Refused because the version shown changed meanwhile: nothing was written, and the page
+ *  gives the typed text back; the draft is not sent again, to another version's line. */
+function versionChanged(e: unknown): boolean {
+  return e instanceof ServiceError && e.status === 409;
 }
 
 export function inkOf(speaker: Speaker): string {
@@ -190,7 +200,7 @@ function EditableText({
   // Remounting the paragraph after each edit gives React back a DOM it knows.
   const [version, setVersion] = useState(0);
   const text = turn.words.map((w) => w.text).join(" ");
-  const { correct, editingTurn, setEditingTurn } = editing;
+  const { correct, editingTurn, setEditingTurn, setTyping } = editing;
 
   // E (or any request) puts the cursor at the end of this line.
   useLayoutEffect(() => {
@@ -225,8 +235,13 @@ function EditableText({
       draft.current = null;
       setVersion((v) => v + 1);
       setActive(false);
-    } catch {
-      // Refused (shown by the page): the draft stays on screen, untouched, to be fixed.
+    } catch (e) {
+      if (versionChanged(e)) {
+        draft.current = null; // given back by the page, never sent to another version
+        setVersion((v) => v + 1);
+        setActive(false);
+      }
+      // Otherwise refused (shown by the page): the draft stays on screen, to be fixed.
     }
   };
 
@@ -241,11 +256,17 @@ function EditableText({
       lang="fr"
       role="textbox"
       aria-label="Texte de la réplique, modifiable"
-      onFocus={() => setActive(true)}
+      onFocus={() => {
+        setActive(true);
+        setTyping(true);
+      }}
       onInput={() => {
         draft.current = ref.current?.innerText ?? "";
       }}
-      onBlur={() => void finish()}
+      onBlur={() => {
+        setTyping(false);
+        void finish();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -450,7 +471,17 @@ const KINDS: PhaseKind[] = ["scene", "discussion", "other"];
 
 /** A chapter's title, typed into directly (no box): Enter or leaving it saves, Escape
  *  gives back what was there. Refused, what was typed stays on screen (P8). */
-function PhaseTitle({ turn, title, correct }: { turn: number; title: string; correct: Editing["correct"] }) {
+function PhaseTitle({
+  turn,
+  title,
+  correct,
+  setTyping,
+}: {
+  turn: number;
+  title: string;
+  correct: Editing["correct"];
+  setTyping: Editing["setTyping"];
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   const cancel = useRef(false);
   const typing = useRef(false);
@@ -468,7 +499,10 @@ function PhaseTitle({ turn, title, correct }: { turn: number; title: string; cor
       if (ref.current) ref.current.innerText = title;
       return;
     }
-    await correct({ kind: "set_phase", turn, title: typed }).catch(() => undefined);
+    await correct({ kind: "set_phase", turn, title: typed }).catch((e: unknown) => {
+      // The version changed meanwhile: given back by the page, the title shows again.
+      if (versionChanged(e) && ref.current) ref.current.innerText = title;
+    });
   };
 
   return (
@@ -484,8 +518,12 @@ function PhaseTitle({ turn, title, correct }: { turn: number; title: string; cor
       data-placeholder="Nommer ce chapitre"
       onFocus={() => {
         typing.current = true;
+        setTyping(true);
       }}
-      onBlur={() => void finish()}
+      onBlur={() => {
+        setTyping(false);
+        void finish();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -548,7 +586,12 @@ const PhaseHeading = memo(function PhaseHeading({
           )}
           {KIND_LABEL[phase.kind]}
         </span>
-        <PhaseTitle turn={phase.turn} title={phase.title} correct={editing.correct} />
+        <PhaseTitle
+          turn={phase.turn}
+          title={phase.title}
+          correct={editing.correct}
+          setTyping={editing.setTyping}
+        />
         {folded && <span className="cl-chapter__count">{plural(lines, "réplique", "répliques")}</span>}
         <span className="cl-chapter__rule" aria-hidden />
         <Popover

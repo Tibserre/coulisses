@@ -1408,6 +1408,129 @@ a.cl-iconbtn {
   text-underline-offset: 3px;
 }
 
+/* -------------------------------------------------------------- Versions --- */
+
+.cl-review__notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-versions__list,
+.cl-notcarried__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-versions__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) 0;
+}
+
+.cl-versions__list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-versions__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-versions__origin {
+  color: var(--color-text-secondary);
+}
+
+.cl-notcarried {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+}
+
+.cl-notcarried__list {
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-1);
+}
+
+.cl-notcarried__list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.cl-notcarried__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+}
+
+.cl-notcarried__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-notcarried__text {
+  margin: 0;
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.cl-notcarried__text[data-clamped] {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cl-notcarried__more {
+  font-size: var(--font-size-sm);
+}
+
+.cl-rerunning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+}
+
+.cl-rerunning > :first-child {
+  margin-top: 0.35em;
+}
+
+.cl-rerunning > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.cl-rerun {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+  padding: var(--spacing-2) var(--spacing-5) var(--spacing-5);
+}
+
+.cl-rerun__voices {
+  width: 300px;
+  padding-inline-start: var(--spacing-7);
+}
+
+.cl-rerun__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-3);
+}
+
 /* ------------------------------------------------------------- Recording --- */
 
 .cl-recording__head {

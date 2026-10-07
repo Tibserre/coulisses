@@ -83,7 +83,7 @@ const VIEW: CorrectedView = {
   ],
   untranscribed: [{ start: 2.0, end: 4.0 }],
   edits: [],
-  other_run_edits: 0,
+  carryover: null,
   word_count: 7,
   timed_share: 6 / 7,
   phases: [],

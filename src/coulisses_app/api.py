@@ -42,6 +42,7 @@ from coulisses_app import (
     settings,
     spaces,
     summaries,
+    versions,
 )
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
@@ -66,6 +67,17 @@ class SessionDetail(BaseModel):
     session: sessions.Session
     source: sessions.AudioSource | None
     stages: list[StageView]
+    version: str | None = None
+    """The « who said what » run of the version shown; None before the first is complete."""
+    rerun: jobs.Rerun | None = None
+    """What the latest processing of the session runs again; None for the first one."""
+
+
+class RerunRequest(BaseModel):
+    etape: jobs.Rerun
+    """transcribe: the transcription (and the alignment); diarize: the voices."""
+    presents: int | None = Field(default=None, ge=1)
+    """For the voices: the minimum of voices to look for (P3)."""
 
 
 class ResumeRequest(BaseModel):
@@ -214,7 +226,13 @@ def create_app(
     @app.exception_handler(spaces.SpaceError)
     async def refused(_: Request, exc: spaces.SpaceError) -> JSONResponse:
         """Requests that cannot be honoured, with the French reason (spaces, corrections)."""
-        status = 404 if isinstance(exc, spaces.NotFoundError) else 422
+        status = (
+            404
+            if isinstance(exc, spaces.NotFoundError)
+            else 409
+            if isinstance(exc, corrections.VersionChangedError)
+            else 422
+        )
         return JSONResponse(status_code=status, content={"detail": str(exc)})
 
     problems = recovery_problems or []
@@ -269,11 +287,47 @@ def create_app(
         session = sessions.get_session(data, session_id)
         if session is None:
             raise _not_found("Séance introuvable.")
+        conn = connect(data)
+        try:
+            shown = conn.execute(
+                "SELECT run_id FROM active_run WHERE session_id = ? AND stage = 'attribute'",
+                (session_id,),
+            ).fetchone()
+            latest = jobs.latest_job(conn, session_id)
+        finally:
+            conn.close()
         return SessionDetail(
             session=session,
             source=sessions.reference_source(data, session_id),
             stages=stage_views(data, chain, session_id),
+            version=shown["run_id"] if shown else None,
+            rerun=latest.params.rerun
+            if latest is not None and isinstance(latest.params, jobs.ChainParams)
+            else None,
         )
+
+    @app.get("/api/seances/{session_id}/versions")
+    def session_versions(session_id: str) -> versions.Versions:
+        return versions.list_versions(data, session_id)
+
+    @app.post("/api/seances/{session_id}/versions/{run_id}/afficher")
+    def show_version(session_id: str, run_id: str) -> versions.Versions:
+        versions.show(data, session_id, run_id)
+        return versions.list_versions(data, session_id)
+
+    @app.post("/api/seances/{session_id}/relancer", status_code=202)
+    def rerun(session_id: str, demande: RerunRequest) -> sessions.Session:
+        """Run the transcription or the voices again, from the version shown: a new version,
+        which replaces it once complete, with the corrections carried over."""
+        attendees = demande.presents if demande.etape == "diarize" else None
+        versions.request_rerun(
+            data, session_id, demande.etape, attendees=attendees, profile=profile
+        )
+        if processor is not None:
+            processor.wake()
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
 
     @app.post("/api/seances/{session_id}/reprendre")
     def resume(session_id: str, demande: ResumeRequest | None = None) -> sessions.Session:
@@ -322,21 +376,31 @@ def create_app(
         """The corrected view: the active run with the user's corrections applied."""
         return _corrected(data, session_id)
 
+    # `version`: the « who said what » run the page shows; a correction made for another
+    # one is refused (409), never written elsewhere (step 7).
     @app.post("/api/seances/{session_id}/corrections", status_code=201)
-    def add_correction(session_id: str, demande: corrections.Request) -> corrections.CorrectedView:
-        return corrections.add(data, session_id, demande.model_dump())
+    def add_correction(
+        session_id: str, demande: corrections.Request, version: str | None = None
+    ) -> corrections.CorrectedView:
+        return corrections.add(data, session_id, demande.model_dump(), version=version)
 
     @app.post("/api/seances/{session_id}/corrections/{edit_id}/annuler")
-    def undo_correction(session_id: str, edit_id: int) -> corrections.CorrectedView:
-        return corrections.undo(data, session_id, edit_id)
+    def undo_correction(
+        session_id: str, edit_id: int, version: str | None = None
+    ) -> corrections.CorrectedView:
+        return corrections.undo(data, session_id, edit_id, version=version)
 
     @app.post("/api/seances/{session_id}/corrections/{edit_id}/retablir")
-    def redo_correction(session_id: str, edit_id: int) -> corrections.CorrectedView:
-        return corrections.redo(data, session_id, edit_id)
+    def redo_correction(
+        session_id: str, edit_id: int, version: str | None = None
+    ) -> corrections.CorrectedView:
+        return corrections.redo(data, session_id, edit_id, version=version)
 
     @app.post("/api/seances/{session_id}/repliques/{turn}/texte-d-origine")
-    def reset_text(session_id: str, turn: int) -> corrections.CorrectedView:
-        return corrections.reset_text(data, session_id, turn)
+    def reset_text(
+        session_id: str, turn: int, version: str | None = None
+    ) -> corrections.CorrectedView:
+        return corrections.reset_text(data, session_id, turn, version=version)
 
     @app.put("/api/seances/{session_id}/presents")
     def set_attendees(session_id: str, demande: AttendeesRequest) -> sessions.Session:

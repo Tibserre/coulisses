@@ -24,5 +24,6 @@ Nouvelle fiche : skill `/adr`.
 | [0025](0025-resumes-a-la-demande.md) | Des résumés à la demande, avec le modèle choisi dans une liste ; seuls les chapitres et le titre restent automatiques | Acceptée (titre : remplacé par 0026) |
 | [0026](0026-titre-a-la-demande.md) | Le titre à la demande, fait à partir des chapitres ; seuls les chapitres restent automatiques | Acceptée |
 | [0027](0027-captation-en-pratique.md) | La captation en pratique : WAV 24 bits tenu à jour, niveaux en flux (SSE), anti-veille, pas de traitement automatique sur batterie | Acceptée |
+| [0028](0028-relance-et-report-des-corrections.md) | Relancer la transcription ou les voix : une nouvelle version complète ou rien, corrections reportées par le temps mesuré, anciennes versions affichables | Acceptée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.

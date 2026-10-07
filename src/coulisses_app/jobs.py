@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from typing import Literal
 
 from pydantic import BaseModel
 
 from coulisses_app.storage.db import now_iso
+
+Rerun = Literal["transcribe", "diarize"]
+
+REDONE: dict[str, tuple[str, ...]] = {
+    "transcribe": ("transcribe", "align", "attribute"),
+    "diarize": ("diarize", "attribute"),
+}
+"""The stages a rerun makes again; the others are those of the version it starts from."""
 
 
 class ChainParams(BaseModel):
@@ -17,6 +26,11 @@ class ChainParams(BaseModel):
     profile: str
     attendees: int | None = None
     glossary: list[str] = []
+    rerun: Rerun | None = None
+    """None: the session's first processing. Otherwise the stage run again (with the stages
+    after it) to make a new version (step 7 of the plan)."""
+    reuse: dict[str, str] = {}
+    """For a rerun: stage → run of the version it starts from, used as it is."""
 
 
 class GenerationParams(BaseModel):
@@ -46,6 +60,28 @@ def enqueue_chain(
     glossary: list[str] | None = None,
 ) -> int:
     params = ChainParams(profile=profile, attendees=attendees, glossary=glossary or [])
+    cursor = conn.execute(
+        "INSERT INTO job (session_id, kind, state, params, requested_at)"
+        " VALUES (?, 'chain', 'queued', ?, ?)",
+        (session_id, params.model_dump_json(), now_iso()),
+    )
+    assert cursor.lastrowid is not None
+    return cursor.lastrowid
+
+
+def enqueue_rerun(
+    conn: sqlite3.Connection,
+    session_id: str,
+    *,
+    profile: str,
+    rerun: Rerun,
+    reuse: dict[str, str],
+    attendees: int | None,
+    glossary: list[str],
+) -> int:
+    params = ChainParams(
+        profile=profile, attendees=attendees, glossary=glossary, rerun=rerun, reuse=reuse
+    )
     cursor = conn.execute(
         "INSERT INTO job (session_id, kind, state, params, requested_at)"
         " VALUES (?, 'chain', 'queued', ?, ?)",

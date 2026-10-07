@@ -209,10 +209,10 @@ def test_the_latest_naming_of_a_voice_wins() -> None:
     assert next(s for s in v.speakers if s.label == "2").name == "Paul"
 
 
-def test_corrections_of_another_run_are_counted_not_applied() -> None:
+def test_corrections_of_another_version_stay_on_it() -> None:
     entries = journal(AssignSpeaker(speaker="2", person_id=1), run="attribute-old")
     v = _replay(TRANSCRIPT, "attribute-a", entries, PEOPLE, {})
-    assert v.other_run_edits == 1
+    assert v.edits == []
     assert next(s for s in v.speakers if s.label == "2").name == "Locuteur 2"
 
 
@@ -224,3 +224,12 @@ def test_a_known_wrong_spelling_suggests_the_glossary_term() -> None:
 
 def test_untranscribed_stretches_are_kept() -> None:
     assert [(u.start, u.end) for u in view().untranscribed] == [(3.0, 4.5)]
+
+
+def test_two_voices_of_the_same_name_merged_read_as_one_person() -> None:
+    v = view(
+        AssignSpeaker(speaker="2", person_id=1),
+        AssignSpeaker(speaker="4", person_id=1),
+        MergeSpeakers(source="4", target="2"),
+    )
+    assert v.edits[-1].description == "Les deux voix de Marie réunies"

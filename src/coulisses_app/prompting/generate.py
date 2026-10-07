@@ -579,11 +579,24 @@ def _finish(
             )
             if prov.status != "succeeded":
                 return
-            conn.execute(
-                "INSERT INTO active_run (session_id, stage, run_id) VALUES (?, ?, ?)"
-                " ON CONFLICT (session_id, stage) DO UPDATE SET run_id = excluded.run_id",
-                (session_id, prov.stage, run_id),
+            # Chapters detected on a version no longer shown (another one was shown while
+            # they were detected) do not replace those of the version shown; they stay in
+            # their folder, and come back when their version is shown again.
+            on_shown = (
+                prov.stage != "segment_phases"
+                or conn.execute(
+                    "SELECT 1 FROM run_upstream u JOIN active_run a ON a.run_id = u.upstream_run_id"
+                    " WHERE u.run_id = ? AND a.session_id = ? AND a.stage = 'attribute'",
+                    (run_id, session_id),
+                ).fetchone()
+                is not None
             )
+            if on_shown:
+                conn.execute(
+                    "INSERT INTO active_run (session_id, stage, run_id) VALUES (?, ?, ?)"
+                    " ON CONFLICT (session_id, stage) DO UPDATE SET run_id = excluded.run_id",
+                    (session_id, prov.stage, run_id),
+                )
             if prov.stage == "title":
                 # The user's own title is never overwritten (title_edited); a session with
                 # no content keeps its date as its name.

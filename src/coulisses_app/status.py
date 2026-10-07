@@ -13,6 +13,7 @@ from typing import Any
 from coulisses.api import ChainConfig, Progress, read_provenance
 from pydantic import BaseModel, ValidationError
 
+from coulisses_app.jobs import REDONE, ChainParams
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import STAGE_LABELS, error_summary, planned_stages
 from coulisses_app.storage.db import connect
@@ -44,6 +45,9 @@ class StageView(BaseModel):
     application itself or a run closed before engine v1.3.0."""
     error_details: dict[str, Any] | None = None
     folder_missing: bool = False
+    stale: bool = False
+    """The run of the version shown, which a rerun under way (or stopped) is making again
+    (« périmée »): kept and still shown until the new version is complete."""
 
 
 def _last_change(folder: Path) -> float | None:
@@ -72,28 +76,40 @@ def stage_views(data: DataDir, chain: ChainConfig, session_id: str) -> list[Stag
     conn = connect(data)
     try:
         job = conn.execute(
-            "SELECT id FROM job WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,)
+            "SELECT id, state, params FROM job WHERE session_id = ? AND kind = 'chain'"
+            " ORDER BY id DESC LIMIT 1",
+            (session_id,),
         ).fetchone()
+        redone: tuple[str, ...] = ()
+        if job is not None and job["state"] != "done":
+            rerun = ChainParams.model_validate_json(job["params"]).rerun
+            redone = REDONE[rerun] if rerun else ()
         views: list[StageView] = []
         for stage in planned_stages(chain):
             row = None
-            if job is not None:
+            # Under way or stopped: its own runs. Done: the version shown (another one may
+            # have been shown again since).
+            if job is not None and job["state"] != "done":
                 row = conn.execute(
                     "SELECT * FROM run WHERE job_id = ? AND stage = ?"
                     " ORDER BY created_at DESC, rowid DESC LIMIT 1",
                     (job["id"], stage.value),
                 ).fetchone()
+            stale = False
             if row is None:
                 row = conn.execute(
                     "SELECT r.* FROM active_run a JOIN run r ON r.id = a.run_id"
                     " WHERE a.session_id = ? AND a.stage = ?",
                     (session_id, stage.value),
                 ).fetchone()
+                stale = row is not None and stage.value in redone
             label = STAGE_LABELS.get(stage.value, stage.value)
             if row is None:
                 views.append(StageView(stage=stage.value, label=label, state="pending"))
                 continue
-            views.append(_run_view(data, session_id, stage.value, label, row))
+            view = _run_view(data, session_id, stage.value, label, row)
+            view.stale = stale
+            views.append(view)
         return views
     finally:
         conn.close()
