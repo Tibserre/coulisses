@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.10.0 — 2026-10-07
+
+### Nouveautés
+
+- relance la transcription ou les voix et reporte les corrections (relance)
+
 ## v0.9.0 — 2026-10-06
 
 ### Nouveautés
