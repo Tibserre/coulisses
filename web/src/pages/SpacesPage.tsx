@@ -14,16 +14,14 @@ import {
   type SpaceAction,
   type SpaceTemplate,
 } from "../api.ts";
-import { AppHeader } from "../components/AppHeader.tsx";
 import { speakerInk } from "../theme/shared.ts";
 
-/** Spaces (a troupe, a team, a client), each with its people and its glossary (ADR 0020).
+/** A space's settings (a troupe, a team, a client; ADR 0020), opened from its « … » menu
+ *  in the side column: its name, its people, its glossary, the summary it offers first.
  *  Nothing is deleted here: people and terms are archived, so past sessions keep them. */
-export function SpacesPage({ id }: { id: number | null }) {
-  const [spaces, setSpaces] = useState<Space[]>([]);
+export function SpacePage({ id, onChanged }: { id: number; onChanged: () => Promise<void> }) {
+  const [spaces, setSpaces] = useState<Space[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [template, setTemplate] = useState<SpaceTemplate>("impro");
 
   const load = useCallback(async () => {
     try {
@@ -37,75 +35,61 @@ export function SpacesPage({ id }: { id: number | null }) {
     void load();
   }, [load]);
 
-  const selected =
-    spaces.find((s) => s.id === id) ?? spaces.find((s) => !s.archived) ?? null;
+  const space = spaces?.find((s) => s.id === id) ?? null;
+  return (
+    <main className="cl-spacepage">
+      <Heading level={2}>{space ? `Paramètres de ${space.name}` : "Paramètres de l'espace"}</Heading>
+      {error && <Banner status="error" title="Action refusée" description={error} />}
+      {spaces && !space && <Banner status="error" title="Espace introuvable" />}
+      {space && (
+        <SpaceDetail
+          key={space.id}
+          space={space}
+          onChanged={async () => {
+            await load();
+            await onChanged();
+          }}
+          onError={setError}
+        />
+      )}
+    </main>
+  );
+}
 
+/** « Nouvel espace » : its name and its starting template (ADR 0020). */
+export function NewSpaceForm({ onCreated, onCancel }: { onCreated: (space: Space) => void; onCancel: () => void }) {
+  const [name, setName] = useState("");
+  const [template, setTemplate] = useState<SpaceTemplate>("impro");
+  const [error, setError] = useState<string | null>(null);
   const create = async () => {
     try {
-      const space = await api.createSpace(newName, template);
-      setNewName("");
-      await load();
-      window.location.hash = `#/espaces/${space.id}`;
+      onCreated(await api.createSpace(name, template));
     } catch (e) {
       setError((e as Error).message);
     }
   };
-
   return (
-    <div className="cl-page">
-      <AppHeader current="spaces" />
-      <main className="cl-spaces">
-        <aside className="cl-spaces__list">
-          <Heading level={2}>Espaces</Heading>
-          <ul>
-            {spaces.map((s) => (
-              <li key={s.id}>
-                <a
-                  href={`#/espaces/${s.id}`}
-                  aria-current={s.id === selected?.id ? "page" : undefined}
-                  data-archived={s.archived || undefined}
-                >
-                  {s.name}
-                  {s.archived && <Text type="supporting"> · archivé</Text>}
-                </a>
-              </li>
-            ))}
-          </ul>
-          <TextInput
-            label="Nouvel espace"
-            placeholder="Une troupe, une équipe, un client"
-            value={newName}
-            onChange={setNewName}
-            onEnter={() => void create()}
-          />
-          <label className="cl-select">
-            <span>Modèle de départ</span>
-            <select value={template} onChange={(e) => setTemplate(e.target.value as SpaceTemplate)}>
-              <option value="impro">Troupe d'impro : Résumé Impro proposé</option>
-              <option value="reunion">Réunions de travail : compte rendu de réunion proposé</option>
-              <option value="vide">Vide : aucun résumé proposé</option>
-            </select>
-          </label>
-          <Button
-            label="Créer l'espace"
-            onClick={() => void create()}
-            isDisabled={!newName.trim()}
-          />
-        </aside>
-        <section className="cl-spaces__detail">
-          {error && (
-            <Banner status="error" title="Action refusée" description={error} />
-          )}
-          {selected && (
-            <SpaceDetail
-              key={selected.id}
-              space={selected}
-              onChanged={load}
-              onError={setError}
-            />
-          )}
-        </section>
-      </main>
+    <div className="cl-newspace">
+      <TextInput
+        label="Nom"
+        placeholder="Une troupe, une équipe, un client"
+        value={name}
+        onChange={setName}
+        onEnter={() => void create()}
+      />
+      <label className="cl-select">
+        <span>Modèle de départ</span>
+        <select value={template} onChange={(e) => setTemplate(e.target.value as SpaceTemplate)}>
+          <option value="impro">Troupe d'impro : Résumé Impro proposé</option>
+          <option value="reunion">Réunions de travail : compte rendu de réunion proposé</option>
+          <option value="vide">Vide : aucun résumé proposé</option>
+        </select>
+      </label>
+      {error && <Banner status="error" title="Refusé" description={error} />}
+      <div className="cl-newspace__actions">
+        <Button variant="ghost" label="Annuler" onClick={onCancel} />
+        <Button variant="primary" label="Créer l'espace" onClick={() => void create()} isDisabled={!name.trim()} />
+      </div>
     </div>
   );
 }

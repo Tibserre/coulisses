@@ -54,11 +54,12 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `action` | `id`, `name*`, `description*`, `prompt*`, `based_on` (clé de l'action fournie dont c'est la version modifiée, qui garde cette clé ; vide pour une action à soi, de clé `perso-<id>`), `created_at*`, `updated_at*`, `archived_at` (restaurer l'original ou retirer une action archive la ligne, jamais d'effacement) (migration 0004 ; une seule version modifiée en vigueur par action fournie) | 5 |
 | `generation` | `id`, `session_id*`, `run_id*`, `action_ref*` (clé d'action fournie ou id), `created_at*` (migration 0003 ; provenance : `schemas/generation-provenance.schema.json`, ADR 0022) | 3 |
 | `action_preference` | `space_id*`, `action_ref*`, `model` (inutilisée depuis l'ADR 0025), `auto_run*` (depuis l'ADR 0025 : le résumé proposé en premier dans l'espace ; rien ne se lance seul) | 3 |
-| `project` + `session.project_id` | `id`, `space_id*`, `name*`, `created_at*`, `archived_at` | 8 |
-| `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind`, `ref`, `text`. Cache reconstructible, jamais une source de vérité | 8 |
+| `project` + `session.project_id` | `id`, `space_id*`, `name*`, `created_at*`, `archived_at` ; `session.project_id` : projet de l'espace de la séance, ou rien (migration 0008, ADR 0030) | 8 |
+| `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind` (`title`, `turn`, `note`, `summary`), `ref`, `at_s` (temps mesuré), `text`. Cache reconstructible, jamais une source de vérité ; effacé avec la séance (migration 0008) | 8 |
+| `search_state` | `session_id*`, `key*` : de quoi le texte indexé d'une séance était fait ; s'il change, la séance est réindexée à la recherche suivante (migration 0008) | 8 |
 | `session` (conservation) | `keep_audio*` (bool : « Garder l'audio »), `retain_until` (prolongation), `purge_announced_at` (purge annoncée ; elle n'a lieu qu'une fois le préavis écoulé depuis), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) (migration 0007, ADR 0029) | 9 |
 | `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion`), `session_id*` (sans clé étrangère : la trace survit à la séance), `session_title` (vide pour une séance supprimée : aucun texte n'en reste), `detail*` (JSON : fichiers supprimés, tailles, problèmes) (migration 0007) | 9 |
-| `app_setting` | `key*`, `value*` (JSON) : modèle de génération choisi (étape 3), durée de conservation (`conservation_jours`) et préavis (`preavis_jours`) (étape 9), puis dossier d'export | 3 |
+| `app_setting` | `key*`, `value*` (JSON) : modèle de génération choisi (étape 3), durée de conservation (`conservation_jours`) et préavis (`preavis_jours`) (étape 9), dossier d'export (`dossier_export`, étape 8) | 3 |
 
 ## Ce qui n'est pas en base
 

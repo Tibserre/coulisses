@@ -7,7 +7,6 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { api, type ActionDraft, type ActionInfo } from "../api.ts";
-import { AppHeader } from "../components/AppHeader.tsx";
 import { clearDraft, readDraft, writeDraft } from "../drafts.ts";
 import { formatDateTime } from "../format.ts";
 
@@ -54,7 +53,6 @@ export function ActionsPage({ selectedRef }: { selectedRef: string | null }) {
 
   return (
     <div className="cl-page">
-      <AppHeader current="actions" />
       <main className="cl-spaces">
         <aside className="cl-spaces__list">
           <Heading level={2}>Actions</Heading>

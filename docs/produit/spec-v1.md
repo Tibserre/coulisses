@@ -169,10 +169,11 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.11 Bibliothèque
 
-- Séances groupées par espace et par projet, triées par date.
-- État visible de chaque séance : en traitement, prête, en erreur, audio bientôt purgé, audio purgé, audio gardé.
-- **Recherche plein texte** dans les transcripts, les notes et les résumés (insensible aux accents et à la casse).
-- **Export Markdown** (résumé, transcript, ou les deux) et copie dans le presse-papiers.
+- **Une coquille d'application** (ADR 0030) : une colonne latérale toujours là, avec les espaces, leurs projets et leurs séances, la plus récente d'abord ; un clic ouvre une séance à côté, sans quitter l'écran. Sur un espace, « + » commence une séance à cet endroit et « … » ouvre un menu (nouveau projet, paramètres de l'espace, archiver). Une séance se range dans un projet en la glissant dessus, ou depuis le fil « espace · projet » au-dessus de son titre. La colonne se masque (`⌘\`).
+- « Nouvelle séance » (⌘N) : espace, projet, présents, puis enregistrer ou importer.
+- État visible de chaque séance : en traitement, prête, en erreur, audio bientôt purgé, audio purgé, audio gardé (un point dans la colonne, des étiquettes dans la liste des dernières séances).
+- **Recherche plein texte** (⌘K) dans les transcriptions corrigées, les notes, les résumés et les titres, insensible aux accents et à la casse, chaque mot cherché comme début de mot ; un résultat ouvre la séance au passage.
+- **Export Markdown** (résumé, transcript, ou les deux), copie dans le presse-papiers, et **export vers un dossier** choisi une fois dans les Réglages (par exemple un dossier synchronisé par Google Drive) : Coulisses n'y écrit qu'un fichier, ne remplace jamais un fichier existant sans le demander, et n'envoie rien lui-même.
 
 ### 7.12 Réglages et modèles
 

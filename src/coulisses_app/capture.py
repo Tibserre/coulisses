@@ -277,6 +277,7 @@ class Recorder:
         attendee_ids: list[int],
         unnamed_attendees: int | None,
         device_index: int | None,
+        project_id: int | None = None,
     ) -> RecordingState:
         with self._lock:
             if self._current is not None:
@@ -319,6 +320,7 @@ class Recorder:
                 session_id, path = sessions.start_capture(
                     self.data,
                     space_id=space_id,
+                    project_id=project_id,
                     attendee_ids=attendee_ids,
                     unnamed_attendees=unnamed_attendees,
                     device=chosen.name,

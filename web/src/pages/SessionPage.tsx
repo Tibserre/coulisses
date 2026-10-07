@@ -7,7 +7,6 @@ import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
-import { ArrowLeft } from "lucide-react";
 import {
   api,
   ServiceError,
@@ -15,6 +14,7 @@ import {
   type CorrectedView,
   type Person,
   type PhasesStatus,
+  type Project,
   type Session,
   type SessionDetail,
   type StageView,
@@ -30,6 +30,7 @@ import { NotesSection } from "../components/NotesSection.tsx";
 import { VersionsSection } from "../components/VersionsSection.tsx";
 import { SessionMenu } from "../components/SessionMenu.tsx";
 import { audioLine } from "../retention.ts";
+import { libraryChanged } from "../library.ts";
 import { RERUN_NAME } from "../versions.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
@@ -48,7 +49,18 @@ function isTyping(target: EventTarget | null): boolean {
   return false;
 }
 
-export function SessionPage({ id }: { id: string }) {
+export function SessionPage({
+  id,
+  at = null,
+  tab: initialTab = null,
+  projects = [],
+}: {
+  id: string;
+  /** A measured time to open at (a search hit). */
+  at?: number | null;
+  tab?: "summary" | null;
+  projects?: Project[];
+}) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [view, setView] = useState<CorrectedView | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -65,6 +77,10 @@ export function SessionPage({ id }: { id: string }) {
   const [menuError, setMenuError] = useState<string | null>(null);
   const [incomplete, setIncomplete] = useState<string | null>(null);
   const [tab, setTab] = useState<"overview" | "summary">("summary");
+  // Opened from a search hit in a summary: the summary tab.
+  useEffect(() => {
+    if (initialTab === "summary") setTab("summary");
+  }, [initialTab]);
   /** Chapters folded by the user, by their first line. */
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
@@ -200,6 +216,24 @@ export function SessionPage({ id }: { id: string }) {
     return shut.size ? buildModel(view, shut) : unfolded;
   }, [view, folded, heardChapter, unfolded]);
   const currentRow = model ? turnAt(model, pb.time) : null;
+
+  // Opened at a passage (a search hit): the player goes there, without playing, and the
+  // line comes to the centre. Once the audio knows its length, so that the time holds.
+  const sought = useRef<number | null>(null);
+  useEffect(() => {
+    if (at == null || !model || sought.current === at) return;
+    const audio = pb.audioRef.current;
+    const go = () => {
+      sought.current = at;
+      pb.seek(at, false);
+    };
+    if (!audio || audio.readyState >= 1) {
+      go();
+      return;
+    }
+    audio.addEventListener("loadedmetadata", go, { once: true });
+    return () => audio.removeEventListener("loadedmetadata", go);
+  }, [at, model, pb]);
   const current = currentRow ? { row: currentRow, word: wordAt(currentRow, pb.time) } : null;
 
   /** A correction refused. Meant for a version no longer shown (409): nothing was
@@ -363,28 +397,37 @@ export function SessionPage({ id }: { id: string }) {
       <audio ref={pb.audioRef} src={audioGone ? undefined : api.audioUrl(id)} preload="metadata" />
       <header className="cl-review__header">
         <div className="cl-review__top">
-          <a className="cl-back" href="#/">
-            <ArrowLeft size={16} strokeWidth={1.75} aria-hidden /> Enregistrements
-          </a>
+          {session ? (
+            <ProjectCrumb
+              session={session}
+              projects={projects}
+              onMoved={(next) => {
+                sessionChanged(next);
+                libraryChanged();
+              }}
+              onError={setMenuError}
+            />
+          ) : (
+            <span />
+          )}
           {session && (
             <SessionMenu
               session={session}
               onChanged={sessionChanged}
               onError={setMenuError}
               onIncomplete={setIncomplete}
+              onDone={setNotice}
             />
           )}
         </div>
         {session && (
           <div>
-            <Text type="supporting">
-              {session.space_name} · {detail?.source?.origin === "captured" ? "enregistrement capté" : "enregistrement importé"}
-            </Text>
             <EditableTitle
               title={title}
               onSave={async (value) => {
                 await api.renameSession(id, value);
                 await refresh();
+                libraryChanged();
               }}
             />
             <Text color="secondary">
@@ -992,6 +1035,46 @@ function NotProcessed({ detail, onProcess }: { detail: SessionDetail; onProcess:
         />
       </div>
       {error && <Banner status="error" title="Refusé" description={error} />}
+    </div>
+  );
+}
+
+
+/** Where the session is: its space, then its project, chosen here to move it (spec
+ *  §7.11). The source (captured, imported) is said in passing. */
+function ProjectCrumb({
+  session,
+  projects,
+  onMoved,
+  onError,
+}: {
+  session: Session;
+  projects: Project[];
+  onMoved: (session: Session) => void;
+  onError: (message: string) => void;
+}) {
+  const own = projects.filter((p) => p.space_id === session.space_id && (!p.archived || p.id === session.project_id));
+  return (
+    <div className="cl-crumb">
+      <a href={`#/espaces/${session.space_id}`}>{session.space_name}</a>
+      <span aria-hidden>·</span>
+      <select
+        className="cl-crumb__select"
+        aria-label="Projet de la séance"
+        value={session.project_id ?? ""}
+        onChange={(e) => {
+          const next = e.target.value ? Number(e.target.value) : null;
+          api.setSessionProject(session.id, next).then(onMoved, (err: Error) => onError(err.message));
+        }}
+      >
+        <option value="">Aucun projet</option>
+        {own.map((p) => (
+          <option key={p.id} value={p.id} disabled={p.archived}>
+            {p.name}
+            {p.archived ? " (archivé)" : ""}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
