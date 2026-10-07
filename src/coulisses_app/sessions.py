@@ -270,6 +270,38 @@ def reference_source(data: DataDir, session_id: str) -> AudioSource | None:
     )
 
 
+def other_sources(data: DataDir, session_id: str) -> list[AudioSource]:
+    """The session's sources besides the reference (a second microphone): kept, listed;
+    not processed yet (ADR 0031)."""
+    conn = connect(data)
+    try:
+        rows = conn.execute(
+            "SELECT a.* FROM audio_source a JOIN session s ON s.id = a.session_id"
+            " AND a.source_id != s.reference_source_id WHERE s.id = ? ORDER BY a.source_id",
+            (session_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        AudioSource(
+            source_id=row["source_id"],
+            origin=row["origin"],
+            original_name=row["original_name"],
+            file_name=row["file_name"],
+            sha256=row["sha256"],
+            size_bytes=row["size_bytes"],
+            duration_s=row["duration_s"],
+            sample_rate=row["sample_rate"],
+            channels=row["channels"],
+            codec=row["codec"],
+            file_present=(data.sources_dir(session_id) / row["file_name"]).is_file(),
+            capture_state=row["capture_state"],
+            device=row["device"],
+        )
+        for row in rows
+    ]
+
+
 def reference_audio_path(data: DataDir, session_id: str) -> Path | None:
     source = reference_source(data, session_id)
     if source is None:
@@ -304,6 +336,13 @@ def interrupted_imports(data: DataDir) -> list[str]:
 # -- recording in the application (step 6, ADR 0005) -------------------------------------
 
 CAPTURE_FILE = f"{REFERENCE_SOURCE_ID}.wav"
+SECOND_SOURCE_ID = "mic2"
+"""A second microphone recording at the same time (often the iPhone, through Continuity):
+kept as a source of its own; the processing uses the reference only, for now (ADR 0031)."""
+
+
+def capture_file(source_id: str) -> str:
+    return f"{source_id}.wav"
 
 
 def start_capture(
@@ -316,9 +355,11 @@ def start_capture(
     device: str,
     sample_rate: int,
     channels: int,
+    second: tuple[str, int] | None = None,
 ) -> tuple[str, Path]:
     """The session of a recording about to start: made at once, so that a crash leaves it
-    there to be repaired (state `recording`). Returns its id and where to write the audio."""
+    there to be repaired (state `recording`). Returns its id and where to write the audio.
+    `second`: (device, channels) of a second microphone, written beside it as `mic2`."""
     if unnamed_attendees is not None and unnamed_attendees < 1:
         raise spaces.SpaceError("Le nombre de présents non nommés doit être au moins 1.")
     present = list(dict.fromkeys(attendee_ids))
@@ -352,21 +393,28 @@ def start_capture(
                 "INSERT INTO attendee (session_id, person_id) VALUES (?, ?)",
                 [(session_id, p) for p in present],
             )
-            conn.execute(
+            conn.executemany(
                 "INSERT INTO audio_source (session_id, source_id, origin, original_name,"
                 " file_name, sha256, size_bytes, sample_rate, channels, codec, device,"
                 " added_at, capture_state) VALUES (?, ?, 'captured', ?, ?, '', 0, ?, ?,"
                 " 'pcm_s24le', ?, ?, 'recording')",
-                (
-                    session_id,
-                    REFERENCE_SOURCE_ID,
-                    f"Enregistrement du {now.astimezone().strftime('%d/%m/%Y %H:%M')}.wav",
-                    CAPTURE_FILE,
-                    sample_rate,
-                    channels,
-                    device,
-                    stamp,
-                ),
+                [
+                    (
+                        session_id,
+                        source_id,
+                        f"Enregistrement du {now.astimezone().strftime('%d/%m/%Y %H:%M')}"
+                        f"{' (deuxième micro)' if source_id == SECOND_SOURCE_ID else ''}.wav",
+                        capture_file(source_id),
+                        sample_rate,
+                        chans,
+                        name,
+                        stamp,
+                    )
+                    for source_id, name, chans in (
+                        [(REFERENCE_SOURCE_ID, device, channels)]
+                        + ([(SECOND_SOURCE_ID, second[0], second[1])] if second else [])
+                    )
+                ],
             )
             sources.mkdir(parents=True)
     finally:
@@ -374,10 +422,17 @@ def start_capture(
     return session_id, sources / CAPTURE_FILE
 
 
-def finish_capture(data: DataDir, session_id: str, *, frames: int, state: str = "complete") -> None:
+def finish_capture(
+    data: DataDir,
+    session_id: str,
+    *,
+    frames: int,
+    state: str = "complete",
+    source_id: str = REFERENCE_SOURCE_ID,
+) -> None:
     """The recording is over (stopped, or repaired after a crash): what is on disk is
     described as for an imported file (size, fingerprint, duration)."""
-    path = data.sources_dir(session_id) / CAPTURE_FILE
+    path = data.sources_dir(session_id) / capture_file(source_id)
     digest = hashlib.sha256()
     with path.open("rb") as f:
         while chunk := f.read(_CHUNK):
@@ -386,7 +441,7 @@ def finish_capture(data: DataDir, session_id: str, *, frames: int, state: str = 
     try:
         rate = conn.execute(
             "SELECT sample_rate FROM audio_source WHERE session_id = ? AND source_id = ?",
-            (session_id, REFERENCE_SOURCE_ID),
+            (session_id, source_id),
         ).fetchone()["sample_rate"]
         with conn:
             conn.execute(
@@ -399,7 +454,7 @@ def finish_capture(data: DataDir, session_id: str, *, frames: int, state: str = 
                     state,
                     now_iso(),
                     session_id,
-                    REFERENCE_SOURCE_ID,
+                    source_id,
                 ),
             )
     finally:
@@ -407,32 +462,40 @@ def finish_capture(data: DataDir, session_id: str, *, frames: int, state: str = 
 
 
 def close_empty_capture(
-    data: DataDir, session_id: str, *, reason: str, unreadable: bool = False
+    data: DataDir,
+    session_id: str,
+    *,
+    reason: str,
+    unreadable: bool = False,
+    source_id: str = REFERENCE_SOURCE_ID,
 ) -> None:
     """A recording that holds nothing usable: its file could not be made (empty, duration
     0), or not be read back (`unreadable`: duration unknown, the file stays on disk).
     Closed, so that it is never left « recording », and why is logged."""
-    log.warning("recording %s closed empty: %s", session_id, reason)
+    log.warning("recording %s (%s) closed empty: %s", session_id, source_id, reason)
     conn = connect(data)
     try:
         with conn:
             conn.execute(
                 "UPDATE audio_source SET duration_s = ?, capture_state = 'complete',"
                 " capture_ended_at = ? WHERE session_id = ? AND source_id = ?",
-                (None if unreadable else 0, now_iso(), session_id, REFERENCE_SOURCE_ID),
+                (None if unreadable else 0, now_iso(), session_id, source_id),
             )
     finally:
         conn.close()
 
 
-def interrupted_captures(data: DataDir) -> list[str]:
-    """Sessions whose recording was still being written when the service stopped."""
+def interrupted_captures(data: DataDir) -> list[tuple[str, str]]:
+    """(session, source) whose recording was still being written when the service stopped,
+    the reference first."""
     conn = connect(data)
     try:
         return [
-            r["session_id"]
+            (r["session_id"], r["source_id"])
             for r in conn.execute(
-                "SELECT session_id FROM audio_source WHERE capture_state = 'recording'"
+                "SELECT a.session_id, a.source_id FROM audio_source a"
+                " JOIN session s ON s.id = a.session_id WHERE a.capture_state = 'recording'"
+                " ORDER BY a.session_id, a.source_id != s.reference_source_id, a.source_id"
             )
         ]
     finally:

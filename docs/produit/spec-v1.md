@@ -72,7 +72,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.2 Enregistrement
 
-- Choix du micro.
+- Choix du micro, et d'un **deuxième micro facultatif** enregistrant en même temps : souvent l'iPhone, que Continuité fait apparaître comme un micro du Mac (ADR 0031). Chacun a son fichier, son vumètre et ses alertes ; la pause les coupe ensemble ; un deuxième micro qui lâche n'arrête pas l'enregistrement. Pour l'instant, seule la première piste est traitée ; la seconde est gardée (« 2 micros » sous le titre de la séance).
 - **Captation brute** : pas de réduction de bruit, pas d'annulation d'écho, pas de gain automatique. WAV PCM 48 kHz, tel quel.
 - Vumètre, alertes de niveau (trop faible, saturation, micro qui ne donne plus de son), pause et reprise. La pause coupe le son à l'instant où on la demande : le fichier ne contient que ce qui a été enregistré. Fermer la page n'arrête pas l'enregistrement ; la bibliothèque montre qu'il est en cours.
 - **Écriture continue sur disque** : une séance survit à un crash de l'interface, du service ou du Mac. Au redémarrage, l'enregistrement interrompu est récupéré et signalé.

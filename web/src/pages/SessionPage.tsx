@@ -433,6 +433,18 @@ export function SessionPage({
             <Text color="secondary">
               {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
               {present ? ` · ${plural(present, "présent", "présents")}` : ""}
+              {detail && detail.other_sources.length > 0 && (
+                <span title={`Pistes gardées en plus : ${detail.other_sources.map((s) => s.device ?? s.original_name).join(", ")}. Seule la première est traitée pour l'instant.`}>
+                  {` · ${detail.other_sources.length + 1} micros`}
+                  {detail.other_sources.some((s) => !s.file_present)
+                    ? " (fichier de la deuxième piste introuvable)"
+                    : detail.other_sources.some((s) => s.duration_s === null)
+                      ? " (deuxième piste illisible)"
+                      : detail.other_sources.some((s) => s.duration_s === 0)
+                        ? " (deuxième piste vide)"
+                        : ""}
+                </span>
+              )}
               {audioText && (
                 <>
                   {" · "}

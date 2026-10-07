@@ -49,6 +49,7 @@ export function NewSessionDialog({
   const [dragging, setDragging] = useState(false);
   const [microphones, setMicrophones] = useState<InputDevice[] | null>(null);
   const [micro, setMicro] = useState<number | null>(null);
+  const [micro2, setMicro2] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
 
   // Each opening starts from where it was asked.
@@ -63,6 +64,7 @@ export function NewSessionDialog({
     setProgress(null);
     setError(null);
     setStarting(false);
+    setMicro2(null);
     api.microphones().then(
       (found) => {
         setMicrophones(found);
@@ -81,7 +83,7 @@ export function NewSessionDialog({
     setError(null);
     setStarting(true);
     try {
-      await api.startRecording({ espace: spaceId, projet: projectId, presents: personIds, non_nommes: unnamed, micro });
+      await api.startRecording({ espace: spaceId, projet: projectId, presents: personIds, non_nommes: unnamed, micro, micro2 });
       onClose();
       window.location.hash = "#/enregistrement";
     } catch (e) {
@@ -175,7 +177,15 @@ export function NewSessionDialog({
               {microphones && microphones.length > 0 && (
                 <label className="cl-select">
                   <span>Micro</span>
-                  <select value={micro ?? ""} disabled={busy} onChange={(e) => setMicro(Number(e.target.value))}>
+                  <select
+                    value={micro ?? ""}
+                    disabled={busy}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      setMicro(next);
+                      if (micro2 === next) setMicro2(null);
+                    }}
+                  >
                     {microphones.map((m) => (
                       <option key={m.index} value={m.index}>
                         {m.name}
@@ -183,6 +193,30 @@ export function NewSessionDialog({
                     ))}
                   </select>
                 </label>
+              )}
+              {microphones && microphones.length > 1 && (
+                <label className="cl-select">
+                  <span>Deuxième micro, en même temps</span>
+                  <select
+                    value={micro2 ?? ""}
+                    disabled={busy}
+                    onChange={(e) => setMicro2(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Aucun</option>
+                    {microphones
+                      .filter((m) => m.index !== micro)
+                      .map((m) => (
+                        <option key={m.index} value={m.index}>
+                          {m.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+              {micro2 !== null && (
+                <Text type="supporting">
+                  Gardé comme une seconde piste ; seule la première est traitée pour l'instant.
+                </Text>
               )}
               <div>
                 <Button

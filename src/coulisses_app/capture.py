@@ -80,6 +80,21 @@ class RecordingState(BaseModel):
     markers: list[marks.Marker] = []
     """Set so far: play and discussion switches, key moments."""
     notes: list[marks.TimedNote] = []
+    second: TrackState | None = None
+    """A second microphone recording at the same time (ADR 0031), with its own alerts."""
+
+
+class TrackState(BaseModel):
+    """A second microphone, as the recording screen shows it."""
+
+    device: str
+    levels: Levels
+    too_quiet: bool
+    clipping: bool
+    dropouts: int = 0
+    error: str | None = None
+    """It stopped (unplugged, the iPhone gone away, the disk…): the main recording goes on;
+    what it recorded is kept."""
 
 
 class InputStream(Protocol):
@@ -206,13 +221,14 @@ recording was paused when it was heard."""
 
 
 @dataclass
-class _Recording:
-    session_id: str
+class _Track:
+    """One microphone and its file: the reference, or a second one (ADR 0031)."""
+
+    source_id: str
     device: str
     channels: int
     writer: wav.WavWriter
     stream: InputStream
-    flags: _Flags
     blocks: queue.Queue[Block | None]
     levels: Levels = field(default_factory=lambda: Levels(peak_db=SILENT_DB, rms_db=SILENT_DB))
     quiet_since: float | None = None
@@ -221,8 +237,20 @@ class _Recording:
     error: str | None = None
     writer_thread: threading.Thread | None = None
     last_block_at: float = 0.0
+
+
+@dataclass
+class _Recording:
+    session_id: str
+    flags: _Flags
+    tracks: list[_Track]
+    """The reference first; its time is the recording's (markers, notes)."""
     markers: list[marks.Marker] = field(default_factory=lambda: list[marks.Marker]())
     notes: list[marks.TimedNote] = field(default_factory=lambda: list[marks.TimedNote]())
+
+    @property
+    def main(self) -> _Track:
+        return self.tracks[0]
 
 
 class StopResult(BaseModel):
@@ -231,6 +259,8 @@ class StopResult(BaseModel):
     processing: bool
     """The processing was queued; not on battery (the user decides, spec §7.4)."""
     on_battery: bool
+    second_problem: str | None = None
+    """The second microphone's file could not be read back: said after stopping."""
 
 
 def _close_quietly(stream: InputStream) -> str | None:
@@ -278,7 +308,10 @@ class Recorder:
         unnamed_attendees: int | None,
         device_index: int | None,
         project_id: int | None = None,
+        second_device_index: int | None = None,
     ) -> RecordingState:
+        """`second_device_index`: a second microphone recording at the same time (often the
+        iPhone through Continuity, ADR 0031), into a file of its own."""
         with self._lock:
             if self._current is not None:
                 raise RecordingError("Un enregistrement est déjà en cours.")
@@ -291,31 +324,29 @@ class Recorder:
                 raise RecordingError(
                     "Aucun micro trouvé : branchez-en un, ou choisissez-en un autre."
                 )
-            channels = min(chosen.channels, MAX_CHANNELS)
-            blocks: queue.Queue[Block | None] = queue.Queue()
+            second: InputDevice | None = None
+            if second_device_index is not None:
+                second = next((d for d in devices if d.index == second_device_index), None)
+                if second is None:
+                    raise RecordingError(
+                        "Le deuxième micro n'est plus là : est-il encore près du Mac ?"
+                    )
+                if second.index == chosen.index:
+                    raise RecordingError("Le deuxième micro doit être un autre micro.")
             flags = _Flags()
-
-            def heard(block: NDArray[np.float32], lost: bool) -> None:
-                # Paused or not when heard, not when written: a pause cuts exactly there.
-                blocks.put((block, lost, flags.paused))
-
-            # The microphone is opened and started before the session is made: one that
-            # refuses leaves nothing behind (its first blocks wait in the queue).
+            # The microphones are opened and started before the session is made: one that
+            # refuses leaves nothing behind (their first blocks wait in their queues).
+            opened: list[tuple[InputDevice, int, InputStream, queue.Queue[Block | None]]] = []
             try:
-                stream = self._stream_factory(chosen.index, channels, heard)
-            except Exception as exc:
-                raise RecordingError(
-                    f"Le micro « {chosen.name} » n'a pas pu être ouvert : {exc}"
-                ) from exc
-            try:
-                stream.start()
-            except Exception as exc:
-                _close_quietly(stream)
-                raise RecordingError(
-                    f"Le micro « {chosen.name} » n'a pas pu démarrer. Sur macOS, l'accès au "
-                    "micro se donne dans Réglages Système, Confidentialité et sécurité, Micro, "
-                    f"à l'application qui lance Coulisses. ({exc})"
-                ) from exc
+                for device in [chosen] + ([second] if second else []):
+                    channels = min(device.channels, MAX_CHANNELS)
+                    blocks: queue.Queue[Block | None] = queue.Queue()
+                    stream = self._open(device, channels, blocks, flags)
+                    opened.append((device, channels, stream, blocks))
+            except RecordingError:
+                for _, _, stream, _ in opened:
+                    _close_quietly(stream)
+                raise
             try:
                 session_id, path = sessions.start_capture(
                     self.data,
@@ -325,92 +356,170 @@ class Recorder:
                     unnamed_attendees=unnamed_attendees,
                     device=chosen.name,
                     sample_rate=SAMPLE_RATE,
-                    channels=channels,
+                    channels=opened[0][1],
+                    second=(second.name, opened[1][1]) if second else None,
                 )
             except Exception:
-                _close_quietly(stream)
+                for _, _, stream, _ in opened:
+                    _close_quietly(stream)
                 raise
-            try:
-                writer = wav.WavWriter(
-                    path, SAMPLE_RATE, channels, max_data_bytes=self._max_data_bytes
+            tracks: list[_Track] = []
+            for k, (device, channels, stream, blocks) in enumerate(opened):
+                source_id = sessions.REFERENCE_SOURCE_ID if k == 0 else sessions.SECOND_SOURCE_ID
+                target = path if k == 0 else path.with_name(sessions.capture_file(source_id))
+                try:
+                    writer = wav.WavWriter(
+                        target, SAMPLE_RATE, channels, max_data_bytes=self._max_data_bytes
+                    )
+                except Exception as exc:
+                    for _, _, other, _ in opened:
+                        _close_quietly(other)
+                    for made in tracks:
+                        try:
+                            made.writer.close()
+                        except Exception:  # what it holds is a header: logged, not hidden
+                            log.exception("closing %s", made.writer.path)
+                    for sid in [sessions.REFERENCE_SOURCE_ID] + (
+                        [sessions.SECOND_SOURCE_ID] if second else []
+                    ):
+                        sessions.close_empty_capture(
+                            self.data, session_id, reason=str(exc), source_id=sid
+                        )
+                    raise RecordingError(
+                        f"Le fichier de l'enregistrement n'a pas pu être créé : {exc}"
+                    ) from exc
+                tracks.append(
+                    _Track(
+                        source_id=source_id,
+                        device=device.name,
+                        channels=channels,
+                        writer=writer,
+                        stream=stream,
+                        blocks=blocks,
+                        last_block_at=self._clock(),
+                    )
                 )
-            except Exception as exc:
-                _close_quietly(stream)
-                sessions.close_empty_capture(self.data, session_id, reason=str(exc))
-                raise RecordingError(
-                    f"Le fichier de l'enregistrement n'a pas pu être créé : {exc}"
-                ) from exc
-            recording = _Recording(
-                session_id=session_id,
-                device=chosen.name,
-                channels=channels,
-                writer=writer,
-                stream=stream,
-                flags=flags,
-                blocks=blocks,
-                last_block_at=self._clock(),
-            )
-            recording.writer_thread = threading.Thread(
-                target=self._write, args=(recording,), name="capture-writer", daemon=True
-            )
-            recording.writer_thread.start()
+            recording = _Recording(session_id=session_id, flags=flags, tracks=tracks)
+            for track in tracks:
+                track.writer_thread = threading.Thread(
+                    target=self._write,
+                    args=(recording, track),
+                    name=f"capture-writer-{track.source_id}",
+                    daemon=True,
+                )
+                track.writer_thread.start()
             self.keep_awake.hold()
             self._current = recording
             return self._state(recording)
 
-    def _write(self, recording: _Recording) -> None:
-        """Drains the blocks from the microphone: levels always, audio unless paused. A
-        failure to write stops writing, keeps what is there and says why (P8)."""
-        while (item := recording.blocks.get()) is not None:
+    def _open(
+        self,
+        device: InputDevice,
+        channels: int,
+        blocks: queue.Queue[Block | None],
+        flags: _Flags,
+    ) -> InputStream:
+        def heard(block: NDArray[np.float32], lost: bool) -> None:
+            # Paused or not when heard, not when written: a pause cuts exactly there, on
+            # every microphone at once.
+            blocks.put((block, lost, flags.paused))
+
+        try:
+            stream = self._stream_factory(device.index, channels, heard)
+        except Exception as exc:
+            raise RecordingError(
+                f"Le micro « {device.name} » n'a pas pu être ouvert : {exc}"
+            ) from exc
+        try:
+            stream.start()
+        except Exception as exc:
+            _close_quietly(stream)
+            raise RecordingError(
+                f"Le micro « {device.name} » n'a pas pu démarrer. Sur macOS, l'accès au "
+                "micro se donne dans Réglages Système, Confidentialité et sécurité, Micro, "
+                f"à l'application qui lance Coulisses. ({exc})"
+            ) from exc
+        return stream
+
+    def _write(self, recording: _Recording, track: _Track) -> None:
+        """Drains the blocks from one microphone: levels always, audio unless paused. A
+        failure to write stops writing that file, keeps what is there and says why (P8);
+        the other microphone goes on."""
+        while (item := track.blocks.get()) is not None:
             block, lost, paused = item
             peak = float(np.max(np.abs(block))) if block.size else 0.0
             rms = float(np.sqrt(np.mean(np.square(block)))) if block.size else 0.0
             now = self._clock()
-            recording.last_block_at = now
-            recording.dropouts += int(lost)
-            recording.levels = Levels(peak_db=_db(peak), rms_db=_db(rms))
-            if recording.levels.peak_db >= CLIP_DB:
-                recording.clipped_at = now
-            if recording.levels.rms_db < LOW_DB:
-                recording.quiet_since = recording.quiet_since or now
+            track.last_block_at = now
+            track.dropouts += int(lost)
+            track.levels = Levels(peak_db=_db(peak), rms_db=_db(rms))
+            if track.levels.peak_db >= CLIP_DB:
+                track.clipped_at = now
+            if track.levels.rms_db < LOW_DB:
+                track.quiet_since = track.quiet_since or now
             else:
-                recording.quiet_since = None
-            if paused or recording.error is not None:
+                track.quiet_since = None
+            if paused or track.error is not None:
                 continue
             try:
-                recording.writer.write(block)
+                track.writer.write(block)
             except wav.WavFullError as exc:
-                recording.error = f"L'enregistrement est arrêté : {exc}."
+                track.error = (
+                    f"L'enregistrement est arrêté : {exc}."
+                    if track.source_id == sessions.REFERENCE_SOURCE_ID
+                    else f"Ce micro n'enregistre plus : {exc}."
+                )
             except Exception as exc:  # disk full…: written so far is kept
-                recording.error = (
+                track.error = (
                     f"L'écriture sur le disque a échoué : {exc}. Ce qui précède est gardé."
                 )
-                log.exception("capture of %s", recording.session_id)
+                log.exception("capture of %s (%s)", recording.session_id, track.source_id)
+
+    def _alerts(self, track: _Track, paused: bool) -> tuple[bool, bool, str | None]:
+        """(too quiet, clipping, error) of one microphone."""
+        now = self._clock()
+        too_quiet = (
+            not paused and track.quiet_since is not None and now - track.quiet_since >= LOW_AFTER_S
+        )
+        clipping = track.clipped_at is not None and now - track.clipped_at <= CLIP_SHOWN_S
+        error = track.error or (
+            "Le micro ne donne plus de son depuis quelques secondes : est-il débranché ? "
+            "Ce qui est enregistré est gardé."
+            if now - track.last_block_at > SILENT_STREAM_S
+            else None
+        )
+        return too_quiet, clipping, error
 
     def _state(self, recording: _Recording) -> RecordingState:
-        now = self._clock()
+        main = recording.main
+        paused = recording.flags.paused
+        too_quiet, clipping, error = self._alerts(main, paused)
+        second: TrackState | None = None
+        if len(recording.tracks) > 1:
+            other = recording.tracks[1]
+            quiet2, clip2, error2 = self._alerts(other, paused)
+            second = TrackState(
+                device=other.device,
+                levels=other.levels,
+                too_quiet=quiet2,
+                clipping=clip2,
+                dropouts=other.dropouts,
+                error=error2,
+            )
         return RecordingState(
             session_id=recording.session_id,
-            state="paused" if recording.flags.paused else "recording",
-            elapsed_s=recording.writer.frames / SAMPLE_RATE,
-            device=recording.device,
-            channels=recording.channels,
-            levels=recording.levels,
-            too_quiet=not recording.flags.paused
-            and recording.quiet_since is not None
-            and now - recording.quiet_since >= LOW_AFTER_S,
-            clipping=recording.clipped_at is not None
-            and now - recording.clipped_at <= CLIP_SHOWN_S,
-            dropouts=recording.dropouts,
+            state="paused" if paused else "recording",
+            elapsed_s=main.writer.frames / SAMPLE_RATE,
+            device=main.device,
+            channels=main.channels,
+            levels=main.levels,
+            too_quiet=too_quiet,
+            clipping=clipping,
+            dropouts=main.dropouts,
             markers=list(recording.markers),
             notes=list(recording.notes),
-            error=recording.error
-            or (
-                "Le micro ne donne plus de son depuis quelques secondes : est-il débranché ? "
-                "Ce qui est enregistré est gardé."
-                if now - recording.last_block_at > SILENT_STREAM_S
-                else None
-            ),
+            error=error,
+            second=second,
         )
 
     def state(self) -> RecordingState | None:
@@ -437,7 +546,7 @@ class Recorder:
         already recorded (a marker taken back by mistake, put back)."""
         with self._lock:
             recording = self._require()
-            elapsed = recording.writer.frames / SAMPLE_RATE
+            elapsed = recording.main.writer.frames / SAMPLE_RATE
             if at_s is None:
                 at_s = elapsed
             elif not 0 <= at_s <= elapsed:
@@ -454,7 +563,7 @@ class Recorder:
         belongs where it was thought of, not where it was finished."""
         with self._lock:
             recording = self._require()
-            elapsed = recording.writer.frames / SAMPLE_RATE
+            elapsed = recording.main.writer.frames / SAMPLE_RATE
             if not 0 <= at_s <= elapsed + 1:
                 raise RecordingError("Cette note tombe hors de l'enregistrement.")
             conn = connect(self.data)
@@ -486,50 +595,94 @@ class Recorder:
         return self._current
 
     def stop(self, *, profile: str) -> StopResult:
-        """Stop, close the file, describe it; queue the processing unless on battery.
-        Whatever the microphone does, the session is closed with what is on disk."""
+        """Stop, close the files, describe them; queue the processing unless on battery.
+        Whatever the microphones do, the session is closed with what is on disk. A second
+        microphone that could not be read back is said and kept; it never stops the main
+        recording from being closed (ADR 0031)."""
         with self._lock:
             recording = self._current
             if recording is None:
                 raise RecordingError("Aucun enregistrement en cours.")
             self._current = None
-        microphone = _close_quietly(recording.stream)
-        recording.blocks.put(None)
-        if recording.writer_thread is not None:
-            recording.writer_thread.join()
+        said: list[str] = []
+        for track in recording.tracks:
+            if (problem := _close_quietly(track.stream)) is not None:
+                said.append(f"{track.device} : {problem}")
+            track.blocks.put(None)
+        for track in recording.tracks:
+            if track.writer_thread is not None:
+                track.writer_thread.join()
         try:
-            recording.writer.close()
-        except OSError as exc:  # its last header write: `repair` below makes it true
-            log.warning("closing %s: %s", recording.writer.path, exc)
+            for track in recording.tracks:
+                try:
+                    track.writer.close()
+                # Its last header write, whatever failed: `repair` below makes it true.
+                except Exception:
+                    log.exception("closing %s", track.writer.path)
         finally:
             self.keep_awake.release()
-        # From what is on disk, whatever the writer managed: the header is made true.
+        # From what is on disk, whatever the writers managed: the headers are made true.
+        # The main recording first: a second microphone never keeps it from being closed.
+        main = recording.main
+        main_error: Exception | None = None
+        frames = 0
         try:
-            frames = wav.repair(recording.writer.path)
+            frames = wav.repair(main.writer.path)
             sessions.finish_capture(self.data, recording.session_id, frames=frames)
         except Exception as exc:
             log.exception("closing the recording of %s", recording.session_id)
             sessions.close_empty_capture(
                 self.data, recording.session_id, reason=str(exc), unreadable=True
             )
+            main_error = exc
+        second_problem = None
+        for track in recording.tracks[1:]:
+            second_problem = self._close_second(recording.session_id, track) or second_problem
+        if main_error is not None:
             raise RecordingError(
-                f"L'enregistrement est arrêté, mais son fichier n'a pas pu être relu : {exc}. "
-                "Il reste dans le dossier de la séance."
-            ) from exc
+                f"L'enregistrement est arrêté, mais son fichier n'a pas pu être relu : "
+                f"{main_error}. Il reste dans le dossier de la séance."
+            ) from main_error
         battery = self._battery()
         processing = frames > 0 and not battery
         if processing:
             sessions.start_processing(self.data, recording.session_id, profile=profile)
-        if microphone:
+        if said:
             log.warning(
-                "recording %s stopped, microphone said: %s", recording.session_id, microphone
+                "recording %s stopped, microphones said: %s", recording.session_id, "; ".join(said)
             )
         return StopResult(
             session_id=recording.session_id,
             duration_s=frames / SAMPLE_RATE,
             processing=processing,
             on_battery=battery,
+            second_problem=second_problem,
         )
+
+    def _close_second(self, session_id: str, track: _Track) -> str | None:
+        """A second microphone's file, described; what went wrong, said to the user (never
+        raised: the main recording is already closed)."""
+        try:
+            kept = wav.repair(track.writer.path)
+            sessions.finish_capture(self.data, session_id, frames=kept, source_id=track.source_id)
+            return None
+        except Exception as exc:
+            log.exception("closing the second track of %s", session_id)
+            try:
+                sessions.close_empty_capture(
+                    self.data,
+                    session_id,
+                    reason=str(exc),
+                    unreadable=True,
+                    source_id=track.source_id,
+                )
+            except Exception:  # the database itself: the next start repairs it (logged)
+                log.exception("marking the second track of %s", session_id)
+            return (
+                f"La piste du deuxième micro ({track.device}) n'a pas pu être relue : {exc}. "
+                "Son fichier reste dans le dossier de la séance ; l'enregistrement principal "
+                "est complet."
+            )
 
     def shutdown(self, *, profile: str) -> None:
         """The service stops: a recording in progress is closed properly, not lost."""
@@ -542,19 +695,29 @@ def recover_interrupted(data: DataDir) -> list[str]:
     processed without the user. Returns what to tell them. Never stops the service from
     starting: what cannot be repaired is said."""
     told: list[str] = []
-    for session_id in sessions.interrupted_captures(data):
-        path = data.sources_dir(session_id) / sessions.CAPTURE_FILE
+    for session_id, source_id in sessions.interrupted_captures(data):
+        path = data.sources_dir(session_id) / sessions.capture_file(source_id)
+        second = source_id != sessions.REFERENCE_SOURCE_ID
+        what = (
+            "Deuxième micro d'un enregistrement interrompu"
+            if second
+            else "Enregistrement interrompu"
+        )
         try:
             frames = wav.repair(path)
-            sessions.finish_capture(data, session_id, frames=frames, state="recovered")
+            sessions.finish_capture(
+                data, session_id, frames=frames, state="recovered", source_id=source_id
+            )
         except Exception as exc:
-            log.exception("recovering the recording of %s", session_id)
-            sessions.close_empty_capture(data, session_id, reason=str(exc), unreadable=True)
-            told.append(f"Enregistrement interrompu illisible ({session_id}) : {exc}")
+            log.exception("recovering the recording of %s (%s)", session_id, source_id)
+            sessions.close_empty_capture(
+                data, session_id, reason=str(exc), unreadable=True, source_id=source_id
+            )
+            told.append(f"{what} illisible ({session_id}) : {exc}")
             continue
         minutes = frames / SAMPLE_RATE / 60
         told.append(
-            f"Enregistrement interrompu récupéré ({session_id}, {minutes:.0f} min) : "
-            "ouvrez la séance pour lancer son traitement."
+            f"{what} récupéré ({session_id}, {minutes:.0f} min)"
+            + ("." if second else " : ouvrez la séance pour lancer son traitement.")
         )
     return told
