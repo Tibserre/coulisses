@@ -549,10 +549,13 @@ def create_app(
     @app.get("/api/micros")
     def microphones() -> list[capture.InputDevice]:
         try:
-            return capture.input_devices()
-        except Exception as exc:  # PortAudio could not list them: said, not hidden
+            return recorder.list_devices()
+        except capture.RecordingError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:  # PortAudio could not list them: said, the cause logged
+            log.exception("listing the microphones")
             raise HTTPException(
-                status_code=503, detail=f"Impossible de lister les micros : {exc}"
+                status_code=503, detail="Les micros n'ont pas pu être listés."
             ) from exc
 
     @app.get("/api/alimentation")

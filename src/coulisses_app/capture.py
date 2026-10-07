@@ -132,6 +132,22 @@ def input_devices() -> list[InputDevice]:
     return found
 
 
+def refresh_devices() -> None:
+    """PortAudio reads the list of microphones once, when it starts, and keeps it. A device
+    that comes and goes (the iPhone through Continuity, each time it wakes) gets a new
+    identity in macOS: opened from the old list, it fails (« Internal »). Read again; only
+    with no stream open (ADR 0031)."""
+    import sounddevice as sd  # pyright: ignore[reportMissingTypeStubs]  # PortAudio, untyped
+
+    # The documented way to read the devices again.
+    sd._terminate()  # pyright: ignore[reportPrivateUsage, reportUnknownMemberType]
+    sd._initialize()  # pyright: ignore[reportPrivateUsage, reportUnknownMemberType]
+
+
+OPEN_TRIES = 3
+"""A microphone that is waking up (the iPhone, a second or two) is tried again."""
+
+
 def _sounddevice_stream(device: int, channels: int, on_block: OnBlock) -> InputStream:
     import sounddevice as sd  # pyright: ignore[reportMissingTypeStubs]  # PortAudio, untyped
 
@@ -287,6 +303,8 @@ class Recorder:
         battery: Callable[[], bool] = on_battery,
         clock: Callable[[], float] = time.monotonic,
         max_data_bytes: int = wav.MAX_DATA_BYTES,
+        refresh: Callable[[], None] | None = None,
+        retry_wait_s: float = 1.0,
     ) -> None:
         self.data = data
         self._stream_factory = stream_factory
@@ -295,10 +313,36 @@ class Recorder:
         self._battery = battery
         self._clock = clock
         self._max_data_bytes = max_data_bytes
+        # The real list is read again; a list given (tests) needs nothing.
+        self._refresh = refresh or (refresh_devices if devices is input_devices else lambda: None)
+        self._retry_wait_s = retry_wait_s
         self._lock = threading.Lock()
+        self._closing = False
+        """A recording being stopped: its streams are still open, the list is not re-read."""
         self._current: _Recording | None = None
 
     # -- the recording --------------------------------------------------------------------
+
+    def list_devices(self) -> list[InputDevice]:
+        """The microphones as macOS sees them now (read again unless a recording runs: the
+        list cannot be re-read with a stream open)."""
+        with self._lock:
+            self._fresh()
+            return self._devices()
+
+    def _fresh(self) -> None:
+        """Re-read the microphones, never with a stream open (recording, or being stopped):
+        PortAudio would cut them. Under the lock."""
+        if self._current is not None or self._closing:
+            return
+        try:
+            self._refresh()
+        except Exception as exc:
+            log.exception("re-reading the microphones")
+            raise RecordingError(
+                "La liste des micros n'a pas pu être relue. Relancez Coulisses si le problème "
+                "reste."
+            ) from exc
 
     def start(
         self,
@@ -315,23 +359,36 @@ class Recorder:
         with self._lock:
             if self._current is not None:
                 raise RecordingError("Un enregistrement est déjà en cours.")
+            # Chosen from a list read a moment ago: found again by name in the list as it
+            # is now (a device that came back has another number). Two microphones of the
+            # very same name cannot be told apart: the first one listed is taken.
+            before = {d.index: d.name for d in self._devices()}
+            if second_device_index is not None and second_device_index == device_index:
+                raise RecordingError("Le deuxième micro doit être un autre micro.")
+            self._fresh()
             devices = self._devices()
+
+            def find(index: int) -> InputDevice | None:
+                name = before.get(index)
+                return next((d for d in devices if d.name == name), None)
+
             if device_index is None:
                 chosen = next((d for d in devices if d.default), devices[0] if devices else None)
             else:
-                chosen = next((d for d in devices if d.index == device_index), None)
+                chosen = find(device_index)
             if chosen is None:
                 raise RecordingError(
                     "Aucun micro trouvé : branchez-en un, ou choisissez-en un autre."
                 )
             second: InputDevice | None = None
             if second_device_index is not None:
-                second = next((d for d in devices if d.index == second_device_index), None)
+                second = find(second_device_index)
                 if second is None:
                     raise RecordingError(
-                        "Le deuxième micro n'est plus là : est-il encore près du Mac ?"
+                        "Le deuxième micro n'est plus là : est-il encore près du Mac, "
+                        "déverrouillé ?"
                     )
-                if second.index == chosen.index:
+                if second.name == chosen.name:
                     raise RecordingError("Le deuxième micro doit être un autre micro.")
             flags = _Flags()
             # The microphones are opened and started before the session is made: one that
@@ -424,22 +481,33 @@ class Recorder:
             # every microphone at once.
             blocks.put((block, lost, flags.paused))
 
-        try:
-            stream = self._stream_factory(device.index, channels, heard)
-        except Exception as exc:
-            raise RecordingError(
-                f"Le micro « {device.name} » n'a pas pu être ouvert : {exc}"
-            ) from exc
-        try:
-            stream.start()
-        except Exception as exc:
-            _close_quietly(stream)
-            raise RecordingError(
-                f"Le micro « {device.name} » n'a pas pu démarrer. Sur macOS, l'accès au "
-                "micro se donne dans Réglages Système, Confidentialité et sécurité, Micro, "
-                f"à l'application qui lance Coulisses. ({exc})"
-            ) from exc
-        return stream
+        failure: Exception | None = None
+        for attempt in range(OPEN_TRIES):
+            if attempt:
+                time.sleep(self._retry_wait_s)  # waking up (the iPhone): tried again
+            try:
+                stream = self._stream_factory(device.index, channels, heard)
+            # PortAudio raises plain exceptions: each kept, the last raised below.
+            except Exception as exc:  # noqa: BLE001
+                failure = exc
+                log.warning("opening %s (try %d): %s", device.name, attempt + 1, exc)
+                continue
+            try:
+                stream.start()
+            except Exception as exc:  # noqa: BLE001
+                _close_quietly(stream)
+                failure = exc
+                log.warning("starting %s (try %d): %s", device.name, attempt + 1, exc)
+                continue
+            return stream
+        hint = (
+            " Gardez l'iPhone déverrouillé près du Mac, Wi-Fi et Bluetooth activés sur les deux, "
+            "même compte Apple, et vérifiez que son micro n'est pas pris (appel, autre app)."
+            if "iphone" in device.name.lower()
+            else " Sur macOS, l'accès au micro se donne dans Réglages Système, Confidentialité "
+            "et sécurité, Micro, à l'application qui lance Coulisses."
+        )
+        raise RecordingError(f"Le micro « {device.name} » n'a pas pu s'ouvrir.{hint}") from failure
 
     def _write(self, recording: _Recording, track: _Track) -> None:
         """Drains the blocks from one microphone: levels always, audio unless paused. A
@@ -604,11 +672,16 @@ class Recorder:
             if recording is None:
                 raise RecordingError("Aucun enregistrement en cours.")
             self._current = None
+            self._closing = True
         said: list[str] = []
-        for track in recording.tracks:
-            if (problem := _close_quietly(track.stream)) is not None:
-                said.append(f"{track.device} : {problem}")
-            track.blocks.put(None)
+        try:
+            for track in recording.tracks:
+                if (problem := _close_quietly(track.stream)) is not None:
+                    said.append(f"{track.device} : {problem}")
+                track.blocks.put(None)
+        finally:
+            with self._lock:
+                self._closing = False
         for track in recording.tracks:
             if track.writer_thread is not None:
                 track.writer_thread.join()

@@ -112,6 +112,7 @@ def recorder(
         keep_awake=awake,
         battery=lambda: battery,
         clock=clock,
+        retry_wait_s=0.0,
     )
 
 
@@ -252,7 +253,7 @@ def test_one_recording_at_a_time_and_a_microphone_that_cannot_open_leaves_nothin
         data, stream_factory=refusing, devices=lambda: [MIC], keep_awake=awake
     )
     before = len(sessions.list_sessions(data))
-    with pytest.raises(capture.RecordingError, match="occupé"):
+    with pytest.raises(capture.RecordingError, match="n'a pas pu s'ouvrir"):
         start(broken)
     assert len(sessions.list_sessions(data)) == before and awake.held == 0
     nothing = capture.Recorder(data, stream_factory=mic.factory, devices=list, keep_awake=awake)
@@ -541,6 +542,7 @@ def two_recorder(
         keep_awake=awake,
         battery=lambda: False,
         clock=clock,
+        retry_wait_s=0.0,
     )
 
 
@@ -686,3 +688,97 @@ def test_a_second_track_unreadable_at_stop_is_said_and_the_main_one_processed(
     [phone] = sessions.other_sources(data, session_id)
     assert phone.duration_s is None and phone.capture_state == "complete"
     assert sessions.reference_source(data, session_id).capture_state == "complete"  # type: ignore[union-attr]
+
+
+def test_a_microphone_that_came_back_is_found_by_name_and_tried_again(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    """The iPhone woke up: macOS gave it another number; and its first opening fails."""
+    mics = TwoMics()
+    listing = [[MIC, PHONE]]
+    refreshed: list[bool] = []
+
+    def refresh() -> None:
+        refreshed.append(True)
+        listing[0] = [MIC, PHONE.model_copy(update={"index": 9})]
+
+    tries = {"n": 0}
+    real_factory = mics.factory
+
+    def flaky(
+        device: int, channels: int, on_block: Callable[[NDArray[np.float32], bool], None]
+    ) -> FakeMic:
+        if device == 9:
+            tries["n"] += 1
+            if tries["n"] == 1:
+                raise OSError("Error opening InputStream: Internal")
+            return mics.phone.factory(device, channels, on_block)
+        return real_factory(device, channels, on_block)
+
+    rec = capture.Recorder(
+        data,
+        stream_factory=flaky,
+        devices=lambda: listing[0],
+        keep_awake=awake,
+        battery=lambda: False,
+        clock=clock,
+        refresh=refresh,
+        retry_wait_s=0.0,
+    )
+    state = start_both(rec)  # asked with the old number, 7
+    assert refreshed and tries["n"] == 2
+    assert state.second is not None and state.second.device == PHONE.name
+    rec.stop(profile="essai")
+
+
+def test_the_list_is_read_again_only_with_no_microphone_open(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mic = FakeMic()
+    refreshed: list[str] = []
+    rec = capture.Recorder(
+        data,
+        stream_factory=mic.factory,
+        devices=lambda: [MIC],
+        keep_awake=awake,
+        battery=lambda: False,
+        clock=clock,
+        refresh=lambda: refreshed.append("relue"),
+        retry_wait_s=0.0,
+    )
+    rec.list_devices()
+    assert refreshed == ["relue"]
+    start(rec)  # read again once more, before opening
+    assert refreshed == ["relue", "relue"]
+    rec.list_devices()  # recording: never
+    seen_while_closing: list[int] = []
+    real_stop = mic.stop
+
+    def stop_and_ask() -> None:
+        rec.list_devices()  # the interface asks while the microphone is being closed
+        seen_while_closing.append(len(refreshed))
+        real_stop()
+
+    mic.stop = stop_and_ask  # type: ignore[method-assign]
+    mic.push(tone(0.2, 0.3))
+    rec.stop(profile="essai")
+    assert seen_while_closing == [2] and refreshed == ["relue", "relue"]
+    rec.list_devices()  # closed: read again
+    assert len(refreshed) == 3
+
+
+def test_a_list_that_cannot_be_read_again_is_said_in_french(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    def broken() -> None:
+        raise OSError("Error initializing PortAudio")
+
+    rec = capture.Recorder(
+        data,
+        stream_factory=FakeMic().factory,
+        devices=lambda: [MIC],
+        keep_awake=awake,
+        refresh=broken,
+    )
+    with pytest.raises(capture.RecordingError, match="n'a pas pu être relue"):
+        rec.list_devices()
