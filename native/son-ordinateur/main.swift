@@ -158,6 +158,7 @@ func tearDown() {
 let output = FileHandle.standardOutput
 let writing = DispatchQueue(label: "coulisses.son-ordinateur.write")
 var micChannels: [Int] = []
+var micStreams = 0
 var expected: Float64 = -1
 var actualRate: Float64 = 0
 var announced = false
@@ -184,13 +185,16 @@ func start() throws {
     description.muteBehavior = .unmuted
     try check(AudioHardwareCreateProcessTap(description, &tapID), "tap", "creating the tap")
 
+    micStreams = try inputLayout(mic).count
+
     let aggregate: [String: Any] = [
         kAudioAggregateDeviceNameKey: "Coulisses",
         kAudioAggregateDeviceUIDKey: "coulisses-\(UUID().uuidString)",
         kAudioAggregateDeviceMainSubDeviceKey: micUID,
         kAudioAggregateDeviceIsPrivateKey: true,
         kAudioAggregateDeviceIsStackedKey: false,
-        kAudioAggregateDeviceTapAutoStartKey: true,
+        // Started with the device, the tap would hold its I/O back until something plays.
+        kAudioAggregateDeviceTapAutoStartKey: false,
         kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: micUID]],
         kAudioAggregateDeviceTapListKey: [
             [
@@ -220,10 +224,11 @@ func start() throws {
 
     // The microphone's streams first, then the tap's (one channel).
     let layout = try inputLayout(aggregateID)
-    guard layout.count >= 2, layout.last == 1 else {
+    // The microphone's streams first; the tap's last (one channel).
+    guard layout.count >= micStreams + 1, layout.last == 1 else {
         throw Failure(code: "format", detail: "input layout \(layout)")
     }
-    micChannels = Array(layout.dropLast())
+    micChannels = Array(layout.prefix(micStreams))
     if micChannels.reduce(0, +) < wanted {
         throw Failure(code: "format", detail: "\(micChannels) channels, \(wanted) wanted")
     }
@@ -238,7 +243,7 @@ func start() throws {
             let buffers = UnsafeMutableAudioBufferListPointer(
                 UnsafeMutablePointer(mutating: inputData))
             calls += 1
-            guard buffers.count == micChannels.count + 1 else { return }
+            guard buffers.count == layout.count else { return }
             let tap = buffers[buffers.count - 1]
             lastTapBytes = tap.mDataByteSize
             let frames = Int(tap.mDataByteSize) / MemoryLayout<Float32>.size
