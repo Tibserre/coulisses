@@ -15,7 +15,9 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Index de recherche | `search_index` | Cache plein texte des transcriptions corrigées, notes, résumés et titres ; reconstruit à la demande, jamais une source de vérité. |
 | Séance | `session` | Un enregistrement (répétition, atelier, réunion), de 1 h à 2 h. Unité de traitement. Appartient à un espace. |
 | Présents | `attendees` | Personnes présentes à une séance. Leur nombre donne le minimum de locuteurs. |
-| Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). Une seule est traitée en V1 ; un deuxième micro en ajoute une (`mic2`, ADR 0031). |
+| Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). Une seule est traitée en V1 ; un deuxième micro en ajoute une (`mic2`, ADR 0031), le son de l'ordinateur aussi (`system`, ADR 0032). |
+| Son de l'ordinateur | `system_audio` | Tout ce que le Mac joue pendant une réunion en ligne ou hybride, enregistré avec le micro, sur son horloge (source `system`, ADR 0032). |
+| Mix | `mix` | La piste que le moteur traite quand une séance a le son de l'ordinateur : le micro plus ce son, baissés d'un seul gain (`sources/mix.wav`). Un audio dérivé, refait depuis les sources. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Audio dérivé | `derived_audio` | Audio produit par une étape (rééchantillonné, déréverbéré, mixé). Purgé avec l'original. |
 | Marqueur | `marker` | Repère horodaté posé à la main : `scene`, `discussion`, `key_moment`. |

@@ -339,6 +339,12 @@ CAPTURE_FILE = f"{REFERENCE_SOURCE_ID}.wav"
 SECOND_SOURCE_ID = "mic2"
 """A second microphone recording at the same time (often the iPhone, through Continuity):
 kept as a source of its own; the processing uses the reference only, for now (ADR 0031)."""
+SYSTEM_SOURCE_ID = "system"
+"""The computer's sound (a meeting online or hybrid), recorded with the reference on its
+clock: mixed with it for the processing, for now (ADR 0032)."""
+SYSTEM_DEVICE = "Son de l'ordinateur"
+
+_SOURCE_LABELS = {SECOND_SOURCE_ID: " (deuxième micro)", SYSTEM_SOURCE_ID: " (son de l'ordinateur)"}
 
 
 def capture_file(source_id: str) -> str:
@@ -356,10 +362,12 @@ def start_capture(
     sample_rate: int,
     channels: int,
     second: tuple[str, int] | None = None,
+    system: bool = False,
 ) -> tuple[str, Path]:
     """The session of a recording about to start: made at once, so that a crash leaves it
     there to be repaired (state `recording`). Returns its id and where to write the audio.
-    `second`: (device, channels) of a second microphone, written beside it as `mic2`."""
+    `second`: (device, channels) of a second microphone, written beside it as `mic2`;
+    `system`: the computer's sound, beside it as `system` (mono)."""
     if unnamed_attendees is not None and unnamed_attendees < 1:
         raise spaces.SpaceError("Le nombre de présents non nommés doit être au moins 1.")
     present = list(dict.fromkeys(attendee_ids))
@@ -403,7 +411,7 @@ def start_capture(
                         session_id,
                         source_id,
                         f"Enregistrement du {now.astimezone().strftime('%d/%m/%Y %H:%M')}"
-                        f"{' (deuxième micro)' if source_id == SECOND_SOURCE_ID else ''}.wav",
+                        f"{_SOURCE_LABELS.get(source_id, '')}.wav",
                         capture_file(source_id),
                         sample_rate,
                         chans,
@@ -412,6 +420,7 @@ def start_capture(
                     )
                     for source_id, name, chans in (
                         [(REFERENCE_SOURCE_ID, device, channels)]
+                        + ([(SYSTEM_SOURCE_ID, SYSTEM_DEVICE, 1)] if system else [])
                         + ([(SECOND_SOURCE_ID, second[0], second[1])] if second else [])
                     )
                 ],

@@ -133,6 +133,15 @@ export interface GlossaryEntry {
   archived: boolean;
 }
 
+/** What the mix of the microphone and the computer's sound was made of. */
+export interface MixFacts {
+  gain: number;
+  sha256: string;
+  /** The computer's sound held nothing at all (the permission, most likely). */
+  system_silent: boolean;
+  made_at: string;
+}
+
 export interface AudioSource {
   source_id: string;
   origin: "captured" | "imported";
@@ -190,14 +199,19 @@ export interface RecordingState {
   markers: Marker[];
   notes: TimedNote[];
   /** A second microphone recording at the same time, with its own alerts. */
-  second: {
-    device: string;
-    levels: { peak_db: number; rms_db: number };
-    too_quiet: boolean;
-    clipping: boolean;
-    dropouts: number;
-    error: string | null;
-  } | null;
+  second: TrackState | null;
+  /** The computer's sound, recorded with the microphone (a meeting online or hybrid).
+   *  Silence is normal there: `too_quiet` only says it has been silent for a while. */
+  system: TrackState | null;
+}
+
+export interface TrackState {
+  device: string;
+  levels: { peak_db: number; rms_db: number };
+  too_quiet: boolean;
+  clipping: boolean;
+  dropouts: number;
+  error: string | null;
 }
 
 export interface StopResult {
@@ -205,7 +219,7 @@ export interface StopResult {
   duration_s: number;
   processing: boolean;
   on_battery: boolean;
-  /** The second microphone's file could not be read back. */
+  /** A second track's file (microphone, computer's sound) could not be read back. */
   second_problem: string | null;
 }
 
@@ -214,6 +228,8 @@ export interface RecordingRequest {
   projet: number | null;
   /** A second microphone recording at the same time (often the iPhone), or none. */
   micro2: number | null;
+  /** The computer's sound too: a meeting online or hybrid. */
+  son_ordinateur: boolean;
   presents: number[];
   non_nommes: number | null;
   micro: number | null;
@@ -270,6 +286,8 @@ export interface SessionDetail {
   rerun: Rerun | null;
   /** A second microphone's track, kept beside the reference (not processed yet). */
   other_sources: AudioSource[];
+  /** The microphone mixed with the computer's sound, once made. */
+  mix: MixFacts | null;
 }
 
 export type Rerun = "transcribe" | "diarize";

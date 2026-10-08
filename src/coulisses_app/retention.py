@@ -233,6 +233,13 @@ def _busy(conn: sqlite3.Connection, session_id: str, *, waiting_counts: bool) ->
     """Why the session cannot lose its files now, if it cannot. `waiting_counts`: a
     processing waiting in the queue needs the audio too (the session's deletion takes its
     queue with it)."""
+    from coulisses_app import mixing  # it reads the sessions, which read this module
+
+    if mixing.busy(session_id):
+        return (
+            "Le micro et le son de l'ordinateur de cette séance sont en train d'être réunis : "
+            "réessayez dans un instant."
+        )
     if conn.execute(
         "SELECT 1 FROM audio_source WHERE session_id = ? AND capture_state = 'recording'",
         (session_id,),

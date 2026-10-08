@@ -6,7 +6,7 @@
 
 ## 1. En une phrase
 
-Une app 100 % locale qui enregistre une séance (répétition d'impro ou réunion de travail) avec un micro (ou plusieurs appareils, plus tard), identifie au mieux qui parle, et produit en français des comptes rendus structurés.
+Une app 100 % locale qui enregistre une séance (répétition d'impro ou réunion de travail, sur place ou en ligne) avec un micro (avec le son de l'ordinateur pour une réunion en ligne, et plusieurs appareils), identifie au mieux qui parle, et produit en français des comptes rendus structurés.
 
 ## 2. Pourquoi
 
@@ -72,6 +72,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.2 Enregistrement
 
+- **Où se passe la séance** : « Sur place » (le micro) ou « En ligne ou hybride » : le micro **et le son de l'ordinateur** (tout ce qu'il joue : Zoom, Teams, Meet…), enregistrés ensemble sur la même horloge, chacun dans son fichier, avec son vumètre (ADR 0032). Pour le traitement et l'écoute, les deux sont réunis en une piste ; les personnes à distance sont entendues même avec un casque. macOS demande la permission « Enregistrement audio du système » ; sans elle, ce son arrive muet, et l'écran d'enregistrement le rappelle.
 - Choix du micro, et d'un **deuxième micro facultatif** enregistrant en même temps : souvent l'iPhone, que Continuité fait apparaître comme un micro du Mac (ADR 0031). Chacun a son fichier, son vumètre et ses alertes ; la pause les coupe ensemble ; un deuxième micro qui lâche n'arrête pas l'enregistrement. Pour l'instant, seule la première piste est traitée ; la seconde est gardée (« 2 micros » sous le titre de la séance).
 - **Captation brute** : pas de réduction de bruit, pas d'annulation d'écho, pas de gain automatique. WAV PCM 48 kHz, tel quel.
 - Vumètre, alertes de niveau (trop faible, saturation, micro qui ne donne plus de son), pause et reprise. La pause coupe le son à l'instant où on la demande : le fichier ne contient que ce qui a été enregistré. Fermer la page n'arrête pas l'enregistrement ; la bibliothèque montre qu'il est en cours.
@@ -185,7 +186,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ## 8. Hors périmètre V1
 
-Dictée, raccourcis globaux, transcription en temps réel, capture audio système ou visio, comptes, sync, cloud, multi-utilisateur, diarisation vidéo, distribution de l'app.
+Dictée, raccourcis globaux, transcription en temps réel, capture vidéo de la visio, comptes, sync, cloud, multi-utilisateur, diarisation vidéo, distribution de l'app.
 
 ## 9. Plus tard
 

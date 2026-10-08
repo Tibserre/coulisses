@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { api, type MarkerKind, type RecordingState } from "../api.ts";
 import { LevelMeter } from "../components/LevelMeter.tsx";
+import { keepStopProblem } from "../stopNotice.ts";
 import { LiveStrip } from "../components/LiveStrip.tsx";
 import { RecordingVisual } from "../components/RecordingVisual.tsx";
 import { formatClock } from "../format.ts";
@@ -161,6 +162,7 @@ export function RecordingPage() {
         setNoteAt(null);
       }
       const stopped = await api.stopRecording();
+      if (stopped.second_problem) keepStopProblem(stopped.session_id, stopped.second_problem);
       window.location.hash = `#/seance/${encodeURIComponent(stopped.session_id)}`;
     } catch (e) {
       setError((e as Error).message);
@@ -228,6 +230,23 @@ export function RecordingPage() {
                   {formatClock(elapsed)}
                 </p>
                 <LevelMeter level={level} peak={peak} clipping={state.clipping} />
+                {state.system && (
+                  <div className="cl-recording__second">
+                    <span>Son de l'ordinateur</span>
+                    <LevelMeter
+                      level={meterValue(state.system.levels.rms_db)}
+                      peak={meterValue(state.system.levels.peak_db)}
+                      clipping={state.system.clipping}
+                    />
+                    {!paused && state.system.too_quiet && !state.system.error && (
+                      <span className="cl-recording__hint">
+                        Rien depuis un moment. Si des personnes parlent à distance, autorisez
+                        l'audio du système dans Réglages Système, Confidentialité et sécurité,
+                        Enregistrement de l'écran et de l'audio du système.
+                      </span>
+                    )}
+                  </div>
+                )}
                 {state.second && (
                   <div className="cl-recording__second">
                     <span>{state.second.device}</span>
@@ -287,6 +306,13 @@ export function RecordingPage() {
                   status="warning"
                   title="Saturation"
                   description="Le son est trop fort : éloignez un peu le micro, ou baissez le niveau d'entrée dans Réglages Système, Son."
+                />
+              )}
+              {state.system?.error && (
+                <Banner
+                  status="warning"
+                  title="Le son de l'ordinateur"
+                  description={`${state.system.error} Le micro continue d'être enregistré.`}
                 />
               )}
               {state.second?.error && (

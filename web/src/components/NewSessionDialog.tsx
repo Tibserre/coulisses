@@ -5,6 +5,7 @@ import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Stack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -12,12 +13,25 @@ import { Mic, Upload } from "lucide-react";
 import { api, type InputDevice, type Person, type Project, type Space } from "../api.ts";
 import { formatBytes, plural } from "../format.ts";
 
+/** Where the last session was held, offered again (this browser only). */
+const WHERE_KEY = "coulisses.nouvelle-seance.lieu";
+type Where = "sur-place" | "en-ligne";
+
+function rememberedWhere(): Where {
+  try {
+    return localStorage.getItem(WHERE_KEY) === "en-ligne" ? "en-ligne" : "sur-place";
+  } catch {
+    return "sur-place";
+  }
+}
+
 const ACCEPT =
   "audio/*,video/*,.wav,.m4a,.mp3,.flac,.ogg,.opus,.aac,.aif,.aiff,.caf,.mp4,.mov,.mkv,.webm";
 
 /** « Nouvelle séance » (⌘N, or « + » on a space): where it goes (space, project), who is
- *  there, then record with the Mac's microphone or import a file recorded elsewhere. The
- *  sound is kept as it is; the processing starts by itself, in the background. */
+ *  there, then record with the Mac's microphone (with the computer's sound, for a meeting
+ *  online or hybrid) or import a file recorded elsewhere. The sound is kept as it is; the
+ *  processing starts by itself, in the background. */
 export function NewSessionDialog({
   isOpen,
   onClose,
@@ -50,6 +64,7 @@ export function NewSessionDialog({
   const [microphones, setMicrophones] = useState<InputDevice[] | null>(null);
   const [micro, setMicro] = useState<number | null>(null);
   const [micro2, setMicro2] = useState<number | null>(null);
+  const [where, setWhere] = useState<Where>(rememberedWhere);
   const [starting, setStarting] = useState(false);
 
   // Each opening starts from where it was asked.
@@ -83,7 +98,15 @@ export function NewSessionDialog({
     setError(null);
     setStarting(true);
     try {
-      await api.startRecording({ espace: spaceId, projet: projectId, presents: personIds, non_nommes: unnamed, micro, micro2 });
+      await api.startRecording({
+        espace: spaceId,
+        projet: projectId,
+        presents: personIds,
+        non_nommes: unnamed,
+        micro,
+        micro2,
+        son_ordinateur: where === "en-ligne",
+      });
       onClose();
       window.location.hash = "#/enregistrement";
     } catch (e) {
@@ -173,7 +196,30 @@ export function NewSessionDialog({
           <div className="cl-newsession__ways">
             <section>
               <Text weight="medium">Enregistrer ici</Text>
-              <Text type="supporting">Avec le micro du Mac ; l'écran d'enregistrement s'ouvre.</Text>
+              <SegmentedControl
+                label="Où se passe la séance"
+                value={where}
+                onChange={(v: string) => {
+                  const next: Where = v === "en-ligne" ? "en-ligne" : "sur-place";
+                  setWhere(next);
+                  try {
+                    localStorage.setItem(WHERE_KEY, next);
+                  } catch {
+                    // Not remembered: offered as « sur place » next time, nothing else lost.
+                  }
+                }}
+                size="sm"
+                layout="fill"
+                isDisabled={busy}
+              >
+                <SegmentedControlItem value="sur-place" label="Sur place" />
+                <SegmentedControlItem value="en-ligne" label="En ligne ou hybride" />
+              </SegmentedControl>
+              <Text type="supporting">
+                {where === "en-ligne"
+                  ? "Le micro et le son de l'ordinateur, enregistrés ensemble : on entend aussi les personnes à distance."
+                  : "Avec le micro ; l'écran d'enregistrement s'ouvre."}
+              </Text>
               {microphones && microphones.length > 0 && (
                 <label className="cl-select">
                   <span>Micro</span>

@@ -13,6 +13,7 @@ from pathlib import Path
 import uvicorn
 from coulisses.api import DEFAULT_PROFILE, ChainConfig, load_profile, profile_path
 
+from coulisses_app import system_audio
 from coulisses_app.api import create_app
 from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
@@ -21,6 +22,8 @@ from coulisses_app.processing import Processor
 from coulisses_app.retention import Watcher
 from coulisses_app.sessions import interrupted_imports
 from coulisses_app.storage.db import migrate
+
+log = logging.getLogger(__name__)
 
 HOST = "127.0.0.1"  # never another interface (ADR 0001)
 DEFAULT_PORT = 8765
@@ -32,6 +35,14 @@ def default_web_dir() -> Path:
     if value:
         return Path(value).expanduser()
     return Path(__file__).resolve().parents[2] / "web" / "dist"
+
+
+def _prepare_system_audio() -> None:
+    try:
+        system_audio.ensure_built()
+    except system_audio.SystemAudioError as exc:
+        # Said again, to the user, when a meeting is recorded with the computer's sound.
+        log.warning("the computer's sound cannot be recorded here: %s", exc)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -64,6 +75,8 @@ def main(argv: list[str] | None = None) -> None:
     problems = processor.recover() + interrupted_imports(data) + recover_interrupted(data)
     for problem in problems:
         print(f"Attention : {problem}", file=sys.stderr)
+    # Built now, in the background, so that the first meeting recorded does not wait for it.
+    threading.Thread(target=_prepare_system_audio, name="system-audio-build", daemon=True).start()
 
     app = create_app(
         data,
