@@ -80,7 +80,7 @@ class SessionDetail(BaseModel):
     rerun: jobs.Rerun | None = None
     """What the latest processing of the session runs again; None for the first one."""
     other_sources: list[sessions.AudioSource] = []
-    """Tracks beside the reference: a second microphone (kept, not processed yet), the
+    """Tracks beside the reference: microphones added (kept, not processed yet), the
     computer's sound (mixed in, ADR 0032)."""
     mix: mixing.MixFacts | None = None
     """The microphone mixed with the computer's sound, once made (from the job that used
@@ -148,8 +148,8 @@ class RecordingRequest(BaseModel):
     non_nommes: int | None = None
     micro: int | None = None
     """Index of the input device; None: the system's default microphone."""
-    micro2: int | None = None
-    """A second microphone recording at the same time (often the iPhone), or none."""
+    micros_en_plus: list[int] = []
+    """Microphones added, recording at the same time (often an iPhone), each its file."""
     son_ordinateur: bool = False
     """The computer's sound too: a meeting online or hybrid (ADR 0032)."""
 
@@ -585,7 +585,7 @@ def create_app(
             attendee_ids=demande.presents,
             unnamed_attendees=demande.non_nommes,
             device_index=demande.micro,
-            second_device_index=demande.micro2,
+            extra_device_indexes=demande.micros_en_plus,
             system=demande.son_ordinateur,
         )
 

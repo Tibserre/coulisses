@@ -552,7 +552,7 @@ def start_both(rec: capture.Recorder) -> capture.RecordingState:
         attendee_ids=[],
         unnamed_attendees=2,
         device_index=MIC.index,
-        second_device_index=PHONE.index,
+        extra_device_indexes=[PHONE.index],
     )
 
 
@@ -562,7 +562,7 @@ def test_two_microphones_record_two_files_paused_together(
     mics = TwoMics()
     rec = two_recorder(data, mics, awake, clock)
     state = start_both(rec)
-    assert state.second is not None and state.second.device == PHONE.name
+    assert [t.device for t in state.extra] == [PHONE.name]
     session_id = state.session_id
     mics.mac.push(tone(1.0, 0.3))
     mics.phone.push(tone(1.0, 0.2))
@@ -600,7 +600,7 @@ def test_the_phone_going_away_never_stops_the_mac(
     wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.1)  # type: ignore[union-attr]
     state = rec.state()
     assert state is not None and state.error is None
-    assert state.second is not None and state.second.error is not None
+    assert state.extra and state.extra[0].error is not None
     mics.phone.refuse_stop = True  # and it vanished for good
     result = rec.stop(profile="essai")
     assert result.duration_s == pytest.approx(1.1)
@@ -618,13 +618,13 @@ def test_a_second_microphone_that_will_not_start_leaves_nothing(
         start_both(rec)
     assert mics.mac.closed
     assert sessions.list_sessions(data) == []
-    with pytest.raises(capture.RecordingError, match="autre micro"):
+    with pytest.raises(capture.RecordingError, match="qu'une fois"):
         rec.start(
             space_id=None,
             attendee_ids=[],
             unnamed_attendees=None,
             device_index=MIC.index,
-            second_device_index=MIC.index,
+            extra_device_indexes=[MIC.index],
         )
 
 
@@ -639,7 +639,7 @@ def test_both_files_are_repaired_after_a_crash(
     wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.5)  # type: ignore[union-attr]
     # The service dies here: the next start finds both still « recording ».
     told = capture.recover_interrupted(data)
-    assert len(told) == 2 and "Deuxième micro" in told[1]
+    assert len(told) == 2 and "Micro ajouté" in told[1]
     [phone] = sessions.other_sources(data, session_id)
     assert phone.capture_state == "recovered" and phone.duration_s is not None
 
@@ -660,7 +660,7 @@ def test_a_second_track_that_fails_to_write_leaves_the_main_one_going(
     mics.mac.push(tone(1.0, 0.3))
     mics.phone.push(tone(1.0, 0.2))
     wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
-    wait_for(lambda: rec.state().second.error is not None)  # type: ignore[union-attr]
+    wait_for(lambda: rec.state().extra[0].error is not None)  # type: ignore[union-attr]
     state = rec.state()
     assert state is not None and state.error is None
     assert rec.stop(profile="essai").duration_s == pytest.approx(1.0)
@@ -727,7 +727,7 @@ def test_a_microphone_that_came_back_is_found_by_name_and_tried_again(
     )
     state = start_both(rec)  # asked with the old number, 7
     assert refreshed and tries["n"] == 2
-    assert state.second is not None and state.second.device == PHONE.name
+    assert [t.device for t in state.extra] == [PHONE.name]
     rec.stop(profile="essai")
 
 
@@ -782,3 +782,90 @@ def test_a_list_that_cannot_be_read_again_is_said_in_french(
     )
     with pytest.raises(capture.RecordingError, match="n'a pas pu être relue"):
         rec.list_devices()
+
+
+class ManyMics:
+    """The Mac's microphone and several more, each its own fake stream."""
+
+    def __init__(self, devices: list[capture.InputDevice]) -> None:
+        self.mics = {d.index: FakeMic() for d in devices}
+
+    def factory(
+        self, device: int, channels: int, on_block: Callable[[NDArray[np.float32], bool], None]
+    ) -> FakeMic:
+        return self.mics[device].factory(device, channels, on_block)
+
+
+def test_as_many_microphones_as_wanted_each_its_file(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    usb = capture.InputDevice(index=9, name="Micro USB", channels=2, default=False)
+    devices = [MIC, PHONE, usb]
+    many = ManyMics(devices)
+    rec = capture.Recorder(
+        data,
+        stream_factory=many.factory,
+        devices=lambda: devices,
+        keep_awake=awake,
+        battery=lambda: False,
+        clock=clock,
+        retry_wait_s=0.0,
+    )
+    state = rec.start(
+        space_id=None,
+        attendee_ids=[],
+        unnamed_attendees=None,
+        device_index=MIC.index,
+        extra_device_indexes=[PHONE.index, usb.index],
+    )
+    assert [t.device for t in state.extra] == [PHONE.name, usb.name]
+    for index, mic in many.mics.items():
+        mic.push(tone(1.0, 0.2, channels=2 if index == usb.index else 1))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    rec.stop(profile="essai")
+    others = sessions.other_sources(data, state.session_id)
+    assert [(s.source_id, s.device, s.channels) for s in others] == [
+        ("mic2", PHONE.name, 1),
+        ("mic3", usb.name, 2),
+    ]
+    assert all(s.duration_s == pytest.approx(1.0) for s in others)
+    assert "(micro 3)" in others[1].original_name
+    with pytest.raises(capture.RecordingError, match="qu'une fois"):
+        rec.start(
+            space_id=None,
+            attendee_ids=[],
+            unnamed_attendees=None,
+            device_index=MIC.index,
+            extra_device_indexes=[PHONE.index, PHONE.index],
+        )
+
+
+def test_the_service_records_the_microphones_added(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    usb = capture.InputDevice(index=9, name="Micro USB", channels=1, default=False)
+    devices = [MIC, PHONE, usb]
+    many = ManyMics(devices)
+    rec = capture.Recorder(
+        data,
+        stream_factory=many.factory,
+        devices=lambda: devices,
+        keep_awake=awake,
+        battery=lambda: True,
+        clock=clock,
+        retry_wait_s=0.0,
+    )
+    client = TestClient(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
+    )
+    twice = client.post(
+        "/api/enregistrement", json={"micro": MIC.index, "micros_en_plus": [PHONE.index] * 2}
+    )
+    assert twice.status_code == 422 and "qu'une fois" in twice.json()["detail"]
+    started = client.post(
+        "/api/enregistrement",
+        json={"micro": MIC.index, "micros_en_plus": [PHONE.index, usb.index]},
+    )
+    assert started.status_code == 201, started.text
+    assert [t["device"] for t in started.json()["extra"]] == [PHONE.name, usb.name]
+    assert client.post("/api/enregistrement/arret").status_code == 200

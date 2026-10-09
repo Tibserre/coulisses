@@ -198,8 +198,8 @@ export interface RecordingState {
   error: string | null;
   markers: Marker[];
   notes: TimedNote[];
-  /** A second microphone recording at the same time, with its own alerts. */
-  second: TrackState | null;
+  /** The microphones added, recording at the same time, each with its own alerts. */
+  extra: TrackState[];
   /** The computer's sound, recorded with the microphone (a meeting online or hybrid).
    *  Silence is normal there: `too_quiet` only says it has been silent for a while. */
   system: TrackState | null;
@@ -226,8 +226,8 @@ export interface StopResult {
 export interface RecordingRequest {
   espace: number | null;
   projet: number | null;
-  /** A second microphone recording at the same time (often the iPhone), or none. */
-  micro2: number | null;
+  /** Microphones added, recording at the same time (often an iPhone), each its file. */
+  micros_en_plus: number[];
   /** The computer's sound too: a meeting online or hybrid. */
   son_ordinateur: boolean;
   presents: number[];

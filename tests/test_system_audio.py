@@ -86,7 +86,7 @@ def start_online(rec: capture.Recorder, *, phone: bool = False) -> capture.Recor
         attendee_ids=[],
         unnamed_attendees=None,
         device_index=MIC.index,
-        second_device_index=PHONE.index if phone else None,
+        extra_device_indexes=[PHONE.index] if phone else [],
         system=True,
     )
 
@@ -104,7 +104,7 @@ def test_the_computers_sound_is_its_own_file_on_the_same_clock(
     state = start_online(rec)
     assert tap.microphone == MIC.name
     assert state.system is not None and state.system.device == "Son de l'ordinateur"
-    assert state.second is None
+    assert state.extra == []
     session_id = state.session_id
     tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
     rec.pause()
@@ -165,7 +165,7 @@ def test_the_computers_sound_and_the_iphone_together(
     tap, phone = FakeTap(), FakeMic()
     rec = system_recorder(data, tap, awake, clock, phone=phone)
     state = start_online(rec, phone=True)
-    assert state.system is not None and state.second is not None
+    assert state.system is not None and len(state.extra) == 1
     tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
     phone.push(tone(1.0, 0.2))
     wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]

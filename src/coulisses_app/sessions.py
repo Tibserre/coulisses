@@ -271,7 +271,8 @@ def reference_source(data: DataDir, session_id: str) -> AudioSource | None:
 
 
 def other_sources(data: DataDir, session_id: str) -> list[AudioSource]:
-    """The session's sources besides the reference (a second microphone): kept, listed;
+    """The session's sources besides the reference (other microphones, the computer's
+    sound): kept, listed;
     not processed yet (ADR 0031)."""
     conn = connect(data)
     try:
@@ -337,14 +338,32 @@ def interrupted_imports(data: DataDir) -> list[str]:
 
 CAPTURE_FILE = f"{REFERENCE_SOURCE_ID}.wav"
 SECOND_SOURCE_ID = "mic2"
-"""A second microphone recording at the same time (often the iPhone, through Continuity):
-kept as a source of its own; the processing uses the reference only, for now (ADR 0031)."""
+"""The first microphone added beside the reference (often the iPhone, through Continuity):
+kept as a source of its own; the processing uses the reference only, for now (ADR 0031,
+0033). The next ones are `mic3`, `mic4`…"""
+
+
+def extra_source_id(position: int) -> str:
+    """The source id of the microphone added at `position` (0 for the first: `mic2`)."""
+    return f"mic{position + 2}"
+
+
+def is_extra_microphone(source_id: str) -> bool:
+    return source_id.startswith("mic") and source_id[3:].isdigit()
+
+
 SYSTEM_SOURCE_ID = "system"
 """The computer's sound (a meeting online or hybrid), recorded with the reference on its
 clock: mixed with it for the processing, for now (ADR 0032)."""
 SYSTEM_DEVICE = "Son de l'ordinateur"
 
-_SOURCE_LABELS = {SECOND_SOURCE_ID: " (deuxième micro)", SYSTEM_SOURCE_ID: " (son de l'ordinateur)"}
+
+def _label(source_id: str) -> str:
+    if source_id == SYSTEM_SOURCE_ID:
+        return " (son de l'ordinateur)"
+    if is_extra_microphone(source_id):
+        return f" (micro {source_id[3:]})"
+    return ""
 
 
 def capture_file(source_id: str) -> str:
@@ -361,12 +380,13 @@ def start_capture(
     device: str,
     sample_rate: int,
     channels: int,
-    second: tuple[str, int] | None = None,
+    extra: list[tuple[str, int]] | None = None,
     system: bool = False,
 ) -> tuple[str, Path]:
     """The session of a recording about to start: made at once, so that a crash leaves it
     there to be repaired (state `recording`). Returns its id and where to write the audio.
-    `second`: (device, channels) of a second microphone, written beside it as `mic2`;
+    `extra`: (device, channels) of the microphones added, written beside it as `mic2`,
+    `mic3`…;
     `system`: the computer's sound, beside it as `system` (mono)."""
     if unnamed_attendees is not None and unnamed_attendees < 1:
         raise spaces.SpaceError("Le nombre de présents non nommés doit être au moins 1.")
@@ -411,7 +431,7 @@ def start_capture(
                         session_id,
                         source_id,
                         f"Enregistrement du {now.astimezone().strftime('%d/%m/%Y %H:%M')}"
-                        f"{_SOURCE_LABELS.get(source_id, '')}.wav",
+                        f"{_label(source_id)}.wav",
                         capture_file(source_id),
                         sample_rate,
                         chans,
@@ -421,7 +441,10 @@ def start_capture(
                     for source_id, name, chans in (
                         [(REFERENCE_SOURCE_ID, device, channels)]
                         + ([(SYSTEM_SOURCE_ID, SYSTEM_DEVICE, 1)] if system else [])
-                        + ([(SECOND_SOURCE_ID, second[0], second[1])] if second else [])
+                        + [
+                            (extra_source_id(k), name, chans)
+                            for k, (name, chans) in enumerate(extra or [])
+                        ]
                     )
                 ],
             )

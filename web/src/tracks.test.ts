@@ -34,7 +34,7 @@ test("the computer's sound is named, and said to be mixed in", () => {
 test("a second microphone is counted, and said not processed yet", () => {
   const said = extraTracks([source("mic2")]);
   assert.equal(said?.text, " · 2 micros");
-  assert.match(said?.title ?? "", /Micro de l'iPhone.*Seul le premier micro est traité/);
+  assert.match(said?.title ?? "", /Micro de l'iPhone.*Seul le micro principal est traité/);
 });
 
 test("a computer's sound that stayed silent points to the permission", () => {
@@ -50,10 +50,19 @@ test("a computer's sound with a faulty file says the microphone is processed alo
   assert.match(said?.title ?? "", /micro seul est traité/);
 });
 
+test("several microphones added: each in trouble is named", () => {
+  const said = extraTracks([
+    source("mic2"),
+    source("mic3", { device: "Micro USB", duration_s: 0 }),
+  ]);
+  assert.equal(said?.text, " · 3 micros (piste « Micro USB » vide)");
+  assert.match(said?.title ?? "", /Gardés en plus : Micro de l'iPhone, Micro USB/);
+});
+
 test("both, each with what went wrong with its file", () => {
   const said = extraTracks([
     source("mic2", { duration_s: 0 }),
     source("system", { file_present: false }),
   ]);
-  assert.equal(said?.text, " · son de l'ordinateur (piste introuvable) · 2 micros (deuxième piste vide)");
+  assert.equal(said?.text, " · son de l'ordinateur (piste introuvable) · 2 micros (piste « Micro de l'iPhone » vide)");
 });

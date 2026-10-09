@@ -2,7 +2,6 @@ import type { AudioSource, MixFacts } from "./api.ts";
 
 /** The source ids the service gives the tracks recorded beside the reference. */
 export const SYSTEM_SOURCE_ID = "system";
-export const SECOND_SOURCE_ID = "mic2";
 
 function trouble(source: AudioSource, what: string): string {
   if (!source.file_present) return ` (${what} introuvable)`;
@@ -41,9 +40,10 @@ export function extraTracks(
     }
   }
   if (mics.length > 0) {
-    parts.push(`${mics.length + 1} micros${mics.map((s) => trouble(s, "deuxième piste")).join("")}`);
+    const name = (s: AudioSource) => s.device ?? s.original_name;
+    parts.push(`${mics.length + 1} micros${mics.map((s) => trouble(s, `piste « ${name(s)} »`)).join("")}`);
     titles.push(
-      `Gardé en plus : ${mics.map((s) => s.device ?? s.original_name).join(", ")}. Seul le premier micro est traité pour l'instant.`,
+      `Gardé${mics.length > 1 ? "s" : ""} en plus : ${mics.map(name).join(", ")}. Seul le micro principal est traité pour l'instant.`,
     );
   }
   return { text: parts.map((p) => ` · ${p}`).join(""), title: titles.join(" ") };

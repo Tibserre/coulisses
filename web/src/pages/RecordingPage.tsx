@@ -14,7 +14,7 @@ import {
   Star,
   X,
 } from "lucide-react";
-import { api, type MarkerKind, type RecordingState } from "../api.ts";
+import { api, type MarkerKind, type RecordingState, type TrackState } from "../api.ts";
 import { LevelMeter } from "../components/LevelMeter.tsx";
 import { keepStopProblem } from "../stopNotice.ts";
 import { LiveStrip } from "../components/LiveStrip.tsx";
@@ -247,16 +247,16 @@ export function RecordingPage() {
                     )}
                   </div>
                 )}
-                {state.second && (
-                  <div className="cl-recording__second">
-                    <span>{state.second.device}</span>
+                {state.extra.map((track) => (
+                  <div key={track.device} className="cl-recording__second">
+                    <span>{track.device}</span>
                     <LevelMeter
-                      level={meterValue(state.second.levels.rms_db)}
-                      peak={meterValue(state.second.levels.peak_db)}
-                      clipping={state.second.clipping}
+                      level={meterValue(track.levels.rms_db)}
+                      peak={meterValue(track.levels.peak_db)}
+                      clipping={track.clipping}
                     />
                   </div>
-                )}
+                ))}
                 <div className="cl-recording__controls">
                   <Button
                     label={paused ? "Reprendre" : "Pause"}
@@ -315,27 +315,9 @@ export function RecordingPage() {
                   description={`${state.system.error} Le micro continue d'être enregistré.`}
                 />
               )}
-              {state.second?.error && (
-                <Banner
-                  status="warning"
-                  title={`Le deuxième micro (${state.second.device})`}
-                  description={`${state.second.error} L'enregistrement principal continue.`}
-                />
-              )}
-              {state.second && state.second.dropouts > 0 && (
-                <Banner
-                  status="warning"
-                  title="Deuxième micro : du son a été perdu"
-                  description={`Le Mac n'a pas suivi ${state.second.dropouts === 1 ? "une fois" : `${state.second.dropouts} fois`} sur ce micro : quelques millisecondes y manquent.`}
-                />
-              )}
-              {state.second && !state.second.error && state.second.too_quiet && (
-                <Banner
-                  status="warning"
-                  title="Deuxième micro : niveau très faible"
-                  description="Presque rien n'arrive du deuxième micro : le téléphone est-il toujours près du Mac, et son micro libre ?"
-                />
-              )}
+              {state.extra.map((track) => (
+                <ExtraAlerts key={track.device} track={track} />
+              ))}
               {state.too_quiet && (
                 <Banner
                   status="warning"
@@ -532,5 +514,34 @@ export function RecordingPage() {
         onAction={stop}
       />
     </div>
+  );
+}
+
+/** The alerts of a microphone added: it never stops the main recording. */
+function ExtraAlerts({ track }: { track: TrackState }) {
+  return (
+    <>
+      {track.error && (
+        <Banner
+          status="warning"
+          title={`Le micro « ${track.device} »`}
+          description={`${track.error} L'enregistrement principal continue.`}
+        />
+      )}
+      {track.dropouts > 0 && (
+        <Banner
+          status="warning"
+          title={`« ${track.device} » : du son a été perdu`}
+          description={`Le Mac n'a pas suivi ${track.dropouts === 1 ? "une fois" : `${track.dropouts} fois`} sur ce micro : quelques millisecondes y manquent.`}
+        />
+      )}
+      {!track.error && track.too_quiet && (
+        <Banner
+          status="warning"
+          title={`« ${track.device} » : niveau très faible`}
+          description="Presque rien n'arrive de ce micro : s'il s'agit d'un téléphone, est-il toujours près du Mac, et son micro libre ?"
+        />
+      )}
+    </>
   );
 }
