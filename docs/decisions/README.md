@@ -9,10 +9,10 @@ Nouvelle fiche : skill `/adr`.
 | # | Décision | Statut |
 |---|---|---|
 | [0001](0001-local-et-emplacement-des-donnees.md) | 100 % local ; code et données séparés, hors de tout dossier synchronisé | Acceptée (emplacements : voir 0009, 0010) |
-| [0002](0002-architecture-generale.md) | Service Python local + interface web servie en local ; étapes en sous-processus | Acceptée |
+| [0002](0002-architecture-generale.md) | Service Python local + interface web servie en local ; étapes en sous-processus | Acceptée (PWA remplacée par 0034) |
 | [0005](0005-captation-par-le-service.md) | La captation audio est faite par le service Python, pas par le navigateur | Acceptée (niveaux : précisé par 0027) |
 | [0006](0006-seance-multi-sources.md) | Une séance a N sources audio dès la V1 | Acceptée |
-| [0007](0007-interface-react-astryx.md) | Interface React + Vite + TS, design system Astryx | Acceptée |
+| [0007](0007-interface-react-astryx.md) | Interface React + Vite + TS, design system Astryx | Acceptée (PWA remplacée par 0034) |
 | [0008](0008-langues-du-projet.md) | Code en anglais, tout le reste en français | Acceptée |
 | [0010](0010-dossier-unique-coulisses.md) | Un seul dossier visible `~/Coulisses` : `Code/` (git), `Modèles/`, `Données/` | Acceptée |
 | [0016](0016-deux-depots-et-versions.md) | Deux dépôts (moteur avec son atelier, application seule), moteur installable et versionné, versions automatiques depuis les commits | Acceptée |
@@ -30,5 +30,6 @@ Nouvelle fiche : skill `/adr`.
 | [0031](0031-deux-micros.md) | Enregistrer avec deux micros à la fois (le Mac et l'iPhone par Continuité) : deux fichiers, la référence seule traitée pour l'instant | Acceptée |
 | [0032](0032-son-de-l-ordinateur.md) | Enregistrer le son de l'ordinateur avec le micro (réunions en ligne ou hybrides) : un programme Swift, deux fichiers sur une horloge, réunis pour le traitement | Acceptée |
 | [0033](0033-autant-de-micros.md) | Autant de micros que l'on veut (« Ajouter un micro ») ; « Nouvelle séance » commence par enregistrer ou importer | Acceptée |
+| [0034](0034-app-du-dock.md) | Coulisses, une app dans le Dock avec sa propre fenêtre : démarre et arrête le service, reçoit les permissions ; la PWA est abandonnée ; le nom reste Coulisses (Q3) | Acceptée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.

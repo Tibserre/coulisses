@@ -5,19 +5,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import mimetypes
+import os
 import sqlite3
+import subprocess
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from coulisses.api import (
     ChainConfig,
     ErrorCode,
     RunNotSucceededError,
+    models_dir,
     read_provenance,
 )
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -65,10 +68,38 @@ class AppInfo(BaseModel):
     data_dir: str
     engine_version: str
     app_version: str
+    pid: int
+    """The service's process: the app in the Dock takes back one left running alone."""
     profile: str
     recovery_problems: list[str]
     processing_error: str | None
     """The processing loop's own last error (not a job's): the queue may be stuck."""
+
+
+SERVICE_LOG = Path.home() / "Library" / "Logs" / "Coulisses" / "service.log"
+"""Where the app in the Dock writes the service's output (ADR 0034)."""
+
+Folder = Literal["donnees", "modeles", "journal"]
+
+
+class Folders(BaseModel):
+    """What can be shown in the Finder from the settings."""
+
+    data: str
+    models: str
+    log: str | None
+    """None until the app in the Dock has started the service once."""
+
+
+_FOLDER_FIELDS: dict[str, str] = {"donnees": "data", "modeles": "models", "journal": "log"}
+
+
+class Activity(BaseModel):
+    """What quitting the app would interrupt (ADR 0034)."""
+
+    recording: bool
+    processing: bool
+    """A stage or a generation running now (it resumes at the next start)."""
 
 
 class SessionDetail(BaseModel):
@@ -325,10 +356,43 @@ def create_app(
             data_dir=str(data.root),
             engine_version=version("coulisses"),
             app_version=version("coulisses-app"),
+            pid=os.getpid(),
             profile=profile,
             recovery_problems=problems,
             processing_error=processor.loop_error if processor else None,
         )
+
+    def _folders() -> Folders:
+        return Folders(
+            data=str(data.root),
+            models=str(models_dir()),
+            log=str(SERVICE_LOG) if SERVICE_LOG.is_file() else None,
+        )
+
+    @app.get("/api/dossiers")
+    def folders() -> Folders:
+        return _folders()
+
+    @app.post("/api/dossiers/{quoi}/ouvrir", status_code=204)
+    def open_folder(quoi: Folder) -> None:
+        """Shown in the Finder (the log selected in its folder). Nothing else is opened."""
+        target = getattr(_folders(), _FOLDER_FIELDS[quoi])
+        if target is None or not Path(target).exists():
+            raise _not_found("Ce dossier n'existe pas encore.")
+        command = ["open", "-R", target] if quoi == "journal" else ["open", target]
+        try:
+            subprocess.run(command, check=True, timeout=10, capture_output=True)
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("opening %s: %s", target, exc)
+            raise HTTPException(
+                status_code=422, detail="Le Finder n'a pas pu ouvrir ce dossier."
+            ) from exc
+
+    @app.get("/api/activite")
+    def activity() -> Activity:
+        with _db() as conn:
+            running = bool(jobs.running_jobs(conn))
+        return Activity(recording=recorder.state() is not None, processing=running)
 
     @app.get("/api/seances")
     def list_sessions() -> list[sessions.Session]:

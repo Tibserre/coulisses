@@ -1,6 +1,6 @@
 # Coulisses — spécification produit V1
 
-> Nom provisoire. Document de référence du produit : **ce que** l'app fait et **pourquoi**.
+> Document de référence du produit : **ce que** l'app fait et **pourquoi**.
 > Le **comment** est dans `docs/decisions/` (ADR). Le vocabulaire est défini dans `glossaire-domaine.md`.
 > Les points non tranchés sont dans `questions-ouvertes.md`.
 
@@ -178,7 +178,8 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.12 Réglages et modèles
 
-- **Lancement** : une icône dans le Dock ouvre une petite app lanceur, qui démarre le service et ouvre l'interface. Rien ne tourne quand l'app n'est pas utilisée. La permission micro de macOS est accordée à ce lanceur (ADR 0005).
+- **Lancement** : l'app **Coulisses** dans le Dock démarre le service et montre l'interface dans sa propre fenêtre. Quitter (⌘Q) arrête le service ; pendant un enregistrement ou un traitement, l'app demande d'abord. Rien ne tourne quand l'app est fermée. Les permissions de macOS (micro, son de l'ordinateur) vont à Coulisses (ADR 0005, 0034).
+- **Dossiers** : depuis les Réglages, ouvrir dans le Finder le dossier des données, celui des modèles et le journal du service.
 - Durée de conservation, préavis de purge.
 - **Modèles dans un dossier visible** : `~/Coulisses/Modèles`, un sous-dossier par modèle avec sa fiche (source, révision, taille, date). Je les vois, les déplace ou les supprime dans le Finder ou depuis l'app.
 - Liste des moteurs et modèles installés, avec leur taille disque ; suppression d'un modèle après confirmation.

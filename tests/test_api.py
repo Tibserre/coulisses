@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import jobs
+from coulisses_app import jobs, sessions
 from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -214,3 +214,72 @@ def test_the_page_is_checked_again_at_each_load_so_a_new_build_shows(
     client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=web))
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert "cache-control" not in client.get("/assets/index-abc.js").headers
+
+
+def test_the_app_asks_what_quitting_would_interrupt(data: DataDir, recording: Path) -> None:
+    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    assert client.get("/api/activite").json() == {"recording": False, "processing": False}
+    with recording.open("rb") as f:
+        sessions.import_recording(
+            data, f, recording.name, unnamed_attendees=1, recorded_at=None, profile="essai"
+        )
+    conn = connect(data)
+    jobs.claim_next(conn)  # running now
+    conn.close()
+    assert client.get("/api/activite").json() == {"recording": False, "processing": True}
+
+
+def test_the_settings_show_the_folders_in_the_finder(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import subprocess
+
+    from coulisses_app import api
+
+    opened: list[list[str]] = []
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **_: opened.append(command),  # pyright: ignore[reportUnknownLambdaType]
+    )
+    monkeypatch.setattr(api, "SERVICE_LOG", tmp_path / "absent.log")
+    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    folders = client.get("/api/dossiers").json()
+    assert folders["data"] == str(data.root) and folders["log"] is None
+    data.root.mkdir(parents=True, exist_ok=True)
+    assert client.post("/api/dossiers/donnees/ouvrir").status_code == 204
+    assert opened == [["open", str(data.root)]]
+    assert client.post("/api/dossiers/journal/ouvrir").status_code == 404  # not yet
+    assert client.post("/api/dossiers/ailleurs/ouvrir").status_code == 422  # nothing else
+
+
+def test_a_recording_in_progress_is_what_quitting_would_interrupt(data: DataDir) -> None:
+    from coulisses_app import capture
+
+    class Recording(capture.Recorder):
+        def state(self) -> capture.RecordingState | None:
+            return capture.RecordingState(
+                session_id="s",
+                state="recording",
+                elapsed_s=1.0,
+                device="Micro",
+                channels=1,
+                levels=capture.Levels(peak_db=-20, rms_db=-30),
+                too_quiet=False,
+                clipping=False,
+            )
+
+        def shutdown(self, *, profile: str) -> None:
+            pass
+
+    client = TestClient(
+        create_app(
+            data,
+            FAKE_CHAIN,
+            profile="essai",
+            processor=None,
+            web_dir=None,
+            recorder=Recording(data),
+        )
+    )
+    assert client.get("/api/activite").json() == {"recording": True, "processing": False}

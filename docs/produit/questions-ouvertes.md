@@ -5,7 +5,6 @@
 ## À trancher par l'utilisateur
 | # | Question | Quand | Piste |
 |---|---|---|---|
-| Q3 | Nom définitif de l'app | Avant la PWA | « Coulisses » provisoire |
 
 ## À trancher par la mesure (banc d'essai)
 | # | Question |
@@ -23,6 +22,6 @@
 - **Voix de personnages** : un comédien qui change de voix en scène peut être confondu avec un autre. Accepté pour les scènes (objectif 2) ; à surveiller en discussion.
 - **Chevauchements fréquents** en discussion animée : dégradent diarisation et transcription.
 - **Réverbération des salles de répétition** : la plus grosse inconnue sur la qualité.
-- **Veille pendant la nuit** : Mac sur batterie, capot fermé → la nuit est perdue. L'app doit le signaler. Le lanceur du Dock doit rester ouvert pendant le traitement de nuit.
+- **Veille pendant la nuit** : Mac sur batterie, capot fermé → la nuit est perdue. L'app doit le signaler. L'app Coulisses doit rester ouverte pendant le traitement de nuit (la quitter l'interrompt ; il reprend au lancement suivant, ADR 0034).
 - **Maturité d'Astryx** (bêta).
 - **Dette de l'interface** : transcript non virtualisé (ne tiendra pas 2 h), pas encore de raccourcis clavier de relecture (`rules/web.md`). À traiter avant la relecture de vraies séances.

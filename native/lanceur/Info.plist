@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>Coulisses</string>
+	<key>CFBundleDisplayName</key>
+	<string>Coulisses</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.coulisses.app</string>
+	<key>CFBundleExecutable</key>
+	<string>Coulisses</string>
+	<key>CFBundleIconFile</key>
+	<string>Coulisses</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.0.0</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>fr</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Coulisses — local, sur ce Mac.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Coulisses enregistre vos séances avec le micro.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Coulisses enregistre le son de l'ordinateur pendant une réunion en ligne, à côté du micro.</string>
+	<key>CoulissesProjet</key>
+	<string></string>
+	<key>CoulissesUV</key>
+	<string></string>
+	<key>CoulissesPATH</key>
+	<string></string>
+</dict>
+</plist>

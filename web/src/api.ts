@@ -61,6 +61,17 @@ export interface ExportFolder {
   present: boolean;
 }
 
+/** What can be shown in the Finder from the settings. */
+export interface Folders {
+  data: string;
+  models: string;
+  /** Null until the app in the Dock has started the service once. */
+  log: string | null;
+}
+
+/** The folders' names in the address that opens them. */
+export type FolderName = "donnees" | "modeles" | "journal";
+
 export interface AudioStatus {
   /** kept: « Garder l'audio » ; removed: gone ; never_processed: never purged until its
    *  processing succeeds ; scheduled: due on `purge_on` ; announced: the purge was
@@ -349,6 +360,8 @@ export interface Carryover {
 
 export interface AppInfo {
   data_dir: string;
+  /** The service's process (the app in the Dock takes back one left running alone). */
+  pid: number;
   engine_version: string;
   app_version: string;
   profile: string;
@@ -673,6 +686,8 @@ export const api = {
   processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   versions: (id: string) => getJson<Versions>(`${sessionPath(id)}/versions`),
   retention: () => getJson<RetentionInfo>("/api/conservation"),
+  folders: () => getJson<Folders>("/api/dossiers"),
+  openFolder: (which: FolderName) => send<void>("POST", `/api/dossiers/${which}/ouvrir`),
   projects: () => getJson<Project[]>("/api/projets"),
   createProject: (spaceId: number, name: string) =>
     send<Project>("POST", `/api/espaces/${spaceId}/projets`, { name }),

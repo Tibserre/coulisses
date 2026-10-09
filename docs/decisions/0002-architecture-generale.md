@@ -1,6 +1,6 @@
 # 0002 — Architecture générale
 
-Statut : Acceptée (2026-09-24). Organisation du dépôt **précisée par 0016** : le moteur est un dépôt à part.
+Statut : Acceptée (2026-09-24). Organisation du dépôt **précisée par 0016** : le moteur est un dépôt à part. La PWA est **remplacée par 0034** (une app dans le Dock).
 
 ## Contexte
 Traitements ML lourds (plusieurs modèles de plusieurs Go, exécutions de plusieurs heures), interface riche (relecture synchronisée avec l'audio), un seul utilisateur sur un seul Mac. Electron n'est justifié que par un besoin natif avéré.

@@ -1,6 +1,6 @@
 # 0027 — La captation en pratique : WAV 24 bits tenu à jour, niveaux en flux, batterie
 
-Statut : Acceptée (2026-10-06 : l'utilisateur valide la dépendance, la migration 0005 et le comportement sur batterie). Précise l'ADR 0005 et en remplace un point : les niveaux passent par un flux d'événements, pas par WebSocket.
+Statut : Acceptée (2026-10-06 : l'utilisateur valide la dépendance, la migration 0005 et le comportement sur batterie). Précise l'ADR 0005 et en remplace un point : les niveaux passent par un flux d'événements, pas par WebSocket. Le lanceur du Dock : fait par l'ADR 0034 (l'app Coulisses).
 
 ## Contexte
 L'ADR 0005 confie la captation au service Python (PortAudio via `sounddevice`), avec écriture continue, survie à un plantage, vumètre par WebSocket et anti-veille. Au moment de la construire (étape 6), il restait à préciser le format, la façon de garder le fichier lisible après un plantage, le transport des niveaux et le comportement sur batterie : un traitement d'une séance de 1 h 30 représente environ un quart d'heure de calcul intensif.
