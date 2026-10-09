@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.15.0 — 2026-10-09
+
+### Nouveautés
+
+- ajoute l'app Coulisses dans le Dock, avec sa fenêtre, à la place de la PWA (app)
+
 ## v0.14.0 — 2026-10-09
 
 ### Nouveautés
