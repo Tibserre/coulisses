@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.16.0 — 2026-10-09
+
+### Nouveautés
+
+- ajoute le rapatriement des séances vers un dossier de données vide (donnees)
+
 ## v0.15.0 — 2026-10-09
 
 ### Nouveautés
