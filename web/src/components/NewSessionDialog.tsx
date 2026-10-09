@@ -3,21 +3,46 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Stack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { Mic, Upload } from "lucide-react";
+import { Mic, MonitorSpeaker, Plus, Upload, X } from "lucide-react";
 import { api, type InputDevice, type Person, type Project, type Space } from "../api.ts";
 import { formatBytes, plural } from "../format.ts";
+
+/** What was chosen last time, offered again (this browser only). */
+const WHERE_KEY = "coulisses.nouvelle-seance.lieu";
+type Where = "sur-place" | "en-ligne";
+type Way = "enregistrer" | "importer";
+
+function remembered(): Where {
+  try {
+    return localStorage.getItem(WHERE_KEY) === "en-ligne" ? "en-ligne" : "sur-place";
+  } catch {
+    return "sur-place";
+  }
+}
+
+function remember(where: Where): void {
+  try {
+    localStorage.setItem(WHERE_KEY, where);
+  } catch {
+    // Not remembered: offered as « sur place » next time, nothing else lost.
+  }
+}
 
 const ACCEPT =
   "audio/*,video/*,.wav,.m4a,.mp3,.flac,.ogg,.opus,.aac,.aif,.aiff,.caf,.mp4,.mov,.mkv,.webm";
 
-/** « Nouvelle séance » (⌘N, or « + » on a space): where it goes (space, project), who is
- *  there, then record with the Mac's microphone or import a file recorded elsewhere. The
- *  sound is kept as it is; the processing starts by itself, in the background. */
+/** « Nouvelle séance » (⌘N, or « + » on a space). First how: record now, or import a file
+ *  recorded elsewhere. Then where it goes (space, project) and who is there. To record:
+ *  where the session is held (in the room, or online: the computer's sound too) and the
+ *  microphones, as many as wanted (« Ajouter un micro »). The sound is kept as it is; the
+ *  processing starts by itself, in the background. */
 export function NewSessionDialog({
   isOpen,
   onClose,
@@ -39,6 +64,7 @@ export function NewSessionDialog({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const open = spaces.filter((s) => !s.archived);
+  const [way, setWay] = useState<Way>("enregistrer");
   const [spaceId, setSpaceId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -48,8 +74,9 @@ export function NewSessionDialog({
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [microphones, setMicrophones] = useState<InputDevice[] | null>(null);
-  const [micro, setMicro] = useState<number | null>(null);
-  const [micro2, setMicro2] = useState<number | null>(null);
+  /** The microphones chosen, the main one first (the one processed). */
+  const [chosen, setChosen] = useState<number[]>([]);
+  const [where, setWhere] = useState<Where>(remembered);
   const [starting, setStarting] = useState(false);
 
   // Each opening starts from where it was asked.
@@ -64,11 +91,12 @@ export function NewSessionDialog({
     setProgress(null);
     setError(null);
     setStarting(false);
-    setMicro2(null);
+    setWay(recording ? "importer" : "enregistrer");
     api.microphones().then(
       (found) => {
         setMicrophones(found);
-        setMicro((current) => current ?? found.find((m) => m.default)?.index ?? found[0]?.index ?? null);
+        const main = found.find((m) => m.default)?.index ?? found[0]?.index;
+        setChosen(main === undefined ? [] : [main]);
       },
       (e: Error) => setError(e.message),
     );
@@ -78,12 +106,21 @@ export function NewSessionDialog({
   const space = open.find((s) => s.id === spaceId) ?? null;
   const spaceProjects = projects.filter((p) => p.space_id === spaceId && !p.archived);
   const busy = progress !== null || starting;
+  const free = (microphones ?? []).filter((m) => !chosen.includes(m.index));
 
   const record = async () => {
     setError(null);
     setStarting(true);
     try {
-      await api.startRecording({ espace: spaceId, projet: projectId, presents: personIds, non_nommes: unnamed, micro, micro2 });
+      await api.startRecording({
+        espace: spaceId,
+        projet: projectId,
+        presents: personIds,
+        non_nommes: unnamed,
+        micro: chosen[0] ?? null,
+        micros_en_plus: chosen.slice(1),
+        son_ordinateur: where === "en-ligne",
+      });
       onClose();
       window.location.hash = "#/enregistrement";
     } catch (e) {
@@ -107,7 +144,12 @@ export function NewSessionDialog({
   };
 
   return (
-    <Dialog isOpen={isOpen} onOpenChange={(o) => !o && !busy && onClose()} width={680}>
+    <Dialog
+      isOpen={isOpen}
+      onOpenChange={(o) => !o && !busy && onClose()}
+      width={640}
+      maxHeight="min(88vh, 820px)"
+    >
       <DialogHeader title="Nouvelle séance" onOpenChange={() => !busy && onClose()} />
       <div
         className="cl-newsession"
@@ -120,11 +162,34 @@ export function NewSessionDialog({
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
+          if (busy) return; // a file being sent, or a recording starting: left as it is
           const dropped = e.dataTransfer.files[0];
-          if (dropped) setFile(dropped);
+          if (dropped) {
+            setFile(dropped);
+            setWay("importer");
+          }
         }}
       >
-        <Stack gap={5}>
+        <div className="cl-newsession__body">
+          <SegmentedControl
+            label="Comment"
+            value={way}
+            onChange={(v: string) => setWay(v === "importer" ? "importer" : "enregistrer")}
+            layout="fill"
+            isDisabled={busy}
+          >
+            <SegmentedControlItem
+              value="enregistrer"
+              label="Enregistrer maintenant"
+              icon={<Mic size={16} strokeWidth={1.75} />}
+            />
+            <SegmentedControlItem
+              value="importer"
+              label="Importer un fichier"
+              icon={<Upload size={16} strokeWidth={1.75} />}
+            />
+          </SegmentedControl>
+
           <div className="cl-newsession__where">
             <label className="cl-select">
               <span>Espace</span>
@@ -160,6 +225,7 @@ export function NewSessionDialog({
               </select>
             </label>
           </div>
+
           {space && (
             <AttendeesPicker
               space={space}
@@ -170,95 +236,151 @@ export function NewSessionDialog({
               disabled={busy}
             />
           )}
-          <div className="cl-newsession__ways">
-            <section>
-              <Text weight="medium">Enregistrer ici</Text>
-              <Text type="supporting">Avec le micro du Mac ; l'écran d'enregistrement s'ouvre.</Text>
-              {microphones && microphones.length > 0 && (
-                <label className="cl-select">
-                  <span>Micro</span>
-                  <select
-                    value={micro ?? ""}
-                    disabled={busy}
-                    onChange={(e) => {
-                      const next = Number(e.target.value);
-                      setMicro(next);
-                      if (micro2 === next) setMicro2(null);
-                    }}
-                  >
-                    {microphones.map((m) => (
-                      <option key={m.index} value={m.index}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+
+          {way === "enregistrer" ? (
+            <section className="cl-newsession__section">
+              <Text weight="medium">Où se passe la séance ?</Text>
+              <SegmentedControl
+                label="Où se passe la séance"
+                value={where}
+                onChange={(v: string) => {
+                  const next: Where = v === "en-ligne" ? "en-ligne" : "sur-place";
+                  setWhere(next);
+                  remember(next);
+                }}
+                size="sm"
+                layout="fill"
+                isDisabled={busy}
+              >
+                <SegmentedControlItem value="sur-place" label="Sur place" />
+                <SegmentedControlItem value="en-ligne" label="En ligne ou hybride" />
+              </SegmentedControl>
+
+              <Text weight="medium">Ce qui est enregistré</Text>
+              <ul className="cl-sources" aria-label="Ce qui est enregistré">
+                {chosen.map((index, k) => (
+                  <li key={k} className="cl-sources__row">
+                    <Mic size={16} strokeWidth={1.75} aria-hidden />
+                    <select
+                      aria-label={k === 0 ? "Micro principal" : `Micro ${k + 1}`}
+                      value={index}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const next = [...chosen];
+                        next[k] = Number(e.target.value);
+                        setChosen(next);
+                      }}
+                    >
+                      {(microphones ?? [])
+                        .filter((m) => m.index === index || !chosen.includes(m.index))
+                        .map((m) => (
+                          <option key={m.index} value={m.index}>
+                            {m.name}
+                          </option>
+                        ))}
+                    </select>
+                    {k === 0 ? (
+                      <span className="cl-sources__note">principal</span>
+                    ) : (
+                      <IconButton
+                        label="Retirer ce micro"
+                        icon={<X size={14} strokeWidth={1.75} />}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setChosen(chosen.filter((_, j) => j !== k))}
+                        isDisabled={busy}
+                      />
+                    )}
+                  </li>
+                ))}
+                {where === "en-ligne" && (
+                  <li className="cl-sources__row">
+                    <MonitorSpeaker size={16} strokeWidth={1.75} aria-hidden />
+                    <span className="cl-sources__fixed">Son de l'ordinateur</span>
+                    <span className="cl-sources__note">réuni au micro principal</span>
+                  </li>
+                )}
+              </ul>
+              {microphones && microphones.length === 0 && (
+                <Text type="supporting">Aucun micro trouvé : branchez-en un.</Text>
               )}
-              {microphones && microphones.length > 1 && (
-                <label className="cl-select">
-                  <span>Deuxième micro, en même temps</span>
-                  <select
-                    value={micro2 ?? ""}
-                    disabled={busy}
-                    onChange={(e) => setMicro2(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">Aucun</option>
-                    {microphones
-                      .filter((m) => m.index !== micro)
-                      .map((m) => (
-                        <option key={m.index} value={m.index}>
-                          {m.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              )}
-              {micro2 !== null && (
+              {microphones && microphones.length > 0 && free.length === 0 && (
                 <Text type="supporting">
-                  Gardé comme une seconde piste ; seule la première est traitée pour l'instant.
+                  Tous les micros du Mac sont dans la liste. Un iPhone proche et déverrouillé y
+                  apparaît de lui-même : rouvrez ce dialogue s'il manque.
                 </Text>
               )}
               <div>
                 <Button
-                  label="Enregistrer"
-                  variant="primary"
-                  icon={<Mic size={16} strokeWidth={1.75} />}
-                  onClick={() => void record()}
-                  isDisabled={recording || busy || micro === null}
+                  label="Ajouter un micro"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Plus size={14} strokeWidth={1.75} />}
+                  onClick={() => free[0] && setChosen([...chosen, free[0].index])}
+                  isDisabled={busy || free.length === 0}
                 />
               </div>
-              {recording && (
-                <Text type="supporting">Un enregistrement est déjà en cours : arrêtez-le d'abord.</Text>
-              )}
-            </section>
-            <section>
-              <Text weight="medium">Importer un fichier</Text>
               <Text type="supporting">
-                {file ? `${file.name} · ${formatBytes(file.size)}` : "Audio ou vidéo enregistré ailleurs ; ou glissez-le ici."}
+                {where === "en-ligne"
+                  ? "On entend aussi les personnes à distance, même avec un casque. "
+                  : ""}
+                Un iPhone proche du Mac apparaît dans la liste des micros. Les micros ajoutés sont
+                gardés à côté ; seul le principal est traité pour l'instant.
               </Text>
-              <input
-                ref={input}
-                type="file"
-                accept={ACCEPT}
-                hidden
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-              <div className="cl-newsession__buttons">
+            </section>
+          ) : (
+            <section className="cl-newsession__section">
+              <Text weight="medium">Le fichier</Text>
+              <div className="cl-dropzone" data-dragging={dragging || undefined}>
+                <Upload size={20} strokeWidth={1.75} aria-hidden />
+                <Text>
+                  {file ? `${file.name} · ${formatBytes(file.size)}` : "Glissez ici un fichier audio ou vidéo"}
+                </Text>
                 <Button
                   label={file ? "Un autre fichier" : "Choisir un fichier"}
-                  icon={<Upload size={16} strokeWidth={1.75} />}
+                  size="sm"
                   onClick={() => input.current?.click()}
                   isDisabled={busy}
                 />
-                {file && <Button label="Importer et traiter" onClick={() => void importFile()} isDisabled={busy} />}
+                <input
+                  ref={input}
+                  type="file"
+                  accept={ACCEPT}
+                  hidden
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
               </div>
             </section>
-          </div>
-          {progress !== null && (
-            <ProgressBar label="Envoi du fichier" value={progress * 100} hasValueLabel />
           )}
+        </div>
+
+        <footer className="cl-newsession__footer">
+          {progress !== null && <ProgressBar label="Envoi du fichier" value={progress * 100} hasValueLabel />}
           {error && <Banner status="error" title="Refusé" description={error} />}
-        </Stack>
+          {way === "enregistrer" && recording && (
+            <Text type="supporting">Un enregistrement est déjà en cours : arrêtez-le d'abord.</Text>
+          )}
+          <div className="cl-newsession__actions">
+            <Button label="Annuler" variant="ghost" onClick={onClose} isDisabled={busy} />
+            {way === "enregistrer" ? (
+              <Button
+                label="Commencer l'enregistrement"
+                variant="primary"
+                icon={<Mic size={16} strokeWidth={1.75} />}
+                onClick={() => void record()}
+                isDisabled={recording || busy || chosen.length === 0}
+              />
+            ) : (
+              <Button
+                label="Importer et traiter"
+                variant="primary"
+                icon={<Upload size={16} strokeWidth={1.75} />}
+                onClick={() => void importFile()}
+                isDisabled={busy || !file}
+              />
+            )}
+          </div>
+        </footer>
       </div>
     </Dialog>
   );
@@ -335,7 +457,7 @@ function AttendeesPicker({
         </div>
       )}
       <Stack direction="horizontal" gap={4} vAlign="end" wrap="wrap">
-        <div style={{ width: 240 }}>
+        <div style={{ width: 200 }}>
           <TextInput
             label="Ajouter un invité"
             value={guest}
@@ -349,9 +471,9 @@ function AttendeesPicker({
           onClick={() => void addGuest()}
           isDisabled={disabled || !guest.trim()}
         />
-        <div style={{ width: 240 }}>
+        <div style={{ width: 200 }}>
           <NumberInput
-            label="Présents non nommés"
+            label="Non nommés"
             value={unnamed}
             onChange={(v) =>
               setUnnamed(Number.isFinite(v) && v >= 1 ? Math.round(v) : null)

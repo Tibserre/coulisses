@@ -14,8 +14,9 @@ import {
   Star,
   X,
 } from "lucide-react";
-import { api, type MarkerKind, type RecordingState } from "../api.ts";
+import { api, type MarkerKind, type RecordingState, type TrackState } from "../api.ts";
 import { LevelMeter } from "../components/LevelMeter.tsx";
+import { keepStopProblem } from "../stopNotice.ts";
 import { LiveStrip } from "../components/LiveStrip.tsx";
 import { RecordingVisual } from "../components/RecordingVisual.tsx";
 import { formatClock } from "../format.ts";
@@ -161,6 +162,7 @@ export function RecordingPage() {
         setNoteAt(null);
       }
       const stopped = await api.stopRecording();
+      if (stopped.second_problem) keepStopProblem(stopped.session_id, stopped.second_problem);
       window.location.hash = `#/seance/${encodeURIComponent(stopped.session_id)}`;
     } catch (e) {
       setError((e as Error).message);
@@ -228,16 +230,33 @@ export function RecordingPage() {
                   {formatClock(elapsed)}
                 </p>
                 <LevelMeter level={level} peak={peak} clipping={state.clipping} />
-                {state.second && (
+                {state.system && (
                   <div className="cl-recording__second">
-                    <span>{state.second.device}</span>
+                    <span>Son de l'ordinateur</span>
                     <LevelMeter
-                      level={meterValue(state.second.levels.rms_db)}
-                      peak={meterValue(state.second.levels.peak_db)}
-                      clipping={state.second.clipping}
+                      level={meterValue(state.system.levels.rms_db)}
+                      peak={meterValue(state.system.levels.peak_db)}
+                      clipping={state.system.clipping}
                     />
+                    {!paused && state.system.too_quiet && !state.system.error && (
+                      <span className="cl-recording__hint">
+                        Rien depuis un moment. Si des personnes parlent à distance, autorisez
+                        l'audio du système dans Réglages Système, Confidentialité et sécurité,
+                        Enregistrement de l'écran et de l'audio du système.
+                      </span>
+                    )}
                   </div>
                 )}
+                {state.extra.map((track) => (
+                  <div key={track.device} className="cl-recording__second">
+                    <span>{track.device}</span>
+                    <LevelMeter
+                      level={meterValue(track.levels.rms_db)}
+                      peak={meterValue(track.levels.peak_db)}
+                      clipping={track.clipping}
+                    />
+                  </div>
+                ))}
                 <div className="cl-recording__controls">
                   <Button
                     label={paused ? "Reprendre" : "Pause"}
@@ -289,27 +308,16 @@ export function RecordingPage() {
                   description="Le son est trop fort : éloignez un peu le micro, ou baissez le niveau d'entrée dans Réglages Système, Son."
                 />
               )}
-              {state.second?.error && (
+              {state.system?.error && (
                 <Banner
                   status="warning"
-                  title={`Le deuxième micro (${state.second.device})`}
-                  description={`${state.second.error} L'enregistrement principal continue.`}
+                  title="Le son de l'ordinateur"
+                  description={`${state.system.error} Le micro continue d'être enregistré.`}
                 />
               )}
-              {state.second && state.second.dropouts > 0 && (
-                <Banner
-                  status="warning"
-                  title="Deuxième micro : du son a été perdu"
-                  description={`Le Mac n'a pas suivi ${state.second.dropouts === 1 ? "une fois" : `${state.second.dropouts} fois`} sur ce micro : quelques millisecondes y manquent.`}
-                />
-              )}
-              {state.second && !state.second.error && state.second.too_quiet && (
-                <Banner
-                  status="warning"
-                  title="Deuxième micro : niveau très faible"
-                  description="Presque rien n'arrive du deuxième micro : le téléphone est-il toujours près du Mac, et son micro libre ?"
-                />
-              )}
+              {state.extra.map((track) => (
+                <ExtraAlerts key={track.device} track={track} />
+              ))}
               {state.too_quiet && (
                 <Banner
                   status="warning"
@@ -506,5 +514,34 @@ export function RecordingPage() {
         onAction={stop}
       />
     </div>
+  );
+}
+
+/** The alerts of a microphone added: it never stops the main recording. */
+function ExtraAlerts({ track }: { track: TrackState }) {
+  return (
+    <>
+      {track.error && (
+        <Banner
+          status="warning"
+          title={`Le micro « ${track.device} »`}
+          description={`${track.error} L'enregistrement principal continue.`}
+        />
+      )}
+      {track.dropouts > 0 && (
+        <Banner
+          status="warning"
+          title={`« ${track.device} » : du son a été perdu`}
+          description={`Le Mac n'a pas suivi ${track.dropouts === 1 ? "une fois" : `${track.dropouts} fois`} sur ce micro : quelques millisecondes y manquent.`}
+        />
+      )}
+      {!track.error && track.too_quiet && (
+        <Banner
+          status="warning"
+          title={`« ${track.device} » : niveau très faible`}
+          description="Presque rien n'arrive de ce micro : s'il s'agit d'un téléphone, est-il toujours près du Mac, et son micro libre ?"
+        />
+      )}
+    </>
   );
 }

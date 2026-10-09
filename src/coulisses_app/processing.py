@@ -36,7 +36,7 @@ from coulisses.api import (
 )
 from pydantic import BaseModel
 
-from coulisses_app import carryover, jobs, settings
+from coulisses_app import carryover, jobs, mixing, settings
 from coulisses_app.capture import KeepAwake
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.generate import (
@@ -46,7 +46,6 @@ from coulisses_app.prompting.generate import (
     generate,
 )
 from coulisses_app.prompting.ollama import OllamaClient
-from coulisses_app.sessions import reference_audio_path
 from coulisses_app.spaces import SpaceError
 from coulisses_app.storage.db import connect, now_iso
 
@@ -264,7 +263,17 @@ class Processor:
                 error="L'audio de cette séance a été supprimé : le traitement ne peut plus "
                 "reprendre."
             )
-        audio = reference_audio_path(self.data, job.session_id)
+        try:
+            # The microphone with the computer's sound, for a meeting online (ADR 0032).
+            audio, mix = mixing.processing_input(self.data, job.session_id)
+        except mixing.MixError as exc:
+            return ChainJobResult(error=str(exc))
+        if mix is not None:
+            conn = connect(self.data)
+            try:
+                jobs.record_mix(conn, job, mix.model_dump())
+            finally:
+                conn.close()
         if audio is None or not audio.is_file():
             return ChainJobResult(
                 error=f"L'enregistrement de la séance est introuvable ({audio}). "

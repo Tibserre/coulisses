@@ -28,5 +28,7 @@ Nouvelle fiche : skill `/adr`.
 | [0029](0029-conservation-et-suppression.md) | Garder l'audio (option de séance), purge annoncée avant d'avoir lieu, suppression totale d'une séance, sauvegardes comprises | Acceptée |
 | [0030](0030-coquille-et-bibliotheque.md) | Coquille d'application : colonne des espaces, projets et séances, recherche plein texte (cache FTS5), export vers un dossier choisi (Q7) | Acceptée |
 | [0031](0031-deux-micros.md) | Enregistrer avec deux micros à la fois (le Mac et l'iPhone par Continuité) : deux fichiers, la référence seule traitée pour l'instant | Acceptée |
+| [0032](0032-son-de-l-ordinateur.md) | Enregistrer le son de l'ordinateur avec le micro (réunions en ligne ou hybrides) : un programme Swift, deux fichiers sur une horloge, réunis pour le traitement | Acceptée |
+| [0033](0033-autant-de-micros.md) | Autant de micros que l'on veut (« Ajouter un micro ») ; « Nouvelle séance » commence par enregistrer ou importer | Acceptée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.

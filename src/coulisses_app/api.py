@@ -39,6 +39,7 @@ from coulisses_app import (
     exports,
     jobs,
     marks,
+    mixing,
     notes,
     projects,
     retention,
@@ -79,7 +80,11 @@ class SessionDetail(BaseModel):
     rerun: jobs.Rerun | None = None
     """What the latest processing of the session runs again; None for the first one."""
     other_sources: list[sessions.AudioSource] = []
-    """A second microphone's track, kept beside the reference (not processed yet)."""
+    """Tracks beside the reference: microphones added (kept, not processed yet), the
+    computer's sound (mixed in, ADR 0032)."""
+    mix: mixing.MixFacts | None = None
+    """The microphone mixed with the computer's sound, once made (from the job that used
+    it, once the audio is purged); whether the computer's sound held anything."""
 
 
 class RerunRequest(BaseModel):
@@ -143,8 +148,10 @@ class RecordingRequest(BaseModel):
     non_nommes: int | None = None
     micro: int | None = None
     """Index of the input device; None: the system's default microphone."""
-    micro2: int | None = None
-    """A second microphone recording at the same time (often the iPhone), or none."""
+    micros_en_plus: list[int] = []
+    """Microphones added, recording at the same time (often an iPhone), each its file."""
+    son_ordinateur: bool = False
+    """The computer's sound too: a meeting online or hybrid (ADR 0032)."""
 
 
 class MarkerRequest(BaseModel):
@@ -371,6 +378,7 @@ def create_app(
                 (session_id,),
             ).fetchone()
             latest = jobs.latest_job(conn, session_id)
+            used_mix = jobs.latest_mix(conn, session_id)
         finally:
             conn.close()
         return SessionDetail(
@@ -382,6 +390,9 @@ def create_app(
             rerun=latest.params.rerun
             if latest is not None and isinstance(latest.params, jobs.ChainParams)
             else None,
+            # Once the audio is purged, from the job that used it (P7).
+            mix=mixing.read_facts(data, session_id)
+            or (mixing.MixFacts.model_validate(used_mix) if used_mix is not None else None),
         )
 
     @app.get("/api/seances/{session_id}/versions")
@@ -574,7 +585,8 @@ def create_app(
             attendee_ids=demande.presents,
             unnamed_attendees=demande.non_nommes,
             device_index=demande.micro,
-            second_device_index=demande.micro2,
+            extra_device_indexes=demande.micros_en_plus,
+            system=demande.son_ordinateur,
         )
 
     @app.post("/api/enregistrement/pause")
@@ -819,7 +831,8 @@ def create_app(
 
     @app.get("/api/seances/{session_id}/audio")
     def audio(session_id: str) -> FileResponse:
-        path = sessions.reference_audio_path(data, session_id)
+        # With the computer's sound, the mix once made: everyone is heard (ADR 0032).
+        path = mixing.listening_path(data, session_id)
         if path is None:
             raise _not_found("Séance introuvable.")
         status = retention.audio_status(data, session_id)

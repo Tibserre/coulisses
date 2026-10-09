@@ -32,6 +32,8 @@ import { SessionMenu } from "../components/SessionMenu.tsx";
 import { audioLine } from "../retention.ts";
 import { libraryChanged } from "../library.ts";
 import { RERUN_NAME } from "../versions.ts";
+import { extraTracks } from "../tracks.ts";
+import { takeStopProblem } from "../stopNotice.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
@@ -75,6 +77,9 @@ export function SessionPage({
   const [giving, setGiving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [menuError, setMenuError] = useState<string | null>(null);
+  const [stopProblem, setStopProblem] = useState<string | null>(null);
+  // Said by the stop of the recording that just opened this page (P8).
+  useEffect(() => setStopProblem(takeStopProblem(id)), [id]);
   const [incomplete, setIncomplete] = useState<string | null>(null);
   const [tab, setTab] = useState<"overview" | "summary">("summary");
   // Opened from a search hit in a summary: the summary tab.
@@ -387,6 +392,7 @@ export function SessionPage({
 
   const audioGone = session?.audio.state === "removed";
   const audioText = session ? audioLine(session.audio) : null;
+  const extra = detail ? extraTracks(detail.other_sources, detail.mix) : null;
   const sessionChanged = (next: Session) => setDetail((d) => (d ? { ...d, session: next } : d));
   const audioAction = (action: () => Promise<Session>) => () =>
     action().then(sessionChanged, (e: Error) => setMenuError(e.message));
@@ -433,18 +439,7 @@ export function SessionPage({
             <Text color="secondary">
               {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
               {present ? ` · ${plural(present, "présent", "présents")}` : ""}
-              {detail && detail.other_sources.length > 0 && (
-                <span title={`Pistes gardées en plus : ${detail.other_sources.map((s) => s.device ?? s.original_name).join(", ")}. Seule la première est traitée pour l'instant.`}>
-                  {` · ${detail.other_sources.length + 1} micros`}
-                  {detail.other_sources.some((s) => !s.file_present)
-                    ? " (fichier de la deuxième piste introuvable)"
-                    : detail.other_sources.some((s) => s.duration_s === null)
-                      ? " (deuxième piste illisible)"
-                      : detail.other_sources.some((s) => s.duration_s === 0)
-                        ? " (deuxième piste vide)"
-                        : ""}
-                </span>
-              )}
+              {extra && <span title={extra.title}>{extra.text}</span>}
               {audioText && (
                 <>
                   {" · "}
@@ -504,6 +499,17 @@ export function SessionPage({
       {incomplete && (
         <div className="cl-review__notice">
           <Banner status="warning" title="Suppression incomplète" description={incomplete} isDismissable onDismiss={() => setIncomplete(null)} />
+        </div>
+      )}
+      {stopProblem && (
+        <div className="cl-review__notice">
+          <Banner
+            status="warning"
+            title="À l'arrêt de l'enregistrement"
+            description={stopProblem}
+            isDismissable
+            onDismiss={() => setStopProblem(null)}
+          />
         </div>
       )}
       {menuError && (

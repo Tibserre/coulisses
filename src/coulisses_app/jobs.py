@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -31,6 +31,10 @@ class ChainParams(BaseModel):
     after it) to make a new version (step 7 of the plan)."""
     reuse: dict[str, str] = {}
     """For a rerun: stage → run of the version it starts from, used as it is."""
+    mix: dict[str, Any] | None = None
+    """When the engine heard the microphone mixed with the computer's sound (ADR 0032):
+    what the mix was made of (`mixing.MixFacts`), set when the job runs. Kept here, it
+    outlives the purge of the session's audio (P7)."""
 
 
 class GenerationParams(BaseModel):
@@ -155,6 +159,14 @@ def requeue(conn: sqlite3.Connection, job_id: int) -> None:
         )
 
 
+def record_mix(conn: sqlite3.Connection, job: Job, facts: dict[str, Any]) -> None:
+    """What the engine is about to hear, when it is a mix: kept with the job (P7)."""
+    assert isinstance(job.params, ChainParams)
+    params = job.params.model_copy(update={"mix": facts})
+    with conn:
+        conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job.id))
+
+
 def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> None:
     """Resume a failed job asking for another minimum of voices, only after a diarization
     refused with `too_few_speakers` (checked by the caller). The former minimum stays in
@@ -176,6 +188,18 @@ def latest_job(conn: sqlite3.Connection, session_id: str, kind: str = "chain") -
         (session_id, kind),
     ).fetchone()
     return _job(row) if row else None
+
+
+def latest_mix(conn: sqlite3.Connection, session_id: str) -> dict[str, Any] | None:
+    """What the latest mix the engine heard was made of, from the jobs that used one."""
+    for row in conn.execute(
+        "SELECT * FROM job WHERE session_id = ? AND kind = 'chain' ORDER BY id DESC",
+        (session_id,),
+    ):
+        job = _job(row)
+        if isinstance(job.params, ChainParams) and job.params.mix is not None:
+            return job.params.mix
+    return None
 
 
 def generation_jobs(conn: sqlite3.Connection, session_id: str) -> list[Job]:

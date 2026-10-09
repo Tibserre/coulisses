@@ -1,6 +1,6 @@
 # 0031 — Enregistrer avec deux micros à la fois, le Mac et l'iPhone par Continuité
 
-Statut : Acceptée (2026-10-07, demande de l'utilisateur). Met en œuvre, pour la captation, l'ADR 0006 (une séance a N sources).
+Statut : Acceptée (2026-10-07, demande de l'utilisateur). Étendu à N micros par l'ADR 0033. Met en œuvre, pour la captation, l'ADR 0006 (une séance a N sources).
 
 ## Contexte
 L'utilisateur veut enregistrer une séance avec le Mac et son téléphone en même temps, pour un meilleur son et, plus tard, des indices sur qui parle (ADR 0006). Le traitement des deux pistes viendra plus tard. Depuis macOS Ventura, Continuité fait de l'iPhone proche un micro du Mac : il apparaît comme une entrée audio ordinaire (« Micro de « iPhone de … » »), sans rien installer sur le téléphone et sans réseau à ouvrir.
