@@ -218,7 +218,11 @@ def test_the_page_is_checked_again_at_each_load_so_a_new_build_shows(
 
 def test_the_app_asks_what_quitting_would_interrupt(data: DataDir, recording: Path) -> None:
     client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
-    assert client.get("/api/activite").json() == {"recording": False, "processing": False}
+    assert client.get("/api/activite").json() == {
+        "recording": False,
+        "processing": False,
+        "downloading": False,
+    }
     with recording.open("rb") as f:
         sessions.import_recording(
             data, f, recording.name, unnamed_attendees=1, recorded_at=None, profile="essai"
@@ -226,7 +230,11 @@ def test_the_app_asks_what_quitting_would_interrupt(data: DataDir, recording: Pa
     conn = connect(data)
     jobs.claim_next(conn)  # running now
     conn.close()
-    assert client.get("/api/activite").json() == {"recording": False, "processing": True}
+    assert client.get("/api/activite").json() == {
+        "recording": False,
+        "processing": True,
+        "downloading": False,
+    }
 
 
 def test_the_settings_show_the_folders_in_the_finder(
@@ -282,4 +290,8 @@ def test_a_recording_in_progress_is_what_quitting_would_interrupt(data: DataDir)
             recorder=Recording(data),
         )
     )
-    assert client.get("/api/activite").json() == {"recording": True, "processing": False}
+    assert client.get("/api/activite").json() == {
+        "recording": True,
+        "processing": False,
+        "downloading": False,
+    }

@@ -61,6 +61,110 @@ export interface ExportFolder {
   present: boolean;
 }
 
+// -- the engine's models (engine schemas model-catalog, model-inventory, readiness; ADR 0036)
+
+export type StageName =
+  | "prepare" | "dereverb" | "transcribe" | "align" | "diarize" | "attribute"
+  | "segment_phases" | "title" | "summarize";
+
+/** model-catalog.schema.json: a model the engine can download. */
+export interface CatalogModel {
+  key: string;
+  stage: StageName;
+  /** The stage in French, as the catalog writes it. */
+  role: string;
+  description: string;
+  /** Rounded; the exact size is asked when downloading. */
+  announced_bytes: number;
+  repo: string;
+  revision: string;
+  licence: string;
+  /** Its terms must be accepted on this page before downloading. */
+  terms_url: string | null;
+  engine: string | null;
+  /** The engine's profiles that need it (the retained chain: « chaine-retenue »). */
+  required_by: string[];
+}
+
+/** model-inventory.schema.json */
+export interface InstalledEngineModel {
+  key: string;
+  /** altered: files missing or of another size; no_manifest: a folder Coulisses did not install. */
+  state: "intact" | "altered" | "no_manifest";
+  in_catalog: boolean;
+  repo: string | null;
+  revision: string | null;
+  /** Its revision is not the one the catalog pins now. */
+  outdated: boolean;
+  size_bytes: number;
+  downloaded_at: string | null;
+  problem: string | null;
+}
+
+export interface PartialDownload {
+  key: string;
+  size_bytes: number;
+}
+
+export interface EnvironmentInfo {
+  name: string;
+  path: string;
+  /** Built for this engine version; an old one only takes space. */
+  current: boolean;
+  /** Usable (an interrupted install is not). */
+  installed: boolean;
+  size_bytes: number;
+}
+
+export interface Inventory {
+  models_dir: string;
+  envs_dir: string;
+  models: InstalledEngineModel[];
+  partial_downloads: PartialDownload[];
+  environments: EnvironmentInfo[];
+  total_bytes: number;
+}
+
+/** readiness.schema.json: what a chain lacks to run. */
+export interface MissingPiece {
+  code: "model_missing" | "model_altered" | "environment_missing";
+  stage: StageName;
+  model: string | null;
+  environment: string | null;
+  message: string;
+}
+
+export interface Readiness {
+  profile: string;
+  ready: boolean;
+  missing: MissingPiece[];
+}
+
+/** A download or an install, running or just over (said by the service, in French). Not a
+ *  `job`: those are a session's. */
+export interface ModelAction {
+  kind: "model" | "environment";
+  name: string;
+  state: "running" | "done" | "failed" | "cancelled";
+  done_bytes: number;
+  /** Null while unknown (an environment's install never knows it). */
+  total_bytes: number | null;
+  error: string | null;
+  code: string | null;
+  /** The engine's own message (developer mode). */
+  detail: string | null;
+  terms_url: string | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface ModelsView {
+  catalog: { models: CatalogModel[] };
+  inventory: Inventory;
+  readiness: Readiness;
+  actions: ModelAction[];
+}
+
 /** What can be shown in the Finder from the settings. */
 export interface Folders {
   data: string;
@@ -687,6 +791,17 @@ export const api = {
   versions: (id: string) => getJson<Versions>(`${sessionPath(id)}/versions`),
   retention: () => getJson<RetentionInfo>("/api/conservation"),
   folders: () => getJson<Folders>("/api/dossiers"),
+  engineModels: () => getJson<ModelsView>("/api/moteur/modeles"),
+  modelActions: () => getJson<ModelAction[]>("/api/moteur/telechargements"),
+  downloadModel: (key: string) =>
+    send<ModelAction>("POST", `/api/moteur/modeles/${encodeURIComponent(key)}/telecharger`),
+  installEnvironment: (name: string) =>
+    send<ModelAction>("POST", `/api/moteur/environnements/${encodeURIComponent(name)}/installer`),
+  cancelModelAction: (kind: ModelAction["kind"], name: string) =>
+    send<void>("POST", `/api/moteur/${kind === "model" ? "modeles" : "environnements"}/${encodeURIComponent(name)}/annuler`),
+  forgetModelAction: (kind: ModelAction["kind"], name: string) =>
+    send<void>("DELETE", `/api/moteur/${kind === "model" ? "modeles" : "environnements"}/${encodeURIComponent(name)}/telechargement`),
+  removeModel: (key: string) => send<void>("DELETE", `/api/moteur/modeles/${encodeURIComponent(key)}`),
   openFolder: (which: FolderName) => send<void>("POST", `/api/dossiers/${which}/ouvrir`),
   projects: () => getJson<Project[]>("/api/projets"),
   createProject: (spaceId: number, name: string) =>

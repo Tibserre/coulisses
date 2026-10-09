@@ -31,5 +31,6 @@ Nouvelle fiche : skill `/adr`.
 | [0032](0032-son-de-l-ordinateur.md) | Enregistrer le son de l'ordinateur avec le micro (réunions en ligne ou hybrides) : un programme Swift, deux fichiers sur une horloge, réunis pour le traitement | Acceptée |
 | [0033](0033-autant-de-micros.md) | Autant de micros que l'on veut (« Ajouter un micro ») ; « Nouvelle séance » commence par enregistrer ou importer | Acceptée |
 | [0034](0034-app-du-dock.md) | Coulisses, une app dans le Dock avec sa propre fenêtre : démarre et arrête le service, reçoit les permissions ; la PWA est abandonnée ; le nom reste Coulisses (Q3) | Acceptée |
+| [0036](0036-page-modeles.md) | La section « Modèles » des Réglages, par l'API de modèles du moteur (v1.5.0) : état, téléchargement confirmé et suivi, suppression confirmée, `stop_downloads` à l'arrêt | Acceptée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.

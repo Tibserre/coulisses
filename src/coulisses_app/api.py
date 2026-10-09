@@ -39,6 +39,7 @@ from coulisses_app import (
     actions,
     capture,
     corrections,
+    engine_models,
     exports,
     jobs,
     marks,
@@ -100,6 +101,8 @@ class Activity(BaseModel):
     recording: bool
     processing: bool
     """A stage or a generation running now (it resumes at the next start)."""
+    downloading: bool = False
+    """A model downloading, or an environment installing (it resumes next time)."""
 
 
 class SessionDetail(BaseModel):
@@ -302,11 +305,13 @@ def create_app(
     model_client: ModelClient | None = None,
     recorder: capture.Recorder | None = None,
     watcher: retention.Watcher | None = None,
+    engine_store: engine_models.EngineModels | None = None,
 ) -> FastAPI:
     """`processor` is started and stopped with the service; None in tests that drive it.
     `model_client` answers the list of installed models (Ollama by default)."""
     model_client = model_client or (processor.model_client if processor else OllamaClient())
     recorder = recorder or capture.Recorder(data)
+    engine_store = engine_store or engine_models.EngineModels(profile)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -320,11 +325,15 @@ def create_app(
             if watcher is not None:
                 watcher.stop()
             try:
-                # A recording in progress is closed properly, never lost (spec §7.2).
-                recorder.shutdown(profile=profile)
+                # Downloads stop; their partial folders are kept (engine ADR 0035).
+                engine_store.shutdown()
             finally:
-                if processor is not None:
-                    processor.stop()
+                try:
+                    # A recording in progress is closed properly, never lost (spec §7.2).
+                    recorder.shutdown(profile=profile)
+                finally:
+                    if processor is not None:
+                        processor.stop()
 
     app = FastAPI(title="Coulisses", lifespan=lifespan, docs_url=None, redoc_url=None)
 
@@ -388,11 +397,45 @@ def create_app(
                 status_code=422, detail="Le Finder n'a pas pu ouvrir ce dossier."
             ) from exc
 
+    # -- the engine's models (spec §7.12, ADR 0036) ------------------------------------
+
+    @app.get("/api/moteur/modeles")
+    def engine_models_view() -> engine_models.ModelsView:
+        return engine_store.view()
+
+    @app.get("/api/moteur/telechargements")
+    def engine_actions() -> list[engine_models.ModelAction]:
+        return engine_store.actions()
+
+    @app.post("/api/moteur/modeles/{cle}/telecharger", status_code=202)
+    def download_model(cle: str) -> engine_models.ModelAction:
+        return engine_store.start("model", cle)
+
+    @app.post("/api/moteur/environnements/{nom}/installer", status_code=202)
+    def install_environment(nom: str) -> engine_models.ModelAction:
+        return engine_store.start("environment", nom)
+
+    @app.post("/api/moteur/{genre}/{nom}/annuler", status_code=204)
+    def cancel_engine_task(genre: Literal["modeles", "environnements"], nom: str) -> None:
+        engine_store.cancel("model" if genre == "modeles" else "environment", nom)
+
+    @app.delete("/api/moteur/{genre}/{nom}/telechargement", status_code=204)
+    def forget_engine_task(genre: Literal["modeles", "environnements"], nom: str) -> None:
+        engine_store.forget("model" if genre == "modeles" else "environment", nom)
+
+    @app.delete("/api/moteur/modeles/{cle}", status_code=204)
+    def remove_model(cle: str) -> None:
+        engine_store.remove(cle)
+
     @app.get("/api/activite")
     def activity() -> Activity:
         with _db() as conn:
             running = bool(jobs.running_jobs(conn))
-        return Activity(recording=recorder.state() is not None, processing=running)
+        return Activity(
+            recording=recorder.state() is not None,
+            processing=running,
+            downloading=engine_store.downloading(),
+        )
 
     @app.get("/api/seances")
     def list_sessions() -> list[sessions.Session]:
