@@ -3,6 +3,17 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.14.0 — 2026-10-09
+
+### Nouveautés
+
+- ajoute autant de micros que voulu et refait « Nouvelle séance » (enregistrement)
+- enregistre le son de l'ordinateur avec le micro pour les réunions en ligne (enregistrement)
+
+### Corrections
+
+- démarre le son de l'ordinateur même quand rien ne joue (enregistrement)
+
 ## v0.13.0 — 2026-10-07
 
 ### Nouveautés
