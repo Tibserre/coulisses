@@ -1,6 +1,6 @@
 # 0007 — Interface : React + Vite + TypeScript, design system Astryx
 
-Statut : Acceptée (2026-09-24). Choix ferme de l'utilisateur, sans condition préalable.
+Statut : Acceptée (2026-09-24). Choix ferme de l'utilisateur, sans condition préalable. La PWA est **remplacée par 0034** (une app dans le Dock).
 
 ## Contexte
 Interface riche et haut de gamme : relecture de transcripts de 2 h synchronisés avec l'audio, forme d'onde, édition, comparaison côte à côte. L'utilisateur envisage Astryx, le design system open source de Meta (React 19 + StyleX, plus de 150 composants accessibles, thèmes, mode sombre, CLI et serveur MCP pensés pour les agents).

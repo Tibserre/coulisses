@@ -13,6 +13,6 @@
 | 7 | Relancer une étape | Relance de la transcription ou de la séparation des voix depuis la version affichée, nouvelle version activée seulement entière, étapes refaites périmées, report des corrections par le temps mesuré et liste de ce qui n'a pas pu l'être, anciennes versions réaffichables (ADR 0028) | Livrée (v0.10.0) |
 | 8 | Bibliothèque | Coquille d'application (colonne des espaces, projets et séances ; ⌘K, ⌘N, ⌘\\), projets, états des séances, recherche plein texte, export vers un dossier (Q7) (ADR 0030) | Livrée (v0.12.0) |
 | 9 | Conservation et purge | Durée, « Garder l'audio », préavis (bandeau et notification), prolonger, suppression de l'audio ou de la séance (totale, sauvegardes comprises), journal des suppressions, page Réglages (ADR 0029) | Livrée (v0.11.0) |
-| 10 | App au quotidien | Lanceur du Dock, PWA, réglages et modèles, test du parcours complet réseau coupé (nom définitif, Q3) | |
+| 10 | App au quotidien | App Coulisses dans le Dock avec sa fenêtre (ADR 0034, à la place de la PWA ; le nom reste Coulisses, Q3), Réglages (dossiers, version), test du parcours complet réseau coupé (`scripts/essai-hors-ligne.sh`) ; la page Modèles attend l'API de modèles du moteur | En cours |
 
 Tranché à l'étape 7 (ADR 0028) : en V1, on relance la transcription (glossaire enrichi, moteur mis à jour) ou la séparation des voix (autre nombre de présents) ; « un autre moteur » viendra avec les profils du moteur.

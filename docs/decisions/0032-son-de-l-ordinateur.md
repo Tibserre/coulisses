@@ -1,6 +1,6 @@
 # 0032 — Enregistrer le son de l'ordinateur avec le micro, pour les réunions en ligne ou hybrides
 
-Statut : Acceptée (2026-10-07, choix de l'utilisateur). Sort « capture audio système ou visio » du hors-périmètre de la V1 (spec §8).
+Statut : Acceptée (2026-10-07, choix de l'utilisateur). Sort « capture audio système ou visio » du hors-périmètre de la V1 (spec §8). Le lanceur du Dock : fait par l'ADR 0034 (l'app Coulisses).
 
 ## Contexte
 L'utilisateur fait aussi des réunions en ligne (Zoom, Teams, Meet dans le navigateur) ou hybrides (une partie dans la salle, une partie à distance). Le micro seul ne suffit pas :

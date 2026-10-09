@@ -1,6 +1,6 @@
 # 0005 — Captation audio par le service Python
 
-Statut : Acceptée (2026-09-24). Précisée par 0027 : les niveaux passent par un flux d'événements (SSE) plutôt que par WebSocket.
+Statut : Acceptée (2026-09-24). Précisée par 0027 : les niveaux passent par un flux d'événements (SSE) plutôt que par WebSocket. Le lanceur du Dock : fait par l'ADR 0034 (l'app Coulisses).
 
 ## Contexte
 Le brief suggère une captation dans le navigateur (getUserMedia, sans echoCancellation, noiseSuppression ni autoGainControl). Exigences : WAV 48 kHz brut, écriture continue sur disque, survie à un crash, Mac qui ne dort pas pendant 2 h.

@@ -4,7 +4,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Text } from "@astryxdesign/core/Text";
-import { api, type AppInfo, type PurgeAnnouncement, type RetentionInfo } from "../api.ts";
+import { api, type AppInfo, type Folders, type PurgeAnnouncement, type RetentionInfo } from "../api.ts";
 import { Switch } from "@astryxdesign/core/Switch";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { setDevMode } from "../devMode.ts";
@@ -12,8 +12,9 @@ import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
 import { useDevMode } from "../devMode.ts";
 
-/** Settings (spec §7.12), for now the audio's keeping (§7.10): how long, the notice, what
- *  is about to be purged, the log of every purge and deletion, the backups of the base. */
+/** Settings (spec §7.12): the audio's keeping (§7.10: how long, the notice, what is about to
+ *  be purged, the log of every purge and deletion, the backups of the base), the export
+ *  folder, Coulisses itself (its version, its folders shown in the Finder), developer mode. */
 export function SettingsPage({ info: about }: { info: AppInfo | null }) {
   const dev = useDevMode();
   const [info, setInfo] = useState<RetentionInfo | null>(null);
@@ -21,6 +22,10 @@ export function SettingsPage({ info: about }: { info: AppInfo | null }) {
   const [notice, setNotice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [folders, setFolders] = useState<Folders | null>(null);
+  useEffect(() => {
+    api.folders().then(setFolders, (e: Error) => setError(e.message));
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -160,6 +165,26 @@ export function SettingsPage({ info: about }: { info: AppInfo | null }) {
               </li>
             ))}
           </ul>
+        </section>
+        <section className="cl-settings__section">
+          <Heading level={3}>Coulisses</Heading>
+          <Text color="secondary">
+            {about ? `Version ${about.app_version}. ` : ""}Tout reste sur ce Mac : les séances dans le
+            dossier des données, les modèles du moteur dans le leur.
+          </Text>
+          <div className="cl-settings__buttons">
+            <Button label="Ouvrir les données" size="sm" onClick={() => void act(() => api.openFolder("donnees"))} />
+            <Button label="Ouvrir les modèles" size="sm" onClick={() => void act(() => api.openFolder("modeles"))} />
+            {dev && folders?.log && (
+              <Button label="Afficher le journal" size="sm" onClick={() => void act(() => api.openFolder("journal"))} />
+            )}
+          </div>
+          {dev && folders && (
+            <Text type="supporting">
+              Modèles : {folders.models}
+              {folders.log ? ` · journal : ${folders.log}` : ""}
+            </Text>
+          )}
         </section>
         <section className="cl-settings__section">
           <Heading level={3}>Mode développeur</Heading>
