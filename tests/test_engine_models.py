@@ -272,6 +272,8 @@ def test_an_environment_installs_like_a_model_downloads(engine: FakeEngine) -> N
         (ModelActionCode.INTEGRITY, "Des fichiers manquent"),
         (ModelActionCode.IN_USE, "un traitement en cours"),
         (ModelActionCode.TOOL_MISSING, "uv est introuvable"),
+        (ModelActionCode.CURRENT_ENVIRONMENT, "le traitement utilise"),
+        (ModelActionCode.NOT_INSTALLED, "Ce modèle n'est pas installé"),
         (ModelActionCode.UNKNOWN_MODEL, "pas dans le catalogue"),
         (ModelActionCode.ALREADY_INSTALLED, "déjà installé"),
     ],
@@ -309,3 +311,62 @@ def test_quitting_is_told_a_download_runs(data: DataDir, engine: FakeEngine) -> 
     engine.go_on.set()
     settle(models, "done")
     assert client.get("/api/activite").json()["downloading"] is False
+
+
+def test_an_old_environment_is_removed_the_current_one_never(
+    data: DataDir, engine: FakeEngine, tmp_path: Path
+) -> None:
+    removed: list[str | Path] = []
+
+    def discard(environment: str | Path) -> None:
+        if str(environment).endswith("courant"):
+            raise ModelActionError(
+                ModelActionCode.CURRENT_ENVIRONMENT,
+                "current",
+                environment="diarizen",
+                path=str(environment),
+            )
+        removed.append(environment)
+
+    models = engine.models()
+    models._discard_environment = discard  # pyright: ignore[reportPrivateUsage]
+    client = TestClient(
+        create_app(
+            data,
+            FAKE_CHAIN,
+            profile="chaine-retenue",
+            processor=None,
+            web_dir=None,
+            engine_store=models,
+        )
+    )
+    old = str(tmp_path / "diarizen-ancien")
+    assert (
+        client.post("/api/moteur/environnements/retirer", json={"chemin": old}).status_code == 204
+    )
+    assert removed == [old]
+    refused = client.post(
+        "/api/moteur/environnements/retirer", json={"chemin": str(tmp_path / "diarizen-courant")}
+    )
+    assert refused.status_code == 422
+    assert "le traitement utilise" in refused.json()["detail"]
+    assert removed == [old]  # nothing else
+    models.start("environment", "diarizen")  # an install running: nothing removed meanwhile
+    with pytest.raises(ModelsError, match="installation en cours"):
+        models.remove_environment(old)
+    engine.go_on.set()
+    settle(models, "done")
+
+
+@pytest.mark.parametrize(
+    ("code", "said"),
+    [
+        (ModelActionCode.NOT_INSTALLED, "Cet environnement n'est plus là"),
+        (ModelActionCode.IN_USE, "Cet environnement est en cours d'installation"),
+        (ModelActionCode.UNKNOWN_MODEL, "Cet environnement est inconnu"),
+    ],
+)
+def test_an_environments_errors_name_an_environment(code: ModelActionCode, said: str) -> None:
+    from coulisses_app.engine_models import said as say
+
+    assert said in say(ModelActionError(code, "english", environment="diarizen"))

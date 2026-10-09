@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, ModelAction, ModelsView } from "./api.ts";
-import { environmentState, gigabytes, modelRows, percent, readinessLine } from "./models.ts";
+import { environmentState, gigabytes, modelRows, percent, readinessLine, removableEnvironment } from "./models.ts";
 
 const model = (
   key: string,
@@ -167,4 +167,16 @@ test("an old environment is said old, not interrupted", () => {
   assert.match(environmentState({ ...env, current: false, installed: false }), /^Ancienne version/);
   assert.equal(environmentState({ ...env, current: true, installed: true }), "Installé");
   assert.equal(environmentState({ ...env, current: true, installed: false }), "Installation interrompue");
+});
+
+test("only an environment the processing does not use can be removed, never while it installs", () => {
+  const env = { name: "diarizen", path: "", size_bytes: 1 };
+  const old = { ...env, current: false, installed: true };
+  const interrupted = { ...env, current: true, installed: false };
+  const used = { ...env, current: true, installed: true };
+  assert.equal(removableEnvironment(old, []), true);
+  assert.equal(removableEnvironment(interrupted, []), true);
+  assert.equal(removableEnvironment(used, []), false);
+  const installing = { ...task("diarizen", "running"), kind: "environment" as const };
+  assert.equal(removableEnvironment(interrupted, [installing]), false);
 });

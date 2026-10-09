@@ -85,6 +85,13 @@ export function environmentState(env: EnvironmentInfo): string {
   return env.installed ? "Installé" : "Installation interrompue";
 }
 
+/** An environment that can be removed: one the processing does not use (an older one, or an
+ *  interrupted install), and not being installed right now. */
+export function removableEnvironment(env: EnvironmentInfo, actions: ModelAction[]): boolean {
+  const installing = actions.some((a) => a.kind === "environment" && a.name === env.name && a.state === "running");
+  return !installing && (!env.current || !env.installed);
+}
+
 /** The share done, 0 to 100; null while the total is unknown. */
 export function percent(action: ModelAction): number | null {
   if (!action.total_bytes) return null;

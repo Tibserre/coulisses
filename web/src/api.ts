@@ -802,6 +802,8 @@ export const api = {
   forgetModelAction: (kind: ModelAction["kind"], name: string) =>
     send<void>("DELETE", `/api/moteur/${kind === "model" ? "modeles" : "environnements"}/${encodeURIComponent(name)}/telechargement`),
   removeModel: (key: string) => send<void>("DELETE", `/api/moteur/modeles/${encodeURIComponent(key)}`),
+  /** An environment the processing does not use (an older one, or interrupted). */
+  removeEnvironment: (path: string) => send<void>("POST", "/api/moteur/environnements/retirer", { chemin: path }),
   openFolder: (which: FolderName) => send<void>("POST", `/api/dossiers/${which}/ouvrir`),
   projects: () => getJson<Project[]>("/api/projets"),
   createProject: (spaceId: number, name: string) =>

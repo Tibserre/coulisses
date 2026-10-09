@@ -5,7 +5,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Text } from "@astryxdesign/core/Text";
-import { api, type ModelAction, type ModelsView } from "../api.ts";
+import { api, type EnvironmentInfo, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import {
   environmentState,
@@ -13,12 +13,14 @@ import {
   modelRows,
   percent,
   readinessLine,
+  removableEnvironment,
   type ModelRow,
 } from "../models.ts";
 
 type Asking =
   | { what: "download" | "remove"; row: ModelRow }
   | { what: "install"; name: string }
+  | { what: "removeEnvironment"; env: EnvironmentInfo }
   | null;
 
 /** The engine's models (spec §7.12, ADR 0036): what the processing needs, what is on the
@@ -192,7 +194,18 @@ export function ModelsSection() {
                 <Text type="supporting">
                   {environmentState(env)} · {gigabytes(env.size_bytes)}
                 </Text>
-                <div className="cl-models__actions" />
+                <div className="cl-models__actions">
+                  {/* Only one that is not the processing's: an older lock's, or interrupted. */}
+                  {removableEnvironment(env, actions) && (
+                    <Button
+                      label="Supprimer"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setAsking({ what: "removeEnvironment", env })}
+                      isDisabled={working}
+                    />
+                  )}
+                </div>
               </li>
             ))}
             {missingEnvironments.map((name) => {
@@ -288,6 +301,22 @@ export function ModelsSection() {
         onAction={() => {
           if (asking?.what === "install")
             void act(() => api.installEnvironment(asking.name));
+        }}
+      />
+      <AlertDialog
+        isOpen={asking?.what === "removeEnvironment"}
+        onOpenChange={(open) => !open && setAsking(null)}
+        title="Supprimer cet environnement ?"
+        description={
+          asking?.what === "removeEnvironment"
+            ? `${asking.env.current ? "Son installation a été interrompue" : "C'est une ancienne version"} : le traitement ne s'en sert pas. ${gigabytes(asking.env.size_bytes)} sont libérés.`
+            : ""
+        }
+        actionLabel="Supprimer"
+        cancelLabel="Annuler"
+        isActionLoading={working}
+        onAction={() => {
+          if (asking?.what === "removeEnvironment") void act(() => api.removeEnvironment(asking.env.path));
         }}
       />
       <AlertDialog

@@ -269,8 +269,8 @@ wheels = [
 
 [[package]]
 name = "coulisses"
-version = "1.5.0"
-source = { git = "file:///Users/t.serre/Coulisses/Moteur?subdirectory=engine&tag=v1.5.0#492956bc1bc5668367ea255fe7486d6bbb4ebdc3" }
+version = "1.6.0"
+source = { git = "file:///Users/t.serre/Coulisses/Moteur?subdirectory=engine&tag=v1.6.0#a2652e05337f1552993308857d28119f0a6e5f46" }
 dependencies = [
     { name = "httpx" },
     { name = "huggingface-hub" },
@@ -318,7 +318,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "coulisses", extras = ["mlx-audio", "pyannote", "wav2vec2"], git = "file:///Users/t.serre/Coulisses/Moteur?subdirectory=engine&tag=v1.5.0" },
+    { name = "coulisses", extras = ["mlx-audio", "pyannote", "wav2vec2"], git = "file:///Users/t.serre/Coulisses/Moteur?subdirectory=engine&tag=v1.6.0" },
     { name = "fastapi", specifier = ">=0.120" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.13" },

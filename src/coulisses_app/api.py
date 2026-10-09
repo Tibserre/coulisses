@@ -95,6 +95,11 @@ class Folders(BaseModel):
 _FOLDER_FIELDS: dict[str, str] = {"donnees": "data", "modeles": "models", "journal": "log"}
 
 
+class EnvironmentRemoval(BaseModel):
+    chemin: str
+    """The environment's folder, as the inventory gives it."""
+
+
 class Activity(BaseModel):
     """What quitting the app would interrupt (ADR 0034)."""
 
@@ -422,6 +427,10 @@ def create_app(
     @app.delete("/api/moteur/{genre}/{nom}/telechargement", status_code=204)
     def forget_engine_task(genre: Literal["modeles", "environnements"], nom: str) -> None:
         engine_store.forget("model" if genre == "modeles" else "environment", nom)
+
+    @app.post("/api/moteur/environnements/retirer", status_code=204)
+    def remove_environment(demande: EnvironmentRemoval) -> None:
+        engine_store.remove_environment(demande.chemin)
 
     @app.delete("/api/moteur/modeles/{cle}", status_code=204)
     def remove_model(cle: str) -> None:

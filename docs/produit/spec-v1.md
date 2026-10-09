@@ -182,7 +182,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Dossiers** : depuis les Réglages, ouvrir dans le Finder le dossier des données, celui des modèles et le journal du service.
 - Durée de conservation, préavis de purge.
 - **Modèles dans un dossier visible** : `~/Coulisses/Modèles`, un sous-dossier par modèle avec sa fiche (source, révision, taille, date). Je les vois, les déplace ou les supprime dans le Finder ou depuis l'app.
-- **Section « Modèles »** des Réglages : chaque modèle du moteur, à quoi il sert, s'il est nécessaire au traitement, installé ou non, sa taille ; une phrase dit si tout est prêt pour traiter. Suppression après confirmation (ADR 0036).
+- **Section « Modèles »** des Réglages : chaque modèle du moteur, à quoi il sert, s'il est nécessaire au traitement, installé ou non, sa taille ; une phrase dit si tout est prêt pour traiter. Suppression après confirmation, d'un modèle ou d'un environnement de calcul que le traitement n'utilise plus (ADR 0036).
 - Téléchargement d'un modèle : action explicite et confirmée, seule exception au hors-ligne, jamais déclenchée automatiquement ; sa progression se voit, il s'arrête et reprend là où il en était. Un modèle absent arrête le traitement avec un message qui renvoie à cette section.
 
 ## 8. Hors périmètre V1

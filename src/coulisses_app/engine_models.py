@@ -29,6 +29,7 @@ from coulisses.api import (
     installed,
     readiness,
     remove,
+    remove_environment,
     stop_downloads,
 )
 from pydantic import BaseModel
@@ -79,6 +80,17 @@ def _gb(value: Any) -> str:
 def said(error: ModelActionError) -> str:
     """The engine's error, in French (its message, in English, stays in `detail`)."""
     details: dict[str, Any] = dict(getattr(error, "details", {}) or {})
+    # An environment's own words: the codes are shared with the models.
+    environment = "environment" in details and "model" not in details
+    if environment and error.code == ModelActionCode.UNKNOWN_MODEL:
+        return "Cet environnement est inconnu du moteur, ou hors de son dossier."
+    if environment and error.code == ModelActionCode.NOT_INSTALLED:
+        return "Cet environnement n'est plus là : rien à supprimer."
+    if environment and error.code == ModelActionCode.IN_USE:
+        return (
+            "Cet environnement est en cours d'installation, ou un traitement en cours "
+            "l'utilise : attendez qu'il se termine."
+        )
     match error.code:
         case ModelActionCode.UNKNOWN_MODEL:
             return "Ce modèle n'est pas dans le catalogue du moteur."
@@ -113,6 +125,8 @@ def said(error: ModelActionError) -> str:
                 "Ce modèle est déjà en cours de téléchargement, ou un traitement en cours "
                 "l'utilise : attendez qu'il se termine."
             )
+        case ModelActionCode.CURRENT_ENVIRONMENT:
+            return "C'est l'environnement que le traitement utilise : il ne peut pas être supprimé."
         case ModelActionCode.TOOL_MISSING:
             return "uv est introuvable : il faut l'installer pour préparer cet environnement."
         case _:
@@ -133,6 +147,7 @@ class EngineModels:
         fetch: Callable[..., Any] = download,
         install: Callable[..., Any] = install_environment,
         discard: Callable[..., None] = remove,
+        discard_environment: Callable[[str | Path], None] = remove_environment,
         stop_all: Callable[[], None] = stop_downloads,
     ) -> None:
         self.profile = profile
@@ -143,6 +158,7 @@ class EngineModels:
         self._fetch = fetch
         self._install = install
         self._discard = discard
+        self._discard_environment = discard_environment
         self._stop_all = stop_all
         self._lock = threading.Lock()
         self._tasks: dict[tuple[Kind, str], ModelAction] = {}
@@ -255,6 +271,19 @@ class EngineModels:
             raise ModelsError(said(exc)) from exc
         with self._lock:
             self._tasks.pop(("model", name), None)
+
+    def remove_environment(self, path: str) -> None:
+        """An environment that only takes space (an older lock's, or an interrupted
+        install), by the path the inventory gives: asked and confirmed by the user. The
+        engine refuses the one the processing uses (`current_environment`)."""
+        with self._lock:
+            if any(a.kind == "environment" and a.state == "running" for a in self._tasks.values()):
+                raise ModelsError("Attendez la fin de l'installation en cours.")
+        try:
+            self._discard_environment(path)
+        except ModelActionError as exc:
+            log.warning("removing the environment %s: %s %s", path, exc.code, exc)
+            raise ModelsError(said(exc)) from exc
 
     def forget(self, kind: Kind, name: str) -> None:
         """A finished task, put away (its message read)."""
