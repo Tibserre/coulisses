@@ -3,6 +3,13 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.17.0 — 2026-10-12
+
+### Nouveautés
+
+- retire un environnement de calcul inutilisé, par le moteur v1.6.0 (reglages)
+- ajoute la section Modèles par l'API de modèles du moteur v1.5.0 (reglages)
+
 ## v0.16.0 — 2026-10-09
 
 ### Nouveautés
