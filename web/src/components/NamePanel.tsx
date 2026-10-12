@@ -7,7 +7,7 @@ import { nameChoices, type NameChoice } from "../transcript.ts";
 type View = "who" | "character" | "same";
 
 /** Naming a voice in place (art direction: without leaving the review): the name turns
- *  into a field, and the list drops just under it, on its line. Typing filters the people
+ *  into a field where it was, and the list floats just under it, held to its line. Typing filters the people
  *  of the space; ↑ ↓ and Enter choose; a name not found becomes a guest, or a free name.
  *  The rare cases (a character played by someone, the same person as another voice) are
  *  a second view of the same list. Escape or a click elsewhere closes it. */

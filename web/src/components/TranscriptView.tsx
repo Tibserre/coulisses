@@ -339,7 +339,6 @@ const TurnLine = memo(function TurnLine({
   return (
     <div
       className="cl-turn"
-      data-naming={naming || undefined}
       data-continued={row.continued || undefined}
       data-current={isCurrent || undefined}
       data-selected={isSelected || undefined}
@@ -705,7 +704,7 @@ export function TranscriptView({
   }, [currentIndex, pb.playing, virtualizer]);
 
   // Naming a voice: on the first line of its group (a line that goes on hides its name),
-  // brought into view with room under it for the list, which opens in the line.
+  // brought into view with room under it for the list, which floats over the lines below.
   const naming = editing.namingTurn;
   const { setNamingTurn } = editing;
   const namingIndex = naming == null ? -1 : model.rows.findIndex((r) => r.kind === "turn" && r.turn.index === naming);
@@ -744,6 +743,8 @@ export function TranscriptView({
                 left: 0,
                 right: 0,
                 transform: `translateY(${item.start}px)`,
+                // Its list floats over the lines under it.
+                zIndex: item.index === namingIndex ? 2 : undefined,
               }}
             >
               {row.kind === "turn" ? (

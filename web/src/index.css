@@ -1128,19 +1128,11 @@ button.cl-name:hover {
   text-underline-offset: 3px;
 }
 
-/* Naming a voice in place: the name turns into a field, the list drops just under it, in
-   the line (its text goes down meanwhile: nothing is covered, nothing floats away). */
-.cl-turn[data-naming] {
-  background: var(--color-background-muted);
-  border-radius: var(--radius-element);
-}
-
+/* Naming a voice in place: the name turns into a field, exactly where it was (nothing
+   moves), and the list floats just under it, over the lines below, held to its line. */
 .cl-nameedit {
+  position: relative;
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding-bottom: var(--spacing-2);
 }
 
 .cl-nameedit__field {
@@ -1148,7 +1140,9 @@ button.cl-name:hover {
   align-items: center;
   gap: var(--spacing-1);
   min-width: 240px;
-  padding: 2px var(--spacing-2);
+  /* Its padding and border drawn outside the name's box: the line keeps its height. */
+  margin: -3px 0 -3px -9px;
+  padding: 2px 8px;
   border: 1px solid var(--color-border-emphasized);
   border-radius: var(--radius-element);
   background: var(--color-background-surface);
@@ -1162,7 +1156,10 @@ button.cl-name:hover {
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
-  font-size: var(--font-size-base);
+  /* The name's size: typing into it does not change it. */
+  font-size: 1rem;
+  line-height: inherit;
+  padding: 0;
   caret-color: var(--color-accent);
 }
 
@@ -1187,6 +1184,10 @@ button.cl-name:hover {
 }
 
 .cl-nameedit__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -9px;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   width: 280px;
