@@ -51,14 +51,25 @@ export function WritingModels() {
   const dev = useDevMode();
   const [info, setInfo] = useState<ModelsInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** A service started before this page was installed does not say each writing's model
+   *  (a guard at run time: the type says it always does). Said plainly, never a broken
+   *  page; the error is cleared only by a reading that has it. */
+  const read = (next: ModelsInfo) => {
+    if (next.writings) {
+      setInfo(next);
+      setError(null);
+    } else
+      setError(
+        "Le service de Coulisses date d'avant cette page : quittez Coulisses (⌘Q) et rouvrez-le. S'il a été lancé dans le Terminal, arrêtez-le là (⌃C) et relancez-le.",
+      );
+  };
   useEffect(() => {
-    api.models().then(setInfo, (e: Error) => setError(e.message));
+    api.models().then(read, (e: Error) => setError(e.message));
   }, []);
 
   const choose = async (writing: Writing, model: string) => {
     try {
-      setInfo(await api.setWritingModel(writing, model));
-      setError(null);
+      read(await api.setWritingModel(writing, model));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -79,7 +90,7 @@ export function WritingModels() {
         {error && (
           <Banner
             status="error"
-            title={info ? "Refusé" : "Lecture impossible"}
+            title="Lecture ou choix impossible"
             description={error}
             isDismissable
             onDismiss={() => setError(null)}
