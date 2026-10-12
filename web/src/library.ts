@@ -156,3 +156,13 @@ export function startSpace(
     null
   );
 }
+
+/** A space's latest session, whatever the order it is given in. */
+export function latestSession<T extends Pick<Session, "space_id" | "recorded_at">>(
+  spaceId: number,
+  sessions: T[],
+): T | null {
+  return sessions
+    .filter((s) => s.space_id === spaceId)
+    .reduce<T | null>((latest, s) => (latest && latest.recorded_at >= s.recorded_at ? latest : s), null);
+}

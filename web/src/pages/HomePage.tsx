@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
-import { ChevronDown, Mic } from "lucide-react";
+import { Popover } from "@astryxdesign/core/Popover";
+import { Check, ChevronDown, Mic } from "lucide-react";
 import type { AppInfo, Project, RecordingState, Session, Space } from "../api.ts";
 import type { Way } from "../components/NewSessionDialog.tsx";
 import { Badge } from "@astryxdesign/core/Badge";
 import { JobBadge } from "../components/JobBadge.tsx";
 import { PurgeBanner } from "../components/PurgeBanner.tsx";
 import { formatClock, formatDate, formatDuration, plural } from "../format.ts";
-import { rememberSpace, rememberedSpace, sessionHref, sessionName, startSpace } from "../library.ts";
+import { rememberSpace, rememberedSpace, sessionHref, sessionName, latestSession, shortDay, startSpace } from "../library.ts";
 import { formatDay, takeMessage } from "../retention.ts";
 
 const RECENT = 6;
@@ -105,24 +106,15 @@ export function HomePage({
               {open.length > 1 ? (
                 <>
                   Enregistrer dans{" "}
-                  <span className="cl-start__space">
-                    <select
-                      aria-label="Espace de la séance"
-                      value={spaceId ?? ""}
-                      onChange={(e) => {
-                        const id = Number(e.target.value);
-                        setChosen(id);
-                        rememberSpace(id);
-                      }}
-                    >
-                      {open.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
-                  </span>
+                  <SpacePicker
+                    spaces={open}
+                    sessions={sorted}
+                    chosen={spaceId}
+                    onChoose={(id) => {
+                      setChosen(id);
+                      rememberSpace(id);
+                    }}
+                  />
                 </>
               ) : open.length === 1 ? (
                 `Enregistrer dans ${open[0].name}`
@@ -200,5 +192,85 @@ function SessionList({
         );
       })}
     </ul>
+  );
+}
+
+/** The space a recording goes to, chosen in place: its name, underlined, opens the list of
+ *  the open spaces (each with its latest session), the chosen one ticked. */
+function SpacePicker({
+  spaces,
+  sessions,
+  chosen,
+  onChoose,
+}: {
+  spaces: Space[];
+  sessions: Session[];
+  chosen: number | null;
+  onChoose: (id: number) => void;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  const list = useRef<HTMLUListElement>(null);
+  const name = spaces.find((s) => s.id === chosen)?.name ?? "";
+  // Opened: the focus on the chosen one; ↑ and ↓ go from one to the next.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = window.setTimeout(() => {
+      const items = [...(list.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+      (items.find((b) => b.hasAttribute("aria-current")) ?? items[0])?.focus();
+    });
+    return () => window.clearTimeout(timer);
+  }, [isOpen]);
+  const move = (e: KeyboardEvent<HTMLUListElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = [...(list.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = e.key === "ArrowDown" ? Math.min(items.length - 1, at + 1) : Math.max(0, at - 1);
+    items[next]?.focus();
+  };
+  return (
+    <Popover
+      isOpen={isOpen}
+      onOpenChange={setOpen}
+      hasAutoFocus={false}
+      label="Espace de la séance"
+      placement="below"
+      alignment="center"
+      width={280}
+      padding={1}
+      content={
+        <ul ref={list} className="cl-spacepick" aria-label="Espaces" onKeyDown={move}>
+          {spaces.map((s) => {
+            const latest = latestSession(s.id, sessions);
+            return (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  className="cl-spacepick__item"
+                  aria-current={s.id === chosen || undefined}
+                  onClick={() => {
+                    onChoose(s.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="cl-spacepick__what">
+                    <span>{s.name}</span>
+                    <Text type="supporting">
+                      {latest ? `Dernière séance ${shortDay(latest.recorded_at)}` : "Aucune séance encore"}
+                    </Text>
+                  </span>
+                  {s.id === chosen && <Check size={16} strokeWidth={1.75} aria-hidden />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      }
+    >
+      <button type="button" className="cl-start__space" aria-label={`Espace : ${name}. Changer`}>
+        {name}
+        <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+      </button>
+    </Popover>
   );
 }

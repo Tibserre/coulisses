@@ -204,29 +204,84 @@ body {
   font-weight: var(--font-weight-medium);
 }
 
-/* The space, chosen in place: its name, underlined with dots, and a chevron. */
+/* The space, chosen in place: its name, underlined with dashes, and a chevron. */
 .cl-start__space {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border-bottom: 1px dashed var(--color-border-emphasized);
-  cursor: pointer;
-}
-
-.cl-start__space select {
-  appearance: none;
+  padding: 0;
   border: 0;
+  border-bottom: 1px dashed var(--color-border-emphasized);
   background: transparent;
   color: inherit;
   font: inherit;
-  padding: 0;
   cursor: pointer;
-  field-sizing: content;
+  transition:
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.cl-start__space:hover {
+.cl-start__space:hover,
+.cl-start__space[aria-expanded="true"] {
   color: var(--color-accent);
+}
+
+.cl-start__space svg {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-start__space[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+/* Its list: the spaces as rows, the chosen one ticked. */
+.cl-spacepick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.cl-spacepick__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  width: 100%;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-spacepick__item:hover,
+.cl-spacepick__item:focus-visible {
+  background: var(--color-background-muted);
+}
+
+.cl-spacepick__item:focus-visible {
+  outline: 1px solid var(--color-border-emphasized);
+  outline-offset: -1px;
+}
+
+.cl-spacepick__item[aria-current] {
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-spacepick__item svg {
+  color: var(--color-accent);
+  flex: none;
+}
+
+.cl-spacepick__what {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* The home's periods: titles of sections, in the size of a section. */
