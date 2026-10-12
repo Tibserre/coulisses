@@ -255,6 +255,9 @@ export interface MixFacts {
   /** The computer's sound held nothing at all (the permission, most likely). */
   system_silent: boolean;
   made_at: string;
+  /** The mix heard on the session's page (the microphone turned down while nobody speaks
+   *  into it); null while it is being made, for a mix made before it existed. */
+  listening_mix: { gain: number; sha256: string } | null;
 }
 
 export interface AudioSource {

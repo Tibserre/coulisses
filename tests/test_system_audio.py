@@ -138,7 +138,8 @@ def test_the_computers_sound_is_its_own_file_on_the_same_clock(
     assert facts["gain"] == 1.0
     assert set(facts["made_from"]) == {"ref", "system"}
     np.testing.assert_allclose(mix, ref + system, atol=2 / 2**23)
-    assert mixing.listening_path(data, session_id) == folder / mixing.MIX_FILE
+    # On the page: the listening mix (ADR 0037); the engine keeps the plain sum above.
+    assert mixing.listening_path(data, session_id) == folder / mixing.LISTENING_FILE
 
 
 def test_the_computers_sound_never_cries_wolf_about_its_stream(
@@ -407,8 +408,21 @@ def test_the_engine_hears_the_mix_and_the_job_keeps_what_it_was(data: DataDir) -
     assert heard == {str(data.sources_dir(session_id) / mixing.MIX_FILE)}
 
     # Once the audio is purged, what the mix was made of is still said, from the job.
+    folder = data.sources_dir(session_id)
+    assert (folder / mixing.LISTENING_FILE).is_file()
     retention.remove_audio(data, session_id, "audio_deletion")
-    assert not (data.sources_dir(session_id) / mixing.MIX_FACTS).exists()
+    assert not (folder / mixing.MIX_FACTS).exists()
+    assert not (folder / mixing.LISTENING_FILE).exists()  # the listening mix goes too
+    conn = connect(data)
+    logged = conn.execute(
+        "SELECT detail FROM deletion_log WHERE session_id = ? ORDER BY id DESC", (session_id,)
+    ).fetchone()["detail"]
+    conn.close()
+    assert mixing.LISTENING_FILE in logged and mixing.MIX_FILE in logged
+    # Nothing is written back after the removal, whatever asks for the mix.
+    with pytest.raises(mixing.MixError, match="supprimé"):
+        mixing.processing_input(data, session_id)
+    assert not (folder / mixing.LISTENING_FILE).exists()
     client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
     kept = client.get(f"/api/seances/{session_id}").json()["mix"]
     assert kept["sha256"] == facts.sha256 and kept["gain"] == facts.gain
@@ -446,7 +460,7 @@ def test_the_service_records_online_and_plays_the_mix(
     assert detail["mix"]["system_silent"] is False
     played = client.get(f"/api/seances/{session_id}/audio")
     assert played.status_code == 200
-    assert played.content == (data.sources_dir(session_id) / mixing.MIX_FILE).read_bytes()
+    assert played.content == (data.sources_dir(session_id) / mixing.LISTENING_FILE).read_bytes()
 
 
 def test_an_interrupted_computers_sound_is_repaired_and_said(

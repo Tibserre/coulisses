@@ -18,6 +18,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). Une seule est traitée en V1 ; chaque micro ajouté en ajoute une (`mic2`, `mic3`…, ADR 0031, 0033), le son de l'ordinateur aussi (`system`, ADR 0032). |
 | Son de l'ordinateur | `system_audio` | Tout ce que le Mac joue pendant une réunion en ligne ou hybride, enregistré avec le micro, sur son horloge (source `system`, ADR 0032). |
 | Mix | `mix` | La piste que le moteur traite quand une séance a le son de l'ordinateur : le micro plus ce son, baissés d'un seul gain (`sources/mix.wav`). Un audio dérivé, refait depuis les sources. |
+| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, ADR 0037). Le moteur ne l'entend pas. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Micro principal | `reference_source` (captée) | Le micro choisi en premier à l'enregistrement : la source de référence, celle qui est traitée (ADR 0033). |
 | Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, par « Ajouter un micro » ; gardé, pas encore traité (ADR 0031, 0033). |

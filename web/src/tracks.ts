@@ -35,7 +35,9 @@ export function extraTracks(
     } else {
       parts.push("son de l'ordinateur");
       titles.push(
-        "Le micro et le son de l'ordinateur ont été enregistrés ensemble ; ils sont réunis pour le traitement et l'écoute.",
+        mix && !mix.listening_mix
+          ? "Le micro et le son de l'ordinateur ont été enregistrés ensemble et réunis. L'écoute où le micro est baissé quand personne n'y parle est en préparation : pour l'instant, on entend les deux tels quels."
+          : "Le micro et le son de l'ordinateur ont été enregistrés ensemble et réunis. À l'écoute, le micro est baissé quand personne n'y parle (le clavier s'entend moins) ; le traitement entend les deux tels quels.",
       );
     }
   }
