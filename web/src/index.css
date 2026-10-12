@@ -3532,6 +3532,108 @@ button.cl-tree__more:hover {
   line-height: 1.4;
 }
 
+/* The writings (title, chapters, summaries), each with its model, chosen on its right. */
+.cl-writings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-writings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+}
+
+.cl-writings__row + .cl-writings__row {
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-writings__what {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cl-writings__description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-writings__uses {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* A task's model: its name in a quiet box that opens the list. */
+.cl-modelpick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  max-width: 22rem;
+  height: 32px;
+  padding: 0 var(--spacing-2) 0 var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-modelpick:hover:not(:disabled),
+.cl-modelpick[aria-expanded="true"] {
+  border-color: var(--color-border-emphasized);
+}
+
+.cl-modelpick:disabled {
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.cl-modelpick svg {
+  flex: none;
+  color: var(--color-text-secondary);
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-modelpick[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.cl-modelpick__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-modelpick__missing {
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.cl-modelpick__option {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-modelpick__about {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+}
+
 /* The engine's models, one row each: what it is for, its state, its action. */
 .cl-models {
   list-style: none;

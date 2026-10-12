@@ -33,6 +33,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Relance | `rerun` | Refaire une étape (la transcription ou la séparation des voix) depuis la version affichée, pour en faire une nouvelle. |
 | Statut d'exécution | `run_status` | `queued`, `running`, `succeeded`, `failed`, `stale` (périmée : l'exécution affichée d'une étape qu'une relance refait ; état calculé, le statut enregistré d'une exécution finie ne change jamais). |
 | Tâche | `job` | Travail mis en file pour une séance (une chaîne à lancer, une étape à relancer, une génération). Produit une ou plusieurs exécutions. La file survit à un redémarrage. |
+| Rédaction | `writing` | Ce qu'un modèle de langage écrit pour une séance : son titre, ses chapitres, ses résumés. Chacune a son modèle, choisi dans les Réglages (ADR 0039). Pas une tâche (`job`) : une rédaction demandée devient une tâche en file. |
 | Capacité | `capability` | Ce qu'un moteur déclare savoir faire (ex. horodatage mesuré au mot, nombre minimal de locuteurs, glossaire). |
 | Moteur | `engine` | Implémentation interchangeable d'une étape (ex. un modèle de transcription donné). |
 | Référence de modèle | `model_ref` | Dépôt et révision épinglée d'un modèle, choisis par un profil, jamais par un moteur. |

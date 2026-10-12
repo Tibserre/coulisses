@@ -108,7 +108,7 @@ export function ModelsSection() {
 
   return (
     <section className="cl-settings__section">
-      <Heading level={3}>Modèles</Heading>
+      <Heading level={3}>Modèles de transcription</Heading>
       {unreadable && (
         <Banner
           status="error"

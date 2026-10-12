@@ -214,11 +214,11 @@ class Processor:
         return result
 
     def _queue_generations(self, conn: sqlite3.Connection, session_id: str) -> None:
-        """After a successful chain: the chapters, with the default model. The title and the
+        """After a successful chain: the chapters, with their model (ADR 0039). The title and the
         summaries are made on demand only (ADR 0025, 0026)."""
-        default = settings.default_model(conn)
+        model = settings.writing_model(conn, "chapitres")
         with conn:
-            jobs.enqueue_generation(conn, session_id, action_ref=PHASES_REF, model=default)
+            jobs.enqueue_generation(conn, session_id, action_ref=PHASES_REF, model=model)
         self._wake.set()
 
     def _run_generation_job(self, job: jobs.Job, params: jobs.GenerationParams) -> ChainJobResult:

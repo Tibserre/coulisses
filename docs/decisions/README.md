@@ -34,5 +34,6 @@ Nouvelle fiche : skill `/adr`.
 | [0036](0036-page-modeles.md) | La section « Modèles » des Réglages, par l'API de modèles du moteur (v1.5.0, puis v1.6.0 pour les environnements) : état, téléchargement confirmé et suivi, suppression confirmée, `stop_downloads` à l'arrêt | Acceptée |
 | [0037](0037-mix-d-ecoute.md) | Un mix d'écoute qui baisse le micro quand personne n'y parle (le clavier, la pièce) ; le moteur garde la somme simple | Acceptée |
 | [0038](0038-echelle-typographique.md) | Une échelle typographique pour une interface : rien sous 12 px, texte d'appoint 13 px, titres 18 à 34 px (remplace le rapport 1,333 de 0017) | Acceptée |
+| [0039](0039-un-modele-par-redaction.md) | Un modèle de langage par rédaction (titre, chapitres, résumés), choisi dans Réglages, onglet « Rédaction » ; le choix fait dans l'onglet Résumé ne change que celui des résumés (précise 0022) | Proposée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.

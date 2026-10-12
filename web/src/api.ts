@@ -651,10 +651,16 @@ export interface InstalledModel {
   parameter_size: string | null;
 }
 
+/** What a language model writes: a title, chapters, summaries (ADR 0039). */
+export type Writing = "titre" | "chapitres" | "resume";
+
 export interface ModelsInfo {
   reachable: boolean;
   error: string | null;
+  /** The summaries' model, offered first when a summary is asked. */
   default: string;
+  /** The model of each writing. */
+  writings: Record<Writing, string>;
   models: InstalledModel[];
 }
 
@@ -866,7 +872,8 @@ export const api = {
   setOfferedAction: (spaceId: number, ref: string | null) =>
     send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/resume-propose`, { action_ref: ref }),
   models: () => getJson<ModelsInfo>("/api/modeles"),
-  setModel: (model: string) => send<ModelsInfo>("PUT", "/api/reglages/modele", { model }),
+  setWritingModel: (writing: Writing, model: string) =>
+    send<ModelsInfo>("PUT", `/api/reglages/modeles/${writing}`, { model }),
   actions: () => getJson<ActionInfo[]>("/api/actions"),
   createAction: (draft: ActionDraft) => send<ActionInfo>("POST", "/api/actions", draft),
   updateAction: (ref: string, draft: ActionDraft) =>

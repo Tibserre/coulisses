@@ -15,6 +15,7 @@ import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { DayStepper } from "../components/DayStepper.tsx";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
+import { WritingModels } from "../components/WritingModels.tsx";
 import { setDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
@@ -23,10 +24,13 @@ import { useDevMode } from "../devMode.ts";
 /** Settings (spec §7.12): the audio's keeping (§7.10: how long, the notice, what is about to
  *  be purged, the log of every purge and deletion, the backups of the base), the export
  *  folder, Coulisses itself (its version, its folders shown in the Finder), developer mode. */
-type Part = "general" | "modeles" | "donnees" | "avance";
+type Part = "general" | "modeles" | "redaction" | "donnees" | "avance";
 const PARTS: [Part, string][] = [
   ["general", "Général"],
-  ["modeles", "Modèles"],
+  // The engine's models (transcription, voices); the language models (titles, chapters,
+  // summaries).
+  ["modeles", "Transcription"],
+  ["redaction", "Rédaction"],
   ["donnees", "Données"],
   ["avance", "Avancé"],
 ];
@@ -242,6 +246,8 @@ export function SettingsPage({
         )}
 
         {part === "modeles" && <ModelsSection />}
+
+        {part === "redaction" && <WritingModels />}
 
         {part === "donnees" && (
           <>

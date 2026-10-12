@@ -263,17 +263,21 @@ def test_the_user_title_is_never_overwritten(
     assert client.patch(f"/api/seances/{session_id}", json={"title": " "}).status_code == 422
 
 
-def test_the_chosen_model_becomes_the_default(
+def test_the_model_chosen_for_a_summary_becomes_the_summaries_one(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    assert client.get("/api/modeles").json()["default"] == assembly.settings().default_model
+    shipped = assembly.settings().default_model
+    assert client.get("/api/modeles").json()["default"] == shipped
     client.post(
         f"/api/seances/{session_id}/resumes",
         json={"action_ref": "resume-impro", "model": "modele-essai"},
     )
-    assert client.get("/api/modeles").json()["default"] == "modele-essai"
+    info = client.get("/api/modeles").json()
+    assert info["default"] == "modele-essai"
+    # Only the summaries': the title and the chapters keep theirs (ADR 0039).
+    assert info["writings"] == {"titre": shipped, "chapitres": shipped, "resume": "modele-essai"}
     assert (
         client.post(
             f"/api/seances/{session_id}/resumes", json={"action_ref": "inconnue"}
@@ -461,3 +465,47 @@ def test_a_title_followed_by_more_is_kept_even_when_the_rest_is_cut(
     )
     fake_model.answer = "Le marché et la f"  # the title itself cut: refused (P8)
     assert generate(data, session_id, "titre", "modele-essai", fake_model).status == "failed"
+
+
+def test_each_writing_is_made_with_its_own_model(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    """Title, chapters and summaries each have their model, chosen in the Réglages: what is
+    asked afterwards is written with it, by hand or after processing."""
+    for writing, model in (("titre", "petit"), ("chapitres", "moyen"), ("resume", "grand")):
+        assert (
+            client.put(f"/api/reglages/modeles/{writing}", json={"model": model}).status_code == 200
+        )
+    assert client.get("/api/modeles").json()["writings"] == {
+        "titre": "petit",
+        "chapitres": "moyen",
+        "resume": "grand",
+    }
+    assert client.put("/api/reglages/modeles/autre", json={"model": "x"}).status_code == 422
+    assert client.put("/api/reglages/modeles/titre", json={"model": ""}).status_code == 422
+
+    session_id = imported(client, recording)
+    run_all(data, fake_model)  # the chapters, after processing
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "titre"})
+    client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "resume-impro"})
+    run_all(data, fake_model)
+    client.post(f"/api/seances/{session_id}/chapitres")  # detected again
+    run_all(data, fake_model)
+    assert [model for model, _, _ in fake_model.calls] == ["moyen", "petit", "grand", "moyen"]
+
+
+def test_the_model_chosen_before_stays_for_every_writing(client: TestClient, data: DataDir) -> None:
+    """A model chosen before there was one per writing is kept for the three (P8)."""
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO app_setting (key, value) VALUES ('modele', ?)", (json.dumps("ancien"),)
+            )
+    finally:
+        conn.close()
+    assert client.get("/api/modeles").json()["writings"] == {
+        "titre": "ancien",
+        "chapitres": "ancien",
+        "resume": "ancien",
+    }
