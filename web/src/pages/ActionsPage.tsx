@@ -55,7 +55,7 @@ export function ActionsPage({ selectedRef }: { selectedRef: string | null }) {
     <div className="cl-page">
       <main className="cl-spaces">
         <aside className="cl-spaces__list">
-          <Heading level={2}>Actions</Heading>
+          <Heading level={2}>Actions de résumé</Heading>
           <Text type="supporting">Fournies avec Coulisses</Text>
           <ul>{provided.map(item)}</ul>
           {own.length > 0 && (

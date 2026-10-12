@@ -49,6 +49,36 @@ export function sessionName(s: Pick<Session, "title" | "recorded_at">, now: Date
   return `Séance du ${formatDay(s.recorded_at, now)}, ${Number(h)} h ${m}`;
 }
 
+const SHORT_DAY = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+/** A day as the side column says it: « 30 sept. ». */
+export function shortDay(iso: string): string {
+  return SHORT_DAY.format(new Date(iso));
+}
+
+/** The latest sessions, by calendar period: this week (since Monday), this month,
+ *  earlier. Empty periods are left out. */
+export function byPeriod<T extends { recorded_at: string }>(list: T[], now: Date = new Date()): [string, T[]][] {
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  const groups: [string, T[]][] = [
+    ["Cette semaine", []],
+    ["Ce mois-ci", []],
+    ["Plus tôt", []],
+  ];
+  for (const s of list) {
+    const when = new Date(s.recorded_at);
+    groups[when >= monday ? 0 : when >= first ? 1 : 2][1].push(s);
+  }
+  return groups.filter(([, items]) => items.length > 0);
+}
+
+/** What a group of the side column shows at first: the `limit` latest, and any other one
+ *  that must stay in sight (open, recording, processing, failed). */
+export function visibleSessions<T>(list: T[], limit: number, pinned: (s: T) => boolean): T[] {
+  return list.filter((s, i) => i < limit || pinned(s));
+}
+
 export type SessionDot = "recording" | "processing" | "failed" | null;
 
 /** The one mark a session carries in the side column, when something is going on. */

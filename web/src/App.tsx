@@ -41,6 +41,20 @@ export function App() {
 }
 
 const SIDEBAR_KEY = "coulisses.colonne";
+/** Under this width, the side column is folded away by default, and comes over the page
+ *  when asked (⌘\), without pushing it. */
+const NARROW = "(max-width: 1100px)";
+
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const query = window.matchMedia(NARROW);
+    const onChange = () => setNarrow(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
+}
 
 function readSidebar(): boolean {
   try {
@@ -60,7 +74,30 @@ function Shell({ route }: { route: Route }) {
   const [recording, setRecording] = useState<RecordingState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sideError, setSideError] = useState<string | null>(null);
-  const [sidebar, setSidebar] = useState(readSidebar);
+  const [wide, setWide] = useState(readSidebar);
+  const narrow = useNarrow();
+  const [overlay, setOverlay] = useState(false);
+  const sidebar = narrow ? overlay : wide;
+  // On a narrow window, the column over the page closes once something is opened, on
+  // Escape, or on a click beside it.
+  useEffect(() => setOverlay(false), [route, narrow]);
+  useEffect(() => {
+    if (!(narrow && overlay)) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOverlay(false);
+    };
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest(".cl-sidebar a")) setOverlay(false); // even the page already open
+      else if (!target?.closest(".cl-sidebar, .cl-topbar")) setOverlay(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerup", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerup", onPointer);
+    };
+  }, [narrow, overlay]);
   const [asking, setAsking] = useState<{ spaceId: number | null; projectId: number | null } | null>(null);
   const [newSpace, setNewSpace] = useState(false);
 
@@ -95,7 +132,11 @@ function Shell({ route }: { route: Route }) {
   }, [refresh]);
 
   const toggleSidebar = useCallback(() => {
-    setSidebar((open) => {
+    if (narrow) {
+      setOverlay((open) => !open);
+      return;
+    }
+    setWide((open) => {
       try {
         window.localStorage.setItem(SIDEBAR_KEY, open ? "fermee" : "ouverte");
       } catch {
@@ -103,7 +144,7 @@ function Shell({ route }: { route: Route }) {
       }
       return !open;
     });
-  }, []);
+  }, [narrow]);
 
   const openSession = route.page === "session" ? sessions?.find((s) => s.id === route.id) : undefined;
   const askNew = useCallback(
@@ -132,7 +173,11 @@ function Shell({ route }: { route: Route }) {
     route.page === "session" ? `session:${route.id}` : route.page === "space" ? `space:${route.id}` : route.page;
 
   return (
-    <div className="cl-shell" data-sidebar={sidebar ? "ouverte" : "fermee"}>
+    <div
+      className="cl-shell"
+      data-sidebar={sidebar ? "ouverte" : "fermee"}
+      data-etroit={narrow || undefined}
+    >
       <header className="cl-topbar">
         <IconButton
           label={sidebar ? "Masquer la colonne (⌘\\)" : "Afficher la colonne (⌘\\)"}

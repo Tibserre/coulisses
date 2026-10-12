@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Folder,
+  House,
   ListChecks,
   Plus,
   Settings,
@@ -14,6 +15,8 @@ import {
   sessionDot,
   sessionHref,
   sessionName,
+  shortDay,
+  visibleSessions,
   type ProjectNode,
   type SpaceNode,
 } from "../library.ts";
@@ -96,10 +99,10 @@ export function Sidebar({
     <nav className="cl-sidebar" aria-label="Espaces et séances">
       <a
         className="cl-sidebar__link"
-        href="#/actions"
-        aria-current={current.page === "actions" ? "page" : undefined}
+        href="#/"
+        aria-current={current.page === "home" ? "page" : undefined}
       >
-        <ListChecks size={16} strokeWidth={1.75} aria-hidden /> Actions
+        <House size={16} strokeWidth={1.75} aria-hidden /> Accueil
       </a>
       <div className="cl-sidebar__heading">
         <span>Espaces</span>
@@ -220,15 +223,12 @@ export function Sidebar({
                       currentId={current.sessionId}
                     />
                   ))}
-                  {node.loose.map((s) => (
-                    <SessionRow
-                      key={s.id}
-                      session={s}
-                      level={1}
-                      recordingId={recordingId}
-                      currentId={current.sessionId}
-                    />
-                  ))}
+                  <SessionRows
+                    sessions={node.loose}
+                    level={1}
+                    recordingId={recordingId}
+                    currentId={current.sessionId}
+                  />
                   {node.projects.length === 0 &&
                     node.loose.length === 0 &&
                     creatingIn !== node.space.id && (
@@ -316,13 +316,22 @@ export function Sidebar({
           </ul>
         </details>
       )}
-      <a
-        className="cl-sidebar__link cl-sidebar__bottom"
-        href="#/reglages"
-        aria-current={current.page === "settings" ? "page" : undefined}
-      >
-        <Settings size={16} strokeWidth={1.75} aria-hidden /> Réglages
-      </a>
+      <div className="cl-sidebar__bottom">
+        <a
+          className="cl-sidebar__link"
+          href="#/actions"
+          aria-current={current.page === "actions" ? "page" : undefined}
+        >
+          <ListChecks size={16} strokeWidth={1.75} aria-hidden /> Actions de résumé
+        </a>
+        <a
+          className="cl-sidebar__link"
+          href="#/reglages"
+          aria-current={current.page === "settings" ? "page" : undefined}
+        >
+          <Settings size={16} strokeWidth={1.75} aria-hidden /> Réglages
+        </a>
+      </div>
     </nav>
   );
 }
@@ -455,18 +464,57 @@ function ProjectRow({
       )}
       {open && node.sessions.length > 0 && (
         <ul>
-          {node.sessions.map((s) => (
-            <SessionRow
-              key={s.id}
-              session={s}
-              level={2}
-              recordingId={recordingId}
-              currentId={currentId}
-            />
-          ))}
+          <SessionRows
+            sessions={node.sessions}
+            level={2}
+            recordingId={recordingId}
+            currentId={currentId}
+          />
         </ul>
       )}
     </li>
+  );
+}
+
+/** At first, the latest sessions of a group; the others on demand (none hidden). The one
+ *  open or recording is always among those shown. */
+const SHOWN_SESSIONS = 5;
+
+function SessionRows({
+  sessions,
+  level,
+  recordingId,
+  currentId,
+}: {
+  sessions: Session[];
+  level: number;
+  recordingId: string | null;
+  currentId: string | null;
+}) {
+  const [all, setAll] = useState(false);
+  const pinned = (s: Session) =>
+    s.id === currentId || sessionDot(s, recordingId, s.id) !== null;
+  const shown = all ? sessions : visibleSessions(sessions, SHOWN_SESSIONS, pinned);
+  const more = sessions.length - shown.length;
+  return (
+    <>
+      {shown.map((s) => (
+        <SessionRow key={s.id} session={s} level={level} recordingId={recordingId} currentId={currentId} />
+      ))}
+      {(more > 0 || all) && sessions.length > SHOWN_SESSIONS && (
+        <li>
+          <button
+            type="button"
+            className="cl-tree__row cl-tree__more"
+            data-level={level}
+            aria-expanded={all}
+            onClick={() => setAll(!all)}
+          >
+            {all ? "Moins" : `Voir ${more === 1 ? "l'autre séance" : `les ${more} autres`}`}
+          </button>
+        </li>
+      )}
+    </>
   );
 }
 
@@ -509,6 +557,8 @@ function SessionRow({
         }}
       >
         <span className="cl-tree__label">{sessionName(session)}</span>
+        {/* A title says what, not when: its day beside it (an untitled one has it). */}
+        {session.title && <span className="cl-tree__date">{shortDay(session.recorded_at)}</span>}
         {dot && (
           <span
             className="cl-tree__dot"

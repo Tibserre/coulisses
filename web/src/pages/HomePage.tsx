@@ -9,13 +9,14 @@ import { Badge } from "@astryxdesign/core/Badge";
 import { JobBadge } from "../components/JobBadge.tsx";
 import { PurgeBanner } from "../components/PurgeBanner.tsx";
 import { formatClock, formatDate, formatDuration, plural } from "../format.ts";
-import { sessionHref, sessionName } from "../library.ts";
+import { byPeriod, sessionHref, sessionName } from "../library.ts";
 import { formatDay, takeMessage } from "../retention.ts";
 
 const RECENT = 12;
 
 /** What the main pane shows with no session open: what needs attention (the service, an
- *  interrupted recording, a purge coming), then the latest sessions of every space. */
+ *  interrupted recording, a purge coming), the sessions being recorded or processed (or
+ *  whose processing failed), then the latest of every space, by period. */
 export function HomePage({
   sessions,
   projects,
@@ -33,9 +34,12 @@ export function HomePage({
 }) {
   // Left by a session page that just deleted its session (what stayed on the disk).
   const [message, setMessage] = useState<string | null>(() => takeMessage());
-  const recent = [...(sessions ?? [])]
-    .sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))
-    .slice(0, RECENT);
+  const sorted = [...(sessions ?? [])].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at));
+  // What is going on first; then the latest, by period.
+  const busy = (s: Session) =>
+    s.id === recording?.session_id || s.job_state === "queued" || s.job_state === "running" || s.job_state === "failed";
+  const ongoing = sorted.filter(busy);
+  const groups = byPeriod(sorted.filter((s) => !busy(s)).slice(0, RECENT));
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
   return (
     <main className="cl-home">
@@ -70,45 +74,78 @@ export function HomePage({
         />
       )}
       <PurgeBanner />
-      <section className="cl-home__recent">
-        <Heading level={2}>Dernières séances</Heading>
-        {sessions !== null && sessions.length === 0 ? (
+      {sessions !== null && sessions.length === 0 ? (
+        <section className="cl-home__recent">
+          <Heading level={2}>Bienvenue</Heading>
           <div className="cl-empty">
             <FileAudio size={40} strokeWidth={1.25} aria-hidden />
             <Text color="secondary">Enregistrez une séance avec le micro du Mac, ou importez un fichier.</Text>
             <Button variant="primary" label="Nouvelle séance" icon={<Plus size={16} strokeWidth={1.75} />} onClick={onNewSession} />
           </div>
-        ) : (
-          <ul className="cl-sessions">
-            {recent.map((s) => {
-              const present = s.attendee_ids.length + (s.unnamed_attendees ?? 0);
-              const where = [s.space_name, s.project_id != null ? projectName.get(s.project_id) : null].filter(Boolean).join(" · ");
-              return (
-                <li key={s.id}>
-                  <a className="cl-sessions__item" href={sessionHref(s.id)}>
-                    <span>
-                      <span className="cl-sessions__title">{sessionName(s)}</span>
-                      <Text type="supporting"> · {where}</Text>
-                    </span>
-                    <Text color="secondary">
-                      {formatDate(s.recorded_at)} · {formatDuration(s.duration_s)}
-                      {present ? ` · ${plural(present, "présent", "présents")}` : ""}
-                    </Text>
-                    <span className="cl-sessions__badges">
-                      {s.audio.state === "announced" && s.audio.purge_on && (
-                        <Badge variant="warning" label={`Suppression de l'audio le ${formatDay(s.audio.purge_on)}`} />
-                      )}
-                      {s.audio.state === "removed" && <Badge variant="neutral" label="Audio supprimé" />}
-                      {s.audio.state === "kept" && <Badge variant="neutral" label="Audio gardé" />}
-                      <JobBadge state={s.job_state} />
-                    </span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+        </section>
+      ) : (
+        <>
+          {ongoing.length > 0 && (
+            <section className="cl-home__recent">
+              <Heading level={2}>En cours</Heading>
+              <SessionList sessions={ongoing} projectName={projectName} recordingId={recording?.session_id ?? null} />
+            </section>
+          )}
+          {groups.map(([label, list]) => (
+            <section key={label} className="cl-home__recent">
+              <Heading level={2}>{label}</Heading>
+              <SessionList sessions={list} projectName={projectName} recordingId={recording?.session_id ?? null} />
+            </section>
+          ))}
+        </>
+      )}
     </main>
+  );
+}
+
+function SessionList({
+  sessions,
+  projectName,
+  recordingId,
+}: {
+  sessions: Session[];
+  projectName: Map<number, string>;
+  recordingId: string | null;
+}) {
+  return (
+    <ul className="cl-sessions">
+      {sessions.map((s) => {
+        const present = s.attendee_ids.length + (s.unnamed_attendees ?? 0);
+        const where = [s.space_name, s.project_id != null ? projectName.get(s.project_id) : null]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <li key={s.id}>
+            <a className="cl-sessions__item" href={s.id === recordingId ? "#/enregistrement" : sessionHref(s.id)}>
+              <span className="cl-sessions__what">
+                <span className="cl-sessions__title">{sessionName(s)}</span>
+                <Text type="supporting">
+                  {where} · {formatDuration(s.duration_s)}
+                  {present ? ` · ${plural(present, "présent", "présents")}` : ""}
+                </Text>
+              </span>
+              <span className="cl-sessions__badges">
+                {s.id === recordingId && <Badge variant="info" label="Enregistrement en cours" />}
+                {s.audio.state === "announced" && s.audio.purge_on && (
+                  <Badge variant="warning" label={`Suppression de l'audio le ${formatDay(s.audio.purge_on)}`} />
+                )}
+                {s.audio.state === "removed" && <Badge variant="neutral" label="Audio supprimé" />}
+                {s.audio.state === "kept" && <Badge variant="neutral" label="Audio gardé" />}
+                {/* « Prête » goes without saying: only what is not. */}
+                {s.id !== recordingId && s.job_state !== "done" && <JobBadge state={s.job_state} />}
+              </span>
+              <Text type="supporting" className="cl-sessions__when">
+                {formatDate(s.recorded_at)}
+              </Text>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

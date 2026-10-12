@@ -60,3 +60,25 @@ test("the tree groups sessions by space and project, the most recent first", () 
   assert.deepEqual(troupe.loose.map((s) => s.id), ["c"]);
   assert.deepEqual(troupe.archived[0].sessions.map((s) => s.id), ["d"]);
 });
+
+test("the latest sessions go by calendar period, since Monday and since the 1st", async () => {
+  const { byPeriod } = await import("./library.ts");
+  const now = new Date(2026, 9, 14, 12); // Wednesday 14 October 2026
+  const at = (y: number, m: number, d: number) => ({ recorded_at: new Date(y, m, d, 10).toISOString() });
+  const groups = byPeriod([at(2026, 9, 12), at(2026, 9, 11), at(2026, 9, 1), at(2026, 8, 30)], now);
+  assert.deepEqual(
+    groups.map(([label, items]) => [label, items.length]),
+    [
+      ["Cette semaine", 1], // Monday 12
+      ["Ce mois-ci", 2], // Sunday 11, the 1st
+      ["Plus tôt", 1], // 30 September: within 31 days, but last month
+    ],
+  );
+});
+
+test("a group shows its latest sessions, and keeps in sight those that must be", async () => {
+  const { visibleSessions } = await import("./library.ts");
+  const ids = ["a", "b", "c", "d", "e", "f", "g"];
+  assert.deepEqual(visibleSessions(ids, 5, () => false), ["a", "b", "c", "d", "e"]);
+  assert.deepEqual(visibleSessions(ids, 5, (s) => s === "g"), ["a", "b", "c", "d", "e", "g"]);
+});
