@@ -10,10 +10,10 @@ import { AudioLines, PanelLeft, Plus } from "lucide-react";
 import { MotionConfig } from "motion/react";
 import { api, type AppInfo, type Project, type RecordingState, type Session, type Space } from "./api.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
-import { NewSessionDialog } from "./components/NewSessionDialog.tsx";
+import { NewSessionDialog, type Way } from "./components/NewSessionDialog.tsx";
 import { SearchBox } from "./components/SearchBox.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { buildTree, onLibraryChanged, parseRoute, sessionHref, type Route } from "./library.ts";
+import { buildTree, onLibraryChanged, parseRoute, rememberedSpace, sessionHref, startSpace, type Route } from "./library.ts";
 import { ActionsPage } from "./pages/ActionsPage.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { RecordingPage } from "./pages/RecordingPage.tsx";
@@ -98,7 +98,7 @@ function Shell({ route }: { route: Route }) {
       window.removeEventListener("pointerup", onPointer);
     };
   }, [narrow, overlay]);
-  const [asking, setAsking] = useState<{ spaceId: number | null; projectId: number | null } | null>(null);
+  const [asking, setAsking] = useState<{ spaceId: number | null; projectId: number | null; way?: Way } | null>(null);
   const [newSpace, setNewSpace] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -147,9 +147,22 @@ function Shell({ route }: { route: Route }) {
   }, [narrow]);
 
   const openSession = route.page === "session" ? sessions?.find((s) => s.id === route.id) : undefined;
+  // Where the open session is; elsewhere, where the home page's button would record.
   const askNew = useCallback(
-    () => setAsking({ spaceId: openSession?.space_id ?? null, projectId: openSession?.project_id ?? null }),
-    [openSession],
+    () =>
+      setAsking(
+        openSession
+          ? { spaceId: openSession.space_id, projectId: openSession.project_id }
+          : {
+              spaceId: startSpace(
+                spaces,
+                [...(sessions ?? [])].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at)),
+                rememberedSpace(),
+              ),
+              projectId: null,
+            },
+      ),
+    [openSession, spaces, sessions],
   );
 
   // ⌘N: a new session (where the open one is); ⌘\ : the side column.
@@ -235,11 +248,12 @@ function Shell({ route }: { route: Route }) {
             ) : (
               <HomePage
                 sessions={sessions}
+                spaces={spaces}
                 projects={projects}
                 info={info}
                 recording={recording}
                 error={error}
-                onNewSession={askNew}
+                onNewSession={(spaceId, way) => setAsking({ spaceId, projectId: null, way })}
               />
             )}
           </ErrorBoundary>

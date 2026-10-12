@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
-import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Text } from "@astryxdesign/core/Text";
 import {
   api,
@@ -13,6 +12,7 @@ import {
 } from "../api.ts";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
+import { DayStepper } from "../components/DayStepper.tsx";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
 import { setDevMode } from "../devMode.ts";
@@ -39,6 +39,9 @@ function partOf(asked: string | null): Part {
 /** Lists that only grow (the deletion log, the backups): the latest first, the rest on
  *  demand. */
 const SHOWN_ROWS = 5;
+/** The usual values the steppers go through: a week, two, a month, a season, a year… */
+const RETENTION_STEPS = [7, 14, 30, 60, 90, 120, 180, 270, 365, 730];
+const NOTICE_STEPS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 60];
 /** The service gives the latest 200 entries of the log (retention.journal). */
 const JOURNAL_LIMIT = 200;
 
@@ -130,47 +133,69 @@ export function SettingsPage({
             <section className="cl-settings__section">
               <Heading level={3}>Conservation de l'audio</Heading>
               <Text color="secondary">
-                L'audio d'une séance traitée est supprimé au bout de cette
-                durée, comptée depuis son entrée dans Coulisses, après un
-                préavis. Le texte, les noms et les résumés restent. Une séance
-                peut garder son audio (menu « … » de la séance).
+                L'audio d'une séance traitée est supprimé après ce délai, avec
+                un préavis. Le texte, les noms et les résumés restent ; une
+                séance peut garder son audio depuis son menu « … ».
               </Text>
-              <div className="cl-settings__fields">
-                <NumberInput
+              <div className="cl-settings__steppers">
+                <DayStepper
                   label="Garder l'audio"
-                  description="En jours."
+                  description="Depuis son entrée dans Coulisses."
                   value={shownDays}
-                  onChange={(v) =>
-                    setDays(Number.isFinite(v) ? Math.round(v) : null)
-                  }
+                  steps={RETENTION_STEPS}
+                  min={Math.max(1, shownNotice)}
+                  isDisabled={info === null}
+                  onChange={(v) => {
+                    setDays(v);
+                    setSaved(false);
+                  }}
                 />
-                <NumberInput
+                <DayStepper
                   label="Préavis"
-                  description="En jours, avant la suppression."
+                  description="Avant la suppression."
                   value={shownNotice}
-                  onChange={(v) =>
-                    setNotice(Number.isFinite(v) ? Math.round(v) : null)
-                  }
+                  steps={NOTICE_STEPS}
+                  max={shownDays}
+                  isDisabled={info === null}
+                  onChange={(v) => {
+                    setNotice(v);
+                    setSaved(false);
+                  }}
                 />
               </div>
-              <div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  label={saved && !changed ? "Enregistré" : "Enregistrer"}
-                  isDisabled={!changed}
-                  clickAction={() =>
-                    act(async () => {
-                      await api.setRetention({
-                        retention_days: shownDays,
-                        notice_days: shownNotice,
-                      });
-                      setDays(null);
-                      setNotice(null);
-                      setSaved(true);
-                    })
-                  }
-                />
+              {/* Said only once something changed; its place kept, so nothing moves. */}
+              <div className="cl-settings__save">
+                {changed ? (
+                  <>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      label="Enregistrer"
+                      clickAction={() =>
+                        act(async () => {
+                          await api.setRetention({
+                            retention_days: shownDays,
+                            notice_days: shownNotice,
+                          });
+                          setDays(null);
+                          setNotice(null);
+                          setSaved(true);
+                        })
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      label="Annuler"
+                      onClick={() => {
+                        setDays(null);
+                        setNotice(null);
+                      }}
+                    />
+                  </>
+                ) : (
+                  saved && <Text type="supporting">Enregistré.</Text>
+                )}
               </div>
             </section>
 

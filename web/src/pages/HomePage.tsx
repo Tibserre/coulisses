@@ -1,24 +1,26 @@
 import { useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
-import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
-import { FileAudio, Plus } from "lucide-react";
-import type { AppInfo, Project, RecordingState, Session } from "../api.ts";
+import { ChevronDown, Mic } from "lucide-react";
+import type { AppInfo, Project, RecordingState, Session, Space } from "../api.ts";
+import type { Way } from "../components/NewSessionDialog.tsx";
 import { Badge } from "@astryxdesign/core/Badge";
 import { JobBadge } from "../components/JobBadge.tsx";
 import { PurgeBanner } from "../components/PurgeBanner.tsx";
 import { formatClock, formatDate, formatDuration, plural } from "../format.ts";
-import { byPeriod, sessionHref, sessionName } from "../library.ts";
+import { rememberSpace, rememberedSpace, sessionHref, sessionName, startSpace } from "../library.ts";
 import { formatDay, takeMessage } from "../retention.ts";
 
-const RECENT = 12;
-
-/** What the main pane shows with no session open: what needs attention (the service, an
- *  interrupted recording, a purge coming), the sessions being recorded or processed (or
- *  whose processing failed), then the latest of every space, by period. */
+const RECENT = 6;
+/** What the main pane shows with no session open. First what one comes for: record a
+ *  session, in a space (the one chosen last, else the latest session's), or import a file.
+ *  Then what needs attention (the service, an interrupted recording, a purge coming), the
+ *  sessions being recorded or processed (or whose processing failed), and the latest few:
+ *  the rest is in the side column. */
 export function HomePage({
   sessions,
+  spaces,
   projects,
   info,
   recording,
@@ -26,21 +28,27 @@ export function HomePage({
   onNewSession,
 }: {
   sessions: Session[] | null;
+  spaces: Space[];
   projects: Project[];
   info: AppInfo | null;
   recording: RecordingState | null;
   error: string | null;
-  onNewSession: () => void;
+  onNewSession: (spaceId: number | null, way: Way) => void;
 }) {
   // Left by a session page that just deleted its session (what stayed on the disk).
   const [message, setMessage] = useState<string | null>(() => takeMessage());
   const sorted = [...(sessions ?? [])].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at));
-  // What is going on first; then the latest, by period.
+  // What is going on first; then the latest.
   const busy = (s: Session) =>
     s.id === recording?.session_id || s.job_state === "queued" || s.job_state === "running" || s.job_state === "failed";
   const ongoing = sorted.filter(busy);
-  const groups = byPeriod(sorted.filter((s) => !busy(s)).slice(0, RECENT));
+  const recent = sorted.filter((s) => !busy(s)).slice(0, RECENT);
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
+
+  const open = spaces.filter((s) => !s.archived);
+  const [chosen, setChosen] = useState<number | null>(rememberedSpace);
+  const spaceId = startSpace(spaces, sorted, chosen);
+
   return (
     <main className="cl-home">
       {error && <Banner status="error" title="Le service ne répond pas" description={error} />}
@@ -65,39 +73,84 @@ export function HomePage({
           </ul>
         </Banner>
       )}
-      {recording && (
-        <Banner
-          status="info"
-          title={recording.state === "paused" ? "Enregistrement en pause" : "Enregistrement en cours"}
-          description={`${formatClock(recording.elapsed_s)} enregistrées avec ${recording.device}.`}
-          endContent={<Button size="sm" label="Y revenir" onClick={() => (window.location.hash = "#/enregistrement")} />}
-        />
-      )}
       <PurgeBanner />
-      {sessions !== null && sessions.length === 0 ? (
+
+      <section className="cl-start" aria-label="Commencer une séance">
+        {recording ? (
+          <>
+            <a className="cl-start__button" data-live href="#/enregistrement" aria-label="Revenir à l'enregistrement">
+              <span className="cl-start__dot" aria-hidden />
+            </a>
+            <p className="cl-start__title">
+              {recording.state === "paused" ? "Enregistrement en pause" : "Enregistrement en cours"}
+            </p>
+            <Text type="supporting">
+              {formatClock(recording.elapsed_s)} avec {recording.device} ·{" "}
+              <a className="cl-linkbtn" href="#/enregistrement">
+                y revenir
+              </a>
+            </Text>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="cl-start__button"
+              aria-label="Enregistrer une séance"
+              onClick={() => onNewSession(spaceId, "enregistrer")}
+            >
+              <Mic size={28} strokeWidth={1.75} aria-hidden />
+            </button>
+            <p className="cl-start__title">
+              {open.length > 1 ? (
+                <>
+                  Enregistrer dans{" "}
+                  <span className="cl-start__space">
+                    <select
+                      aria-label="Espace de la séance"
+                      value={spaceId ?? ""}
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        setChosen(id);
+                        rememberSpace(id);
+                      }}
+                    >
+                      {open.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+                  </span>
+                </>
+              ) : open.length === 1 ? (
+                `Enregistrer dans ${open[0].name}`
+              ) : (
+                "Enregistrer une séance"
+              )}
+            </p>
+            <Text type="supporting">
+              ⌘N ·{" "}
+              <button type="button" className="cl-linkbtn" onClick={() => onNewSession(spaceId, "importer")}>
+                ou importer un fichier
+              </button>
+            </Text>
+          </>
+        )}
+      </section>
+
+      {ongoing.length > 0 && (
         <section className="cl-home__recent">
-          <Heading level={2}>Bienvenue</Heading>
-          <div className="cl-empty">
-            <FileAudio size={40} strokeWidth={1.25} aria-hidden />
-            <Text color="secondary">Enregistrez une séance avec le micro du Mac, ou importez un fichier.</Text>
-            <Button variant="primary" label="Nouvelle séance" icon={<Plus size={16} strokeWidth={1.75} />} onClick={onNewSession} />
-          </div>
+          <Heading level={2}>En cours</Heading>
+          <SessionList sessions={ongoing} projectName={projectName} recordingId={recording?.session_id ?? null} />
         </section>
-      ) : (
-        <>
-          {ongoing.length > 0 && (
-            <section className="cl-home__recent">
-              <Heading level={2}>En cours</Heading>
-              <SessionList sessions={ongoing} projectName={projectName} recordingId={recording?.session_id ?? null} />
-            </section>
-          )}
-          {groups.map(([label, list]) => (
-            <section key={label} className="cl-home__recent">
-              <Heading level={2}>{label}</Heading>
-              <SessionList sessions={list} projectName={projectName} recordingId={recording?.session_id ?? null} />
-            </section>
-          ))}
-        </>
+      )}
+      {recent.length > 0 && (
+        <section className="cl-home__recent">
+          <Heading level={2}>Récemment</Heading>
+          <SessionList sessions={recent} projectName={projectName} recordingId={recording?.session_id ?? null} />
+        </section>
       )}
     </main>
   );

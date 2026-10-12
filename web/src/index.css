@@ -136,6 +136,99 @@ body {
   margin-top: var(--spacing-6);
 }
 
+/* The home's first thing: record a session (a big round button), in the space said under
+   it, or import a file. */
+.cl-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-10) 0 var(--spacing-8);
+  text-align: center;
+}
+
+.cl-start__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  margin-bottom: var(--spacing-4);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-start__button:hover {
+  transform: scale(1.05);
+}
+
+.cl-start__button:active {
+  transform: scale(0.97);
+}
+
+.cl-start__button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+
+/* Recording: the button is a way back to it, its dot breathing. */
+.cl-start__button[data-live] {
+  background: var(--color-accent-muted);
+}
+
+.cl-start__dot {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  animation: cl-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes cl-breathe {
+  50% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+}
+
+.cl-start__title {
+  margin: 0;
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+/* The space, chosen in place: its name, underlined with dots, and a chevron. */
+.cl-start__space {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px dashed var(--color-border-emphasized);
+  cursor: pointer;
+}
+
+.cl-start__space select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  field-sizing: content;
+}
+
+.cl-start__space:hover {
+  color: var(--color-accent);
+}
+
 /* The home's periods: titles of sections, in the size of a section. */
 .cl-home__recent h2 {
   font-size: var(--font-size-lg);
@@ -172,6 +265,101 @@ body {
   gap: var(--spacing-3);
   padding: var(--spacing-4) var(--spacing-8) var(--spacing-5);
   border-bottom: 1px solid var(--color-border);
+}
+
+/* The page while it is read: its shapes at their sizes (nothing moves when it comes), shown
+   only past a short wait (a quick load goes straight to the page). Then the page fades in. */
+.cl-skeleton {
+  animation: cl-appear 200ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
+  pointer-events: none;
+}
+
+.cl-review > .cl-review__header:not(.cl-skeleton),
+.cl-review > .cl-review__columns:not(.cl-skeleton),
+.cl-review > .cl-processing {
+  animation: cl-appear 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cl-appear {
+  from {
+    opacity: 0;
+  }
+}
+
+.cl-skeleton__top {
+  height: 32px;
+}
+
+.cl-skeleton__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cl-skeleton__title,
+.cl-skeleton__meta,
+.cl-skeleton__strip-head {
+  display: flex;
+  align-items: center;
+}
+
+.cl-skeleton__title {
+  height: 34px;
+}
+
+.cl-skeleton__meta {
+  height: 21px;
+}
+
+.cl-skeleton__strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-skeleton__strip-head {
+  height: 26px;
+}
+
+.cl-skeleton__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+}
+
+.cl-skeleton__turn {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  column-gap: var(--spacing-5);
+}
+
+.cl-skeleton__name {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 3px;
+}
+
+.cl-skeleton__text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-inline-start: var(--spacing-4);
+}
+
+.cl-side .cl-skeleton__text,
+.cl-skeleton__text--flush {
+  padding-inline-start: 0;
+}
+
+.cl-skeleton__tabs {
+  display: flex;
+  gap: var(--spacing-5);
+  padding-bottom: var(--spacing-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-skeleton__player {
+  min-height: 61px;
 }
 
 .cl-review__notice {
@@ -536,6 +724,11 @@ button.cl-time {
   color: var(--color-text-primary);
 }
 
+/* A choice on its own under its heading: as wide as what it says. */
+.cl-select--inline {
+  align-self: flex-start;
+}
+
 .cl-checklist {
   display: flex;
   flex-direction: column;
@@ -604,40 +797,195 @@ button.cl-time {
   gap: var(--spacing-8);
 }
 
-.cl-space__head {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--spacing-3);
-}
-
 .cl-space__section {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
 }
 
-.cl-rows {
+/* A space's page: its name as the title (typed into in place), then what it holds. */
+.cl-space__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cl-space__counts {
+  min-height: 1.5em;
+}
+
+.cl-space__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+/* « Tous · Membres · Invités »: words, the chosen one darker. */
+.cl-filter {
+  display: inline-flex;
+  gap: var(--spacing-1);
+}
+
+.cl-filter button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-element);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-filter button:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-filter button[aria-pressed="true"] {
+  color: var(--color-text-primary);
+  background: var(--color-background-muted);
+}
+
+/* People and terms: rows without boxes, a light ground under the one pointed at. */
+.cl-people {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.cl-rows__item {
+.cl-people__row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 11rem) minmax(0, 1fr) auto 28px;
+  align-items: center;
+  gap: var(--spacing-3);
+  min-height: 40px;
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-element);
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-people__row--term {
+  grid-template-columns: minmax(0, 13rem) minmax(0, 1fr) 28px;
+}
+
+.cl-people__row:hover,
+.cl-people__row:focus-within {
+  background: var(--color-background-muted);
+}
+
+.cl-people__row[data-archived] > :not(.cl-people__more) {
+  opacity: 0.5;
+}
+
+.cl-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A value typed into in place: text until hovered or typed into. */
+.cl-inline {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  padding: 4px 6px;
+  margin-inline-start: -6px;
+  outline: none;
+  caret-color: var(--color-accent);
+  text-overflow: ellipsis;
+}
+
+.cl-inline:hover {
+  background: var(--color-background-surface);
+}
+
+.cl-inline:focus {
+  background: var(--color-background-surface);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+/* Not saved (refused): said on the field until it is saved or given back. */
+.cl-inline[aria-invalid] {
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.cl-inline::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.cl-people__role {
+  color: var(--color-text-secondary);
+}
+
+/* Member or guest: a pill, which changes it. */
+.cl-pill {
+  border: 0;
+  border-radius: 4px;
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-people__row:hover .cl-pill {
+  background: var(--color-background-surface);
+}
+
+.cl-pill:hover {
+  color: var(--color-text-primary);
+}
+
+/* The « … » shows on the row pointed at (and stays reachable by the keyboard). */
+.cl-people__more {
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-people__row:hover .cl-people__more,
+.cl-people__row:focus-within .cl-people__more {
+  opacity: 1;
+}
+
+.cl-people__add {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
-  padding-block: var(--spacing-2);
-  border-bottom: 1px solid var(--color-border);
+  width: 100%;
+  min-height: 40px;
+  padding: 2px var(--spacing-2) 2px 14px;
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 
-.cl-rows__item[data-archived] {
-  opacity: 0.55;
+.cl-people__add:hover {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
 }
 
-.cl-rows__add {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--spacing-3);
+.cl-people__add[data-open] {
+  cursor: default;
 }
 
 /* ------------------------------------------------------------- Corrections --- */
@@ -1654,6 +2002,8 @@ a.cl-iconbtn {
 }
 
 .cl-settings {
+  /* Its whole width whatever the tab shows: the tabs stay where they are. */
+  width: 100%;
   max-width: 46rem;
   margin: 0 auto;
   padding: var(--spacing-6) var(--spacing-6) var(--spacing-10);
@@ -1668,10 +2018,79 @@ a.cl-iconbtn {
   gap: var(--spacing-3);
 }
 
-.cl-settings__fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 14rem));
-  gap: var(--spacing-5);
+.cl-settings__steppers {
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-settings__steppers > * + * {
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-settings__save {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-height: 28px;
+}
+
+/* A number of days, with − and +: the label on the left, the value between its buttons. */
+.cl-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+}
+
+.cl-stepper__what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cl-stepper__description {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-stepper__control {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+}
+
+.cl-stepper__control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-element);
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-stepper__control button:hover:not(:disabled) {
+  background: var(--color-background-muted);
+}
+
+.cl-stepper__control button:disabled {
+  color: var(--color-text-disabled, var(--color-text-secondary));
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cl-stepper__control output {
+  min-width: 6.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .cl-settings__list {
@@ -1700,11 +2119,6 @@ a.cl-iconbtn {
   flex-direction: column;
 }
 
-@media (max-width: 640px) {
-  .cl-settings__fields {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ------------------------------------------------------------- Recording --- */
 
@@ -2560,6 +2974,7 @@ button.cl-tree__more:hover {
 
 .cl-home,
 .cl-spacepage {
+  width: 100%;
   max-width: 880px;
   margin: 0 auto;
   padding: var(--spacing-6) var(--spacing-8) var(--spacing-10);

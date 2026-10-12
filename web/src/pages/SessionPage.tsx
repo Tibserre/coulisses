@@ -21,6 +21,7 @@ import {
 } from "../api.ts";
 import { PhaseStrip } from "../components/PhaseStrip.tsx";
 import { PlayerBar } from "../components/PlayerBar.tsx";
+import { ReviewSkeleton } from "../components/ReviewSkeleton.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../components/ReviewSide.tsx";
 import { StageList } from "../components/StageList.tsx";
@@ -397,283 +398,293 @@ export function SessionPage({
   const audioAction = (action: () => Promise<Session>) => () =>
     action().then(sessionChanged, (e: Error) => setMenuError(e.message));
 
+  const reading = !error && (!detail || (attributeRun !== null && !view && !transcriptError));
+
   return (
     <div className="cl-review" data-audio-gone={audioGone || undefined}>
       {/* Once the audio is deleted there is nothing to load (spec §7.10). */}
       <audio ref={pb.audioRef} src={audioGone ? undefined : api.audioUrl(id)} preload="metadata" />
-      <header className="cl-review__header">
-        <div className="cl-review__top">
-          {session ? (
-            <ProjectCrumb
-              session={session}
-              projects={projects}
-              onMoved={(next) => {
-                sessionChanged(next);
-                libraryChanged();
-              }}
-              onError={setMenuError}
-            />
-          ) : (
-            <span />
-          )}
-          {session && (
-            <SessionMenu
-              session={session}
-              onChanged={sessionChanged}
-              onError={setMenuError}
-              onIncomplete={setIncomplete}
-              onDone={setNotice}
-            />
-          )}
-        </div>
-        {session && (
-          <div>
-            <EditableTitle
-              title={title}
-              onSave={async (value) => {
-                await api.renameSession(id, value);
-                await refresh();
-                libraryChanged();
-              }}
-            />
-            <Text color="secondary">
-              {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
-              {present ? ` · ${plural(present, "présent", "présents")}` : ""}
-              {extra && <span title={extra.title}>{extra.text}</span>}
-              {audioText && (
-                <>
-                  {" · "}
-                  <span data-announced={session.audio.state === "announced" || undefined} className="cl-audio-note">
-                    {audioText}
-                  </span>
-                  {session.audio.state === "announced" && (
-                    <>
-                      {" · "}
-                      <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.keepAudio(id, true))}>
-                        Garder l'audio
-                      </button>
-                      {" · "}
-                      <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.extendAudio(id))}>
-                        Prolonger
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-              {!session.title_edited && attributeRun && (
-                <>
-                  {" · "}
-                  {titleState === "waiting" ? (
-                    <span>titre en préparation…</span>
-                  ) : (
-                    <button type="button" className="cl-linkbtn" onClick={askTitle}>
-                      {session.title ? "Proposer un autre titre" : "Proposer un titre"}
-                    </button>
-                  )}
-                </>
-              )}
-            </Text>
-            {titleState && titleState !== "waiting" && <p className="cl-title__error">{titleState}</p>}
-          </div>
-        )}
-        {session && view && (
-          <PhaseStrip
-            view={view}
-            duration={session.duration_s ?? 0}
-            time={pb.time}
-            status={phasesStatus}
-            dev={dev}
-            onSeek={pb.seek}
-            onDetect={() => {
-              api.detectPhases(id).then(setPhasesStatus, (e: Error) => setError(e.message));
-            }}
-          />
-        )}
-      </header>
-
-      {error && (
-        <div className="cl-review__notice">
-          <Banner status="error" title="Séance illisible" description={error} />
-        </div>
-      )}
-      {incomplete && (
-        <div className="cl-review__notice">
-          <Banner status="warning" title="Suppression incomplète" description={incomplete} isDismissable onDismiss={() => setIncomplete(null)} />
-        </div>
-      )}
-      {stopProblem && (
-        <div className="cl-review__notice">
-          <Banner
-            status="warning"
-            title="À l'arrêt de l'enregistrement"
-            description={stopProblem}
-            isDismissable
-            onDismiss={() => setStopProblem(null)}
-          />
-        </div>
-      )}
-      {menuError && (
-        <div className="cl-review__notice">
-          <Banner status="error" title="Refusé" description={menuError} isDismissable onDismiss={() => setMenuError(null)} />
-        </div>
-      )}
-      {detail && !model && (
-        <ProcessingPanel
-          detail={detail}
-          transcriptError={transcriptError}
-          onResume={async (attendees) => {
-            await api.resume(id, attendees);
-            await refresh();
-          }}
-          onProcess={async () => {
-            await api.processSession(id);
-            await refresh();
-          }}
-          onShowProvenance={setProvenanceOf}
-        />
-      )}
-      {detail && model && view && session && (
+      {/* Read, not yet shown: the session, or the version it has. Its shapes meanwhile, then
+          the page at once: nothing comes in pieces (the steps, then the transcript). */}
+      {reading ? (
+        <ReviewSkeleton />
+      ) : (
         <>
-          <div className="cl-review__columns">
-            <div className="cl-review__main">
-              {editError && (
-                <div className="cl-review__notice">
-                  <Banner
-                    status="error"
-                    title="Correction refusée"
-                    description={editError}
-                    isDismissable
-                    onDismiss={() => setEditError(null)}
-                  />
-                </div>
-              )}
-              <RerunNotices
-                detail={detail}
-                view={view}
-                onResume={async (attendees) => {
-                  await api.resume(id, attendees);
-                  await refresh();
-                }}
-                onShowList={() => {
-                  setTab("overview");
-                  // Once the tab is drawn: the list, in view.
-                  window.setTimeout(
-                    () => document.getElementById("non-reportees")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                    50,
-                  );
-                }}
-              />
-              <TranscriptView model={model} pb={pb} current={current} editing={editing} />
-              {notice && (
-                <div className="cl-notice" role="status">
-                  {notice}
-                </div>
-              )}
-              {selected.size > 0 && (
-                <div className="cl-selection" role="toolbar" aria-label="Répliques sélectionnées">
-                  <Text>{plural(selected.size, "réplique sélectionnée", "répliques sélectionnées")}</Text>
-                  <Popover
-                    isOpen={giving}
-                    onOpenChange={setGiving}
-                    label="Donner les répliques à"
-                    width={280}
-                    content={
-                      <GiveToPanel
-                        voices={model.speakers}
-                        except={null}
-                        onGive={(target) => {
-                          setGiving(false);
-                          void correct({ kind: "reassign_turns", turns: [...selected], target }).then(
-                            () => setSelected(new Set()),
-                            () => undefined,
-                          );
-                        }}
-                      />
-                    }
-                  >
-                    <Button size="sm" variant="primary" label="Donner à…" />
-                  </Popover>
-                  <Button size="sm" variant="ghost" label="Désélectionner" onClick={() => setSelected(new Set())} />
-                </div>
-              )}
-            </div>
-            <aside className="cl-side">
-              <TabList value={tab} onChange={(v) => setTab(v as "overview" | "summary")} hasDivider>
-                <Tab value="overview" label="Vue d'ensemble" />
-                <Tab value="summary" label="Résumé" />
-              </TabList>
-              {tab === "summary" ? (
-                <SummaryPanel
-                  sessionId={id}
-                  spaceId={session.space_id}
-                  transcriptKey={liveEditsKey(view)}
+          <header className="cl-review__header">
+            <div className="cl-review__top">
+              {session ? (
+                <ProjectCrumb
+                  session={session}
+                  projects={projects}
+                  onMoved={(next) => {
+                    sessionChanged(next);
+                    libraryChanged();
+                  }}
+                  onError={setMenuError}
                 />
               ) : (
-                <>
-              <KeyFigures view={view} model={model} dev={dev} />
-              <Participants
-                model={model}
-                onMerge={(source, target) => correct({ kind: "merge_speakers", source, target })}
-              />
-              <NotesSection sessionId={id} />
-              <Attendees
-                session={session}
-                people={people}
-                onSave={async (ids, unnamed) => {
-                  await api.setAttendees(id, ids, unnamed);
-                  await refresh();
-                }}
-              />
-              <CorrectionsHistory
-                edits={view.edits}
-                onUndo={async (editId) => {
-                  try {
-                    setView(await api.undo(id, editId, view.run_id));
-                  } catch (e) {
-                    refused(e);
-                  }
-                }}
-                onRedo={async (editId) => {
-                  try {
-                    setView(await api.redo(id, editId, view.run_id));
-                  } catch (e) {
-                    refused(e);
-                  }
-                }}
-              />
-              <VersionsSection
-                sessionId={id}
-                version={attributeRun}
-                busy={busy}
-                carryover={view.carryover}
-                duration={session.duration_s}
-                dev={dev}
-                onChanged={refresh}
-                onSeek={pb.seek}
-              />
-              {(dev ||
-                busy ||
-                detail.stages.some(
-                  (s) => s.state === "failed" || s.state === "stalled" || s.folder_missing || s.stale,
-                )) && (
-                <section>
-                  <Heading level={3}>Traitement</Heading>
-                  <StageList stages={detail.stages} onShowProvenance={setProvenanceOf} />
-                </section>
+                <span />
               )}
-              {dev && <SourceInfo detail={detail} />}
-                </>
+              {session && (
+                <SessionMenu
+                  session={session}
+                  onChanged={sessionChanged}
+                  onError={setMenuError}
+                  onIncomplete={setIncomplete}
+                  onDone={setNotice}
+                />
               )}
-            </aside>
-          </div>
-          {audioGone ? (
-            <div className="cl-player-gone" role="status">
-              <Text color="secondary">
-                L'audio de cette séance a été supprimé{audioText ? ` (${audioText.replace("audio supprimé ", "")})` : ""} : la lecture n'est plus possible. Le texte reste modifiable.
-              </Text>
             </div>
-          ) : (
-            <PlayerBar model={model} pb={pb} current={currentRow} />
+            {session && (
+              <div>
+                <EditableTitle
+                  title={title}
+                  onSave={async (value) => {
+                    await api.renameSession(id, value);
+                    await refresh();
+                    libraryChanged();
+                  }}
+                />
+                <Text color="secondary">
+                  {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
+                  {present ? ` · ${plural(present, "présent", "présents")}` : ""}
+                  {extra && <span title={extra.title}>{extra.text}</span>}
+                  {audioText && (
+                    <>
+                      {" · "}
+                      <span data-announced={session.audio.state === "announced" || undefined} className="cl-audio-note">
+                        {audioText}
+                      </span>
+                      {session.audio.state === "announced" && (
+                        <>
+                          {" · "}
+                          <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.keepAudio(id, true))}>
+                            Garder l'audio
+                          </button>
+                          {" · "}
+                          <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.extendAudio(id))}>
+                            Prolonger
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  {!session.title_edited && attributeRun && (
+                    <>
+                      {" · "}
+                      {titleState === "waiting" ? (
+                        <span>titre en préparation…</span>
+                      ) : (
+                        <button type="button" className="cl-linkbtn" onClick={askTitle}>
+                          {session.title ? "Proposer un autre titre" : "Proposer un titre"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </Text>
+                {titleState && titleState !== "waiting" && <p className="cl-title__error">{titleState}</p>}
+              </div>
+            )}
+            {session && view && (
+              <PhaseStrip
+                view={view}
+                duration={session.duration_s ?? 0}
+                time={pb.time}
+                status={phasesStatus}
+                dev={dev}
+                onSeek={pb.seek}
+                onDetect={() => {
+                  api.detectPhases(id).then(setPhasesStatus, (e: Error) => setError(e.message));
+                }}
+              />
+            )}
+          </header>
+
+          {error && (
+            <div className="cl-review__notice">
+              <Banner status="error" title="Séance illisible" description={error} />
+            </div>
+          )}
+          {incomplete && (
+            <div className="cl-review__notice">
+              <Banner status="warning" title="Suppression incomplète" description={incomplete} isDismissable onDismiss={() => setIncomplete(null)} />
+            </div>
+          )}
+          {stopProblem && (
+            <div className="cl-review__notice">
+              <Banner
+                status="warning"
+                title="À l'arrêt de l'enregistrement"
+                description={stopProblem}
+                isDismissable
+                onDismiss={() => setStopProblem(null)}
+              />
+            </div>
+          )}
+          {menuError && (
+            <div className="cl-review__notice">
+              <Banner status="error" title="Refusé" description={menuError} isDismissable onDismiss={() => setMenuError(null)} />
+            </div>
+          )}
+          {detail && !model && (
+            <ProcessingPanel
+              detail={detail}
+              transcriptError={transcriptError}
+              onResume={async (attendees) => {
+                await api.resume(id, attendees);
+                await refresh();
+              }}
+              onProcess={async () => {
+                await api.processSession(id);
+                await refresh();
+              }}
+              onShowProvenance={setProvenanceOf}
+            />
+          )}
+          {detail && model && view && session && (
+            <>
+              <div className="cl-review__columns">
+                <div className="cl-review__main">
+                  {editError && (
+                    <div className="cl-review__notice">
+                      <Banner
+                        status="error"
+                        title="Correction refusée"
+                        description={editError}
+                        isDismissable
+                        onDismiss={() => setEditError(null)}
+                      />
+                    </div>
+                  )}
+                  <RerunNotices
+                    detail={detail}
+                    view={view}
+                    onResume={async (attendees) => {
+                      await api.resume(id, attendees);
+                      await refresh();
+                    }}
+                    onShowList={() => {
+                      setTab("overview");
+                      // Once the tab is drawn: the list, in view.
+                      window.setTimeout(
+                        () => document.getElementById("non-reportees")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                        50,
+                      );
+                    }}
+                  />
+                  <TranscriptView model={model} pb={pb} current={current} editing={editing} />
+                  {notice && (
+                    <div className="cl-notice" role="status">
+                      {notice}
+                    </div>
+                  )}
+                  {selected.size > 0 && (
+                    <div className="cl-selection" role="toolbar" aria-label="Répliques sélectionnées">
+                      <Text>{plural(selected.size, "réplique sélectionnée", "répliques sélectionnées")}</Text>
+                      <Popover
+                        isOpen={giving}
+                        onOpenChange={setGiving}
+                        label="Donner les répliques à"
+                        width={280}
+                        content={
+                          <GiveToPanel
+                            voices={model.speakers}
+                            except={null}
+                            onGive={(target) => {
+                              setGiving(false);
+                              void correct({ kind: "reassign_turns", turns: [...selected], target }).then(
+                                () => setSelected(new Set()),
+                                () => undefined,
+                              );
+                            }}
+                          />
+                        }
+                      >
+                        <Button size="sm" variant="primary" label="Donner à…" />
+                      </Popover>
+                      <Button size="sm" variant="ghost" label="Désélectionner" onClick={() => setSelected(new Set())} />
+                    </div>
+                  )}
+                </div>
+                <aside className="cl-side">
+                  <TabList value={tab} onChange={(v) => setTab(v as "overview" | "summary")} hasDivider>
+                    <Tab value="overview" label="Vue d'ensemble" />
+                    <Tab value="summary" label="Résumé" />
+                  </TabList>
+                  {tab === "summary" ? (
+                    <SummaryPanel
+                      sessionId={id}
+                      spaceId={session.space_id}
+                      transcriptKey={liveEditsKey(view)}
+                    />
+                  ) : (
+                    <>
+                  <KeyFigures view={view} model={model} dev={dev} />
+                  <Participants
+                    model={model}
+                    onMerge={(source, target) => correct({ kind: "merge_speakers", source, target })}
+                  />
+                  <NotesSection sessionId={id} />
+                  <Attendees
+                    session={session}
+                    people={people}
+                    onSave={async (ids, unnamed) => {
+                      await api.setAttendees(id, ids, unnamed);
+                      await refresh();
+                    }}
+                  />
+                  <CorrectionsHistory
+                    edits={view.edits}
+                    onUndo={async (editId) => {
+                      try {
+                        setView(await api.undo(id, editId, view.run_id));
+                      } catch (e) {
+                        refused(e);
+                      }
+                    }}
+                    onRedo={async (editId) => {
+                      try {
+                        setView(await api.redo(id, editId, view.run_id));
+                      } catch (e) {
+                        refused(e);
+                      }
+                    }}
+                  />
+                  <VersionsSection
+                    sessionId={id}
+                    version={attributeRun}
+                    busy={busy}
+                    carryover={view.carryover}
+                    duration={session.duration_s}
+                    dev={dev}
+                    onChanged={refresh}
+                    onSeek={pb.seek}
+                  />
+                  {(dev ||
+                    busy ||
+                    detail.stages.some(
+                      (s) => s.state === "failed" || s.state === "stalled" || s.folder_missing || s.stale,
+                    )) && (
+                    <section>
+                      <Heading level={3}>Traitement</Heading>
+                      <StageList stages={detail.stages} onShowProvenance={setProvenanceOf} />
+                    </section>
+                  )}
+                  {dev && <SourceInfo detail={detail} />}
+                    </>
+                  )}
+                </aside>
+              </div>
+              {audioGone ? (
+                <div className="cl-player-gone" role="status">
+                  <Text color="secondary">
+                    L'audio de cette séance a été supprimé{audioText ? ` (${audioText.replace("audio supprimé ", "")})` : ""} : la lecture n'est plus possible. Le texte reste modifiable.
+                  </Text>
+                </div>
+              ) : (
+                <PlayerBar model={model} pb={pb} current={currentRow} />
+              )}
+            </>
           )}
         </>
       )}

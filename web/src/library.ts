@@ -56,23 +56,6 @@ export function shortDay(iso: string): string {
   return SHORT_DAY.format(new Date(iso));
 }
 
-/** The latest sessions, by calendar period: this week (since Monday), this month,
- *  earlier. Empty periods are left out. */
-export function byPeriod<T extends { recorded_at: string }>(list: T[], now: Date = new Date()): [string, T[]][] {
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  const groups: [string, T[]][] = [
-    ["Cette semaine", []],
-    ["Ce mois-ci", []],
-    ["Plus tôt", []],
-  ];
-  for (const s of list) {
-    const when = new Date(s.recorded_at);
-    groups[when >= monday ? 0 : when >= first ? 1 : 2][1].push(s);
-  }
-  return groups.filter(([, items]) => items.length > 0);
-}
-
 /** What a group of the side column shows at first: the `limit` latest, and any other one
  *  that must stay in sight (open, recording, processing, failed). */
 export function visibleSessions<T>(list: T[], limit: number, pinned: (s: T) => boolean): T[] {
@@ -136,4 +119,40 @@ export function libraryChanged(): void {
 export function onLibraryChanged(listener: () => void): () => void {
   window.addEventListener(CHANGED, listener);
   return () => window.removeEventListener(CHANGED, listener);
+}
+
+/** The space chosen last on the home page (this browser only). */
+const SPACE_KEY = "coulisses.accueil.espace";
+
+export function rememberedSpace(): number | null {
+  try {
+    const id = Number(localStorage.getItem(SPACE_KEY));
+    return Number.isInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberSpace(id: number): void {
+  try {
+    localStorage.setItem(SPACE_KEY, String(id));
+  } catch {
+    // Not remembered: the space of the latest session is offered next time.
+  }
+}
+
+/** Where a session started from the home page (its button, or ⌘N) goes: the space chosen
+ *  there, if still open; else the latest session's; else the first open one. */
+export function startSpace(
+  spaces: Pick<Space, "id" | "archived">[],
+  latestFirst: Pick<Session, "space_id">[],
+  chosen: number | null,
+): number | null {
+  const open = spaces.filter((s) => !s.archived);
+  return (
+    open.find((s) => s.id === chosen)?.id ??
+    open.find((s) => s.id === latestFirst[0]?.space_id)?.id ??
+    open[0]?.id ??
+    null
+  );
 }

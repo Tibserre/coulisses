@@ -17,7 +17,7 @@ import { formatBytes, plural } from "../format.ts";
 /** What was chosen last time, offered again (this browser only). */
 const WHERE_KEY = "coulisses.nouvelle-seance.lieu";
 type Where = "sur-place" | "en-ligne";
-type Way = "enregistrer" | "importer";
+export type Way = "enregistrer" | "importer";
 
 function remembered(): Where {
   try {
@@ -56,8 +56,9 @@ export function NewSessionDialog({
   onClose: () => void;
   spaces: Space[];
   projects: Project[];
-  /** Where it was asked from (a space's « + », the session shown). */
-  initial: { spaceId: number | null; projectId: number | null };
+  /** Where it was asked from (a space's « + », the session shown), and how (the home
+   *  page's « importer un fichier »). */
+  initial: { spaceId: number | null; projectId: number | null; way?: Way };
   /** A recording is in progress: another cannot start. */
   recording: boolean;
   onImported: (id: string) => void;
@@ -91,7 +92,7 @@ export function NewSessionDialog({
     setProgress(null);
     setError(null);
     setStarting(false);
-    setWay(recording ? "importer" : "enregistrer");
+    setWay(recording ? "importer" : (initial.way ?? "enregistrer"));
     api.microphones().then(
       (found) => {
         setMicrophones(found);
