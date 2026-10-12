@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.18.0 — 2026-10-12
+
+### Nouveautés
+
+- baisse le micro à l'écoute quand personne n'y parle (ecoute)
+
 ## v0.17.0 — 2026-10-12
 
 ### Nouveautés
