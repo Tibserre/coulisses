@@ -5,7 +5,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Text } from "@astryxdesign/core/Text";
 import type { CorrectedView, EditInfo, Person, Session } from "../api.ts";
-import { formatDateTime, plural } from "../format.ts";
+import { formatDateTime } from "../format.ts";
 import type { ReviewModel } from "../transcript.ts";
 import { speakerTitle } from "../transcript.ts";
 import { inkOf } from "./TranscriptView.tsx";
@@ -45,9 +45,15 @@ export function KeyFigures({
  *  engine split one person, P3) are offered a merge. */
 export function Participants({
   model,
+  onShow,
+  onPoint,
   onMerge,
 }: {
   model: ReviewModel;
+  /** Shows a voice's lines only. */
+  onShow: (label: string) => void;
+  /** The voice pointed at: where it speaks is marked on the player bar. */
+  onPoint: (label: string | null) => void;
   onMerge: (source: string, target: string) => Promise<void>;
 }) {
   const total = model.speakers.reduce((sum, s) => sum + s.seconds, 0) || 1;
@@ -59,8 +65,8 @@ export function Participants({
       <Heading level={3}>Participants</Heading>
       <Text type="supporting">
         {unnamed > 0
-          ? `${plural(unnamed, "voix reste", "voix restent")} à nommer : cliquez sur un nom dans le transcript, ou appuyez sur N pendant l'écoute.`
-          : "Toutes les voix sont nommées."}
+          ? "Cliquez sur une voix pour n'afficher que ses répliques."
+          : "Toutes les voix sont nommées. Cliquez sur une voix pour n'afficher que ses répliques."}
       </Text>
       <ul className="cl-participants">
         {model.speakers.map((s, i) => {
@@ -76,14 +82,29 @@ export function Participants({
                   )
               : undefined;
           return (
-            <li key={s.label ?? "inconnu"}>
-              <span
-                className="cl-name"
-                data-unnamed={!s.named || undefined}
-                style={{ color: inkOf(s) }}
-              >
-                {speakerTitle(s)}
-              </span>
+            <li
+              key={s.label ?? "inconnu"}
+              onPointerEnter={() => s.label !== null && onPoint(s.label)}
+              onPointerLeave={() => onPoint(null)}
+              onFocus={() => s.label !== null && onPoint(s.label)}
+              onBlur={() => onPoint(null)}
+            >
+              {s.label !== null ? (
+                <button
+                  type="button"
+                  className="cl-name"
+                  data-unnamed={!s.named || undefined}
+                  style={{ color: inkOf(s) }}
+                  title={`N'afficher que les répliques de ${s.name}`}
+                  onClick={() => onShow(s.label!)}
+                >
+                  {speakerTitle(s)}
+                </button>
+              ) : (
+                <span className="cl-name" data-unnamed style={{ color: inkOf(s) }}>
+                  {speakerTitle(s)}
+                </span>
+              )}
               <span className="cl-share" aria-hidden>
                 <span
                   style={{

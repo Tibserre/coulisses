@@ -46,6 +46,8 @@ export interface Editing {
   /** A line's text or a chapter title is being typed into: the page keeps the version on
    *  screen until it is left (a newer one would put other lines under the cursor). */
   setTyping: (on: boolean) => void;
+  /** Shows this voice's lines only. */
+  showSpeaker: (label: string) => void;
 }
 
 /** Refused because the version shown changed meanwhile: nothing was written, and the page
@@ -370,6 +372,7 @@ const TurnLine = memo(function TurnLine({
                 editing.setNamingTurn(null);
               }}
               onAddGuest={editing.addGuest}
+              onShowLines={editing.showSpeaker}
               onClose={closeNaming}
             />
           ) : (
@@ -776,6 +779,8 @@ export function TranscriptView({
                     <PenLine size={14} strokeWidth={1.75} aria-hidden /> {row.note.text}
                   </span>
                 </div>
+              ) : row.kind === "others" ? (
+                <div className="cl-others">{plural(row.count, "réplique d'une autre voix", "répliques d'autres voix")}</div>
               ) : (
                 <div className="cl-gap">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />

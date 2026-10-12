@@ -22,10 +22,11 @@ import {
 import { PhaseStrip } from "../components/PhaseStrip.tsx";
 import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ReviewSkeleton } from "../components/ReviewSkeleton.tsx";
+import { SpeakerFocusBar, SpeakersToName } from "../components/SpeakerFocus.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../components/ReviewSide.tsx";
 import { StageList } from "../components/StageList.tsx";
-import { GiveToPanel, TranscriptView, type Editing } from "../components/TranscriptView.tsx";
+import { GiveToPanel, TranscriptView, inkOf, type Editing } from "../components/TranscriptView.tsx";
 import { SummaryPanel } from "../components/SummaryPanel.tsx";
 import { NotesSection } from "../components/NotesSection.tsx";
 import { VersionsSection } from "../components/VersionsSection.tsx";
@@ -38,7 +39,7 @@ import { takeStopProblem } from "../stopNotice.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
-import { buildModel, liveEditsKey, phaseOf, toggleSelection, turnAt, wordAt } from "../transcript.ts";
+import { buildModel, focusModel, liveEditsKey, phaseOf, toggleSelection, turnAt, speakerMarks, wordAt } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
@@ -221,7 +222,23 @@ export function SessionPage({
     const shut = new Set([...folded].filter((t) => t !== heardChapter));
     return shut.size ? buildModel(view, shut) : unfolded;
   }, [view, folded, heardChapter, unfolded]);
-  const currentRow = model ? turnAt(model, pb.time) : null;
+  // One voice shown only (its lines, the others folded), and the voice pointed at in the
+  // side column: where it speaks is marked on the player bar.
+  const [focus, setFocus] = useState<string | null>(null);
+  const [pointed, setPointed] = useState<string | null>(null);
+  const shown = useMemo(
+    () => (focus && unfolded ? focusModel(unfolded, focus) : model),
+    [focus, unfolded, model],
+  );
+  const focused = focus ? (unfolded?.speakers.find((s) => s.label === focus) ?? null) : null;
+  // The voice merged into another one: back to all of them.
+  useEffect(() => {
+    if (focus && unfolded && !focused) setFocus(null);
+  }, [focus, unfolded, focused]);
+  const marked = pointed ?? focus;
+  const marks = useMemo(() => (marked && unfolded ? speakerMarks(unfolded, marked) : []), [marked, unfolded]);
+  const markInk = marked ? unfolded?.speakers.find((s) => s.label === marked) : undefined;
+  const currentRow = shown ? turnAt(shown, pb.time) : null;
 
   // Opened at a passage (a search hit): the player goes there, without playing, and the
   // line comes to the centre. Once the audio knows its length, so that the time holds.
@@ -310,11 +327,15 @@ export function SessionPage({
       setNamingTurn,
       selected,
       toggleSelected: (turn: number, extend: boolean) => {
-        const order = model ? model.rows.flatMap((r) => (r.kind === "turn" ? [r.turn.index] : [])) : [];
+        const order = shown ? shown.rows.flatMap((r) => (r.kind === "turn" ? [r.turn.index] : [])) : [];
         setSelected((before) => toggleSelection(before, order, turn, extend ? lastSelected : null));
         setLastSelected(turn);
       },
       setTyping,
+      showSpeaker: (label: string) => {
+        setNamingTurn(null);
+        setFocus(label);
+      },
       toggleFolded: (turn: number) =>
         setFolded((before) => {
           const next = new Set(before);
@@ -322,7 +343,7 @@ export function SessionPage({
           return next;
         }),
     }),
-    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, model, viewRun, refused],
+    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, shown, viewRun, refused],
   );
 
   /** Cmd-Z undoes the last correction still in force; Cmd-Shift-Z redoes the last one
@@ -371,6 +392,12 @@ export function SessionPage({
         void history(e.shiftKey);
         return;
       }
+      // Escape: back to all the voices (a name being typed handles its own Escape).
+      if (e.key === "Escape" && focus) {
+        e.preventDefault();
+        setFocus(null);
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey || !currentRow) return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
@@ -385,7 +412,7 @@ export function SessionPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentRow, history, correct]);
+  }, [currentRow, history, correct, focus]);
 
   const session = detail?.session;
   const title = session ? (session.title ?? `Séance du ${formatDate(session.recorded_at).toLowerCase()}`) : "";
@@ -572,7 +599,20 @@ export function SessionPage({
                       );
                     }}
                   />
-                  <TranscriptView model={model} pb={pb} current={current} editing={editing} />
+                  {focused && shown && (
+                    <SpeakerFocusBar
+                      speaker={focused}
+                      shown={shown}
+                      pb={pb}
+                      current={currentRow}
+                      onName={() => {
+                        const first = shown.rows.find((r) => r.kind === "turn");
+                        if (first?.kind === "turn") setNamingTurn(first.turn.index);
+                      }}
+                      onClose={() => setFocus(null)}
+                    />
+                  )}
+                  <TranscriptView model={shown!} pb={pb} current={current} editing={editing} />
                   {notice && (
                     <div className="cl-notice" role="status">
                       {notice}
@@ -620,8 +660,22 @@ export function SessionPage({
                   ) : (
                     <>
                   <KeyFigures view={view} model={model} dev={dev} />
+                  <SpeakersToName
+                    model={unfolded!}
+                    pb={pb}
+                    audioGone={audioGone}
+                    onShow={setFocus}
+                    onName={(label, turn) => {
+                      // Its lines only (never in a folded chapter), named on the first one.
+                      setFocus(label);
+                      setNamingTurn(turn);
+                    }}
+                    onPoint={setPointed}
+                  />
                   <Participants
                     model={model}
+                    onShow={setFocus}
+                    onPoint={setPointed}
                     onMerge={(source, target) => correct({ kind: "merge_speakers", source, target })}
                   />
                   <NotesSection sessionId={id} />
@@ -682,7 +736,13 @@ export function SessionPage({
                   </Text>
                 </div>
               ) : (
-                <PlayerBar model={model} pb={pb} current={currentRow} />
+                <PlayerBar
+                  model={shown!}
+                  pb={pb}
+                  current={currentRow}
+                  marks={marks}
+                  markInk={markInk ? inkOf(markInk) : undefined}
+                />
               )}
             </>
           )}

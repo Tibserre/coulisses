@@ -329,3 +329,26 @@ test("naming a voice offers the people matching what is typed, then a guest or a
   // A line without a voice: nothing to name.
   assert.deepEqual(nameChoices("who", voice(null, "?"), people, voices, "Lucie"), []);
 });
+
+test("one voice shown: its lines, its chapters, the others folded into a count", async () => {
+  const { focusModel, speakerMarks, speakerExcerpt } = await import("./transcript.ts");
+  const model = buildModel(CHAPTERED);
+  const shape = (rows: { kind: string; count?: number; continued?: boolean }[]) =>
+    rows.map((r) => (r.kind === "others" ? `+${r.count}` : r.kind === "turn" && r.continued ? "turn…" : r.kind));
+
+  const marie = focusModel(model, "2");
+  // Its chapter only (« Accueil » has none of its lines); the line of the other voice
+  // before the chapter and the one after it, folded.
+  assert.deepEqual(shape(marie.rows), ["+1", "phase", "turn", "+1"]);
+  assert.deepEqual(marie.timed.map((r) => r.turn.index), [1]); // the arrows stay within it
+
+  const first = focusModel(model, "7");
+  assert.deepEqual(shape(first.rows), ["phase", "turn", "phase", "+1", "turn"]); // its name said again after a fold
+
+  assert.deepEqual(speakerMarks(model, "7"), [
+    { start: 0, end: 0.9 },
+    { start: 9, end: 9.3 },
+  ]);
+  assert.equal(speakerExcerpt(model, "7")?.turn.index, 0); // its longest line
+  assert.equal(speakerExcerpt(model, "absent"), null);
+});

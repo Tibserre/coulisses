@@ -17,6 +17,7 @@ export function NameEditor({
   voices,
   onCorrect,
   onAddGuest,
+  onShowLines,
   onClose,
 }: {
   speaker: Speaker;
@@ -24,6 +25,8 @@ export function NameEditor({
   voices: Speaker[];
   onCorrect: (correction: EditRequest) => Promise<void>;
   onAddGuest: (name: string) => Promise<Person>;
+  /** Shows this voice's lines only. */
+  onShowLines: (label: string) => void;
   /** Closed; by the keyboard (Escape), the focus goes back to the voice's name. */
   onClose: (byKeyboard: boolean) => void;
 }) {
@@ -238,6 +241,9 @@ export function NameEditor({
             {error && <span className="cl-nameedit__error">{error}</span>}
             {view === "who" && (
               <span className="cl-nameedit__more">
+                <button type="button" onClick={() => onShowLines(label)}>
+                  Ses répliques
+                </button>
                 <button type="button" onClick={() => setView("character")}>
                   Personnage joué…
                 </button>

@@ -620,6 +620,113 @@ button.cl-time {
   gap: var(--spacing-3);
 }
 
+/* One voice shown: a bar above its lines. */
+.cl-focusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-8);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  animation: cl-appear 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-focusbar__name {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-base);
+}
+
+.cl-focusbar__meta {
+  color: var(--color-text-secondary);
+}
+
+.cl-focusbar__nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-focusbar__count {
+  min-width: 4.5rem;
+  text-align: center;
+}
+
+/* The lines of the other voices, folded: a quiet count between two lines. */
+.cl-others {
+  padding: var(--spacing-2) 0 var(--spacing-2) calc(6rem + var(--spacing-5) + var(--spacing-4));
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The voices to name: hear, recognise, name. */
+.cl-toname {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.cl-toname li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-toname .cl-linkbtn {
+  font-size: var(--font-size-sm);
+}
+
+.cl-toname__noplay {
+  width: 26px;
+}
+
+.cl-toname__voice {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--spacing-1) var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-toname__voice:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-toname__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  color: var(--coulisses-speaker-unknown-ink);
+  font-style: italic;
+}
+
+.cl-toname__time {
+  color: var(--color-text-secondary);
+  font-style: normal;
+  font-size: var(--font-size-sm);
+}
+
+.cl-toname__quote {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .cl-participants {
   list-style: none;
   margin: 0;
@@ -717,9 +824,44 @@ button.cl-time {
   gap: var(--spacing-2);
 }
 
+.cl-player__track {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
 .cl-player__seek {
   flex: 1;
   accent-color: var(--color-accent);
+}
+
+/* Where a voice speaks, under the position bar: thin strokes in its ink, a click goes
+   there. */
+.cl-player__marks {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -7px;
+  height: 5px;
+  pointer-events: none;
+  animation: cl-appear 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-player__mark {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.8;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.cl-player__mark:hover {
+  opacity: 1;
 }
 
 /* ------------------------------------------------------------ Navigation --- */
