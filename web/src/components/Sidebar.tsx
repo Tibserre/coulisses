@@ -147,8 +147,6 @@ export function Sidebar({
                         },
                         {
                           label: "Paramètres de l'espace",
-                          description:
-                            "Membres, invités, glossaire, résumé proposé",
                           onClick: () =>
                             (window.location.hash = `#/espaces/${node.space.id}`),
                         },
@@ -209,7 +207,6 @@ export function Sidebar({
                         },
                         {
                           label: "Archiver le projet",
-                          description: "Ses séances y restent.",
                           onClick: () =>
                             void act(() =>
                               api.updateProject(p.project.id, {

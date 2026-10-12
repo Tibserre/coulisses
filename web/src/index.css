@@ -31,7 +31,7 @@ body {
 
 .cl-code {
   font-family: var(--font-family-code);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   word-break: break-all;
 }
 
@@ -240,7 +240,7 @@ body {
   background: none;
   padding: 0;
   font: inherit;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   font-variant-numeric: tabular-nums;
   color: var(--color-text-secondary);
 }
@@ -315,13 +315,13 @@ button.cl-time {
 
 .cl-figures dt {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-figures dd {
   margin: 0;
   font-family: var(--font-family-heading);
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.03em;
 }
@@ -655,7 +655,7 @@ button.cl-name:hover {
   background: none;
   padding: 0;
   font: inherit;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   color: var(--color-accent);
   cursor: pointer;
 }
@@ -882,7 +882,7 @@ button.cl-name {
   background: var(--color-background-surface);
   box-shadow: var(--shadow-low), 0 0 0 1px var(--color-border);
   font-family: var(--font-family-body);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   font-style: normal;
   font-variant-numeric: tabular-nums;
@@ -943,7 +943,7 @@ button.cl-name {
 .cl-title {
   margin: 0;
   font-family: var(--font-family-heading);
-  font-size: var(--font-size-3xl, 2rem);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -1046,7 +1046,7 @@ a.cl-iconbtn {
   max-height: 70dvh;
   overflow: auto;
   white-space: pre-wrap;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 /* --------------------------------------------------------------- Chapters --- */
@@ -1088,7 +1088,7 @@ a.cl-iconbtn {
 }
 
 .cl-chapter__kind {
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.1em;
   font-variant-caps: all-small-caps;
@@ -1101,7 +1101,7 @@ a.cl-iconbtn {
   min-width: 8ch;
   max-width: 40ch;
   font-family: var(--font-family-heading);
-  font-size: var(--font-size-md, 1.0625rem);
+  font-size: var(--text-large-size);
   font-weight: var(--font-weight-medium);
   text-align: center;
   outline: none;
@@ -1122,7 +1122,7 @@ a.cl-iconbtn {
 
 .cl-chapter__count {
   flex: none;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
@@ -1222,7 +1222,7 @@ a.cl-iconbtn {
 }
 
 .cl-strip__kind {
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.1em;
   font-variant-caps: all-small-caps;
@@ -1242,7 +1242,7 @@ a.cl-iconbtn {
 }
 
 .cl-strip__note {
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-strip__tools {
@@ -1388,7 +1388,7 @@ a.cl-iconbtn {
   background: none;
   padding: 0;
   font: inherit;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   color: var(--color-accent);
   cursor: pointer;
 }
@@ -1896,7 +1896,7 @@ a.cl-iconbtn {
 
 .cl-live kbd {
   font: inherit;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-normal);
   color: var(--color-text-secondary);
   padding: 0 5px;
@@ -1926,7 +1926,7 @@ a.cl-iconbtn {
 }
 
 .cl-livenote__at {
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   font-variant-numeric: tabular-nums;
   color: var(--color-accent);
 }
@@ -2160,13 +2160,13 @@ a.cl-iconbtn {
   justify-content: space-between;
   padding: var(--spacing-3) var(--spacing-2) var(--spacing-1);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-sidebar__archived summary {
   padding: var(--spacing-1) var(--spacing-2);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
@@ -2209,7 +2209,7 @@ a.cl-iconbtn {
 
 .cl-tree__row[data-muted] {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-tree__row[aria-current="page"],
@@ -2257,7 +2257,7 @@ a.cl-iconbtn {
 
 .cl-tree__count {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-tree__actions {
@@ -2296,7 +2296,7 @@ a.cl-iconbtn {
 .cl-tree__empty {
   padding: var(--spacing-1) var(--spacing-2) var(--spacing-1) 34px;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-tree__input {
@@ -2351,7 +2351,7 @@ a.cl-iconbtn {
 
 .cl-search__field kbd {
   font: inherit;
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
 
@@ -2380,7 +2380,7 @@ a.cl-iconbtn {
 .cl-search__meta {
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-normal);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-search__hit {
@@ -2400,7 +2400,7 @@ a.cl-iconbtn {
 
 .cl-search__where {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
   padding-top: 2px;
 }
 
@@ -2632,7 +2632,7 @@ a.cl-iconbtn {
   flex-direction: column;
   gap: var(--spacing-1);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xsm);
+  font-size: var(--font-size-sm);
 }
 
 .cl-recording__hint {

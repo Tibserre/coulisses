@@ -45,7 +45,7 @@ Valeurs données en clair puis en sombre. Les deux modes sont conçus ensemble.
 
 - **Titres** : DM Sans, graisse medium, approche serrée (-0,03 em). La hiérarchie vient de la taille, pas du gras.
 - **Texte et interface** : Figtree.
-- **Échelle** : base 15 px, rapport 1,333. Transcript en 17 px, interligne 1,6. Largeur de lecture d'environ 70 caractères.
+- **Échelle** (ADR 0038) : base 15 px ; rien sous 12 px ; texte d'appoint 13 px ; titres 18, 22, 28 et 34 px. Transcript en 17 px, interligne 1,6. Largeur de lecture d'environ 70 caractères.
 - **Chiffres** : tabulaires partout (horodatages, durées, pourcentages). Pas de police à chasse fixe.
 - **Noms dans le transcript** : petites capitales espacées (0,1 em), dans l'encre du participant.
 - Polices variables, sous licence OFL, embarquées dans l'application. Aucune ressource distante (principe 1).

@@ -16,7 +16,7 @@ Nouvelle fiche : skill `/adr`.
 | [0008](0008-langues-du-projet.md) | Code en anglais, tout le reste en français | Acceptée |
 | [0010](0010-dossier-unique-coulisses.md) | Un seul dossier visible `~/Coulisses` : `Code/` (git), `Modèles/`, `Données/` | Acceptée |
 | [0016](0016-deux-depots-et-versions.md) | Deux dépôts (moteur avec son atelier, application seule), moteur installable et versionné, versions automatiques depuis les commits | Acceptée |
-| [0017](0017-direction-artistique.md) | Direction artistique sobre et éditoriale : fonds neutres, accent brique, DM Sans et Figtree, relecture en deux colonnes | Acceptée |
+| [0017](0017-direction-artistique.md) | Direction artistique sobre et éditoriale : fonds neutres, accent brique, DM Sans et Figtree, relecture en deux colonnes | Acceptée (échelle typographique : remplacée par 0038) |
 | [0018](0018-schema-de-donnees.md) | Schéma de données : SQLite fait foi, les exécutions restent des fichiers, corrections en journal | Acceptée (sauvegardes et séance supprimée : remplacé par 0029) |
 | [0020](0020-espaces.md) | Des espaces (troupe, équipe, client) plutôt qu'une troupe ; pas de type, des modèles de départ ; reconnaissance des voix sur option | Acceptée |
 | [0022](0022-generation-des-resumes.md) | Générer les résumés : une exécution de l'application, tokens estimés puis vérifiés, modèle en configuration | Acceptée |
@@ -33,5 +33,6 @@ Nouvelle fiche : skill `/adr`.
 | [0034](0034-app-du-dock.md) | Coulisses, une app dans le Dock avec sa propre fenêtre : démarre et arrête le service, reçoit les permissions ; la PWA est abandonnée ; le nom reste Coulisses (Q3) | Acceptée |
 | [0036](0036-page-modeles.md) | La section « Modèles » des Réglages, par l'API de modèles du moteur (v1.5.0, puis v1.6.0 pour les environnements) : état, téléchargement confirmé et suivi, suppression confirmée, `stop_downloads` à l'arrêt | Acceptée |
 | [0037](0037-mix-d-ecoute.md) | Un mix d'écoute qui baisse le micro quand personne n'y parle (le clavier, la pièce) ; le moteur garde la somme simple | Acceptée |
+| [0038](0038-echelle-typographique.md) | Une échelle typographique pour une interface : rien sous 12 px, texte d'appoint 13 px, titres 18 à 34 px (remplace le rapport 1,333 de 0017) | Acceptée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.
