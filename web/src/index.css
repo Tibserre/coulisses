@@ -160,7 +160,9 @@ body {
 
 .cl-review__columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  /* The side column gives way first on a narrow window: the transcript keeps a reading
+     width. */
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 30vw, 420px);
   min-height: 0;
 }
 
@@ -189,7 +191,6 @@ body {
   gap: var(--spacing-1);
   padding-inline-start: var(--spacing-4);
 }
-
 
 .cl-name {
   font-weight: var(--font-weight-semibold);
@@ -306,24 +307,42 @@ button.cl-time {
   gap: var(--spacing-3);
 }
 
+/* The key figures, on one line: the number, then what it counts. */
 .cl-figures {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1) var(--spacing-5);
   margin: 0;
 }
 
+.cl-figures > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+}
+
 .cl-figures dt {
+  order: 2;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
 
 .cl-figures dd {
+  order: 1;
   margin: 0;
   font-family: var(--font-family-heading);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-medium);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A section reduced to a line until asked: « 5 présents · Modifier ». */
+.cl-side__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-3);
 }
 
 .cl-participants {
@@ -630,6 +649,37 @@ button.cl-time {
   gap: var(--spacing-3);
 }
 
+/* The same voice goes on: its name is not said again and the line sits closer. On hover
+   (or keyboard focus), a small bar above the line's end brings back the name (to name the
+   voice) and the line's actions, over the gap between lines, never over its text. */
+.cl-turn[data-continued] {
+  padding-top: 0;
+}
+
+.cl-turn[data-continued] .cl-turn__head {
+  position: absolute;
+  bottom: 100%;
+  inset-inline-end: 0;
+  z-index: 1;
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-element);
+  background: var(--color-background-popover);
+  box-shadow: var(--shadow-low, 0 1px 3px rgb(0 0 0 / 12%));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cl-turn[data-continued]:hover .cl-turn__head,
+.cl-turn[data-continued] .cl-turn__head:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cl-turn[data-continued] .cl-turn__actions {
+  opacity: 1;
+}
+
 button.cl-name {
   border: 0;
   background: none;
@@ -690,20 +740,11 @@ button.cl-name:hover {
   color: var(--color-text-primary);
 }
 
-
-
 .cl-word[data-suggestion] {
   text-decoration: underline wavy var(--color-accent);
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;
 }
-
-
-
-
-
-
-
 
 .cl-selection {
   position: absolute;
@@ -979,6 +1020,14 @@ button.cl-name {
 
 .cl-summary__head p {
   margin: 0;
+}
+
+/* The summary's name, then its date under it: never run together. */
+.cl-summary__head > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .cl-summary__tools {
@@ -1759,7 +1808,6 @@ a.cl-iconbtn {
   flex-direction: column;
   gap: var(--spacing-3);
 }
-
 
 /* What is marked while recording: the strip as it grows, the switch, the moment, a note. */
 .cl-live {
@@ -2688,5 +2736,24 @@ a.cl-iconbtn {
 
   .cl-models__actions {
     justify-content: flex-start;
+  }
+}
+
+/* A narrow window (after every rule it adjusts): the transcript keeps its width. */
+@media (max-width: 1280px) {
+  .cl-transcript {
+    padding-inline: var(--spacing-5);
+  }
+
+  .cl-turn,
+  .cl-chapter,
+  .cl-gap,
+  .cl-aside {
+    grid-template-columns: 4.5rem 1fr;
+    column-gap: var(--spacing-3);
+  }
+
+  .cl-transcript > div {
+    max-width: calc(70ch + 4.5rem + var(--spacing-3) + var(--spacing-4));
   }
 }

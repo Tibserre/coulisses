@@ -104,7 +104,7 @@ Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à dro
 
 **Colonne de gauche : la transcription entière.** Elle se lit comme un texte édité :
 - l'horodatage dans la marge, cliquable pour lire à partir de là ;
-- le nom en petites capitales dans l'encre du participant, puis la réplique ;
+- le nom en petites capitales dans l'encre du participant, puis la réplique ; quand la même voix continue, sans rien entre, son nom n'est pas répété : la ligne garde son horodatage, et au survol une petite barre au-dessus de sa fin rend le nom (pour nommer la voix) et ses actions ;
 - pas de pastille ni d'avatar dans le texte ;
 - la réplique en cours a son horodatage en brique ; le mot en cours est surligné. Aucun trait de couleur sur le bord (retour de l'utilisateur du 2026-10-06) ;
 - le texte d'une réplique se modifie directement, comme dans Notion : ni cadre, ni fond, ni contour, au survol comme pendant la saisie ; seul le curseur (brique) montre où l'on écrit ;
@@ -113,8 +113,9 @@ Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à dro
 - un mot peu sûr est souligné en pointillé ; au survol, « le modèle doutait » et sa certitude, qui compte depuis 0 ;
 - un mot ajouté à la main, sans temps mesuré, porte un petit « + » en exposant (ADR 0011 du moteur).
 
-**Colonne de droite : vue d'ensemble et résumé.** Largeur fixe d'environ 420 px.
-- En haut, les chiffres clés : durée, participants, décisions, actions, questions.
+**Colonne de droite : vue d'ensemble et résumé.** Environ 420 px, jusqu'à 300 px sur une fenêtre étroite : la transcription garde sa largeur de lecture.
+- En haut, les chiffres clés sur une ligne : voix, répliques (la durée est sous le titre), puis décisions, actions, questions quand elles existent.
+- Ce qui sert rarement tient en une ligne jusqu'à ce qu'on le demande : les présents (« Modifier »), les corrections (les trois dernières, puis « Voir les N autres »).
 - Onglet « Vue d'ensemble » : les participants (pastille aux initiales, rôle, part du temps de parole), puis les décisions, les actions (responsable, échéance) et les questions ouvertes.
 - Onglet « Résumé » : le compte rendu par sections, puis le message court prêt à copier.
 - Chaque point renvoie aux répliques qui le justifient par une **citation** : une petite étiquette à l'heure de la réplique, dans la couleur de la personne. Cliquer y amène la lecture ; survoler surligne la réplique à gauche.

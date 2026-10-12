@@ -321,6 +321,7 @@ const TurnLine = memo(function TurnLine({
   return (
     <div
       className="cl-turn"
+      data-continued={row.continued || undefined}
       data-current={isCurrent || undefined}
       data-selected={isSelected || undefined}
     >

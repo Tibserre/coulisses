@@ -10,6 +10,9 @@ export interface TurnRow {
   key: string;
   turn: Turn;
   speaker: Speaker;
+  /** The line just above is the same voice's, with nothing between: its name is not said
+   *  again (the line keeps its time, its selection, its actions). */
+  continued?: boolean;
 }
 
 export interface GapRow {
@@ -137,7 +140,12 @@ export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = ne
         opensSession: starts.phase.turn === view.turns[0]?.index,
       });
     }
-    if (!hidden) rows.push(row);
+    if (!hidden) {
+      const above = rows[rows.length - 1];
+      const continued =
+        above?.kind === "turn" && above.turn.speaker === row.turn.speaker && row.speaker.label !== null;
+      rows.push(continued ? { ...row, continued } : row);
+    }
   }
   while (g < gaps.length) {
     const gap = gaps[g++];

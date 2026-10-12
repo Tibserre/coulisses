@@ -251,3 +251,55 @@ test("key moments and notes from the recording sit between the lines, by time", 
   // 0:00 line, 2–4 s untranscribed, the moment at 4.5 s, 5 s line, the note at 8 s, 9 s line.
   assert.deepEqual(rows, ["turn", "untranscribed", "moment", "turn", "note", "turn"]);
 });
+
+test("the same voice going on is not named again; anything between names it again", () => {
+  const turn = (index: number, speaker: string, start: number) => ({
+    index,
+    speaker,
+    start,
+    end: start + 1,
+    edited: false,
+    words: [word("mot", start)],
+  });
+  const view: CorrectedView = {
+    ...VIEW,
+    turns: [turn(0, "7", 0), turn(1, "7", 2), turn(2, "2", 4), turn(3, "2", 6), turn(4, "2", 30)],
+    untranscribed: [{ start: 20, end: 25 }],
+  };
+  const lines = buildModel(view).rows.filter((r): r is TurnRow => r.kind === "turn");
+  assert.deepEqual(
+    lines.map((r) => !!r.continued),
+    [false, true, false, true, false], // the stretch not transcribed, between 3 and 4
+  );
+});
+
+test("a chapter, a key moment or a note between two lines of a voice names it again", () => {
+  const turn = (index: number, speaker: string | null, start: number) => ({
+    index,
+    speaker,
+    start,
+    end: start + 1,
+    edited: false,
+    words: [word("mot", start)],
+  });
+  const view: CorrectedView = {
+    ...VIEW,
+    turns: [
+      turn(0, "7", 0),
+      turn(1, "7", 2), // a chapter starts here
+      turn(2, "7", 4),
+      turn(3, "7", 10), // a note at 8 s before it
+      turn(4, null, 12),
+      turn(5, null, 14), // no voice: never « continued »
+    ],
+    untranscribed: [],
+    phases: [{ ...CHAPTERED.phases[0], turn: 1, end_turn: 6 }],
+    markers: [],
+    timed_notes: [{ id: 1, at_s: 8, text: "une idée" }],
+  };
+  const lines = buildModel(view).rows.filter((r): r is TurnRow => r.kind === "turn");
+  assert.deepEqual(
+    lines.map((r) => !!r.continued),
+    [false, false, true, false, false, false],
+  );
+});

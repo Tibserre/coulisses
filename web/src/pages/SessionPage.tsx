@@ -610,7 +610,7 @@ export function SessionPage({
                 />
               ) : (
                 <>
-              <KeyFigures view={view} model={model} duration={session.duration_s} dev={dev} />
+              <KeyFigures view={view} model={model} dev={dev} />
               <Participants
                 model={model}
                 onMerge={(source, target) => correct({ kind: "merge_speakers", source, target })}
