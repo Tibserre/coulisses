@@ -28,7 +28,7 @@ test("nothing beside the reference: nothing said", () => {
 test("the computer's sound is named, and said to be mixed in", () => {
   const said = extraTracks([source("system")]);
   assert.equal(said?.text, " · son de l'ordinateur");
-  assert.match(said?.title ?? "", /réunis pour le traitement/);
+  assert.match(said?.title ?? "", /le traitement entend les deux tels quels/);
 });
 
 test("a second microphone is counted, and said not processed yet", () => {
@@ -38,7 +38,7 @@ test("a second microphone is counted, and said not processed yet", () => {
 });
 
 test("a computer's sound that stayed silent points to the permission", () => {
-  const mix = { gain: 1, sha256: "", system_silent: true, made_at: "" };
+  const mix = { gain: 1, sha256: "", system_silent: true, made_at: "", listening_mix: null };
   const said = extraTracks([source("system")], mix);
   assert.equal(said?.text, " · son de l'ordinateur resté muet");
   assert.match(said?.title ?? "", /Enregistrement de l'écran et de l'audio du système.*micro seul/);
@@ -65,4 +65,11 @@ test("both, each with what went wrong with its file", () => {
     source("system", { file_present: false }),
   ]);
   assert.equal(said?.text, " · son de l'ordinateur (piste introuvable) · 2 micros (piste « Micro de l'iPhone » vide)");
+});
+
+test("while the listening mix is being made, the tooltip says what is heard", () => {
+  const mix = { gain: 1, sha256: "", system_silent: false, made_at: "", listening_mix: null };
+  assert.match(extraTracks([source("system")], mix)?.title ?? "", /en préparation/);
+  const made = { ...mix, listening_mix: { gain: 1, sha256: "" } };
+  assert.match(extraTracks([source("system")], made)?.title ?? "", /le micro est baissé/);
 });

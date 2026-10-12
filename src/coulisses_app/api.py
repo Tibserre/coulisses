@@ -947,13 +947,16 @@ def create_app(
 
     @app.get("/api/seances/{session_id}/audio")
     def audio(session_id: str) -> FileResponse:
-        # With the computer's sound, the mix once made: everyone is heard (ADR 0032).
-        path = mixing.listening_path(data, session_id)
-        if path is None:
+        if sessions.get_session(data, session_id) is None:
             raise _not_found("Séance introuvable.")
+        # Checked first: after a removal, nothing is prepared again (ADR 0029).
         status = retention.audio_status(data, session_id)
         if status.state == "removed":
             raise _not_found("L'audio de cette séance a été supprimé.")
+        # With the computer's sound, its listening mix once made (ADR 0032, 0037).
+        path = mixing.listening_path(data, session_id)
+        if path is None:
+            raise _not_found("Séance introuvable.")
         if not path.is_file():
             raise _not_found(
                 "L'enregistrement est introuvable dans le dossier de la séance. "

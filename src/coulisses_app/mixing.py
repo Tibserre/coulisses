@@ -23,13 +23,16 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ValidationError
 
-from coulisses_app import sessions, wav
+from coulisses_app import listening, sessions, wav
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import now_iso
 
 log = logging.getLogger(__name__)
 
 MIX_FILE = "mix.wav"
+LISTENING_FILE = "listening.wav"
+"""What the session's page plays: the microphone turned down while nobody speaks into it
+(ADR 0037). The engine never hears it."""
 MIX_FACTS = "mix.json"
 CEILING = 0.98
 """The loudest sample of the mix, at most (just under full scale)."""
@@ -47,6 +50,16 @@ class MixError(RuntimeError):
     """The mix cannot be made; the message is shown to the user."""
 
 
+class ListeningMixFacts(BaseModel):
+    """What the listening mix was made of (ADR 0037)."""
+
+    file: str
+    sha256: str
+    gain: float
+    rule: str
+    parameters: dict[str, float]
+
+
 class MixFacts(BaseModel):
     """What a mix was made of, and what it holds."""
 
@@ -59,6 +72,8 @@ class MixFacts(BaseModel):
     system_silent: bool
     """The computer's sound held nothing at all: the mix is the microphone alone."""
     made_at: str
+    listening_mix: ListeningMixFacts | None = None
+    """The mix heard on the session's page; None for a mix made before it existed."""
 
 
 def _lock(session_id: str) -> threading.Lock:
@@ -149,10 +164,26 @@ def read_facts(data: DataDir, session_id: str) -> MixFacts | None:
         return None
 
 
+_asked: set[str] = set()
+_asked_lock = threading.Lock()
+
+
 def listening_path(data: DataDir, session_id: str) -> Path | None:
-    """What to play back: the mix once made, else the reference."""
-    mix = data.sources_dir(session_id) / MIX_FILE
-    if mix.is_file() and read_facts(data, session_id) is not None:
+    """What to play back: the listening mix once made, else the plain mix, else the
+    reference. A mix made before the listening one existed gets it, in the background."""
+    folder = data.sources_dir(session_id)
+    facts = read_facts(data, session_id)
+    if facts is not None and facts.listening_mix is not None:
+        heard = folder / facts.listening_mix.file
+        if heard.is_file():
+            return heard
+    mix = folder / MIX_FILE
+    if facts is not None and mix.is_file():
+        with _asked_lock:  # once per service: the player asks for the file many times
+            first = session_id not in _asked
+            _asked.add(session_id)
+        if first:
+            prepare_in_background(data, session_id)
         return mix
     return sessions.reference_audio_path(data, session_id)
 
@@ -188,20 +219,52 @@ def ensure_mix(
         # The fingerprints taken when each recording closed (`finish_capture`).
         made_from = {reference.source_id: reference.sha256, system.source_id: system.sha256}
         known = read_facts(data, session_id)
-        if known is not None and known.made_from == made_from and mix.is_file():
+        heard = folder / LISTENING_FILE
+        if (
+            known is not None
+            and known.made_from == made_from
+            and mix.is_file()
+            and known.listening_mix is not None
+            and heard.is_file()
+        ):
             return mix, known
+        # Never after the audio was removed (a purge, a deletion): nothing is written back.
+        session = sessions.get_session(data, session_id)
+        if session is None or session.audio.state == "removed":
+            raise MixError("L'audio de cette séance a été supprimé.")
+        # A mix made before ADR 0037, from the same sources: only its listening mix is
+        # made; the engine's input stays as it was, byte for byte.
+        keep_plain = known is not None and known.made_from == made_from and mix.is_file()
         if known is not None:
-            log.info("mix of %s made again: its sources changed", session_id)
-        try:
-            gain, system_peak = _mix(ref_path, system_path, mix)
-            facts = MixFacts(
-                made_from=made_from,
-                gain=gain,
-                rule=RULE,
-                sha256=_sha256(mix),
-                system_silent=system_peak < SILENT_PEAK,
-                made_at=now_iso(),
+            log.info(
+                "mix of %s: %s",
+                session_id,
+                "listening mix added" if keep_plain else "made again, its sources changed",
             )
+        try:
+            gain, system_peak, heard_gain = _mix(
+                ref_path, system_path, None if keep_plain else mix, heard
+            )
+            listening_mix = ListeningMixFacts(
+                file=LISTENING_FILE,
+                sha256=_sha256(heard),
+                gain=heard_gain,
+                rule=listening.RULE,
+                parameters=listening.PARAMETERS,
+            )
+            if keep_plain:
+                assert known is not None
+                facts = known.model_copy(update={"listening_mix": listening_mix})
+            else:
+                facts = MixFacts(
+                    made_from=made_from,
+                    gain=gain,
+                    rule=RULE,
+                    sha256=_sha256(mix),
+                    system_silent=system_peak < SILENT_PEAK,
+                    made_at=now_iso(),
+                    listening_mix=listening_mix,
+                )
             partial = folder / f"{MIX_FACTS}.partiel"
             partial.write_text(facts.model_dump_json(indent=2), encoding="utf-8")
             os.replace(partial, folder / MIX_FACTS)
@@ -218,51 +281,92 @@ def ensure_mix(
         return mix, facts
 
 
-def _mix(ref_path: Path, system_path: Path, target: Path) -> tuple[float, float]:
-    """Writes the mix; returns its gain and the loudest sample of the computer's sound."""
+def _mix(
+    ref_path: Path, system_path: Path, target: Path | None, heard_target: Path
+) -> tuple[float, float, float]:
+    """Writes the mix the engine hears (unless `target` is None: it is kept as it is) and
+    the one heard on the session's page; returns their gains and the loudest sample of the
+    computer's sound."""
     rate, ref_channels, ref_frames = _layout(ref_path)
     system_rate, system_channels, system_frames = _layout(system_path)
     if system_rate != rate:
         raise MixError("Le micro et le son de l'ordinateur n'ont pas la même fréquence.")
     total = max(ref_frames, system_frames)
+    frame = max(1, round(rate * listening.FRAME_S))
+    step = max(frame, CHUNK_FRAMES - CHUNK_FRAMES % frame)  # whole frames per chunk
 
-    def chunk(start: int) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
-        """(the sum, the computer's sound) of frames from `start`."""
-        count = min(CHUNK_FRAMES, total - start)
-        both = np.zeros(count, dtype=np.float32)
+    def tracks(start: int) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+        """(the microphone in mono, the computer's sound) from `start`, as long as each
+        other: a shorter track is padded with silence."""
+        count = min(step, total - start)
+        mic = np.zeros(count, dtype=np.float32)
+        computer = np.zeros(count, dtype=np.float32)
         a = _read(ref_path, ref_channels, start, min(count, max(0, ref_frames - start)))
         b = _read(system_path, system_channels, start, min(count, max(0, system_frames - start)))
-        both[: len(a)] += a
-        both[: len(b)] += b
-        return both, b
+        mic[: len(a)] = a
+        computer[: len(b)] = b
+        return mic, computer
 
+    # First: the peaks, and the level of each track every 10 ms.
     peak = system_peak = 0.0
-    for start in range(0, total, CHUNK_FRAMES):
-        both, system = chunk(start)
-        peak = max(peak, float(np.max(np.abs(both), initial=0.0)))
-        system_peak = max(system_peak, float(np.max(np.abs(system), initial=0.0)))
+    mic_levels: list[NDArray[np.float64]] = []
+    computer_levels: list[NDArray[np.float64]] = []
+    for start in range(0, total, step):
+        mic, computer = tracks(start)
+        peak = max(peak, float(np.max(np.abs(mic + computer), initial=0.0)))
+        system_peak = max(system_peak, float(np.max(np.abs(computer), initial=0.0)))
+        mic_levels.append(listening.frame_db(mic, frame))
+        computer_levels.append(listening.frame_db(computer, frame))
+    gains = listening.microphone_gains(
+        np.concatenate(mic_levels) if mic_levels else np.zeros(0),
+        np.concatenate(computer_levels) if computer_levels else np.zeros(0),
+    )
+
+    def heard(
+        start: int, mic: NDArray[np.float32], computer: NDArray[np.float32]
+    ) -> NDArray[np.float32]:
+        mixed = computer + mic * listening.per_sample(gains, frame, start, len(mic))
+        return mixed.astype(np.float32, copy=False)
+
+    heard_peak = 0.0
+    for start in range(0, total, step):
+        mic, computer = tracks(start)
+        heard_peak = max(
+            heard_peak, float(np.max(np.abs(heard(start, mic, computer)), initial=0.0))
+        )
     gain = min(1.0, CEILING / peak) if peak > 0 else 1.0
-    partial = target.with_name(target.name + ".partiel")
-    partial.unlink(missing_ok=True)
-    writer = wav.WavWriter(partial, rate, 1, sync_s=60.0)
+    heard_gain = min(1.0, CEILING / heard_peak) if heard_peak > 0 else 1.0
+
+    targets = [path for path in (target, heard_target) if path is not None]
+    partials = [path.with_name(path.name + ".partiel") for path in targets]
+    for partial in partials:
+        partial.unlink(missing_ok=True)
+    writers = [wav.WavWriter(partial, rate, 1, sync_s=60.0) for partial in partials]
     try:
-        for start in range(0, total, CHUNK_FRAMES):
-            writer.write((chunk(start)[0] * gain).reshape(-1, 1))
+        for start in range(0, total, step):
+            mic, computer = tracks(start)
+            if target is not None:
+                writers[0].write(((mic + computer) * gain).reshape(-1, 1))
+            writers[-1].write((heard(start, mic, computer) * heard_gain).reshape(-1, 1))
     finally:
-        writer.close()
-    os.replace(partial, target)
-    return gain, system_peak
+        for writer in writers:
+            writer.close()
+    for partial, final in zip(partials, targets, strict=True):
+        os.replace(partial, final)
+    return gain, system_peak, heard_gain
 
 
 def prepare_in_background(data: DataDir, session_id: str) -> None:
     """After a recording with the computer's sound: the mix is made at once, to be heard
-    on the session's page before the processing gets to it. A failure is logged; the
-    processing tries again and says why."""
+    on the session's page before the processing gets to it. A failure is logged and asked
+    again at the next listening; the processing tries again and says why."""
 
     def run() -> None:
         try:
             processing_input(data, session_id)
         except Exception:
             log.exception("preparing the mix of %s", session_id)
+            with _asked_lock:
+                _asked.discard(session_id)
 
     threading.Thread(target=run, name=f"mix-{session_id}", daemon=True).start()
