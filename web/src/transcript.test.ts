@@ -303,3 +303,29 @@ test("a chapter, a key moment or a note between two lines of a voice names it ag
     [false, false, true, false, false, false],
   );
 });
+
+test("naming a voice offers the people matching what is typed, then a guest or a free name", async () => {
+  const { nameChoices } = await import("./transcript.ts");
+  const person = (id: number, name: string, archived = false) =>
+    ({ id, space_id: 1, kind: "member", name, role: null, color_slot: id, archived }) as const;
+  const people = [person(1, "Elise"), person(2, "Nathalie"), person(3, "Lucie", true)];
+  const voice = (label: string | null, name: string) => ({ label, name }) as unknown as Speaker;
+  const me = voice("SPEAKER_01", "Nouvelle voix 1");
+  const voices = [me, voice("SPEAKER_02", "Elise"), voice(null, "Sans voix")];
+  const kinds = (c: { kind: string }[]) => c.map((x) => x.kind);
+
+  assert.deepEqual(kinds(nameChoices("who", me, people, voices, "")), ["person", "person"]); // archived left out
+  // A part of a name: the people it matches first, and still a new name.
+  assert.deepEqual(kinds(nameChoices("who", me, people, voices, "nath")), ["person", "guest", "free"]);
+  assert.deepEqual(kinds(nameChoices("who", me, people, voices, " elise ")), ["person"]); // the exact name: no guest
+  assert.deepEqual(nameChoices("who", me, people, voices, "  Lu  cie "), [
+    { kind: "guest", name: "Lu cie" },
+    { kind: "free", name: "Lu cie" },
+  ]);
+  // Who plays a character: everyone, whatever was typed on the first view.
+  assert.equal(nameChoices("character", me, people, voices, "nath").length, 2);
+  // The same as another voice: never itself, never a line without a voice.
+  assert.deepEqual(kinds(nameChoices("same", me, people, voices, "")), ["voice"]);
+  // A line without a voice: nothing to name.
+  assert.deepEqual(nameChoices("who", voice(null, "?"), people, voices, "Lucie"), []);
+});

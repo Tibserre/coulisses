@@ -124,7 +124,7 @@ Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à dro
 
 **Comportements.**
 - Le transcript ne défile tout seul que pendant la lecture ou après un clic de navigation. Jamais à l'ouverture.
-- Un participant non nommé s'appelle « Locuteur N », en italique gris, numéroté dans l'ordre de détection. L'action « Nommer » est toujours visible à côté. Nommer ne demande jamais d'ouvrir un autre écran.
+- Un participant non nommé s'appelle « Locuteur N », en italique gris, numéroté dans l'ordre de détection. L'action « Nommer » est toujours visible à côté. Nommer ne demande jamais d'ouvrir un autre écran : le nom devient un champ, et la liste des personnes s'ouvre dans la ligne, juste dessous, sans flotter ailleurs.
 - Les longs enregistrements : le texte d'un chapitre peut se replier, le chapitre en cours restant ouvert. Le transcript est virtualisé (`rules/web.md`).
 - Chaque état d'une étape se voit : en file, en cours avec sa progression, réussie, échouée avec une erreur lisible.
 

@@ -280,8 +280,6 @@ body {
 .cl-spacepick__what {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 /* The home's periods: titles of sections, in the size of a section. */
@@ -1130,6 +1128,172 @@ button.cl-name:hover {
   text-underline-offset: 3px;
 }
 
+/* Naming a voice in place: the name turns into a field, the list drops just under it, in
+   the line (its text goes down meanwhile: nothing is covered, nothing floats away). */
+.cl-turn[data-naming] {
+  background: var(--color-background-muted);
+  border-radius: var(--radius-element);
+}
+
+.cl-nameedit {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-bottom: var(--spacing-2);
+}
+
+.cl-nameedit__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  min-width: 240px;
+  padding: 2px var(--spacing-2);
+  border: 1px solid var(--color-border-emphasized);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+}
+
+.cl-nameedit__field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-base);
+  caret-color: var(--color-accent);
+}
+
+.cl-nameedit__field input::placeholder {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.1em;
+  font-variant-caps: all-small-caps;
+}
+
+.cl-nameedit__back {
+  display: inline-flex;
+  border: 0;
+  background: none;
+  padding: 2px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-nameedit__back:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-nameedit__panel {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  padding: var(--spacing-1);
+  border-radius: var(--radius-container);
+  background: var(--color-background-popover);
+  box-shadow: var(--shadow-med);
+  animation: cl-drop 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cl-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.cl-nameedit__title {
+  padding: var(--spacing-1) var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-nameedit__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 264px;
+  overflow-y: auto;
+}
+
+.cl-nameedit__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 6px var(--spacing-2);
+  border-radius: var(--radius-inner);
+  cursor: pointer;
+}
+
+.cl-nameedit__item[aria-selected="true"] {
+  background: var(--color-background-muted);
+}
+
+.cl-nameedit__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cl-nameedit__note {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-nameedit__icon {
+  flex: none;
+  width: 22px;
+  color: var(--color-text-secondary);
+}
+
+.cl-avatar--sm {
+  width: 22px;
+  height: 22px;
+  font-size: var(--font-size-xs);
+  flex: none;
+}
+
+.cl-nameedit__empty {
+  padding: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-nameedit__error {
+  padding: var(--spacing-1) var(--spacing-2);
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+}
+
+/* The rare cases, as words under the list. */
+.cl-nameedit__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1) var(--spacing-3);
+  margin-top: var(--spacing-1);
+  padding: var(--spacing-2) var(--spacing-2) var(--spacing-1);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-nameedit__more button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-nameedit__more button:hover {
+  color: var(--color-text-primary);
+}
+
 .cl-name__played {
   font-variant-caps: normal;
   letter-spacing: 0;
@@ -1197,12 +1361,6 @@ button.cl-name:hover {
   box-shadow: var(--shadow-med);
 }
 
-.cl-namepanel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-}
-
 .cl-namepanel__list {
   list-style: none;
   margin: 0;
@@ -1230,25 +1388,6 @@ button.cl-name:hover {
 .cl-namepanel__person:hover,
 .cl-namepanel__person[data-current] {
   background: var(--color-background-muted);
-}
-
-.cl-namepanel__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-2);
-}
-
-.cl-namepanel__more summary {
-  cursor: pointer;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.cl-namepanel__character {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-  padding-top: var(--spacing-2);
 }
 
 .cl-history {

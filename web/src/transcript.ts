@@ -3,7 +3,7 @@
  * untranscribed stretches in between, a heading at each chapter, each line with its voice.
  * Times are the engine's, measured or absent: nothing here estimates one (P2).
  */
-import type { CorrectedView, Marker, Phase, PhaseKind, Speaker, TimedNote, Turn, Word } from "./api.ts";
+import type { CorrectedView, Marker, Person, Phase, PhaseKind, Speaker, TimedNote, Turn, Word } from "./api.ts";
 
 export interface TurnRow {
   kind: "turn";
@@ -279,4 +279,37 @@ export function phaseSpans(view: Pick<CorrectedView, "phases" | "turns">, durati
     spans.push({ phase, number: i + 1, start, end: Math.max(start, next ?? duration) });
   });
   return spans;
+}
+
+/** What naming a voice offers, by view: who it is (the people of the space matching what is
+ *  typed, then, for a name not found, a new guest or a free name), who plays a character
+ *  (every person, whatever was typed before), or another voice it is the same as. A line
+ *  without a voice offers nothing: it is given to a voice instead. */
+export type NameChoice =
+  | { kind: "person"; person: Person }
+  | { kind: "guest"; name: string }
+  | { kind: "free"; name: string }
+  | { kind: "voice"; voice: Speaker };
+
+export function nameChoices(
+  view: "who" | "character" | "same",
+  speaker: Speaker,
+  people: Person[],
+  voices: Speaker[],
+  typed: string,
+): NameChoice[] {
+  if (speaker.label === null) return [];
+  const present = people.filter((p) => !p.archived);
+  const name = typed.replace(/\s+/g, " ").trim();
+  const q = name.toLowerCase();
+  if (view === "character") return present.map((person) => ({ kind: "person", person }));
+  if (view === "same")
+    return voices
+      .filter((v) => v.label !== null && v.label !== speaker.label && (!q || v.name.toLowerCase().includes(q)))
+      .map((voice) => ({ kind: "voice", voice }));
+  const matches: NameChoice[] = present
+    .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .map((person) => ({ kind: "person", person }));
+  if (!q || present.some((p) => p.name.toLowerCase() === q)) return matches;
+  return [...matches, { kind: "guest", name }, { kind: "free", name }];
 }

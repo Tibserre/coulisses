@@ -87,15 +87,3 @@ test("the home page records where it was chosen, else where the latest session w
   assert.equal(startSpace(spaces, [], 9), 1);
   assert.equal(startSpace([], [], null), null);
 });
-
-test("a space's latest session, whatever the order", async () => {
-  const { latestSession } = await import("./library.ts");
-  const list = [
-    { space_id: 1, recorded_at: "2026-09-30T18:00:00Z" },
-    { space_id: 2, recorded_at: "2026-10-09T18:00:00Z" },
-    { space_id: 1, recorded_at: "2026-10-07T18:00:00Z" },
-  ];
-  assert.equal(latestSession(1, list)?.recorded_at, "2026-10-07T18:00:00Z");
-  assert.equal(latestSession(2, list)?.recorded_at, "2026-10-09T18:00:00Z");
-  assert.equal(latestSession(3, list), null);
-});

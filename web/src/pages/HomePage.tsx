@@ -10,7 +10,7 @@ import { Badge } from "@astryxdesign/core/Badge";
 import { JobBadge } from "../components/JobBadge.tsx";
 import { PurgeBanner } from "../components/PurgeBanner.tsx";
 import { formatClock, formatDate, formatDuration, plural } from "../format.ts";
-import { rememberSpace, rememberedSpace, sessionHref, sessionName, latestSession, shortDay, startSpace } from "../library.ts";
+import { rememberSpace, rememberedSpace, sessionHref, sessionName, startSpace } from "../library.ts";
 import { formatDay, takeMessage } from "../retention.ts";
 
 const RECENT = 6;
@@ -108,7 +108,6 @@ export function HomePage({
                   Enregistrer dans{" "}
                   <SpacePicker
                     spaces={open}
-                    sessions={sorted}
                     chosen={spaceId}
                     onChoose={(id) => {
                       setChosen(id);
@@ -196,15 +195,13 @@ function SessionList({
 }
 
 /** The space a recording goes to, chosen in place: its name, underlined, opens the list of
- *  the open spaces (each with its latest session), the chosen one ticked. */
+ *  the open spaces, the chosen one ticked. */
 function SpacePicker({
   spaces,
-  sessions,
   chosen,
   onChoose,
 }: {
   spaces: Space[];
-  sessions: Session[];
   chosen: number | null;
   onChoose: (id: number) => void;
 }) {
@@ -241,7 +238,6 @@ function SpacePicker({
       content={
         <ul ref={list} className="cl-spacepick" aria-label="Espaces" onKeyDown={move}>
           {spaces.map((s) => {
-            const latest = latestSession(s.id, sessions);
             return (
               <li key={s.id}>
                 <button
@@ -253,12 +249,7 @@ function SpacePicker({
                     setOpen(false);
                   }}
                 >
-                  <span className="cl-spacepick__what">
-                    <span>{s.name}</span>
-                    <Text type="supporting">
-                      {latest ? `Dernière séance ${shortDay(latest.recorded_at)}` : "Aucune séance encore"}
-                    </Text>
-                  </span>
+                  <span className="cl-spacepick__what">{s.name}</span>
                   {s.id === chosen && <Check size={16} strokeWidth={1.75} aria-hidden />}
                 </button>
               </li>
