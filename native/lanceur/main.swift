@@ -32,6 +32,8 @@ let expectedData: String = {
 struct Activity: Decodable {
     let recording: Bool
     let processing: Bool
+    /// A model downloading (absent from a service older than this app: none).
+    let downloading: Bool?
 }
 
 /// What the service says at /api/etat: enough to know it is Coulisses.
@@ -270,7 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     func confirmQuit(_ activity: Activity?) {
         var go = true
-        if activity.map({ $0.recording || $0.processing }) ?? true {
+        if activity.map({ $0.recording || $0.processing || $0.downloading == true }) ?? true {
             let alert = NSAlert()
             if activity == nil {
                 alert.messageText = "Coulisses ne répond pas."
@@ -281,10 +283,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 alert.messageText = "Un enregistrement est en cours."
                 alert.informativeText = "Quitter l'arrête : ce qui est enregistré est gardé."
                 alert.addButton(withTitle: "Arrêter et quitter")
+            } else if activity?.processing != true {
+                alert.messageText = "Un modèle est en cours de téléchargement."
+                alert.informativeText =
+                    "Il reprendra là où il en est la prochaine fois que vous le demanderez."
+                alert.addButton(withTitle: "Quitter")
             } else {
                 alert.messageText = "Un traitement est en cours."
                 alert.informativeText =
                     "Il reprendra là où il en est au prochain lancement de Coulisses."
+                    + (activity?.downloading == true
+                        ? " Le téléchargement de modèle en cours reprendra aussi quand vous le demanderez."
+                        : "")
                 alert.addButton(withTitle: "Quitter")
             }
             alert.addButton(withTitle: "Annuler")

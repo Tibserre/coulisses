@@ -7,6 +7,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { api, type AppInfo, type Folders, type PurgeAnnouncement, type RetentionInfo } from "../api.ts";
 import { Switch } from "@astryxdesign/core/Switch";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
+import { ModelsSection } from "../components/ModelsSection.tsx";
 import { setDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
@@ -166,6 +167,7 @@ export function SettingsPage({ info: about }: { info: AppInfo | null }) {
             ))}
           </ul>
         </section>
+        <ModelsSection />
         <section className="cl-settings__section">
           <Heading level={3}>Coulisses</Heading>
           <Text color="secondary">
@@ -174,7 +176,6 @@ export function SettingsPage({ info: about }: { info: AppInfo | null }) {
           </Text>
           <div className="cl-settings__buttons">
             <Button label="Ouvrir les données" size="sm" onClick={() => void act(() => api.openFolder("donnees"))} />
-            <Button label="Ouvrir les modèles" size="sm" onClick={() => void act(() => api.openFolder("modeles"))} />
             {dev && folders?.log && (
               <Button label="Afficher le journal" size="sm" onClick={() => void act(() => api.openFolder("journal"))} />
             )}

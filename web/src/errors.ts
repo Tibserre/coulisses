@@ -15,11 +15,11 @@ export function describeStageError(stage: StageError): string | null {
   const d = stage.error_details;
   switch (stage.error_code) {
     case "model_missing":
-      return `Un modèle nécessaire n'est pas installé (${text(d, "model")}). Installez-le dans le Terminal avec « uv run coulisses-models telecharger ${text(d, "model")} », puis reprenez.`;
+      return `Un modèle nécessaire n'est pas installé (${text(d, "model")}). Téléchargez-le dans Réglages, section Modèles, puis reprenez.`;
     case "model_altered":
-      return `Le modèle ${text(d, "model")} est abîmé : supprimez-le (« uv run coulisses-models supprimer ${text(d, "model")} »), retéléchargez-le, puis reprenez.`;
+      return `Le modèle ${text(d, "model")} est abîmé : dans Réglages, section Modèles, supprimez-le puis retéléchargez-le, et reprenez.`;
     case "environment_missing":
-      return `L'environnement de calcul ${text(d, "environment")} n'est pas installé. Installez-le avec « uv run coulisses-models installer-environnement ${text(d, "environment")} », puis reprenez.`;
+      return `L'environnement de calcul ${text(d, "environment")} n'est pas installé. Installez-le dans Réglages, section Modèles, puis reprenez.`;
     case "audio_unreadable":
       return "L'enregistrement n'a pas pu être lu : fichier absent, abîmé, ou sans son.";
     case "too_few_speakers":
