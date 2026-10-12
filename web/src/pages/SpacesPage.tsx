@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -145,13 +146,6 @@ function SpaceDetail({
             clickAction={act(() => api.updateSpace(space.id, { name }))}
           />
         )}
-        <Button
-          variant="ghost"
-          label={space.archived ? "Désarchiver" : "Archiver l'espace"}
-          clickAction={act(() =>
-            api.updateSpace(space.id, { archived: !space.archived }),
-          )}
-        />
       </div>
 
       <Switch
@@ -179,6 +173,25 @@ function SpaceDetail({
       />
       <GlossarySection spaceId={space.id} entries={glossary} act={act} />
       <AutoSummaries spaceId={space.id} onError={onError} />
+
+      {/* Away from the name: archiving is rare, and never next to what one types. */}
+      <section className="cl-space__section">
+        <Heading level={3}>{space.archived ? "Espace archivé" : "Archiver l'espace"}</Heading>
+        <Text type="supporting">
+          {space.archived
+            ? "Il est rangé à part dans la colonne ; ses séances y restent."
+            : "Il est rangé à part dans la colonne, avec ses séances, qui restent consultables ; on n'y commence plus de séance. Rien n'est supprimé."}
+        </Text>
+        <div>
+          <Button
+            size="sm"
+            label={space.archived ? "Désarchiver" : "Archiver l'espace"}
+            clickAction={act(() =>
+              api.updateSpace(space.id, { archived: !space.archived }),
+            )}
+          />
+        </div>
+      </section>
     </div>
   );
 }
@@ -324,23 +337,28 @@ function PersonRow({ person, act }: { person: Person; act: Act }) {
           clickAction={act(() => api.updatePerson(person.id, { name, role }))}
         />
       )}
-      <Button
+      <MoreMenu
+        label={`Options de ${person.name}`}
         size="sm"
-        variant="ghost"
-        label={person.kind === "guest" ? "Passer membre" : "Passer invité"}
-        clickAction={act(() =>
-          api.updatePerson(person.id, {
-            kind: person.kind === "guest" ? "member" : "guest",
-          }),
-        )}
-      />
-      <Button
-        size="sm"
-        variant="ghost"
-        label={person.archived ? "Désarchiver" : "Archiver"}
-        clickAction={act(() =>
-          api.updatePerson(person.id, { archived: !person.archived }),
-        )}
+        alignment="end"
+        items={[
+          {
+            label: person.kind === "guest" ? "Passer membre" : "Passer invité",
+            onClick: () =>
+              void act(() =>
+                api.updatePerson(person.id, {
+                  kind: person.kind === "guest" ? "member" : "guest",
+                }),
+              )(),
+          },
+          {
+            label: person.archived ? "Désarchiver" : "Archiver",
+            onClick: () =>
+              void act(() =>
+                api.updatePerson(person.id, { archived: !person.archived }),
+              )(),
+          },
+        ]}
       />
     </li>
   );
@@ -442,13 +460,19 @@ function GlossaryRow({ entry, act }: { entry: GlossaryEntry; act: Act }) {
           )}
         />
       )}
-      <Button
+      <MoreMenu
+        label={`Options de ${entry.term}`}
         size="sm"
-        variant="ghost"
-        label={entry.archived ? "Désarchiver" : "Archiver"}
-        clickAction={act(() =>
-          api.updateEntry(entry.id, { archived: !entry.archived }),
-        )}
+        alignment="end"
+        items={[
+          {
+            label: entry.archived ? "Désarchiver" : "Archiver",
+            onClick: () =>
+              void act(() =>
+                api.updateEntry(entry.id, { archived: !entry.archived }),
+              )(),
+          },
+        ]}
       />
     </li>
   );

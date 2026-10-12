@@ -12,7 +12,7 @@ test("a search hit opens its session at the measured time", () => {
   assert.equal(sessionHref("abc", 12.53), "#/seance/abc?t=12.5");
   assert.equal(sessionHref("abc", null, "summary"), "#/seance/abc?onglet=resume");
   assert.deepEqual(parseRoute("#/espaces/3"), { page: "space", id: 3 });
-  assert.deepEqual(parseRoute("#/reglages"), { page: "settings" });
+  assert.deepEqual(parseRoute("#/reglages"), { page: "settings", part: null });
   assert.deepEqual(parseRoute(""), { page: "home" });
 });
 
@@ -81,4 +81,9 @@ test("a group shows its latest sessions, and keeps in sight those that must be",
   const ids = ["a", "b", "c", "d", "e", "f", "g"];
   assert.deepEqual(visibleSessions(ids, 5, () => false), ["a", "b", "c", "d", "e"]);
   assert.deepEqual(visibleSessions(ids, 5, (s) => s === "g"), ["a", "b", "c", "d", "e", "g"]);
+});
+
+test("the settings open on the tab the address asks for", () => {
+  assert.deepEqual(parseRoute("#/reglages?onglet=modeles"), { page: "settings", part: "modeles" });
+  assert.deepEqual(parseRoute("#/reglages"), { page: "settings", part: null });
 });

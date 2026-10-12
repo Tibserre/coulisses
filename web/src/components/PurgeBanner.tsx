@@ -47,7 +47,7 @@ export function PurgeBanner() {
             : `L'audio de ${plural(coming.length, "séance", "séances")} sera bientôt supprimé, dès le ${formatDay(first.purge_on)}`
         }
         description={`Le texte, les noms et les résumés restent. Gardez l'audio ou prolongez s'il vous sert encore.${problems.length ? ` ${problems.join(" ")}` : ""}`}
-        endContent={<Button size="sm" label="Voir" onClick={() => (window.location.hash = "#/reglages")} />}
+        endContent={<Button size="sm" label="Voir" onClick={() => (window.location.hash = "#/reglages?onglet=general")} />}
       />
     </div>
   );

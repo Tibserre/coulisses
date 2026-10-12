@@ -141,6 +141,13 @@ body {
   font-size: var(--font-size-lg);
 }
 
+/* An action's heading: its name, then what it is, under it. */
+.cl-actions__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
 .cl-footer {
   display: flex;
   flex-wrap: wrap;
@@ -2509,9 +2516,11 @@ button.cl-tree__more:hover {
 }
 
 .cl-search__meta {
+  flex: none;
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-normal);
   font-size: var(--font-size-sm);
+  white-space: nowrap;
 }
 
 .cl-search__hit {

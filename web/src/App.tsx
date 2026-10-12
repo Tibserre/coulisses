@@ -231,7 +231,7 @@ function Shell({ route }: { route: Route }) {
             ) : route.page === "actions" ? (
               <ActionsPage selectedRef={route.ref} />
             ) : route.page === "settings" ? (
-              <SettingsPage info={info} />
+              <SettingsPage part={route.part} info={info} />
             ) : (
               <HomePage
                 sessions={sessions}

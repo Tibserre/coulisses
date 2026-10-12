@@ -9,7 +9,7 @@ export type Route =
   | { page: "space"; id: number }
   | { page: "actions"; ref: string | null }
   | { page: "recording" }
-  | { page: "settings" };
+  | { page: "settings"; part: string | null };
 
 /** `#/seance/<id>?t=12.5` opens a session at a measured time (a search hit). */
 export function parseRoute(hash: string): Route {
@@ -28,7 +28,7 @@ export function parseRoute(hash: string): Route {
   const space = /^#\/espaces\/(\d+)/.exec(path);
   if (space) return { page: "space", id: Number(space[1]) };
   if (path.startsWith("#/enregistrement")) return { page: "recording" };
-  if (path.startsWith("#/reglages")) return { page: "settings" };
+  if (path.startsWith("#/reglages")) return { page: "settings", part: params.get("onglet") };
   const actions = /^#\/actions(?:\/([^/?#]+))?/.exec(path);
   if (actions) return { page: "actions", ref: actions[1] ? decodeURIComponent(actions[1]) : null };
   return { page: "home" };

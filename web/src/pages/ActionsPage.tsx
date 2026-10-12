@@ -164,7 +164,7 @@ function ActionEditor({
 
   return (
     <div className="cl-space">
-      <div className="cl-space__head">
+      <div className="cl-actions__head">
         <Heading level={2}>{action ? action.name : "Nouvelle action"}</Heading>
         <Text type="supporting">
           {action == null
@@ -202,7 +202,7 @@ function ActionEditor({
           description="Coulisses ajoute toujours autour : le cadre, la règle pour une séance sans contenu, la consigne de répondre en français, le contexte (espace, présents, voix, glossaire, notes) et la transcription avec ses chapitres. Ne les recopiez pas."
           value={draft.prompt}
           onChange={(prompt) => setDraft({ ...draft, prompt })}
-          rows={22}
+          rows={16}
           hasSpellCheck
         />
         <div className="cl-actions__buttons">

@@ -180,6 +180,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 - **Lancement** : l'app **Coulisses** dans le Dock démarre le service et montre l'interface dans sa propre fenêtre. Quitter (⌘Q) arrête le service ; pendant un enregistrement ou un traitement, l'app demande d'abord. Rien ne tourne quand l'app est fermée. Les permissions de macOS (micro, son de l'ordinateur) vont à Coulisses (ADR 0005, 0034).
 - **Dossiers** : depuis les Réglages, ouvrir dans le Finder le dossier des données, celui des modèles et le journal du service.
+- **Réglages en quatre onglets**, dont l'adresse garde l'onglet ouvert : « Général » (conservation de l'audio, ce qui est bientôt supprimé, dossier d'export), « Modèles », « Données » (la version, les dossiers à ouvrir dans le Finder, le journal des suppressions et les sauvegardes de la base, les cinq plus récentes d'abord, le reste sur demande), « Avancé » (mode développeur).
 - Durée de conservation, préavis de purge.
 - **Modèles dans un dossier visible** : `~/Coulisses/Modèles`, un sous-dossier par modèle avec sa fiche (source, révision, taille, date). Je les vois, les déplace ou les supprime dans le Finder ou depuis l'app.
 - **Section « Modèles »** des Réglages : chaque modèle du moteur, à quoi il sert, s'il est nécessaire au traitement, installé ou non, sa taille ; une phrase dit si tout est prêt pour traiter. Suppression après confirmation, d'un modèle ou d'un environnement de calcul que le traitement n'utilise plus (ADR 0036).
