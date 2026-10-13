@@ -27,9 +27,17 @@ Le moteur (étiquette dans `pyproject.toml`) a besoin de ses modèles et de l'en
 uv run coulisses-app
 ```
 
-Le service écoute sur `http://127.0.0.1:8765` et ouvre l'interface. Les séances vont dans `~/Coulisses/Données`. Pour développer : `COULISSES_DATA_DIR=~/Coulisses/Données-dev uv run coulisses-app`. Ctrl-C arrête le service ; un traitement en cours reprend au lancement suivant.
+Le service écoute sur `http://127.0.0.1:8765` et ouvre l'interface. Les séances vont dans `~/Coulisses/Données`. Ctrl-C arrête le service ; un traitement en cours reprend au lancement suivant.
 
-Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l'API passe par le service).
+**Pour développer** (ADR 0040), jamais sur les vraies séances :
+
+```bash
+uv run coulisses-app --dev
+```
+
+Le service écoute alors sur le port 8766, sur `~/Coulisses/Données-dev` (ou le dossier donné par `COULISSES_DATA_DIR`), et refuse le dossier des données réelles. `scripts/installer-lanceur.sh --dev` installe l'app « Coulisses (dév) », icône graphite, qui le lance depuis le dépôt ; elle vit à côté de Coulisses sans partager ni service, ni données, ni permissions.
+
+Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l'API passe par le service de dév ; `COULISSES_PORT` en vise un autre).
 
 ## Tests
 

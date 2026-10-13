@@ -6,7 +6,8 @@
 // runs once the app is closed. The service's output goes to ~/Library/Logs/Coulisses.
 //
 // The project's folder, uv and the PATH to give the service are written into Info.plist
-// when the app is built (`scripts/installer-lanceur.sh`).
+// when the app is built (`scripts/installer-lanceur.sh`), with its variant: « Coulisses
+// (dév) » (`--dev`) has its own name, port, data, log and permissions (ADR 0040).
 
 import AppKit
 import WebKit
@@ -15,17 +16,21 @@ let settings = Bundle.main.infoDictionary ?? [:]
 let projectDir = settings["CoulissesProjet"] as? String ?? ""
 let uvPath = settings["CoulissesUV"] as? String ?? "uv"
 let servicePath = settings["CoulissesPATH"] as? String ?? "/usr/bin:/bin:/usr/sbin:/sbin"
-let base = URL(string: "http://127.0.0.1:8765/")!
+let isDev = settings["CoulissesVariante"] as? String == "dev"
+let appName = settings["CFBundleName"] as? String ?? "Coulisses"
+// The service's ports (cli.py): 8765 for the published app, 8766 for « Coulisses (dév) ».
+let base = URL(string: isDev ? "http://127.0.0.1:8766/" : "http://127.0.0.1:8765/")!
 let logDir = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Logs/Coulisses")
-let logFile = logDir.appendingPathComponent("service.log")
+let logFile = logDir.appendingPathComponent(isDev ? "service-dev.log" : "service.log")
 let startWithin: TimeInterval = 180
-/// The data the service must serve: the real ones, unless told otherwise (development).
+/// The data the service must serve: the real ones, or Données-dev for « Coulisses (dév) »,
+/// unless told otherwise (the service refuses the real ones to dév).
 let expectedData: String = {
     let given = ProcessInfo.processInfo.environment["COULISSES_DATA_DIR"]
     let path = given.map { NSString(string: $0).expandingTildeInPath }
         ?? FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Coulisses/Données").path
+            .appendingPathComponent(isDev ? "Coulisses/Données-dev" : "Coulisses/Données").path
     return path.precomposedStringWithCanonicalMapping
 }()
 
@@ -101,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
         makeWindow()
-        showPage(title: "Coulisses démarre…", detail: nil, actions: false)
+        showPage(title: "\(appName) démarre…", detail: nil, actions: false)
         start()
     }
 
@@ -157,9 +162,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let process = Process()
         process.executableURL = URL(fileURLWithPath: uvPath)
         // Offline: uv never fetches anything when the app starts (P1).
-        process.arguments = [
-            "run", "--project", projectDir, "--offline", "coulisses-app", "--sans-navigateur",
-        ]
+        process.arguments =
+            ["run", "--project", projectDir, "--offline", "coulisses-app", "--sans-navigateur"]
+            + (isDev ? ["--dev"] : [])
         process.currentDirectoryURL = URL(fileURLWithPath: projectDir)
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = servicePath
@@ -275,7 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         if activity.map({ $0.recording || $0.processing || $0.downloading == true }) ?? true {
             let alert = NSAlert()
             if activity == nil {
-                alert.messageText = "Coulisses ne répond pas."
+                alert.messageText = "\(appName) ne répond pas."
                 alert.informativeText =
                     "Un enregistrement ou un traitement est peut-être en cours. Quitter l'arrête ; ce qui est enregistré est gardé."
                 alert.addButton(withTitle: "Quitter quand même")
@@ -304,7 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             NSApp.reply(toApplicationShouldTerminate: false)
             return
         }
-        showPage(title: "Coulisses s'arrête…", detail: nil, actions: false)
+        showPage(title: "\(appName) s'arrête…", detail: nil, actions: false)
         stopService { NSApp.reply(toApplicationShouldTerminate: true) }
     }
 
@@ -332,7 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
-        window.title = "Coulisses"
+        window.title = appName
         window.minSize = NSSize(width: 900, height: 600)
         window.contentView = web
         window.delegate = self
@@ -342,7 +347,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 : NSColor(red: 0xfa / 255, green: 0xfa / 255, blue: 0xfa / 255, alpha: 1)
         }
         window.center()
-        window.setFrameAutosaveName("Coulisses")
+        window.setFrameAutosaveName(appName)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -384,7 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         if url.scheme == "coulisses" {
             decisionHandler(.cancel)
             if url.host == "relancer" {
-                showPage(title: "Coulisses démarre…", detail: nil, actions: false)
+                showPage(title: "\(appName) démarre…", detail: nil, actions: false)
                 start()
             } else if url.host == "journal" {
                 NSWorkspace.shared.open(logFile)
@@ -490,14 +495,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             made.keyEquivalentModifierMask = modifiers
             return made
         }
-        menu("Coulisses", [
-            item("À propos de Coulisses", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+        menu(appName, [
+            item("À propos de \(appName)", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
             .separator(),
-            item("Masquer Coulisses", #selector(NSApplication.hide(_:)), "h"),
+            item("Masquer \(appName)", #selector(NSApplication.hide(_:)), "h"),
             item("Masquer les autres", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Tout afficher", #selector(NSApplication.unhideAllApplications(_:)), ""),
             .separator(),
-            item("Quitter Coulisses", #selector(NSApplication.terminate(_:)), "q"),
+            item("Quitter \(appName)", #selector(NSApplication.terminate(_:)), "q"),
         ])
         menu("Édition", [
             item("Annuler", Selector(("undo:")), "z"),

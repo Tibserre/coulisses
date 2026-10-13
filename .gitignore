@@ -48,6 +48,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build-*/
 
 # Web
 node_modules/
