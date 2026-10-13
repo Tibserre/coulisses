@@ -56,11 +56,11 @@ Depuis une étiquette `vX.Y.Z` (née d'une fusion dans `main`), en trois temps (
 
 ```bash
 uv run python scripts/publier.py vX.Y.Z              # prépare tout ici, n'envoie rien
-uv run python scripts/publier.py vX.Y.Z --envoyer    # puis la pré-version sur GitHub
-uv run python scripts/publier.py --confirmer vX.Y.Z  # les amis la reçoivent
+uv run python scripts/publier.py vX.Y.Z --envoyer    # cette préparation, en pré-version
+uv run python scripts/publier.py vX.Y.Z --confirmer  # les amis la reçoivent
 ```
 
-Préparer passe tous les tests de l'étiquette, construit et signe l'app, l'essaie, vérifie qu'elle garde l'exigence désignée et ouvre la base de la version publiée avant, puis fait le DMG, sa signature EdDSA, les notes (tirées de `CHANGELOG.md`) et l'appcast signé, dans `~/Coulisses/Publications/vX.Y.Z`. La pré-version n'a pas d'appcast : vous l'installez et vous en servez ; confirmer vérifie que son DMG est celui préparé, puis publie l'appcast. Le dépôt doit être public pour que les apps des amis le lisent.
+Préparer passe tous les tests de l'étiquette, construit et signe l'app, l'essaie, vérifie qu'elle garde l'exigence désignée et ouvre la base de la version publiée avant, puis fait le DMG, sa signature EdDSA, les notes (tirées de `CHANGELOG.md`) et l'appcast signé, dans `~/Coulisses/Publications/vX.Y.Z`. La toute première publication se prépare avec `--premiere` (il n'y a encore rien à comparer). La pré-version n'a pas d'appcast : vous l'installez et vous en servez ; confirmer vérifie que son DMG est celui préparé, puis publie l'appcast. Le dépôt doit être public pour que les apps des amis le lisent.
 
 ## Tests
 

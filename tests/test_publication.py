@@ -128,3 +128,51 @@ def test_the_previous_publication_is_the_latest_confirmed(
     (tmp_path / "v0.26.0").mkdir()
     (tmp_path / "v0.26.0" / publier.CONFIRMED).write_text("x", encoding="utf-8")
     assert publier.previous_publication("0.26.0") == tmp_path / "v0.10.0"
+
+
+def test_a_higher_version_is_never_the_previous_one(
+    publier, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publier, "PUBLICATIONS", tmp_path)
+    for tag in ("v0.10.0", "v0.30.0"):
+        (tmp_path / tag).mkdir()
+        (tmp_path / tag / publier.CONFIRMED).write_text("x", encoding="utf-8")
+    assert publier.previous_publication("0.26.0") == tmp_path / "v0.10.0"
+
+
+def test_a_preparation_sent_or_confirmed_is_never_replaced(publier, tmp_path: Path) -> None:
+    out = tmp_path / "v0.26.0"
+    assert publier.replaceable(out) is False  # nothing yet
+    out.mkdir()
+    assert publier.replaceable(out) is True  # an earlier try, never sent
+    (out / publier.SENT).write_text("x", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        publier.replaceable(out)  # its DMG is on GitHub: kept to be confirmed
+    (out / publier.SENT).unlink()
+    (out / publier.CONFIRMED).write_text("x", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        publier.replaceable(out)
+
+
+DMG = "Coulisses-0.26.0.dmg"
+
+
+def test_only_the_very_dmg_prepared_is_confirmed(publier) -> None:
+    good = {"name": DMG, "digest": "sha256:abc"}
+    other = {"name": "appcast.xml", "digest": "sha256:zzz"}
+    assert publier.release_state({"isPrerelease": True, "assets": [good]}, DMG, "abc") == (
+        "pre-release"
+    )
+    # Run again after a confirmation cut short: already published, the same DMG.
+    assert (
+        publier.release_state({"isPrerelease": False, "assets": [good, other]}, DMG, "abc")
+        == "published"
+    )
+    for fields in (
+        {"isPrerelease": True, "assets": []},
+        {"isPrerelease": True, "assets": [{"name": DMG, "digest": "sha256:autre"}]},
+        {"isPrerelease": True, "assets": [{"name": DMG}]},
+        {"isPrerelease": True, "assets": [good, good]},
+    ):
+        with pytest.raises(SystemExit):
+            publier.release_state(fields, DMG, "abc")

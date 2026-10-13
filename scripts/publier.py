@@ -1,8 +1,8 @@
 """Publish a version of Coulisses.app for the friends (ADR 0040; plan step 11f), from this Mac.
 
-    uv run python scripts/publier.py vX.Y.Z              prepares, sends nothing
-    uv run python scripts/publier.py vX.Y.Z --envoyer    then the pre-release on GitHub
-    uv run python scripts/publier.py --confirmer vX.Y.Z  the friends get it
+    uv run python scripts/publier.py vX.Y.Z [--premiere]  prepares, sends nothing
+    uv run python scripts/publier.py vX.Y.Z --envoyer     that preparation, as a pre-release
+    uv run python scripts/publier.py vX.Y.Z --confirmer   the friends get it
 
 Preparing, in this order, each step stopping the next:
 1. the tag exists and this repository is clean; the tag is checked out in a worktree of the
@@ -11,24 +11,28 @@ Preparing, in this order, each step stopping the next:
 3. the build, signed with the certificate (`construire.py`), then the package test with
    --publication (an ad hoc signature, or no update key, fails);
 4. the designated requirement is the previous publication's: otherwise the friends would
-   lose their permissions;
+   lose their permissions (without any confirmed publication here, only --premiere goes on);
 5. the previous published app makes a base with a session, the new one opens it
-   (migrations);
+   (migrations), network cut, with empty models;
 6. the DMG, signed; its EdDSA signature; the notes, from CHANGELOG.md; the appcast, signed
    too (the app requires it), without any remote resource.
 Everything is kept in ~/Coulisses/Publications/vX.Y.Z.
 
-Sending (--envoyer) pushes the tag and makes a GitHub pre-release with the DMG and the
-notes, without the appcast: the friends get nothing yet; the user installs it and uses it.
-Confirming (--confirmer) checks that the pre-release's DMG is the one prepared, then
-uploads the appcast and makes the release the latest: the friends' apps find it.
+Sending (--envoyer) takes that preparation as it is (never built again), pushes the tag and
+makes a GitHub pre-release with the DMG and the notes, without the appcast: the friends get
+nothing yet; the user installs it and uses it. A preparation once sent is never replaced.
+Confirming (--confirmer) checks that the repository is public and that GitHub holds the very
+DMG prepared, then uploads the appcast and makes the release the latest: the friends' apps
+find it. Cut short, it can be run again. One publication at a time on this Mac.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import html
+import json
 import os
 import re
 import shutil
@@ -46,6 +50,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path.home() / "Library" / "Caches" / "Coulisses" / "construction"
 PUBLICATIONS = Path.home() / "Coulisses" / "Publications"
 CONFIRMED = "confirmee"
+SENT = "envoyee"
 TAG = re.compile(r"^v(\d+\.\d+\.\d+)$")
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
 
@@ -182,9 +187,21 @@ def checked_out(tag: str) -> Path:
         fail(f"l'étiquette {tag} n'existe pas (elle naît d'une fusion dans main)")
     work = CACHE / f"publication-{tag}"
     if work.exists():
+        say(f"   l'essai précédent de {tag} ({work}) est retiré")
         run(["git", "-C", ROOT, "worktree", "remove", "--force", work])
     run(["git", "-C", ROOT, "worktree", "add", "--detach", work, tag])
     return work
+
+
+def one_at_a_time() -> object:
+    """Two publications at once would remove each other's worktree."""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    handle = (CACHE / "publication.verrou").open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fail("une autre publication tourne déjà sur ce Mac")
+    return handle
 
 
 def test_everything(work: Path) -> None:
@@ -215,34 +232,55 @@ def designated_requirement(app: Path) -> str:
     return line
 
 
+def numbers(version: str) -> tuple[int, ...]:
+    return tuple(int(n) for n in version.split("."))
+
+
 def previous_publication(version: str) -> Path | None:
-    """The latest confirmed publication before this one, if any."""
+    """The latest confirmed publication older than this one, if any."""
     if not PUBLICATIONS.is_dir():
         return None
     older = [
         p
         for p in PUBLICATIONS.iterdir()
-        if (p / CONFIRMED).is_file() and TAG.match(p.name) and p.name != f"v{version}"
+        if (p / CONFIRMED).is_file()
+        and TAG.match(p.name)
+        and numbers(p.name[1:]) < numbers(version)
     ]
-    key = lambda p: tuple(int(n) for n in p.name[1:].split("."))  # noqa: E731
-    return max(older, key=key) if older else None
+    return max(older, key=lambda p: numbers(p.name[1:])) if older else None
 
 
-def service(app: Path, data: Path, port: int, log: Path) -> subprocess.Popen[bytes]:
-    """The app's service, as its launcher starts it (see essai-paquet.sh), on `data`."""
+NETWORK_CUT = """(version 1)
+(allow default)
+(deny network-outbound)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-outbound (remote unix-socket))
+"""
+
+
+def service(app: Path, work: Path, port: int) -> subprocess.Popen[bytes]:
+    """The app's service as its launcher starts it (see essai-paquet.sh), network cut, on
+    `work/donnees`, with empty models and environments: a session imported there fails
+    at once instead of being processed."""
     resources = app / "Contents" / "Resources"
+    for folder in ("modeles", "environnements"):
+        (work / folder).mkdir(exist_ok=True)
+    (work / "reseau.sb").write_text(NETWORK_CUT, encoding="utf-8")
     env = {
         "HOME": str(Path.home()),
         "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         "COULISSES_RESSOURCES": str(resources),
-        "COULISSES_DATA_DIR": str(data),
+        "COULISSES_DATA_DIR": str(work / "donnees"),
+        "COULISSES_MODELS_DIR": str(work / "modeles"),
+        "COULISSES_ENVS_DIR": str(work / "environnements"),
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONNOUSERSITE": "1",
     }
-    command = [resources / "python" / "bin" / "python3", "-I", "-B", "-u", "-m"]
+    command = ["sandbox-exec", "-f", work / "reseau.sb"]
+    command += [resources / "python" / "bin" / "python3", "-I", "-B", "-u", "-m"]
     command += ["coulisses_app.cli", "--sans-navigateur", "--port", str(port)]
-    with log.open("ab") as out:
+    with (work / "service.log").open("ab") as out:
         return subprocess.Popen(
             [str(c) for c in command], env=env, stdout=out, stderr=out, cwd=Path.home()
         )
@@ -283,31 +321,35 @@ def migration_test(previous: Path, app: Path) -> None:
         mount = work / "ancienne"
         run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mount, dmgs[0]])
         try:
-            data, log = work / "donnees", work / "service.log"
             run(["say", "-v", "Thomas", "-o", work / "voix.aiff", "Bonjour à tous."])
-            old = service(mount / "Coulisses.app", data, 8797, log)
+            old = service(mount / "Coulisses.app", work, 8797)
             try:
                 answering(8797)
-                run(
+                made = run(
                     [
                         *("curl", "-s", "-f", "-F", f"fichier=@{work / 'voix.aiff'}"),
                         *("-F", "non_nommes=1", "http://127.0.0.1:8797/api/seances"),
                     ]
-                )
+                ).stdout
             finally:
                 stop(old)
         finally:
             run(["hdiutil", "detach", mount])
-        new = service(app, data, 8797, log)
+        session_id = json.loads(made)["id"]
+        new = service(app, work, 8797)
         try:
             answering(8797)
-            listed = run(["curl", "-s", "-f", "http://127.0.0.1:8797/api/seances"]).stdout
+            found = subprocess.run(
+                ["curl", "-s", "-f", f"http://127.0.0.1:8797/api/seances/{session_id}"],
+                capture_output=True,
+                check=False,
+            ).returncode
         finally:
             stop(new)
-        if '"id"' not in listed:
-            print(log.read_text(encoding="utf-8", errors="replace")[-3000:], file=sys.stderr)
+        if found != 0:
+            print((work / "service.log").read_text(errors="replace")[-3000:], file=sys.stderr)
             fail("la séance de l'ancienne version ne se retrouve pas dans la nouvelle")
-    say(f"   la base de {previous.name} s'ouvre dans la nouvelle version")
+    say(f"   une séance faite par {previous.name} s'ouvre dans la nouvelle version")
 
 
 def make_dmg(app: Path, target: Path, identity: str) -> None:
@@ -325,27 +367,46 @@ def make_dmg(app: Path, target: Path, identity: str) -> None:
     run(["codesign", "--force", "--timestamp=none", "--sign", identity, target])
 
 
-def prepare(tag: str) -> Path:
+def replaceable(out: Path) -> bool:
+    """Whether an earlier preparation of the same tag may be replaced: never once sent
+    (its DMG is on GitHub and cannot be built again identically), nor once confirmed."""
+    if (out / CONFIRMED).is_file():
+        fail(f"{out.name} est déjà publiée pour les amis : une version se corrige par une suivante")
+    if (out / SENT).is_file():
+        fail(
+            f"{out.name} est déjà envoyée en pré-version : confirmez-la, "
+            "ou publiez une version suivante"
+        )
+    return out.exists()
+
+
+def prepare(tag: str, first: bool) -> Path:
     version = version_of(tag)
     pinned = settings()
-    sign_update = (
-        CACHE / f"sparkle-{pinned['sparkle']['version']}" / "extrait" / "bin" / "sign_update"
-    )
-    if not sign_update.is_file():
-        fail(f"{sign_update} manque : lancez d'abord scripts/construire.py --telecharger")
+    tools = CACHE / f"sparkle-{pinned['sparkle']['version']}" / "extrait" / "bin"
+    if not (tools / "sign_update").is_file():
+        fail(f"{tools / 'sign_update'} manque : lancez d'abord scripts/construire.py --telecharger")
+    out = PUBLICATIONS / tag
+    replaced = replaceable(out)
+    previous = previous_publication(version)
+    if previous is None and not first:
+        fail(
+            f"aucune version confirmée avant {tag} dans {PUBLICATIONS} : sans elle, ni "
+            "l'exigence désignée ni la migration ne se vérifient. Pour la toute première "
+            "publication, relancez avec --premiere."
+        )
+    if previous is not None and first:
+        fail(f"--premiere, alors que {previous.name} est déjà publiée")
     say(f"1. L'étiquette {tag}, telle quelle…")
     work = checked_out(tag)
-    out = PUBLICATIONS / tag
-    if (out / CONFIRMED).is_file():
-        fail(f"{tag} est déjà publiée pour les amis : une version se corrige par une suivante")
+    say(f"   (en cas d'échec, l'étiquette reste dans {work} pour comprendre)")
     test_everything(work)
     app = build_and_test(work)
 
     say("4. La même exigence désignée que la version publiée avant…")
     requirement = designated_requirement(app)
-    previous = previous_publication(version)
     if previous is None:
-        say("   première publication : rien à comparer")
+        say("   première publication (--premiere) : rien à comparer")
     else:
         before = (previous / "exigence.txt").read_text(encoding="utf-8").strip()
         if before != requirement:
@@ -357,17 +418,18 @@ def prepare(tag: str) -> Path:
 
     say("5. Migration depuis la version publiée avant…")
     if previous is None:
-        say("   première publication : rien à migrer")
+        say("   première publication (--premiere) : rien à migrer")
     else:
         migration_test(previous, app)
 
     say("6. DMG, signatures, notes et appcast…")
-    if out.exists():
-        shutil.rmtree(out)  # an earlier, unconfirmed preparation of the same tag
+    if replaced:
+        say(f"   la préparation précédente de {tag}, jamais envoyée, est remplacée")
+        shutil.rmtree(out)
     out.mkdir(parents=True)
     dmg = out / f"Coulisses-{version}.dmg"
     make_dmg(app, dmg, pinned["signature"]["identity"])
-    signature, length = parse_signature(run([sign_update, dmg]).stdout)
+    signature, length = parse_signature(run([tools / "sign_update", dmg]).stdout)
     notes = release_notes((work / "CHANGELOG.md").read_text(encoding="utf-8"), version)
     (out / "notes.md").write_text(notes, encoding="utf-8")
     feed = out / "appcast.xml"
@@ -382,22 +444,37 @@ def prepare(tag: str) -> Path:
         ),
         encoding="utf-8",
     )
-    run([sign_update, feed])  # the signature goes inside the feed (SURequireSignedFeed)
+    run([tools / "sign_update", feed])  # the signature goes inside it (SURequireSignedFeed)
+    run([tools / "sign_update", "--verify", feed])
+    run([tools / "sign_update", "--verify", dmg, signature])
     (out / "exigence.txt").write_text(requirement + "\n", encoding="utf-8")
     (out / "empreinte.txt").write_text(sha256(dmg) + "\n", encoding="utf-8")
     run(["git", "-C", ROOT, "worktree", "remove", "--force", work])
     size = run(["du", "-sh", dmg]).stdout.split()[0]
-    say(f"Prêt : {dmg} ({size}), notes et appcast dans {out}. Rien n'est encore envoyé.")
+    say(
+        f"Prêt : {dmg} ({size}), notes et appcast dans {out}. Rien n'est encore envoyé.\n"
+        f"Pour l'envoyer en pré-version : uv run python scripts/publier.py {tag} --envoyer"
+    )
     return out
 
 
 # -- sending and confirming ----------------------------------------------------------------
 
 
-def send(tag: str, out: Path) -> None:
+def send(tag: str) -> None:
+    """The preparation as it is (never built again), as a GitHub pre-release."""
     repository = settings()["publication"]["repository"]
     version = version_of(tag)
+    out = PUBLICATIONS / tag
     dmg = out / f"Coulisses-{version}.dmg"
+    if not (out / "appcast.xml").is_file() or not dmg.is_file():
+        fail(f"{tag} n'est pas préparée ici : lancez d'abord scripts/publier.py {tag}")
+    replaceable(out)  # neither sent nor confirmed yet
+    if sha256(dmg) != (out / "empreinte.txt").read_text(encoding="utf-8").strip():
+        fail(f"{dmg} a changé depuis sa préparation")
+    origin = run(["git", "-C", ROOT, "remote", "get-url", "origin"]).stdout.strip()
+    if f"github.com/{repository}" not in origin and f"github.com:{repository}" not in origin:
+        fail(f"origin ({origin}) n'est pas {repository}")
     say(f"Envoi de la pré-version {tag} sur GitHub ({repository}), sans appcast…")
     run(["git", "-C", ROOT, "push", "origin", tag])
     run(
@@ -407,10 +484,20 @@ def send(tag: str, out: Path) -> None:
             *("--notes-file", out / "notes.md", dmg),
         ]
     )
+    (out / SENT).write_text(datetime.now(UTC).isoformat() + "\n", encoding="utf-8")
     say(
         f"Pré-version {tag} envoyée. Installez-la depuis GitHub, servez-vous-en, puis :\n"
-        f"   uv run python scripts/publier.py --confirmer {tag}"
+        f"   uv run python scripts/publier.py {tag} --confirmer"
     )
+
+
+def release_state(fields: dict, dmg_name: str, expected_sha256: str) -> str:
+    """What GitHub holds for the tag (`gh release view --json isPrerelease,assets`):
+    "pre-release" or "published", with the very DMG prepared; anything else stops."""
+    digests = [a.get("digest") for a in fields.get("assets", []) if a.get("name") == dmg_name]
+    if digests != [f"sha256:{expected_sha256}"]:
+        fail(f"le DMG sur GitHub n'est pas celui préparé ({digests or 'absent'})")
+    return "pre-release" if fields.get("isPrerelease") else "published"
 
 
 def confirm(tag: str) -> None:
@@ -418,29 +505,28 @@ def confirm(tag: str) -> None:
     repository = pinned["publication"]["repository"]
     version = version_of(tag)
     out = PUBLICATIONS / tag
-    dmg_name = f"Coulisses-{version}.dmg"
-    if not (out / "appcast.xml").is_file():
-        fail(f"{tag} n'a pas été préparée ici ({out})")
+    if not (out / SENT).is_file():
+        fail(f"{tag} n'a pas été envoyée depuis ce Mac ({out})")
     visibility = run(
         ["gh", "repo", "view", repository, "--json", "visibility", "-q", ".visibility"]
     )
     if visibility.stdout.strip() != "PUBLIC":
         fail(f"{repository} est privé : les apps des amis ne pourraient pas lire l'appcast")
-    shown_assets = run(
-        [
-            *("gh", "release", "view", tag, "--repo", repository),
-            *("--json", "isPrerelease,assets", "-q"),
-            f'[.isPrerelease, (.assets[] | select(.name == "{dmg_name}") | .digest)] | @tsv',
-        ]
-    ).stdout.split()
+    fields = json.loads(
+        run(
+            [
+                *("gh", "release", "view", tag, "--repo", repository),
+                *("--json", "isPrerelease,assets"),
+            ]
+        ).stdout
+    )
     expected = (out / "empreinte.txt").read_text(encoding="utf-8").strip()
-    if len(shown_assets) != 2 or shown_assets[0] != "true":
-        fail(f"{tag} n'est pas une pré-version avec son DMG sur GitHub")
-    if shown_assets[1] != f"sha256:{expected}":
-        fail(f"le DMG de la pré-version n'est pas celui préparé ({shown_assets[1]})")
+    state = release_state(fields, f"Coulisses-{version}.dmg", expected)
     say(f"Publication de {tag} pour les amis…")
-    run(["gh", "release", "upload", tag, out / "appcast.xml", "--repo", repository])
-    run(["gh", "release", "edit", tag, "--repo", repository, "--prerelease=false", "--latest"])
+    # Again after a confirmation cut short: the appcast is the one prepared, replaced.
+    run(["gh", "release", "upload", tag, out / "appcast.xml", "--repo", repository, "--clobber"])
+    if state == "pre-release":
+        run(["gh", "release", "edit", tag, "--repo", repository, "--prerelease=false", "--latest"])
     feed = run(["curl", "-sSfL", "-m", "30", pinned["sparkle"]["feed_url"]]).stdout
     if f"<sparkle:version>{version}</sparkle:version>" not in feed:
         fail("l'appcast publié ne donne pas cette version")
@@ -451,15 +537,21 @@ def confirm(tag: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Publie Coulisses.app (ADR 0040).")
     parser.add_argument("etiquette", help="vX.Y.Z")
-    parser.add_argument("--envoyer", action="store_true", help="envoyer la pré-version")
-    parser.add_argument("--confirmer", action="store_true", help="la publier pour les amis")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--envoyer", action="store_true", help="envoyer la pré-version préparée")
+    action.add_argument("--confirmer", action="store_true", help="la publier pour les amis")
+    parser.add_argument("--premiere", action="store_true", help="la toute première publication")
     args = parser.parse_args()
-    if args.confirmer:
-        confirm(args.etiquette)
-        return
-    out = prepare(args.etiquette)
-    if args.envoyer:
-        send(args.etiquette, out)
+    lock = one_at_a_time()
+    try:
+        if args.confirmer:
+            confirm(args.etiquette)
+        elif args.envoyer:
+            send(args.etiquette)
+        else:
+            prepare(args.etiquette, args.premiere)
+    finally:
+        lock.close()  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":

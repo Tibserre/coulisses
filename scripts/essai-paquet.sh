@@ -29,6 +29,7 @@ URL=http://127.0.0.1:$PORT
 SERVICE=""
 
 finish() {
+  restore_preferences
   if [[ -n $SERVICE ]]; then
     kill -INT $SERVICE 2>/dev/null || true
     wait $SERVICE 2>/dev/null || true
@@ -38,6 +39,18 @@ finish() {
 trap finish EXIT
 
 fail() { print -u2 "ÉCHEC : $*"; exit 1 }
+# Step 5 sets aside the published app's preferences (same identifier as an installed
+# Coulisses) and puts them back, even when the test fails.
+SAVED_PREFERENCES=""
+restore_preferences() {
+  [[ -n $SAVED_PREFERENCES ]] || return 0
+  if [[ $SAVED_PREFERENCES == none ]]; then
+    defaults delete $BUNDLE_ID 2>/dev/null || true
+  else
+    defaults import $BUNDLE_ID $SAVED_PREFERENCES
+  fi
+  SAVED_PREFERENCES=""
+}
 snapshot() { find $APP -print0 | xargs -0 stat -f '%m %z %p %N' | sort }
 
 [[ -x $RES/python/bin/python3 ]] || fail "$APP n'est pas une Coulisses.app construite"
@@ -178,12 +191,16 @@ kill -INT $SERVICE; wait $SERVICE 2>/dev/null || true; SERVICE=""
 
 print "5. L'app elle-même, lancée sans accord : rien ne sort du Mac…"
 # ADR 0040: Sparkle looks for updates only after consent. The app is launched for real (its
-# window opens), on a throwaway data folder, and its connections are read for 30 s.
+# window opens), on a throwaway data folder, the automatic search off, and its connections
+# are read for 30 s. Its preferences are set aside before, and put back after.
 BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw $PLIST)
-CONSENT=$(defaults read $BUNDLE_ID SUEnableAutomaticChecks 2>/dev/null || true)
-if [[ $CONSENT == 1 ]]; then
-  print "   recherche automatique acceptée sur ce Mac : une connexion à GitHub serait normale, contrôle sans objet"
+if defaults export $BUNDLE_ID $WORK/preferences.plist 2>/dev/null; then
+  SAVED_PREFERENCES=$WORK/preferences.plist
 else
+  SAVED_PREFERENCES=none
+fi
+defaults write $BUNDLE_ID SUEnableAutomaticChecks -bool false
+{
   open -n --env COULISSES_DATA_DIR=$WORK/donnees-app $APP
   : > $WORK/connexions.txt
   for _ in {1..30}; do
@@ -202,8 +219,9 @@ else
   OUTSIDE=$(awk -F'->' 'NF > 1 {sub(/:[0-9]+$/, "", $2); print $2}' $WORK/connexions.txt |
     grep -vE '^(127\.0\.0\.1|\[::1\]|localhost)$' | sort -u || true)
   [[ -z $OUTSIDE ]] || fail "l'app s'est connectée hors du Mac sans accord : $OUTSIDE"
-  print "   aucune connexion hors de 127.0.0.1 en 30 s"
-fi
+  print "   aucune connexion hors de 127.0.0.1 en 30 s ; préférences de l'app remises"
+}
+restore_preferences
 
 print "6. Rien d'écrit dans l'app…"
 snapshot > $WORK/apres.txt
