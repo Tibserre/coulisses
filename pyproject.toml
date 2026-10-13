@@ -1,6 +1,6 @@
 [project]
 name = "coulisses-app"
-version = "0.22.0"
+version = "0.22.1"
 description = "Coulisses: debrief of improv rehearsals, 100 % local (the application; the engine is coulisses-moteur)."
 readme = "README.md"
 authors = [{ name = "Tibserre" }]
@@ -19,7 +19,7 @@ dependencies = [
 coulisses-app = "coulisses_app.cli:main"
 
 [tool.uv.sources]
-coulisses = { git = "file:///Users/t.serre/Coulisses/Moteur", subdirectory = "engine", tag = "v1.7.0" }
+coulisses = { git = "file:///Users/t.serre/Coulisses/Moteur", subdirectory = "engine", tag = "v1.7.1" }
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]

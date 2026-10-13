@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.22.1 — 2026-10-13
+
+### Corrections
+
+- passe au moteur v1.7.1, qui n'écrit plus de bytecode dans son paquet (moteur)
+
 ## v0.22.0 — 2026-10-13
 
 ### Nouveautés
