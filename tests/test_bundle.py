@@ -75,7 +75,14 @@ def test_where_uv_keeps_its_downloads_is_left_to_the_engine(tmp_path: Path) -> N
     """The engine (v1.7.0) puts uv's Python and cache under its environments folder; set
     by the service, they would override it."""
     env = Resources(make_app(tmp_path)).environment({"PATH": "/usr/bin"})
-    assert set(env) == {"PATH"}
+    assert not {"UV_PYTHON_INSTALL_DIR", "UV_CACHE_DIR"} & set(env)
+
+
+def test_no_python_of_the_app_writes_bytecode(tmp_path: Path) -> None:
+    """From the .app, the service and the engine's steps write no bytecode: the .app stays
+    as signed (the engine's README asks it of the caller since v1.7.1)."""
+    assert Resources(make_app(tmp_path)).environment({})["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert "PYTHONDONTWRITEBYTECODE" not in Resources(None).environment({})
 
 
 def test_the_apps_sound_program_is_used_as_shipped(

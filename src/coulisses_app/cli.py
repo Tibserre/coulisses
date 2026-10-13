@@ -87,6 +87,8 @@ def main(argv: list[str] | None = None) -> None:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
     os.environ.update(resources.environment(os.environ))
+    if os.environ.get("PYTHONDONTWRITEBYTECODE"):
+        sys.dont_write_bytecode = True  # this process too, not only what it starts
 
     try:
         data, port = launch_settings(args)
