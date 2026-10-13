@@ -13,6 +13,8 @@ from pathlib import Path
 import coulisses.testing.fakes  # noqa: F401  # registers the fake engines
 import pytest
 from coulisses.api import ChainConfig, StageConfig
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaError
@@ -110,3 +112,8 @@ def fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
     monkeypatch.setattr("coulisses_app.processing.OllamaClient", lambda: fake)
     monkeypatch.setattr("coulisses_app.api.OllamaClient", lambda: fake)
     return fake
+
+
+def local_client(app: FastAPI) -> TestClient:
+    """A client as the service's own page: the service refuses any other host name."""
+    return TestClient(app, base_url="http://127.0.0.1:8765")

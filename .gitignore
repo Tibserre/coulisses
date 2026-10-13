@@ -62,7 +62,11 @@ atelier/web/dist/
 CLAUDE.local.md
 .claude/settings.local.json
 
-# The signing certificate (docs/technique/certificat.md): never in git.
+# The signing certificate and the update key (docs/technique/certificat.md): never in git.
 *.p12
 *.cer
 *.certSigningRequest
+*.pem
+*.key
+*.p8
+cle-mises-a-jour*

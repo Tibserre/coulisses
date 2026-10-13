@@ -25,13 +25,12 @@ from coulisses.api import (
     Readiness,
     StageName,
 )
-from fastapi.testclient import TestClient
 
 from coulisses_app.api import create_app
 from coulisses_app.engine_models import EngineModels, ModelsError
 from coulisses_app.paths import DataDir
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 
 ASR = CatalogModel(
     key="asr",
@@ -242,7 +241,7 @@ def test_the_service_shows_them_and_stops_every_download_when_it_stops(
         web_dir=None,
         engine_store=models,
     )
-    with TestClient(app) as client:
+    with local_client(app) as client:
         view = client.get("/api/moteur/modeles").json()
         assert view["catalog"]["models"][0]["key"] == "asr"
         assert view["readiness"]["missing"][0]["model"] == "asr"
@@ -296,7 +295,7 @@ def test_a_removal_the_engine_refuses_is_said(engine: FakeEngine) -> None:
 
 def test_quitting_is_told_a_download_runs(data: DataDir, engine: FakeEngine) -> None:
     models = engine.models()
-    client = TestClient(
+    client = local_client(
         create_app(
             data,
             FAKE_CHAIN,
@@ -330,7 +329,7 @@ def test_an_old_environment_is_removed_the_current_one_never(
 
     models = engine.models()
     models._discard_environment = discard  # pyright: ignore[reportPrivateUsage]
-    client = TestClient(
+    client = local_client(
         create_app(
             data,
             FAKE_CHAIN,

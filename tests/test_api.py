@@ -14,13 +14,13 @@ from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 
 
 @pytest.fixture
 def client(data: DataDir) -> TestClient:
     app = create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
-    return TestClient(app)
+    return local_client(app)
 
 
 def upload(client: TestClient, recording: Path, **form: Any) -> str:
@@ -159,7 +159,7 @@ def test_after_too_few_voices_the_processing_resumes_with_fewer_attendees(
     refused = FAKE_CHAIN.model_copy(
         update={"diarize": StageConfig(engine="fake_under_segmenting")}
     )  # finds one voice whatever the attendees
-    client = TestClient(create_app(data, refused, profile="essai", processor=None, web_dir=None))
+    client = local_client(create_app(data, refused, profile="essai", processor=None, web_dir=None))
     session_id = upload(client, recording, non_nommes="3")
 
     def run_next() -> None:
@@ -211,13 +211,17 @@ def test_the_page_is_checked_again_at_each_load_so_a_new_build_shows(
     (web / "assets").mkdir(parents=True)
     (web / "index.html").write_text("<!doctype html><title>Coulisses</title>")
     (web / "assets" / "index-abc.js").write_text("console.log(1)")
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=web))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=web)
+    )
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert "cache-control" not in client.get("/assets/index-abc.js").headers
 
 
 def test_the_app_asks_what_quitting_would_interrupt(data: DataDir, recording: Path) -> None:
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     assert client.get("/api/activite").json() == {
         "recording": False,
         "processing": False,
@@ -251,7 +255,9 @@ def test_the_settings_show_the_folders_in_the_finder(
         lambda command, **_: opened.append(command),  # pyright: ignore[reportUnknownLambdaType]
     )
     monkeypatch.setattr(api, "SERVICE_LOG", tmp_path / "absent.log")
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     folders = client.get("/api/dossiers").json()
     assert folders["data"] == str(data.root) and folders["log"] is None
     data.root.mkdir(parents=True, exist_ok=True)
@@ -280,7 +286,7 @@ def test_a_recording_in_progress_is_what_quitting_would_interrupt(data: DataDir)
         def shutdown(self, *, profile: str) -> None:
             pass
 
-    client = TestClient(
+    client = local_client(
         create_app(
             data,
             FAKE_CHAIN,

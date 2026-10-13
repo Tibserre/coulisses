@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -188,13 +189,19 @@ def export_markdown(
         raise KeyError(session_id)
     when = datetime.fromisoformat(session.recorded_at.replace("Z", "+00:00")).astimezone()
     title = session.title or f"Séance du {when.strftime('%d/%m/%Y')}"
-    lines = [f"# {title}", "", f"_{session.space_name} · {when.strftime('%d/%m/%Y')}_", ""]
+    # What the model wrote (title, summary, chapters) is made inert; the rest is as typed.
+    lines = [
+        f"# {inert_markdown(title)}",
+        "",
+        f"_{session.space_name} · {when.strftime('%d/%m/%Y')}_",
+        "",
+    ]
     written: str | None = None
     if summary:
         found = list_generations(data, session_id).generations
         chosen = next((g for g in found if generation_id is None or g.id == generation_id), None)
         if chosen and chosen.output:
-            lines += [f"## {chosen.action_name}", "", chosen.output.strip(), ""]
+            lines += [f"## {chosen.action_name}", "", inert_markdown(chosen.output.strip()), ""]
             written = chosen.action_name
     if transcript:
         view = corrections.build_view(data, session_id)
@@ -203,7 +210,10 @@ def export_markdown(
             for line in assembly.transcript_lines(view):
                 if line.phase_heading:
                     # « [12:34] ── Chapitre « Titre » (jeu) ── » → a Markdown heading.
-                    lines += [f"### {line.text.split('── ', 1)[1].rstrip(' ─')}", ""]
+                    lines += [
+                        f"### {inert_markdown(line.text.split('── ', 1)[1].rstrip(' ─'))}",
+                        "",
+                    ]
                     continue
                 stamp, _, rest = line.text.partition("] ")
                 name, _, text = rest.partition(" : ")
@@ -211,6 +221,23 @@ def export_markdown(
                 lines.append("")
     name = f"{when.strftime('%Y-%m-%d')} {title}".replace("/", "-")
     return f"{name}.md", "\n".join(lines).rstrip() + "\n", written
+
+
+# Every form of image: inline, by reference, collapsed and shortcut (`![alt]`, its address
+# defined elsewhere in the text).
+_IMAGE = re.compile(r"!\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])?")
+_LINK = re.compile(r"(?<!!)\[([^\]]+)\]\([^)]*\)")
+_TAG = re.compile(r"<(?=[A-Za-z/!?])")
+
+
+def inert_markdown(text: str) -> str:
+    """The text as the app shows it (SummaryPanel): an image keeps only its description, a
+    link only its text, and raw HTML shows as text. Opened in an editor that loads remote
+    images, an exported text written by the model can then fetch nothing (P1; security
+    review of 2026-10-13). Nothing else changes."""
+    text = _IMAGE.sub(lambda m: m.group(1), text)
+    text = _LINK.sub(lambda m: m.group(1), text)
+    return _TAG.sub("&lt;", text)
 
 
 class PhasesStatus(BaseModel):

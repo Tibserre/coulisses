@@ -15,12 +15,12 @@ from coulisses_app.processing import Processor
 from coulisses_app.storage import db
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 
 
 @pytest.fixture
 def client(data: DataDir) -> TestClient:
-    return TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    return local_client(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
 
 
 def processed_session(client: TestClient, data: DataDir, recording: Path, **form: object) -> str:

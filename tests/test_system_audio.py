@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile as sf
-from fastapi.testclient import TestClient
 from numpy.typing import NDArray
 
 from coulisses_app import capture, jobs, mixing, retention, sessions, system_audio, wav
@@ -24,7 +23,7 @@ from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 from .test_capture import MIC, PHONE, Clock, CountingAwake, FakeMic, tone, wait_for
 
 
@@ -423,7 +422,9 @@ def test_the_engine_hears_the_mix_and_the_job_keeps_what_it_was(data: DataDir) -
     with pytest.raises(mixing.MixError, match="supprimé"):
         mixing.processing_input(data, session_id)
     assert not (folder / mixing.LISTENING_FILE).exists()
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     kept = client.get(f"/api/seances/{session_id}").json()["mix"]
     assert kept["sha256"] == facts.sha256 and kept["gain"] == facts.gain
 
@@ -445,7 +446,7 @@ def test_the_service_records_online_and_plays_the_mix(
 ) -> None:
     tap = FakeTap()
     rec = system_recorder(data, tap, awake, clock)
-    client = TestClient(
+    client = local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
     )
     started = client.post("/api/enregistrement", json={"micro": MIC.index, "son_ordinateur": True})

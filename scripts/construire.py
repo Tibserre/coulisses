@@ -104,7 +104,10 @@ def pinned_uv(config: dict) -> Path:
     version = run([found, "--version"]).stdout.split()[1]
     if version != config["version"]:
         fail(f"uv {version} sur ce Mac, {config['version']} attendu (scripts/construction.toml)")
-    return Path(found).resolve()
+    binary = Path(found).resolve()
+    if sha256(binary) != config["sha256"]:
+        fail(f"{binary} n'a pas l'empreinte attendue (scripts/construction.toml)")
+    return binary
 
 
 def sparkle_framework(config: dict, download: bool) -> Path:
@@ -236,7 +239,8 @@ def build_interface() -> Path:
     web = ROOT / "web"
     if not (web / "node_modules").is_dir():
         say("Dépendances de l'interface (depuis le cache de npm, sans réseau)…")
-        run(["npm", "ci", "--offline", "--no-audit", "--no-fund"], cwd=web)
+        # No package's install script runs: what is built uses none.
+        run(["npm", "ci", "--offline", "--no-audit", "--no-fund", "--ignore-scripts"], cwd=web)
     say("Construction de l'interface…")
     run(["npm", "run", "build"], cwd=web)
     return web / "dist"

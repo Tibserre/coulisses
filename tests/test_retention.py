@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from coulisses_app import corrections, jobs, retention, sessions, versions
 from coulisses_app.api import create_app
@@ -18,7 +17,7 @@ from coulisses_app.processing import Processor
 from coulisses_app.spaces import SpaceError
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 from .test_versions import claim, processed
 
 NOW = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
@@ -73,7 +72,9 @@ def test_removing_the_audio_keeps_the_text_and_says_it(data: DataDir, recording:
     with pytest.raises(retention.DeletionError, match="déjà supprimé"):
         retention.remove_audio(data, session_id, "audio_deletion")
 
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     assert client.get(f"/api/seances/{session_id}/audio").status_code == 404
     listed = client.get(f"/api/seances/{session_id}").json()["session"]["audio"]
     assert listed["state"] == "removed"
@@ -154,7 +155,9 @@ def test_a_session_never_processed_can_be_deleted(data: DataDir, recording: Path
         session_id = sessions.import_recording(
             data, f, recording.name, unnamed_attendees=1, recorded_at=None, profile="essai"
         )
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     deleted = client.delete(f"/api/seances/{session_id}")
     assert (deleted.status_code, deleted.json()) == (200, {"problems": []})
     assert sessions.get_session(data, session_id) is None
@@ -283,7 +286,9 @@ def test_the_watcher_notifies_what_it_announces(data: DataDir, recording: Path) 
 
 def test_the_service_keeps_extends_removes_and_lists(data: DataDir, recording: Path) -> None:
     session_id = processed(data, recording)
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     kept = client.put(f"/api/seances/{session_id}/garder-audio", json={"keep": True})
     assert kept.json()["audio"]["state"] == "kept"
     assert client.post(f"/api/seances/{session_id}/prolonger").status_code == 200
@@ -401,7 +406,9 @@ def test_a_failed_processing_is_not_offered_again_once_the_audio_is_gone(
 
     assert Processor(data, REFUSED_DIARIZATION).run_job(claim(data)).error is not None
     retention.remove_audio(data, session_id, "audio_deletion")
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     refused = client.post(f"/api/seances/{session_id}/reprendre")
     assert refused.status_code == 409
     assert refused.json()["detail"] == versions.AUDIO_GONE
