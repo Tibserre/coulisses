@@ -35,5 +35,6 @@ Nouvelle fiche : skill `/adr`.
 | [0037](0037-mix-d-ecoute.md) | Un mix d'écoute qui baisse le micro quand personne n'y parle (le clavier, la pièce) ; le moteur garde la somme simple | Acceptée |
 | [0038](0038-echelle-typographique.md) | Une échelle typographique pour une interface : rien sous 12 px, texte d'appoint 13 px, titres 18 à 34 px (remplace le rapport 1,333 de 0017) | Acceptée |
 | [0039](0039-un-modele-par-redaction.md) | Un modèle de langage par rédaction (titre, chapitres, résumés), choisi dans Réglages, onglet « Rédaction » ; le choix fait dans l'onglet Résumé ne change que celui des résumés (précise 0022) | Acceptée |
+| [0040](0040-distribuer-a-quelques-amis.md) | Distribuer Coulisses à quelques amis : app autonome (Python embarqué), certificat auto-signé, mises à jour par Sparkle avec vérification automatique sur accord (P1 amendé), dépôt de l'app public (MIT), publication par `scripts/publier.py` depuis ce Mac | Proposée |
 
 Les ADR techniques du moteur (0003, 0004, 0009, 0011 à 0015, 0019, 0021, 0023) sont dans le dépôt `coulisses-moteur` (`docs/decisions/`). Les numéros sont communs aux deux dépôts : un nouvel ADR prend le numéro libre suivant dans les deux.
