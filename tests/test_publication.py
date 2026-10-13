@@ -176,3 +176,69 @@ def test_only_the_very_dmg_prepared_is_confirmed(publier) -> None:
     ):
         with pytest.raises(SystemExit):
             publier.release_state(fields, DMG, "abc")
+
+
+def test_a_send_begun_protects_its_preparation_too(publier, tmp_path: Path) -> None:
+    out = tmp_path / "v0.26.0"
+    out.mkdir()
+    (out / publier.SENDING).write_text("x", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        publier.replaceable(out)
+
+
+def test_origin_must_be_exactly_the_repository(publier) -> None:
+    for origin in (
+        "https://github.com/Tibserre/coulisses.git",
+        "https://github.com/Tibserre/coulisses",
+        "git@github.com:Tibserre/coulisses.git",
+        "ssh://git@github.com/Tibserre/coulisses.git",
+    ):
+        assert publier.same_repository(origin, "Tibserre/coulisses"), origin
+    for origin in (
+        "git@github.com:Tibserre/coulisses-moteur.git",
+        "https://github.com/autre/coulisses.git",
+        "https://exemple.org/Tibserre/coulisses.git",
+    ):
+        assert not publier.same_repository(origin, "Tibserre/coulisses"), origin
+
+
+def test_without_a_confirmed_version_only_the_very_first_goes_on(
+    publier, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refused before anything is checked out or built."""
+    monkeypatch.setattr(publier, "PUBLICATIONS", tmp_path)
+    monkeypatch.setattr(publier, "checked_out", lambda tag: pytest.fail("went on"))
+    with pytest.raises(SystemExit):
+        publier.prepare("v0.26.0", first=False)
+    (tmp_path / "v0.25.1").mkdir()
+    (tmp_path / "v0.25.1" / publier.CONFIRMED).write_text("x", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        publier.prepare("v0.26.0", first=True)
+
+
+def test_one_publication_at_a_time(
+    publier, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(publier, "CACHE", tmp_path)
+    first = publier.one_at_a_time()
+    try:
+        with pytest.raises(SystemExit):
+            publier.one_at_a_time()
+    finally:
+        first.close()
+    publier.one_at_a_time().close()  # free again once the first one ends
+
+
+@pytest.mark.parametrize("action", ["--envoyer", "--confirmer"])
+def test_premiere_only_prepares(action: str) -> None:
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "publier.py"), "v0.26.0", action, "--premiere"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 2
+    assert "--premiere ne vaut que pour préparer" in done.stderr

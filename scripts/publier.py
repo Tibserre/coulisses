@@ -50,6 +50,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path.home() / "Library" / "Caches" / "Coulisses" / "construction"
 PUBLICATIONS = Path.home() / "Coulisses" / "Publications"
 CONFIRMED = "confirmee"
+SENDING = "envoi-commence"
 SENT = "envoyee"
 TAG = re.compile(r"^v(\d+\.\d+\.\d+)$")
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
@@ -372,20 +373,23 @@ def replaceable(out: Path) -> bool:
     (its DMG is on GitHub and cannot be built again identically), nor once confirmed."""
     if (out / CONFIRMED).is_file():
         fail(f"{out.name} est déjà publiée pour les amis : une version se corrige par une suivante")
-    if (out / SENT).is_file():
+    if (out / SENT).is_file() or (out / SENDING).is_file():
         fail(
-            f"{out.name} est déjà envoyée en pré-version : confirmez-la, "
-            "ou publiez une version suivante"
+            f"{out.name} est déjà envoyée (ou son envoi a commencé) : reprenez avec --envoyer "
+            "puis --confirmer, ou publiez une version suivante"
         )
     return out.exists()
+
+
+def same_repository(origin: str, repository: str) -> bool:
+    """Whether the remote `origin` is exactly github.com/<repository> (https or ssh)."""
+    path = re.sub(r"^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)", "", origin)
+    return path.removesuffix(".git").removesuffix("/") == repository
 
 
 def prepare(tag: str, first: bool) -> Path:
     version = version_of(tag)
     pinned = settings()
-    tools = CACHE / f"sparkle-{pinned['sparkle']['version']}" / "extrait" / "bin"
-    if not (tools / "sign_update").is_file():
-        fail(f"{tools / 'sign_update'} manque : lancez d'abord scripts/construire.py --telecharger")
     out = PUBLICATIONS / tag
     replaced = replaceable(out)
     previous = previous_publication(version)
@@ -397,6 +401,9 @@ def prepare(tag: str, first: bool) -> Path:
         )
     if previous is not None and first:
         fail(f"--premiere, alors que {previous.name} est déjà publiée")
+    tools = CACHE / f"sparkle-{pinned['sparkle']['version']}" / "extrait" / "bin"
+    if not (tools / "sign_update").is_file():
+        fail(f"{tools / 'sign_update'} manque : lancez d'abord scripts/construire.py --telecharger")
     say(f"1. L'étiquette {tag}, telle quelle…")
     work = checked_out(tag)
     say(f"   (en cas d'échec, l'étiquette reste dans {work} pour comprendre)")
@@ -469,21 +476,42 @@ def send(tag: str) -> None:
     dmg = out / f"Coulisses-{version}.dmg"
     if not (out / "appcast.xml").is_file() or not dmg.is_file():
         fail(f"{tag} n'est pas préparée ici : lancez d'abord scripts/publier.py {tag}")
-    replaceable(out)  # neither sent nor confirmed yet
-    if sha256(dmg) != (out / "empreinte.txt").read_text(encoding="utf-8").strip():
+    if (out / CONFIRMED).is_file() or (out / SENT).is_file():
+        fail(f"{tag} est déjà envoyée : il reste --confirmer")
+    expected = (out / "empreinte.txt").read_text(encoding="utf-8").strip()
+    if sha256(dmg) != expected:
         fail(f"{dmg} a changé depuis sa préparation")
     origin = run(["git", "-C", ROOT, "remote", "get-url", "origin"]).stdout.strip()
-    if f"github.com/{repository}" not in origin and f"github.com:{repository}" not in origin:
+    if not same_repository(origin, repository):
         fail(f"origin ({origin}) n'est pas {repository}")
+    # Before anything leaves: from now on, this preparation is never replaced.
+    (out / SENDING).write_text(datetime.now(UTC).isoformat() + "\n", encoding="utf-8")
     say(f"Envoi de la pré-version {tag} sur GitHub ({repository}), sans appcast…")
     run(["git", "-C", ROOT, "push", "origin", tag])
-    run(
-        [
-            *("gh", "release", "create", tag, "--repo", repository, "--prerelease"),
-            *("--verify-tag", "--title", f"Coulisses {version}"),
-            *("--notes-file", out / "notes.md", dmg),
-        ]
+    existing = subprocess.run(
+        ["gh", "release", "view", tag, "--repo", repository, "--json", "isPrerelease,assets"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    if existing.returncode == 0:  # an earlier send cut short after creating the release
+        fields = json.loads(existing.stdout)
+        if not any(a.get("name") == dmg.name for a in fields.get("assets", [])):
+            fail(
+                f"la pré-version {tag} existe sur GitHub sans son DMG (envoi coupé) : "
+                f"supprimez-la (gh release delete {tag} --repo {repository}), "
+                "puis relancez --envoyer"
+            )
+        release_state(fields, dmg.name, expected)
+        say("   la pré-version existait déjà, avec ce DMG : l'envoi est repris")
+    else:
+        run(
+            [
+                *("gh", "release", "create", tag, "--repo", repository, "--prerelease"),
+                *("--verify-tag", "--title", f"Coulisses {version}"),
+                *("--notes-file", out / "notes.md", dmg),
+            ]
+        )
     (out / SENT).write_text(datetime.now(UTC).isoformat() + "\n", encoding="utf-8")
     say(
         f"Pré-version {tag} envoyée. Installez-la depuis GitHub, servez-vous-en, puis :\n"
@@ -522,6 +550,8 @@ def confirm(tag: str) -> None:
     )
     expected = (out / "empreinte.txt").read_text(encoding="utf-8").strip()
     state = release_state(fields, f"Coulisses-{version}.dmg", expected)
+    tools = CACHE / f"sparkle-{pinned['sparkle']['version']}" / "extrait" / "bin"
+    run([tools / "sign_update", "--verify", out / "appcast.xml"])  # unchanged since signed
     say(f"Publication de {tag} pour les amis…")
     # Again after a confirmation cut short: the appcast is the one prepared, replaced.
     run(["gh", "release", "upload", tag, out / "appcast.xml", "--repo", repository, "--clobber"])
@@ -542,6 +572,8 @@ def main() -> None:
     action.add_argument("--confirmer", action="store_true", help="la publier pour les amis")
     parser.add_argument("--premiere", action="store_true", help="la toute première publication")
     args = parser.parse_args()
+    if args.premiere and (args.envoyer or args.confirmer):
+        parser.error("--premiere ne vaut que pour préparer")
     lock = one_at_a_time()
     try:
         if args.confirmer:

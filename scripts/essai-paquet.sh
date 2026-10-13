@@ -29,6 +29,11 @@ URL=http://127.0.0.1:$PORT
 SERVICE=""
 
 finish() {
+  # The app launched at step 5 first: it must not write after its preferences are back.
+  if [[ -n $LAUNCHER ]] && kill -0 $LAUNCHER 2>/dev/null; then
+    kill -TERM $LAUNCHER 2>/dev/null || true
+    wait_end $LAUNCHER 30 || print -u2 "ATTENTION : l'app d'essai ($LAUNCHER) tourne encore."
+  fi
   restore_preferences
   if [[ -n $SERVICE ]]; then
     kill -INT $SERVICE 2>/dev/null || true
@@ -42,14 +47,28 @@ fail() { print -u2 "ÉCHEC : $*"; exit 1 }
 # Step 5 sets aside the published app's preferences (same identifier as an installed
 # Coulisses) and puts them back, even when the test fails.
 SAVED_PREFERENCES=""
+LAUNCHER=""
+# Waits for a process to end, at most `seconds`; false if it does not.
+wait_end() {
+  local pid=$1 seconds=$2
+  for _ in $(seq 1 $((seconds * 2))); do
+    kill -0 $pid 2>/dev/null || return 0
+    sleep 0.5
+  done
+  return 1
+}
+# `defaults import` adds to a domain without removing what was written meanwhile: the
+# domain is deleted first, then given back what it held, and compared.
 restore_preferences() {
   [[ -n $SAVED_PREFERENCES ]] || return 0
-  if [[ $SAVED_PREFERENCES == none ]]; then
-    defaults delete $BUNDLE_ID 2>/dev/null || true
-  else
-    defaults import $BUNDLE_ID $SAVED_PREFERENCES
-  fi
+  defaults delete $BUNDLE_ID 2>/dev/null || true
+  defaults import $BUNDLE_ID $SAVED_PREFERENCES
+  defaults export $BUNDLE_ID $WORK/preferences-apres.plist
   SAVED_PREFERENCES=""
+  plutil -convert xml1 -o $WORK/avant.xml $WORK/preferences.plist
+  plutil -convert xml1 -o $WORK/apres.xml $WORK/preferences-apres.plist
+  diff -q $WORK/avant.xml $WORK/apres.xml >/dev/null ||
+    { print -u2 "ÉCHEC : les préférences de $BUNDLE_ID n'ont pas pu être remises telles quelles (sauvegarde : $WORK/preferences.plist)"; exit 1 }
 }
 snapshot() { find $APP -print0 | xargs -0 stat -f '%m %z %p %N' | sort }
 
@@ -191,15 +210,23 @@ kill -INT $SERVICE; wait $SERVICE 2>/dev/null || true; SERVICE=""
 
 print "5. L'app elle-même, lancée sans accord : rien ne sort du Mac…"
 # ADR 0040: Sparkle looks for updates only after consent. The app is launched for real (its
-# window opens), on a throwaway data folder, the automatic search off, and its connections
-# are read for 30 s. Its preferences are set aside before, and put back after.
+# window opens), on a throwaway data folder, as a friend's app that was never asked: no
+# answer to Sparkle's question, which it asks on this second launch. Its connections are
+# read for 30 s. The preferences of this identifier are set aside before, put back after.
 BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw $PLIST)
-if defaults export $BUNDLE_ID $WORK/preferences.plist 2>/dev/null; then
-  SAVED_PREFERENCES=$WORK/preferences.plist
-else
-  SAVED_PREFERENCES=none
-fi
-defaults write $BUNDLE_ID SUEnableAutomaticChecks -bool false
+# An installed Coulisses of the same identifier, open now, would share these preferences.
+for pid in ${(f)"$(pgrep -f '\.app/Contents/MacOS/' || true)"}; do
+  running=$(ps -o comm= -p $pid 2>/dev/null || true)
+  bundle=${running%/Contents/MacOS/*}
+  [[ -n $running && $bundle != $APP ]] || continue
+  if [[ $(plutil -extract CFBundleIdentifier raw "$bundle/Contents/Info.plist" 2>/dev/null) == $BUNDLE_ID ]]; then
+    fail "une Coulisses de même identifiant est ouverte ($bundle) : quittez-la, puis relancez l'essai"
+  fi
+done
+defaults export $BUNDLE_ID $WORK/preferences.plist
+SAVED_PREFERENCES=$WORK/preferences.plist
+defaults delete $BUNDLE_ID 2>/dev/null || true
+defaults write $BUNDLE_ID SUHasLaunchedBefore -bool true
 {
   open -n --env COULISSES_DATA_DIR=$WORK/donnees-app $APP
   : > $WORK/connexions.txt
@@ -215,13 +242,19 @@ defaults write $BUNDLE_ID SUEnableAutomaticChecks -bool false
   # Stopped by hand: AppleScript would also quit an installed Coulisses of the same identifier.
   APP_SERVICE=$(pgrep -P $LAUNCHER -f coulisses_app.cli || true)
   kill -TERM $LAUNCHER
-  [[ -z $APP_SERVICE ]] || { kill -INT $APP_SERVICE; while kill -0 $APP_SERVICE 2>/dev/null; do sleep 0.5; done }
+  if [[ -n $APP_SERVICE ]]; then
+    kill -INT $APP_SERVICE
+    wait_end $APP_SERVICE 60 || fail "le service de l'app d'essai ne s'arrête pas ($APP_SERVICE)"
+  fi
+  # Nothing written after the put back.
+  wait_end $LAUNCHER 30 || fail "l'app d'essai ne s'arrête pas ($LAUNCHER)"
+  LAUNCHER=""
   OUTSIDE=$(awk -F'->' 'NF > 1 {sub(/:[0-9]+$/, "", $2); print $2}' $WORK/connexions.txt |
     grep -vE '^(127\.0\.0\.1|\[::1\]|localhost)$' | sort -u || true)
   [[ -z $OUTSIDE ]] || fail "l'app s'est connectée hors du Mac sans accord : $OUTSIDE"
-  print "   aucune connexion hors de 127.0.0.1 en 30 s ; préférences de l'app remises"
 }
 restore_preferences
+print "   aucune connexion hors de 127.0.0.1 en 30 s, sans réponse à Sparkle ; préférences de l'app remises telles quelles"
 
 print "6. Rien d'écrit dans l'app…"
 snapshot > $WORK/apres.txt
