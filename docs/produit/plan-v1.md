@@ -14,5 +14,19 @@
 | 8 | Bibliothèque | Coquille d'application (colonne des espaces, projets et séances ; ⌘K, ⌘N, ⌘\\), projets, états des séances, recherche plein texte, export vers un dossier (Q7) (ADR 0030) | Livrée (v0.12.0) |
 | 9 | Conservation et purge | Durée, « Garder l'audio », préavis (bandeau et notification), prolonger, suppression de l'audio ou de la séance (totale, sauvegardes comprises), journal des suppressions, page Réglages (ADR 0029) | Livrée (v0.11.0) |
 | 10 | App au quotidien | App Coulisses dans le Dock avec sa fenêtre (ADR 0034, à la place de la PWA ; le nom reste Coulisses, Q3), Réglages (dossiers, version, section Modèles par l'API de modèles du moteur v1.5.0, ADR 0036), test du parcours complet réseau coupé (`scripts/essai-hors-ligne.sh`) | Livrée (v0.15.0, puis Modèles) |
+| 11 | Distribution (ADR 0040) | Un ami installe Coulisses depuis un DMG, télécharge les modèles, installe Ollama guidé par l'app, et reçoit les mises à jour par Sparkle ; sur ce Mac, l'app publiée sert l'usage réel et « Coulisses (dév) » le développement | À faire |
 
 Tranché à l'étape 7 (ADR 0028) : en V1, on relance la transcription (glossaire enrichi, moteur mis à jour) ou la séparation des voix (autre nombre de présents) ; « un autre moteur » viendra avec les profils du moteur.
+
+## Étape 11 : distribution (ADR 0040)
+
+Chaque lot est une branche, relue par `gardien-principes`, close par un essai à la main.
+
+- **11a — Séparer dév et publiée.** Identifiant, nom et port de « Coulisses (dév) » (8766, `Données-dev`, refus du dossier réel) ; `scripts/installer-lanceur.sh` l'installe. Tests : choix du port et du dossier, refus du dossier réel. Rien ne change encore pour l'usage réel.
+- **11b — Le service sans dépôt.** Le service trouve ses ressources dans le .app : interface construite, programme du son de l'ordinateur précompilé (plus de `swiftc` à l'exécution s'il est fourni), `uv` dans le PATH, `UV_PYTHON_INSTALL_DIR` et `UV_CACHE_DIR` sous `~/Coulisses/Environnements/`. Tests sur `tmp_path`.
+- **11c — Construire le .app.** `scripts/construire.py` : Python autonome, dépendances depuis `uv.lock` (`--frozen`), `.pyc` précompilés, interface, Swift, licences des dépendances ; le lanceur démarre le Python embarqué. `scripts/essai-paquet.py` : le .app construit, réseau coupé, sur un dossier temporaire, migre une base synthétique de la version précédente et traite une séance synthétique ; rien n'est écrit dans le .app. Essai à la main sur un compte macOS neuf, sans uv ni Xcode.
+- **11d — Signer.** Certificat auto-signé (créé par l'utilisateur, guidé), signature de chaque binaire, vérification `codesign --verify --deep --strict`. Essai : deux constructions successives gardent la permission micro.
+- **11e — Mises à jour.** Sparkle dans le lanceur, accord au premier lancement, réglage et « Rechercher maintenant » dans l'onglet Données ; refus pendant un enregistrement ou un traitement ; test du `Info.plist` (pas de téléchargement ni d'installation automatiques, pas de profil système) ; aucun flux pour l'app de dév ; `essai-hors-ligne.sh` étendu ; mention du réseau de la section Modèles reformulée (ADR 0036).
+- **11f — Publier.** `scripts/publier.py vX.Y.Z` : refus si l'arbre est sale ou l'étiquette absente, tous les tests, construction, signature, essai du paquet, puis pré-version (DMG signé EdDSA, notes du `CHANGELOG.md`) ; `--confirmer` la publie et met l'appcast à jour. Tests du script (refus, notes, appcast). Essai : mise à jour de vA vers vB sur un autre compte macOS, données et permissions gardées.
+- **11g — Ollama guidé et prérequis.** Onglet Rédaction quand Ollama manque, modèle conseillé dans `reglages.toml` ; mémoire minimale mesurée sur 16 Go ; page « Installer Coulisses » pour les amis.
+- **11h — Rendre public.** Relecture de l'historique git (faite le 2026-10-13 : rien de sensible), `LICENSE` MIT, changement de visibilité par l'utilisateur ; licence du moteur décidée dans son dépôt. Première release.

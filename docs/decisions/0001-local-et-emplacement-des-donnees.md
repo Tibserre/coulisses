@@ -1,6 +1,6 @@
 # 0001 — 100 % local ; code et données séparés
 
-Statut : Acceptée (2026-09-24). Emplacements du code, des données et des modèles **remplacés par 0009 et 0010** ; le reste (hors ligne, séparation code/données, organisation interne) tient toujours.
+Statut : Acceptée (2026-09-24). Emplacements du code, des données et des modèles **remplacés par 0009 et 0010** ; le reste (hors ligne, séparation code/données, organisation interne) tient toujours ; hors ligne : exception des mises à jour ajoutée par 0040.
 
 ## Contexte
 Principe P1 : aucune donnée ne sort de la machine. Le projet a démarré dans un dossier OneDrive d'entreprise, synchronisé vers le cloud, qui abîme aussi les bases SQLite et gère mal les `.venv`, `node_modules` et `.git`.

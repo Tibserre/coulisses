@@ -20,7 +20,7 @@ Coulisses fait **une seule chose, bien** : le débrief d'une séance enregistré
 
 ## 3. Utilisateur et contexte
 
-- **Un seul utilisateur** : moi, sur mon Mac (Apple M5 Pro, 64 Go). Pas de distribution prévue ; seuls les comptes rendus sont partagés.
+- **Un seul utilisateur** : moi, sur mon Mac (Apple M5 Pro, 64 Go). Quelques amis l'installent aussi, chacun seul sur son Mac (Apple Silicon) ; ils reçoivent les mises à jour (ADR 0040). Les données ne sont jamais partagées, seuls les comptes rendus le sont.
 - **Des espaces** : une troupe d'impro (quelques comédiens et un coach, plus des invités ponctuels), des équipes ou des clients au travail. Chaque espace a ses membres ; les participants changent d'un espace à l'autre.
 - **Une séance** : 1 h à 2 h, en salle, micro posé. En impro, alternance de **scènes jouées** et de **discussions** (retours, débrief, décisions sur le spectacle) ; au travail, une réunion découpée en chapitres.
 - **Captation** : le Mac dans la salle (V1), ou un téléphone / enregistreur dont on importe le fichier (V1). Captation simultanée Mac + téléphones (plus tard, prévue dans le modèle dès la V1).
@@ -40,7 +40,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 | # | Principe | Conséquence concrète |
 |---|---|---|
-| P1 | **Local d'abord, toujours.** | Aucun appel réseau à l'exécution. Les modèles sont téléchargés explicitement, une fois, par une commande dédiée ; ensuite tout tourne hors ligne. Pas de télémétrie, pas de CDN, pas de police web distante. |
+| P1 | **Local d'abord, toujours.** | Aucun appel réseau à l'exécution. Deux exceptions seulement : les modèles, téléchargés explicitement, une fois, sur demande ; les mises à jour de Coulisses, par l'app du Dock seule (jamais le service), seulement l'appcast et le DMG depuis GitHub, sans profil système : recherche automatique après accord (révocable) ou sur demande, téléchargement sur clic (ADR 0040). Ensuite tout tourne hors ligne. Pas de télémétrie, pas de CDN, pas de police web distante. |
 | P2 | **Horodatages mesurés, jamais estimés.** | Chaque temps de mot vient de l'audio (moteur à horodatage mesuré ou alignement forcé), ou manque : un mot que l'aligneur ne sait pas placer reste sans temps (au moins 90 % de mots horodatés, sinon refus, ADR 0011). Jamais d'interpolation, jamais de répartition au prorata du texte. Un moteur déclare si ses horodatages sont mesurés. |
 | P3 | **Mieux vaut trop de locuteurs que pas assez.** | Seuils orientés sur-segmentation. Le nombre de présents est un **minimum**, jamais un maximum. Aucun réglage de diarisation ne dépend de la durée de la séance. La métrique prioritaire est la pureté des locuteurs. |
 | P4 | **Le français partout.** | Chaque génération reçoit une consigne de langue explicite, sans chemin d'exception. Prompts rédigés en français natif. |
@@ -179,9 +179,10 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.12 Réglages et modèles
 
-- **Lancement** : l'app **Coulisses** dans le Dock démarre le service et montre l'interface dans sa propre fenêtre. Quitter (⌘Q) arrête le service ; pendant un enregistrement ou un traitement, l'app demande d'abord. Rien ne tourne quand l'app est fermée. Les permissions de macOS (micro, son de l'ordinateur) vont à Coulisses (ADR 0005, 0034).
+- **Lancement** : l'app **Coulisses** dans le Dock démarre le service et montre l'interface dans sa propre fenêtre. Quitter (⌘Q) arrête le service ; pendant un enregistrement ou un traitement, l'app demande d'abord. Rien ne tourne quand l'app est fermée. Les permissions de macOS (micro, son de l'ordinateur) vont à Coulisses et sont gardées d'une version à l'autre (ADR 0005, 0034, 0040).
+- **Installation et mises à jour** (ADR 0040) : Coulisses s'installe depuis un DMG, sans autre outil. Au premier lancement, l'app demande si elle peut rechercher seule les mises à jour ; l'onglet « Données » permet de changer d'avis et de « Rechercher maintenant ». Une mise à jour ne se télécharge et ne s'installe que sur un clic, jamais pendant un enregistrement ni un traitement. Si Ollama manque, l'onglet « Rédaction » dit comment l'installer et quel modèle prendre.
 - **Dossiers** : depuis les Réglages, ouvrir dans le Finder le dossier des données, celui des modèles et le journal du service.
-- **Réglages en cinq onglets**, dont l'adresse garde l'onglet ouvert : « Général » (conservation de l'audio, ce qui est bientôt supprimé, dossier d'export), « Transcription » (les modèles du moteur), « Rédaction » (les modèles de langage), « Données » (la version, les dossiers à ouvrir dans le Finder, le journal des suppressions et les sauvegardes de la base, les cinq plus récentes d'abord, le reste sur demande), « Avancé » (mode développeur).
+- **Réglages en cinq onglets**, dont l'adresse garde l'onglet ouvert : « Général » (conservation de l'audio, ce qui est bientôt supprimé, dossier d'export), « Transcription » (les modèles du moteur), « Rédaction » (les modèles de langage), « Données » (la version et les mises à jour, les dossiers à ouvrir dans le Finder, le journal des suppressions et les sauvegardes de la base, les cinq plus récentes d'abord, le reste sur demande), « Avancé » (mode développeur).
 - Durée de conservation, préavis de purge : chacun se règle par « − » et « + », de valeur usuelle en valeur usuelle (une semaine, un mois, trois mois…), puis « Enregistrer », qui n'apparaît qu'une fois quelque chose changé.
 - **Modèles dans un dossier visible** : `~/Coulisses/Modèles`, un sous-dossier par modèle avec sa fiche (source, révision, taille, date). Je les vois, les déplace ou les supprime dans le Finder ou depuis l'app.
 - **Onglet « Rédaction »** (ADR 0039) : le modèle de langage de chaque rédaction, titre, chapitres et résumés, choisi parmi ceux installés dans Ollama, et la liste de ceux-ci avec leur taille et ce qu'ils rédigent. Un changement vaut pour ce qui est demandé ensuite ; ce qui est rédigé garde son modèle. Le modèle choisi dans l'onglet Résumé d'une séance devient celui des résumés. Si Ollama ne répond pas, l'onglet le dit.
@@ -190,7 +191,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ## 8. Hors périmètre V1
 
-Dictée, raccourcis globaux, transcription en temps réel, capture vidéo de la visio, comptes, sync, cloud, multi-utilisateur, diarisation vidéo, distribution de l'app.
+Dictée, raccourcis globaux, transcription en temps réel, capture vidéo de la visio, comptes, sync, cloud, multi-utilisateur, diarisation vidéo, distribution au-delà de quelques amis (App Store, notarisation).
 
 ## 9. Plus tard
 
@@ -206,11 +207,11 @@ Dictée, raccourcis globaux, transcription en temps réel, capture vidéo de la 
 
 | Domaine | Exigence |
 |---|---|
-| Hors ligne | Tout le parcours fonctionne en mode avion. Vérifié par un test automatisé réseau coupé. |
+| Hors ligne | Tout le parcours fonctionne en mode avion. Vérifié par un test automatisé réseau coupé, sur le dépôt et sur l'app construite (ADR 0040). |
 | Vitesse | 80 min d'audio traitées en 15 min au plus par le moteur (≈ 10 min de calcul par heure d'audio mesurées), résumés en plus. |
 | Mémoire | Tient dans 64 Go avec les autres applis ouvertes. Pas deux gros modèles chargés en même temps sans nécessité. |
 | Robustesse | Crash pendant l'enregistrement : au plus quelques secondes perdues. Crash pendant le traitement : reprise à l'étape interrompue. |
-| Données | Un seul dossier visible `~/Coulisses/` : `App/` et `Moteur/` (les deux dépôts git, ADR 0016), `Modèles/`, `Environnements/`, `Données/`. Jamais dans un dossier synchronisé (ADR 0010). |
+| Données | Un seul dossier visible `~/Coulisses/` : `Modèles/`, `Environnements/`, `Données/` ; sur le Mac de développement, aussi `App/` et `Moteur/` (les deux dépôts git, ADR 0016) et `Données-dev/`. Jamais dans un dossier synchronisé (ADR 0010). |
 | Longues séances | 2 h sans dérive d'horodatage ni dégradation de la diarisation. |
 
 ## 11. Critères de réussite V1
