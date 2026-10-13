@@ -1,4 +1,4 @@
-import type { CatalogModel, EnvironmentInfo, Inventory, ModelAction, ModelsView, Readiness } from "./api.ts";
+import type { CatalogModel, EnvironmentInfo, Inventory, ModelAction, ModelsView, Readiness, UvStore } from "./api.ts";
 
 /** What each stage is for, said to the user. */
 const STAGE_WORDS: Partial<Record<CatalogModel["stage"], string>> = {
@@ -83,6 +83,30 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
 export function environmentState(env: EnvironmentInfo): string {
   if (!env.current) return "Ancienne version : ne fait que prendre de la place";
   return env.installed ? "Installé" : "Installation interrompue";
+}
+
+/** Where an environment's Python is, when that is worth saying: outside Coulisses (an
+ *  install from before engine v1.7.0), it works as long as that Python stays in place. */
+export function interpreterNote(env: EnvironmentInfo): string | null {
+  return env.installed && env.interpreter_outside
+    ? "Son Python est installé hors de Coulisses : il fonctionne tant que ce Python reste en place."
+    : null;
+}
+
+/** uv's folders for the environments, as the list says them; an empty one is not shown. */
+export function uvStoreRows(inventory: Inventory): { key: string; title: string; note: string; store: UvStore }[] {
+  return inventory.uv_stores
+    .filter((store) => store.size_bytes > 0)
+    .map((store) =>
+      store.kind === "python"
+        ? { key: store.path, title: "Python des environnements", note: "Utilisé par les environnements de calcul", store }
+        : {
+            key: store.path,
+            title: "Cache des installations",
+            note: "Hors du total : ses fichiers sont partagés avec les environnements",
+            store,
+          },
+    );
 }
 
 /** An environment that can be removed: one the processing does not use (an older one, or an

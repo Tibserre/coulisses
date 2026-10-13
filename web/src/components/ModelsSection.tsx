@@ -10,11 +10,13 @@ import { api, type EnvironmentInfo, type ModelAction, type ModelsView } from "..
 import { useDevMode } from "../devMode.ts";
 import {
   environmentState,
+  interpreterNote,
   gigabytes,
   modelRows,
   percent,
   readinessLine,
   removableEnvironment,
+  uvStoreRows,
   type ModelRow,
 } from "../models.ts";
 
@@ -190,9 +192,17 @@ export function ModelsSection() {
                   </Text>
                   {dev && <Text type="supporting">{env.path}</Text>}
                 </div>
-                <Text type="supporting">
-                  {environmentState(env)} · {gigabytes(env.size_bytes)}
-                </Text>
+                <div className="cl-models__what">
+                  <Text type="supporting">
+                    {environmentState(env)} · {gigabytes(env.size_bytes)}
+                  </Text>
+                  {interpreterNote(env) && (
+                    <Text type="supporting">
+                      {interpreterNote(env)}
+                      {dev && env.interpreter ? ` (${env.interpreter})` : ""}
+                    </Text>
+                  )}
+                </div>
                 <div className="cl-models__actions">
                   {/* Only one that is not the processing's: an older lock's, or interrupted. */}
                   {removableEnvironment(env, actions) && (
@@ -205,6 +215,17 @@ export function ModelsSection() {
                     />
                   )}
                 </div>
+              </li>
+            ))}
+            {view && uvStoreRows(view.inventory).map(({ key, title, note, store }) => (
+              <li key={key} className="cl-models__row">
+                <div className="cl-models__what">
+                  <Text weight="medium">{title}</Text>
+                  <Text type="supporting">{note}</Text>
+                  {dev && <Text type="supporting">{store.path}</Text>}
+                </div>
+                <Text type="supporting">{gigabytes(store.size_bytes)}</Text>
+                <div className="cl-models__actions" />
               </li>
             ))}
             {missingEnvironments.map((name) => {

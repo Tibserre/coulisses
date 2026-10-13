@@ -114,6 +114,18 @@ export interface EnvironmentInfo {
   /** Usable (an interrupted install is not). */
   installed: boolean;
   size_bytes: number;
+  /** The Python it runs (engine v1.7.0), null if absent. */
+  interpreter: string | null;
+  /** Its Python lives outside the engine's folder (installed before v1.7.0, usually in
+   *  ~/.local/share/uv): it works as long as that one stays, and is not counted. */
+  interpreter_outside: boolean;
+}
+
+/** uv's Python interpreters, or its download cache, for the environments (engine v1.7.0). */
+export interface UvStore {
+  kind: "python" | "cache";
+  path: string;
+  size_bytes: number;
 }
 
 export interface Inventory {
@@ -122,6 +134,8 @@ export interface Inventory {
   models: InstalledEngineModel[];
   partial_downloads: PartialDownload[];
   environments: EnvironmentInfo[];
+  /** Counted in `total_bytes`, except the cache (its files are cloned into the environments). */
+  uv_stores: UvStore[];
   total_bytes: number;
 }
 

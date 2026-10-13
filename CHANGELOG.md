@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.22.0 — 2026-10-13
+
+### Nouveautés
+
+- passe au moteur v1.7.0, qui range uv sous ses environnements (moteur)
+
 ## v0.21.0 — 2026-10-13
 
 ### Nouveautés
