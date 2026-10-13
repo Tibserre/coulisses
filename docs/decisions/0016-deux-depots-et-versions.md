@@ -1,6 +1,6 @@
 # 0016 — Deux dépôts, un moteur versionné, des versions automatiques
 
-Statut : Acceptée (2026-10-02 : l'utilisateur veut un dépôt qui soit juste l'application, un moteur qu'il peut améliorer et publier par versions, et des versions propres et automatiques).
+Statut : Acceptée (2026-10-02 : l'utilisateur veut un dépôt qui soit juste l'application, un moteur qu'il peut améliorer et publier par versions, et des versions propres et automatiques). Dossiers chez un ami, Python et cache de uv : précisés par 0040.
 
 ## Contexte
 Le moteur est fixé (ADR 0014) et l'atelier n'est pas le produit (ADR 0015). Le produit va être construit dans un dépôt propre. Il doit utiliser une version précise du moteur, et le moteur doit pouvoir s'améliorer sans casser l'application.
