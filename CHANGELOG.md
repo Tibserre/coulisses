@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.26.1 — 2026-10-13
+
+### Corrections
+
+- n'accepte que la page de Coulisses et neutralise ce que le modèle écrit (securite)
+
 ## v0.26.0 — 2026-10-13
 
 ### Nouveautés
