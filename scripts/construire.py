@@ -9,9 +9,12 @@ holds:
 - its tools: ffmpeg and ffprobe (built here, audio only, LGPL), uv, the computer's sound
   program;
 - the licences of what it carries.
-It is signed ad hoc for now (signature with the certificate: step 11d).
+Every binary inside, then the .app, is signed with the self-signed certificate named in
+`construction.toml` (ADR 0040; no hardened runtime, no notarization, no timestamp server):
+macOS keeps the friends' permissions from one version to the next. --ad-hoc signs for
+this Mac only, for a try: such a build is never published.
 
-Usage: uv run python scripts/construire.py [--telecharger] [--sortie dossier]
+Usage: uv run python scripts/construire.py [--telecharger] [--ad-hoc] [--sortie dossier]
 Then: scripts/essai-paquet.sh dist/Coulisses.app
 """
 
@@ -34,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path.home() / "Library" / "Caches" / "Coulisses" / "construction"
 LAUNCHER = ROOT / "native" / "lanceur"
 SYSTEM_LIBRARIES = ("/usr/lib/", "/System/Library/")
+MACH_O = (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca")
 COMPONENTS = ("protocols", "demuxers", "decoders", "parsers", "encoders", "muxers", "filters")
 
 
@@ -327,15 +331,53 @@ def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path) -> Non
     )
 
 
+def signing_identity(config: dict, ad_hoc: bool) -> str:
+    """The certificate's name, checked before anything is built; "-" for --ad-hoc."""
+    if ad_hoc:
+        say("Signature ad hoc : pour un essai sur ce Mac, jamais publiée.")
+        return "-"
+    identity = config["identity"]
+    found = run(["security", "find-identity", "-p", "codesigning"]).stdout
+    if f'"{identity}"' not in found:
+        fail(
+            f"le certificat « {identity} » n'est pas dans le trousseau : créez-le "
+            "(docs/technique/certificat.md), ou construisez avec --ad-hoc pour un essai."
+        )
+    return identity
+
+
+def binaries(folder: Path) -> list[Path]:
+    """The Mach-O files inside (libraries, programs), deepest first: signed before what
+    holds them."""
+    found = []
+    for path in folder.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            with path.open("rb") as stream:
+                if stream.read(4) in MACH_O:
+                    found.append(path)
+    return sorted(found, key=lambda p: len(p.parts), reverse=True)
+
+
 def sign(app: Path, identity: str) -> None:
-    say("Signature…")
-    run(["codesign", "--force", "--sign", identity, app])
+    """Each binary inside, then the launcher and the .app. No timestamp server (nothing
+    leaves this Mac), no hardened runtime (ADR 0040)."""
+    inside = binaries(app / "Contents" / "Resources")
+    say(f"Signature de {len(inside)} binaires, puis de l'app ({identity})…")
+    command = ["codesign", "--force", "--timestamp=none", "--sign", identity]
+    for start in range(0, len(inside), 100):
+        run([*command, *inside[start : start + 100]])
+    run([*command, app])  # with its launcher, the main executable
     run(["codesign", "--verify", "--deep", "--strict", app])
+    for start in range(0, len(inside), 100):
+        run(["codesign", "--verify", "--strict", *inside[start : start + 100]])
+    requirement = run(["codesign", "--display", "--requirements", "-", app]).stdout.strip()
+    say(f"   exigence désignée : {requirement.splitlines()[-1] if requirement else '?'}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Construit Coulisses.app (ADR 0040).")
     parser.add_argument("--telecharger", action="store_true", help="télécharger ce qui manque")
+    parser.add_argument("--ad-hoc", action="store_true", help="signer pour ce Mac seulement")
     parser.add_argument("--sortie", type=Path, default=ROOT / "dist")
     args = parser.parse_args()
 
@@ -343,6 +385,7 @@ def main() -> None:
     app, minimum_macos = settings["app"], settings["app"]["minimum_macos"]
     version = app_version()
 
+    identity = signing_identity(settings["signature"], args.ad_hoc)
     uv = pinned_uv(settings["uv"])
     archive = ffmpeg_archive(settings["ffmpeg"], args.telecharger)
     python_dir = standalone_python(settings["python"], args.telecharger)
@@ -366,7 +409,7 @@ def main() -> None:
     copy_tools(resources, ffmpeg, uv, minimum_macos)
     write_licences(resources, ffmpeg, resources / "python", uv)
     build_launcher(contents, app, version, minimum_macos)
-    sign(partial, "-")
+    sign(partial, identity)
 
     if final.exists():
         shutil.rmtree(final)  # the previous build of this script, in its own output folder
