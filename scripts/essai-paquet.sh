@@ -12,11 +12,14 @@
 # Voices made by `say`; the sample files are made by Homebrew's ffmpeg (test tooling only).
 # Nothing is written in ~/Coulisses/Données.
 #
-# Usage: scripts/essai-paquet.sh [chemin/Coulisses.app]
+# Usage: scripts/essai-paquet.sh [--publication] [chemin/Coulisses.app]
+# --publication: an app signed ad hoc fails (scripts/publier.py, ADR 0040).
 
 set -euo pipefail
 
 ROOT=${0:A:h:h}
+PUBLICATION=""
+if [[ ${1:-} == --publication ]]; then PUBLICATION=1; shift; fi
 APP=${1:-$ROOT/dist/Coulisses.app}
 APP=${APP:A}
 RES=$APP/Contents/Resources
@@ -43,6 +46,19 @@ print "Essai de $APP ($VERSION)"
 
 print "1. Signature et contenu…"
 codesign --verify --deep --strict $APP || fail "signature invalide"
+# Signed by the certificate of construction.toml, the .app and what it runs (ADR 0040).
+EXPECTED=$($RES/python/bin/python3 -I -B -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["signature"]["identity"])' $ROOT/scripts/construction.toml)
+signer() { codesign -dvv $1 2>&1 | awk -F= '/^Authority=/{print $2; exit} /^Signature=adhoc/{print "ad hoc"; exit}' }
+SIGNER=$(signer $APP)
+if [[ $SIGNER == "ad hoc" ]]; then
+  [[ -z $PUBLICATION ]] || fail "signature ad hoc : une telle app ne se publie pas"
+  print "   signature ad hoc : essai seulement, jamais publiée"
+else
+  [[ $SIGNER == $EXPECTED ]] || fail "signée par « $SIGNER », pas par « $EXPECTED »"
+fi
+for inside in $RES/bin/ffmpeg $RES/bin/uv $RES/python/bin/python3.12 $(find $RES/python -name '*.so' | head -3); do
+  [[ $(signer $inside) == $SIGNER ]] || fail "${inside#$RES/} n'est pas signé comme l'app ($(signer $inside))"
+done
 snapshot > $WORK/avant.txt
 for tool in ffmpeg ffprobe uv coulisses-son-ordinateur; do
   [[ -x $RES/bin/$tool ]] || fail "outil absent : $tool"
@@ -54,7 +70,7 @@ BUILT_WITH=$($RES/bin/ffmpeg -version)
 [[ $BUILT_WITH == *--enable-gpl* || $BUILT_WITH == *--enable-nonfree* ]] && fail "ffmpeg n'est pas sous LGPL"
 PROTOCOLS=$($RES/bin/ffmpeg -hide_banner -protocols | awk '/Input:/{on=1; next} /Output:/{on=0} on {print $1}' | sort -u | tr '\n' ' ')
 [[ $PROTOCOLS == "file pipe " ]] || fail "protocoles en entrée de ffmpeg : $PROTOCOLS"
-print "   signature valide ; outils autonomes ; ffmpeg LGPL, sans réseau, protocoles : $PROTOCOLS"
+print "   signature valide ($SIGNER) ; outils autonomes ; ffmpeg LGPL, sans réseau, protocoles : $PROTOCOLS"
 
 print "2. Le ffmpeg de l'app lit chaque format…"
 say -v Thomas -o $WORK/voix.aiff "Bonjour à tous. On reprend la scène du marché, avec plus d'énergie au début."

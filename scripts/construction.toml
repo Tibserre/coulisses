@@ -8,6 +8,12 @@ name = "Coulisses"
 identifier = "io.github.tibserre.coulisses"
 minimum_macos = "14.4"
 
+[signature]
+# The self-signed certificate of ADR 0040, in this Mac's login keychain, never in git
+# (how to make it: docs/technique/certificat.md). macOS ties the friends' permissions to
+# it: every version is signed with the same one.
+identity = "Coulisses"
+
 [uv]
 # Copied into the .app (the engine installs its environments with it), and the one that
 # picks the python-build-standalone release: the build refuses another version.
