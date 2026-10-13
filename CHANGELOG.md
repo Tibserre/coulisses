@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.26.2 — 2026-10-13
+
+### Corrections
+
+- ne signe plus le DMG, pour un seul « Ouvrir quand même » (publication)
+
 ## v0.26.1 — 2026-10-13
 
 ### Corrections
