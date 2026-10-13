@@ -14,8 +14,9 @@ Preparing, in this order, each step stopping the next:
    lose their permissions (without any confirmed publication here, only --premiere goes on);
 5. the previous published app makes a base with a session, the new one opens it
    (migrations), network cut, with empty models;
-6. the DMG, signed; its EdDSA signature; the notes, from CHANGELOG.md; the appcast, signed
-   too (the app requires it), without any remote resource.
+6. the DMG (the app inside signed, the image itself not); its EdDSA signature; the notes,
+   from CHANGELOG.md; the appcast, signed too (the app requires it), without any remote
+   resource.
 Everything is kept in ~/Coulisses/Publications/vX.Y.Z.
 
 Sending (--envoyer) takes that preparation as it is (never built again), pushes the tag and
@@ -353,7 +354,10 @@ def migration_test(previous: Path, app: Path) -> None:
     say(f"   une séance faite par {previous.name} s'ouvre dans la nouvelle version")
 
 
-def make_dmg(app: Path, target: Path, identity: str) -> None:
+def make_dmg(app: Path, target: Path) -> None:
+    """The DMG, not signed itself: macOS checks a signed disk image when it opens it, and one
+    signed with a certificate it does not know is blocked, a second time after the app. The
+    app inside is signed with the certificate, and the DMG with the update key (EdDSA)."""
     with tempfile.TemporaryDirectory(prefix="coulisses-dmg-") as work_dir:
         staging = Path(work_dir) / "Coulisses"
         staging.mkdir()
@@ -365,7 +369,6 @@ def make_dmg(app: Path, target: Path, identity: str) -> None:
                 *("-fs", "APFS", "-format", "ULFO", "-ov", target),
             ]
         )
-    run(["codesign", "--force", "--timestamp=none", "--sign", identity, target])
 
 
 def replaceable(out: Path) -> bool:
@@ -435,7 +438,7 @@ def prepare(tag: str, first: bool) -> Path:
         shutil.rmtree(out)
     out.mkdir(parents=True)
     dmg = out / f"Coulisses-{version}.dmg"
-    make_dmg(app, dmg, pinned["signature"]["identity"])
+    make_dmg(app, dmg)
     signature, length = parse_signature(run([tools / "sign_update", dmg]).stdout)
     notes = release_notes((work / "CHANGELOG.md").read_text(encoding="utf-8"), version)
     (out / "notes.md").write_text(notes, encoding="utf-8")
