@@ -22,7 +22,7 @@ Tranché à l'étape 7 (ADR 0028) : en V1, on relance la transcription (glossair
 
 Chaque lot est une branche, relue par `gardien-principes`, close par un essai à la main.
 
-- **11a — Séparer dév et publiée.** Identifiant, nom et port de « Coulisses (dév) » (8766, `Données-dev`, refus du dossier réel) ; `scripts/installer-lanceur.sh` l'installe. Tests : choix du port et du dossier, refus du dossier réel. Rien ne change encore pour l'usage réel.
+- **11a — Séparer dév et publiée.** Identifiant, nom et port de « Coulisses (dév) » (8766, `Données-dev`, refus du dossier réel) ; `scripts/installer-lanceur.sh` l'installe. Tests : choix du port et du dossier, refus du dossier réel. Rien ne change encore pour l'usage réel. **Fait.**
 - **11b — Le service sans dépôt.** Le service trouve ses ressources dans le .app : interface construite, programme du son de l'ordinateur précompilé (plus de `swiftc` à l'exécution s'il est fourni), `uv` dans le PATH, `UV_PYTHON_INSTALL_DIR` et `UV_CACHE_DIR` sous `~/Coulisses/Environnements/`. Tests sur `tmp_path`.
 - **11c — Construire le .app.** `scripts/construire.py` : Python autonome, dépendances depuis `uv.lock` (`--frozen`), `.pyc` précompilés, interface, Swift, licences des dépendances ; le lanceur démarre le Python embarqué. `scripts/essai-paquet.py` : le .app construit, réseau coupé, sur un dossier temporaire, migre une base synthétique de la version précédente et traite une séance synthétique ; rien n'est écrit dans le .app. Essai à la main sur un compte macOS neuf, sans uv ni Xcode.
 - **11d — Signer.** Certificat auto-signé (créé par l'utilisateur, guidé), signature de chaque binaire, vérification `codesign --verify --deep --strict`. Essai : deux constructions successives gardent la permission micro.

@@ -60,7 +60,7 @@ def main() -> None:
         block(
             "P8 : commande potentiellement destructrice sur le dossier de données réel. "
             "Seule l'app (purge, suppression confirmée) touche à ces données. "
-            "Travaille dans Coulisses-dev ou un dossier temporaire."
+            "Travaille avec `coulisses-app --dev` (~/Coulisses/Données-dev) ou un dossier temporaire."
         )
 
     for pattern, msg in RULES:

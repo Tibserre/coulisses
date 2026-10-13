@@ -36,7 +36,7 @@ Des hooks bloquent une partie de ces violations (`.claude/hooks/`). Un blocage n
 ## Données
 - Tout vit sous `~/Coulisses/` : `App/` (ce dépôt), `Moteur/` (le moteur), `Modèles/`, `Environnements/`, `Données/` (ADR 0010, 0016).
 - Données réelles : `~/Coulisses/Données/`. **Tu n'y écris jamais et tu n'y supprimes rien**, même pour un test.
-- Développement : `COULISSES_DATA_DIR=~/Coulisses/Données-dev`. Tests : dossier temporaire (`tmp_path`).
+- Développement : `uv run coulisses-app --dev` ou l'app « Coulisses (dév) » (`scripts/installer-lanceur.sh --dev`) : port 8766, `~/Coulisses/Données-dev`, refus des données réelles (ADR 0040). Tests : dossier temporaire (`tmp_path`).
 - Jamais d'audio réel, de transcript réel, de base ou de modèle dans git. Les fixtures de test sont synthétiques (`say -v Thomas …`) et restent sous 1 Mo.
 
 ## Façon de travailler (autonomie encadrée)

@@ -17,7 +17,7 @@ from coulisses_app import system_audio
 from coulisses_app.api import create_app
 from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
-from coulisses_app.paths import DataDir
+from coulisses_app.paths import DataDir, RealDataRefusedError
 from coulisses_app.processing import Processor
 from coulisses_app.retention import Watcher
 from coulisses_app.sessions import interrupted_imports
@@ -27,6 +27,8 @@ log = logging.getLogger(__name__)
 
 HOST = "127.0.0.1"  # never another interface (ADR 0001)
 DEFAULT_PORT = 8765
+# « Coulisses (dév) » beside the published app: neither service nor data shared (ADR 0040).
+DEV_PORT = 8766
 WEB_DIR_ENV = "COULISSES_WEB_DIR"
 
 
@@ -45,11 +47,29 @@ def _prepare_system_audio() -> None:
         log.warning("the computer's sound cannot be recorded here: %s", exc)
 
 
-def main(argv: list[str] | None = None) -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="coulisses-app", description="Lance Coulisses.")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--sans-navigateur", action="store_true", help="ne pas ouvrir l'interface")
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="développement : port 8766, ~/Coulisses/Données-dev, jamais les données réelles",
+    )
+    return parser.parse_args(argv)
+
+
+def launch_settings(args: argparse.Namespace) -> tuple[DataDir, int]:
+    """The data folder and the port: development never gets the real data (ADR 0040)."""
+    if args.dev:
+        data, port = DataDir.for_development(), DEV_PORT
+    else:
+        data, port = DataDir.from_env(), DEFAULT_PORT
+    return data, port if args.port is None else args.port
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
 
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -59,7 +79,11 @@ def main(argv: list[str] | None = None) -> None:
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
-    data = DataDir.from_env()
+    try:
+        data, port = launch_settings(args)
+    except RealDataRefusedError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from exc
     print(f"Coulisses — données : {data.root}", file=sys.stderr)
     try:
         lock = hold_data_lock(data)
@@ -88,15 +112,13 @@ def main(argv: list[str] | None = None) -> None:
         recorder=Recorder(data, keep_awake=awake),
         watcher=Watcher(data),
     )
-    url = f"http://{HOST}:{args.port}/"
+    url = f"http://{HOST}:{port}/"
     if not args.sans_navigateur:
         threading.Timer(1.0, webbrowser.open, args=(url,)).start()
     try:
         # Open streams (the recording page's meter) are cut after 2 s at shutdown, so that
         # the service's own shutdown always runs: the recording is closed, the stages
         # stopped (ADR 0018, 0027).
-        uvicorn.run(
-            app, host=HOST, port=args.port, log_level="warning", timeout_graceful_shutdown=2
-        )
+        uvicorn.run(app, host=HOST, port=port, log_level="warning", timeout_graceful_shutdown=2)
     finally:
         lock.close()

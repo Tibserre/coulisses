@@ -2,7 +2,11 @@
 # Builds Coulisses.app, the app in the Dock (ADR 0034), and puts it in ~/Applications
 # (or the folder given). Built on this Mac with Apple's compiler; nothing is downloaded.
 #
-# Usage: scripts/installer-lanceur.sh [dossier]
+# --dev builds « Coulisses (dév) » instead (ADR 0040): another name, identifier, icon,
+# port (8766) and log, on ~/Coulisses/Données-dev; its service refuses the real data. The
+# two apps live side by side and share neither service, data nor permissions.
+#
+# Usage: scripts/installer-lanceur.sh [--dev] [dossier]
 #
 # The app is signed for this Mac only (ad hoc). macOS ties the permissions (micro, son de
 # l'ordinateur) to that signature: built again, the app asks for them again.
@@ -11,9 +15,35 @@ set -euo pipefail
 
 ROOT=${0:A:h:h}
 SOURCE=$ROOT/native/lanceur
-BUILD=$SOURCE/build
-DESTINATION=${1:-$HOME/Applications}
-APP=$BUILD/Coulisses.app
+
+VARIANT=""
+NAME="Coulisses"
+IDENTIFIER="local.coulisses.app"
+DESTINATION=""
+# Anything not understood stops here: a misplaced --dev would replace the everyday app.
+for argument in "$@"; do
+  case $argument in
+    --dev)
+      VARIANT=dev
+      NAME="Coulisses (dév)"
+      IDENTIFIER="local.coulisses.app.dev"
+      ;;
+    -*)
+      print -u2 "Option inconnue : $argument. Usage : scripts/installer-lanceur.sh [--dev] [dossier]"
+      exit 2
+      ;;
+    *)
+      [[ -z $DESTINATION ]] || {
+        print -u2 "Un seul dossier de destination. Usage : scripts/installer-lanceur.sh [--dev] [dossier]"
+        exit 2
+      }
+      DESTINATION=$argument
+      ;;
+  esac
+done
+DESTINATION=${DESTINATION:-$HOME/Applications}
+BUILD=$SOURCE/build${VARIANT:+-$VARIANT}
+APP="$BUILD/$NAME.app"
 
 UV=$(command -v uv) || { print -u2 "uv est introuvable : installez-le, puis relancez."; exit 1 }
 command -v swiftc >/dev/null || {
@@ -30,7 +60,7 @@ swiftc -O -swift-version 5 -target arm64-apple-macosx14.4 \
   $SOURCE/main.swift -o $APP/Contents/MacOS/Coulisses
 
 print "Icône…"
-swift $SOURCE/icone.swift $BUILD/Coulisses.iconset
+swift $SOURCE/icone.swift $BUILD/Coulisses.iconset $VARIANT
 iconutil -c icns $BUILD/Coulisses.iconset -o $APP/Contents/Resources/Coulisses.icns
 
 PLIST=$APP/Contents/Info.plist
@@ -40,11 +70,15 @@ plutil -replace CoulissesUV -string $UV $PLIST
 # The PATH of this shell: ffmpeg, swiftc and the others, as in the Terminal.
 plutil -replace CoulissesPATH -string $PATH $PLIST
 plutil -replace CFBundleShortVersionString -string $VERSION $PLIST
+plutil -replace CFBundleName -string $NAME $PLIST
+plutil -replace CFBundleDisplayName -string $NAME $PLIST
+plutil -replace CFBundleIdentifier -string $IDENTIFIER $PLIST
+plutil -replace CoulissesVariante -string "$VARIANT" $PLIST
 plutil -replace CFBundleVersion -string $VERSION $PLIST
 
 codesign --force --sign - $APP
 
 mkdir -p $DESTINATION
-rm -rf $DESTINATION/Coulisses.app
-ditto $APP $DESTINATION/Coulisses.app
-print "Coulisses $VERSION est dans $DESTINATION. Glissez-le dans le Dock."
+rm -rf "$DESTINATION/$NAME.app"
+ditto $APP "$DESTINATION/$NAME.app"
+print "$NAME $VERSION est dans $DESTINATION. Glissez-le dans le Dock."
