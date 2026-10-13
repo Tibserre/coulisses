@@ -14,6 +14,18 @@ minimum_macos = "14.4"
 # it: every version is signed with the same one.
 identity = "Coulisses"
 
+[sparkle]
+# The updates (ADR 0040), in the launcher of the published app only.
+version = "2.10.0"
+url = "https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz"
+# As published by GitHub for this release: checked before anything else.
+sha256 = "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c"
+# Where the app reads which version is the latest: the appcast of the latest release.
+feed_url = "https://github.com/Tibserre/coulisses/releases/latest/download/appcast.xml"
+# The public half of the EdDSA key that signs each update (the private half stays in this
+# Mac's keychain: docs/technique/certificat.md). Empty: no updates in the app.
+public_key = "FrX3p/sJ+KIF1J60fZxA1cwNBqbiw0hy8GuCXK5XsbY="
+
 [uv]
 # Copied into the .app (the engine installs its environments with it), and the one that
 # picks the python-build-standalone release: the build refuses another version.

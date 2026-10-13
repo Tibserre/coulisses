@@ -14,6 +14,10 @@
 import AppKit
 import WebKit
 
+#if COULISSES_SPARKLE
+    import Sparkle
+#endif
+
 let resourcesDir = Bundle.main.resourceURL ?? Bundle.main.bundleURL
 let bundledPython = resourcesDir.appendingPathComponent("python/bin/python3")
 let isStandalone = FileManager.default.isExecutableFile(atPath: bundledPython.path)
@@ -107,8 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// taken back, so that ⌘Q stops it.
     var adopted: pid_t?
     var stopping = false
+    #if COULISSES_SPARKLE
+        /// Sparkle (ADR 0040): only in the published app, built with its feed and its key.
+        var updates: SPUStandardUpdaterController?
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        startUpdates()
         buildMenu()
         makeWindow()
         showPage(title: "\(appName) démarre…", detail: nil, actions: false)
@@ -213,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         if service == nil, adopted == nil, isLeftAlone(info.pid) {
             adopted = info.pid
         }
+        refreshUpdatesState()
         web.load(URLRequest(url: base))
     }
 
@@ -345,6 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         configuration.websiteDataStore = .default()
         // Its lists would be fetched from the network (P1): the window only shows 127.0.0.1.
         configuration.preferences.isFraudulentWebsiteWarningEnabled = false
+        addUpdatesBridge(to: configuration.userContentController)
         web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -540,10 +551,156 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             item("Fermer", #selector(NSWindow.performClose(_:)), "w"),
         ]
         menu("Fenêtre", windowItems)
+        if let check = updatesMenuItem() {
+            bar.items.first?.submenu?.insertItem(check, at: 1)
+        }
         NSApp.mainMenu = bar
         NSApp.windowsMenu = bar.items.last?.submenu
     }
 }
+
+// -- updates (ADR 0040) ---------------------------------------------------------------------
+
+#if COULISSES_SPARKLE
+    extension AppDelegate: SPUUpdaterDelegate, WKScriptMessageHandler {
+        /// Sparkle looks for updates only after the user's consent (it asks on the second
+        /// launch) or on demand; nothing downloads nor installs without a click (Info.plist:
+        /// no automatic updates, no system profile). The development app has no updater.
+        func startUpdates() {
+            guard isStandalone, !isDev, settings["SUFeedURL"] != nil, settings["SUPublicEDKey"] != nil
+            else { return }
+            updates = SPUStandardUpdaterController(
+                startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+        }
+
+        func updatesMenuItem() -> NSMenuItem? {
+            guard let updates else { return nil }
+            let check = NSMenuItem(
+                title: "Rechercher les mises à jour…",
+                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
+            check.target = updates
+            return check
+        }
+
+        /// What the page reads (web/src/appBridge.ts), and where it sends its two requests.
+        func addUpdatesBridge(to content: WKUserContentController) {
+            guard updates != nil else { return }
+            content.add(self, name: "coulisses")
+            refreshUpdatesState(content)
+        }
+
+        func refreshUpdatesState(_ given: WKUserContentController? = nil) {
+            guard let updater = updates?.updater,
+                let content = given ?? web?.configuration.userContentController
+            else { return }
+            let state: [String: Any] = [
+                "automatic": updater.automaticallyChecksForUpdates,
+                "lastCheck": updater.lastUpdateCheckDate.map { ISO8601DateFormatter().string(from: $0) }
+                    ?? NSNull(),
+            ]
+            let json =
+                (try? JSONSerialization.data(withJSONObject: state)).flatMap {
+                    String(data: $0, encoding: .utf8)
+                } ?? "{}"
+            content.removeAllUserScripts()
+            content.addUserScript(
+                WKUserScript(
+                    source: "window.coulissesApp = { updates: \(json) };",
+                    injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+
+        func userContentController(
+            _ controller: WKUserContentController, didReceive message: WKScriptMessage
+        ) {
+            // Only from the service's page, never from another origin.
+            let origin = message.frameInfo.securityOrigin
+            guard message.frameInfo.isMainFrame, origin.host == base.host, origin.port == base.port ?? 0,
+                let body = message.body as? [String: Any], let action = body["action"] as? String,
+                let updates
+            else { return }
+            switch action {
+            case "mises-a-jour-automatiques":
+                if let on = body["value"] as? Bool { updates.updater.automaticallyChecksForUpdates = on }
+            case "rechercher-mises-a-jour":
+                updates.checkForUpdates(nil)
+            default:
+                return
+            }
+            refreshUpdatesState()
+        }
+
+        /// What the service is doing (GET /api/activite): said if it records or processes.
+        /// Ours running without answering counts as busy, as when quitting; nil when no
+        /// service runs at all (an update may be what repairs it).
+        func busyNow() -> String? {
+            var request = URLRequest(url: base.appendingPathComponent("api/activite"))
+            request.timeoutInterval = 2
+            let answered = DispatchSemaphore(value: 0)
+            var activity: Activity?
+            URLSession.shared.dataTask(with: request) { data, _, _ in
+                activity = data.flatMap { try? JSONDecoder().decode(Activity.self, from: $0) }
+                answered.signal()
+            }.resume()
+            _ = answered.wait(timeout: .now() + 3)
+            guard let activity else {
+                let ours = service?.isRunning == true || adopted.map(isAlive) == true
+                return ours ? "Coulisses ne répond pas, un enregistrement est peut-être en cours" : nil
+            }
+            if activity.recording { return "Un enregistrement est en cours" }
+            if activity.processing { return "Un traitement est en cours" }
+            return nil
+        }
+
+        /// Never during a recording or a processing: the update is not even shown, so not
+        /// downloaded (a chain must not mix two versions of the engine, P5 and P7).
+        func updater(
+            _ updater: SPUUpdater, shouldProceedWithUpdate updateItem: SUAppcastItem,
+            updateCheck: SPUUpdateCheck
+        ) throws {
+            if let busy = busyNow() {
+                throw NSError(
+                    domain: "Coulisses", code: 1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey:
+                            "\(busy) : la mise à jour attendra qu'il soit fini. Cherchez-la de nouveau ensuite."
+                    ])
+            }
+        }
+
+        /// One started meanwhile: the relaunch waits for its end.
+        func updater(
+            _ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem,
+            untilInvokingBlock installHandler: @escaping () -> Void
+        ) -> Bool {
+            guard let busy = busyNow() else { return false }
+            let alert = NSAlert()
+            alert.messageText = "La mise à jour est prête."
+            alert.informativeText = "\(busy) : elle s'installera dès qu'il sera fini."
+            alert.runModal()
+            waitUntilIdle(then: installHandler)
+            return true
+        }
+
+        func waitUntilIdle(then go: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                if self.busyNow() == nil { go() } else { self.waitUntilIdle(then: go) }
+            }
+        }
+
+        func updater(
+            _ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?
+        ) {
+            refreshUpdatesState()
+        }
+    }
+#else
+    extension AppDelegate {
+        func startUpdates() {}
+        func updatesMenuItem() -> NSMenuItem? { nil }
+        func addUpdatesBridge(to content: WKUserContentController) {}
+        func refreshUpdatesState() {}
+    }
+#endif
 
 let app = NSApplication.shared
 let delegate = AppDelegate()

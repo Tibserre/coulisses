@@ -8,6 +8,7 @@ holds:
 - the built interface;
 - its tools: ffmpeg and ffprobe (built here, audio only, LGPL), uv, the computer's sound
   program;
+- Sparkle, for its updates (in the launcher only, never in the service);
 - the licences of what it carries.
 Every binary inside, then the .app, is signed with the self-signed certificate named in
 `construction.toml` (ADR 0040; no hardened runtime, no notarization, no timestamp server):
@@ -104,6 +105,56 @@ def pinned_uv(config: dict) -> Path:
     if version != config["version"]:
         fail(f"uv {version} sur ce Mac, {config['version']} attendu (scripts/construction.toml)")
     return Path(found).resolve()
+
+
+def sparkle_framework(config: dict, download: bool) -> Path:
+    """The folder holding Sparkle.framework (and its publishing tools, kept here)."""
+    folder = CACHE / f"sparkle-{config['version']}"
+    archive = folder / Path(config["url"]).name
+    if not archive.is_file():
+        if not download:
+            fail(f"{archive} manque : relancez avec --telecharger (une fois).")
+        folder.mkdir(parents=True, exist_ok=True)
+        partial = archive.with_name(archive.name + ".partiel")
+        say(f"Téléchargement de {config['url']}…")
+        run(["curl", "-sSfL", "-o", partial, config["url"]])
+        os.replace(partial, archive)
+    found = sha256(archive)
+    if found != config["sha256"]:
+        fail(f"{archive} n'a pas l'empreinte attendue ({found}) : supprimez-le, puis relancez.")
+    extracted = folder / "extrait"
+    if not (extracted / "Sparkle.framework").is_dir():
+        partial = folder / "extrait.partiel"
+        shutil.rmtree(partial, ignore_errors=True)
+        partial.mkdir()
+        with tarfile.open(archive) as tar:
+            tar.extractall(partial, filter="data")
+        os.replace(partial, extracted)
+    return extracted
+
+
+def update_settings(config: dict, ad_hoc: bool) -> dict[str, object]:
+    """Sparkle's keys in Info.plist (ADR 0040). Always: no automatic download nor
+    install, no system profile sent, one check a day at most. With the feed and
+    the key only: the app may look for its updates (after consent, or on demand)."""
+    keys: dict[str, object] = {
+        "SUEnableSystemProfiling": False,
+        "SUAllowsAutomaticUpdates": False,
+        "SUAutomaticallyUpdate": False,
+        "SUScheduledCheckInterval": 86400,
+        "SUVerifyUpdateBeforeExtraction": True,
+    }
+    if not config["public_key"]:
+        if not ad_hoc:
+            fail(
+                "la clé publique des mises à jour manque dans scripts/construction.toml "
+                "(docs/technique/certificat.md), ou construisez avec --ad-hoc pour un essai."
+            )
+        say("Sans clé des mises à jour : cette app ne cherchera pas les siennes.")
+        return keys
+    if not config["feed_url"].startswith("https://github.com/"):
+        fail(f"flux des mises à jour inattendu : {config['feed_url']}")
+    return {**keys, "SUFeedURL": config["feed_url"], "SUPublicEDKey": config["public_key"]}
 
 
 def standalone_python(config: dict, download: bool) -> Path:
@@ -250,8 +301,23 @@ def install_python(python_dir: Path, target: Path) -> None:
             say(f"   {line}")
 
 
-def build_launcher(contents: Path, app: dict, version: str, minimum_macos: str) -> None:
+def build_launcher(
+    contents: Path,
+    app: dict,
+    version: str,
+    minimum_macos: str,
+    sparkle: Path,
+    updates: dict[str, object],
+) -> None:
     (contents / "MacOS").mkdir(parents=True)
+    # Sparkle, without what only a sandboxed app needs (its XPC services) nor what only the
+    # compiler reads (headers, modules).
+    framework = contents / "Frameworks" / "Sparkle.framework"
+    framework.parent.mkdir()
+    shutil.copytree(sparkle / "Sparkle.framework", framework, symlinks=True)
+    for unused in ("XPCServices", "Headers", "PrivateHeaders", "Modules"):
+        (framework / unused).unlink()
+        shutil.rmtree(framework / "Versions" / "B" / unused)
     run(
         [
             *(
@@ -262,6 +328,8 @@ def build_launcher(contents: Path, app: dict, version: str, minimum_macos: str) 
                 "-target",
                 f"arm64-apple-macosx{minimum_macos}",
             ),
+            *("-D", "COULISSES_SPARKLE", "-F", sparkle, "-framework", "Sparkle"),
+            *("-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"),
             *(LAUNCHER / "main.swift", "-o", contents / "MacOS" / app["name"]),
         ]
     )
@@ -285,6 +353,7 @@ def build_launcher(contents: Path, app: dict, version: str, minimum_macos: str) 
         CoulissesProjet="",
         CoulissesUV="",
         CoulissesPATH="",
+        **updates,
     )
     with (contents / "Info.plist").open("wb") as stream:
         plistlib.dump(plist, stream)
@@ -303,7 +372,7 @@ def copy_tools(resources: Path, ffmpeg: Path, uv: Path, minimum_macos: str) -> N
     system_audio.compile_program(tools / SYSTEM_AUDIO_PROGRAM, minimum_macos)
 
 
-def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path) -> None:
+def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path, sparkle: Path) -> None:
     licences = resources / "licences"
     licences.mkdir()
     if not (ROOT / "LICENSE").is_file():
@@ -312,6 +381,7 @@ def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path) -> Non
     shutil.copy2(ffmpeg / "COPYING.LGPLv2.1", licences / "ffmpeg-LGPL-2.1.txt")
     shutil.copy2(ffmpeg / "configuration.txt", licences / "ffmpeg-configuration.txt")
     shutil.copy2(python / "lib" / "python3.12" / "LICENSE.txt", licences / "Python.txt")
+    shutil.copy2(sparkle / "LICENSE", licences / "Sparkle.txt")
     uv_home = uv.parents[1]
     uv_licences = sorted(uv_home.glob("LICENSE*"))
     if not uv_licences:
@@ -325,6 +395,7 @@ def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path) -> Non
         "officielles, sans modification (ffmpeg-LGPL-2.1.txt, ffmpeg-configuration.txt).\n"
         "- Python : PSF (Python.txt).\n"
         "- uv : MIT ou Apache 2.0 (uv-*.txt).\n"
+        "- Sparkle (mises à jour) : MIT (Sparkle.txt).\n"
         "- Les paquets Python : chacun avec sa licence, dans "
         "python/lib/python3.12/site-packages/*.dist-info/.\n",
         encoding="utf-8",
@@ -366,6 +437,11 @@ def sign(app: Path, identity: str) -> None:
     command = ["codesign", "--force", "--timestamp=none", "--sign", identity]
     for start in range(0, len(inside), 100):
         run([*command, *inside[start : start + 100]])
+    sparkle = app / "Contents" / "Frameworks" / "Sparkle.framework"
+    if sparkle.is_dir():  # its helpers, then the framework, as Sparkle documents it
+        version = sparkle / "Versions" / "B"
+        for part in (version / "Updater.app", version / "Autoupdate", sparkle):
+            run([*command, part])
     run([*command, app])  # with its launcher, the main executable
     run(["codesign", "--verify", "--deep", "--strict", app])
     for start in range(0, len(inside), 100):
@@ -389,6 +465,8 @@ def main() -> None:
     uv = pinned_uv(settings["uv"])
     archive = ffmpeg_archive(settings["ffmpeg"], args.telecharger)
     python_dir = standalone_python(settings["python"], args.telecharger)
+    sparkle = sparkle_framework(settings["sparkle"], args.telecharger)
+    updates = update_settings(settings["sparkle"], args.ad_hoc)
     ffmpeg = build_ffmpeg(settings["ffmpeg"], archive, minimum_macos)
     interface = build_interface()
 
@@ -407,8 +485,8 @@ def main() -> None:
     install_python(python_dir, resources / "python")
     shutil.copytree(interface, resources / "web")
     copy_tools(resources, ffmpeg, uv, minimum_macos)
-    write_licences(resources, ffmpeg, resources / "python", uv)
-    build_launcher(contents, app, version, minimum_macos)
+    write_licences(resources, ffmpeg, resources / "python", uv, sparkle)
+    build_launcher(contents, app, version, minimum_macos, sparkle, updates)
     sign(partial, identity)
 
     if final.exists():

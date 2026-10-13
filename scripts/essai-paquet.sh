@@ -65,6 +65,26 @@ LIBRARIES=(${(f)"$(find $RES/python -name '*.so')"})
 for inside in $RES/bin/ffmpeg $RES/bin/uv $RES/python/bin/python3.12 ${LIBRARIES[1,3]}; do
   [[ $(signer $inside) == $SIGNER ]] || fail "${inside#$RES/} n'est pas signé comme l'app ($(signer $inside))"
 done
+# Sparkle (ADR 0040): signed like the app, never downloading nor installing on its own.
+SPARKLE=$APP/Contents/Frameworks/Sparkle.framework
+[[ -d $SPARKLE ]] || fail "Sparkle manque dans l'app"
+[[ ! -e $SPARKLE/Versions/B/XPCServices ]] || fail "Sparkle garde ses services XPC (inutiles hors bac à sable)"
+for part in $SPARKLE $SPARKLE/Versions/B/Autoupdate $SPARKLE/Versions/B/Updater.app; do
+  [[ $(signer $part) == $SIGNER ]] || fail "${part#$APP/} n'est pas signé comme l'app"
+done
+PLIST=$APP/Contents/Info.plist
+for key in SUEnableSystemProfiling SUAllowsAutomaticUpdates SUAutomaticallyUpdate; do
+  [[ $(plutil -extract $key raw $PLIST 2>/dev/null) == false ]] || fail "$key n'est pas à « non » dans Info.plist"
+done
+FEED=$(plutil -extract SUFeedURL raw $PLIST 2>/dev/null || true)
+if [[ -n $FEED ]]; then
+  [[ $FEED == https://github.com/* ]] || fail "flux des mises à jour inattendu : $FEED"
+  plutil -extract SUPublicEDKey raw $PLIST >/dev/null 2>&1 || fail "un flux sans clé des mises à jour"
+  print "   mises à jour : $FEED, sur accord ou sur demande, jamais installées seules"
+else
+  [[ -z $PUBLICATION ]] || fail "sans flux ni clé de mises à jour, une app ne se publie pas"
+  print "   sans clé des mises à jour : cette app ne cherche pas les siennes (essai seulement)"
+fi
 snapshot > $WORK/avant.txt
 for tool in ffmpeg ffprobe uv coulisses-son-ordinateur; do
   [[ -x $RES/bin/$tool ]] || fail "outil absent : $tool"
