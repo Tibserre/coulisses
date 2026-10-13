@@ -67,7 +67,7 @@ def main() -> None:
     if REAL_DATA_DIR.search(path):
         block(
             "P8 : écriture interdite dans le dossier de données réel. "
-            "Utilise COULISSES_DATA_DIR=~/Coulisses/Données-dev ou tmp_path."
+            "Utilise `coulisses-app --dev` (~/Coulisses/Données-dev) ou tmp_path."
         )
 
     is_code = path.endswith(".py") and "/.venv/" not in path and "/node_modules/" not in path
