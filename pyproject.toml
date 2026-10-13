@@ -1,6 +1,6 @@
 [project]
 name = "coulisses-app"
-version = "0.22.0"
+version = "0.22.1"
 description = "Coulisses: debrief of improv rehearsals, 100 % local (the application; the engine is coulisses-moteur)."
 readme = "README.md"
 authors = [{ name = "Tibserre" }]
