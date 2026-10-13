@@ -3,6 +3,20 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.19.0 — 2026-10-13
+
+### Nouveautés
+
+- choisit le modèle de langage du titre, des chapitres et des résumés (redaction)
+- retrouve les répliques d'une voix, nommée ou non (relecture)
+- nomme une voix en place, sous son nom, dans sa ligne (relecture)
+- commence depuis l'accueil, édite l'espace en place et charge sans à-coups (interface)
+
+### Corrections
+
+- dit qu'un service trop ancien est à relancer au lieu de planter (redaction)
+- ouvre la liste des noms par-dessus les lignes, sans rien pousser (relecture)
+
 ## v0.18.0 — 2026-10-12
 
 ### Nouveautés
