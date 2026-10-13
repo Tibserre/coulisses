@@ -76,6 +76,7 @@ PLIST=$APP/Contents/Info.plist
 for key in SUEnableSystemProfiling SUAllowsAutomaticUpdates SUAutomaticallyUpdate; do
   [[ $(plutil -extract $key raw $PLIST 2>/dev/null) == false ]] || fail "$key n'est pas à « non » dans Info.plist"
 done
+[[ $(plutil -extract SURequireSignedFeed raw $PLIST 2>/dev/null) == true ]] || fail "l'app accepterait un appcast non signé"
 FEED=$(plutil -extract SUFeedURL raw $PLIST 2>/dev/null || true)
 if [[ -n $FEED ]]; then
   [[ $FEED == https://github.com/* ]] || fail "flux des mises à jour inattendu : $FEED"
@@ -173,8 +174,38 @@ turns = view["turns"]
 assert turns, "aucun tour"
 print("   traitée :", len(turns), "tours")' || fail "transcription vide"
 
-print "5. Arrêt du service, puis rien d'écrit dans l'app…"
 kill -INT $SERVICE; wait $SERVICE 2>/dev/null || true; SERVICE=""
+
+print "5. L'app elle-même, lancée sans accord : rien ne sort du Mac…"
+# ADR 0040: Sparkle looks for updates only after consent. The app is launched for real (its
+# window opens), on a throwaway data folder, and its connections are read for 30 s.
+BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw $PLIST)
+CONSENT=$(defaults read $BUNDLE_ID SUEnableAutomaticChecks 2>/dev/null || true)
+if [[ $CONSENT == 1 ]]; then
+  print "   recherche automatique acceptée sur ce Mac : une connexion à GitHub serait normale, contrôle sans objet"
+else
+  open -n --env COULISSES_DATA_DIR=$WORK/donnees-app $APP
+  : > $WORK/connexions.txt
+  for _ in {1..30}; do
+    PIDS=(${(f)"$(pgrep -f "$APP/Contents/" || true)"})
+    if (( ${#PIDS} )); then
+      lsof -nP -a -i -p ${(j:,:)PIDS} 2>/dev/null | awk 'NR > 1 {print $9}' >> $WORK/connexions.txt || true
+    fi
+    sleep 1
+  done
+  LAUNCHER=$(pgrep -f "$APP/Contents/MacOS/" || true)
+  [[ -n $LAUNCHER ]] || fail "l'app ne s'est pas lancée"
+  # Stopped by hand: AppleScript would also quit an installed Coulisses of the same identifier.
+  APP_SERVICE=$(pgrep -P $LAUNCHER -f coulisses_app.cli || true)
+  kill -TERM $LAUNCHER
+  [[ -z $APP_SERVICE ]] || { kill -INT $APP_SERVICE; while kill -0 $APP_SERVICE 2>/dev/null; do sleep 0.5; done }
+  OUTSIDE=$(awk -F'->' 'NF > 1 {sub(/:[0-9]+$/, "", $2); print $2}' $WORK/connexions.txt |
+    grep -vE '^(127\.0\.0\.1|\[::1\]|localhost)$' | sort -u || true)
+  [[ -z $OUTSIDE ]] || fail "l'app s'est connectée hors du Mac sans accord : $OUTSIDE"
+  print "   aucune connexion hors de 127.0.0.1 en 30 s"
+fi
+
+print "6. Rien d'écrit dans l'app…"
 snapshot > $WORK/apres.txt
 diff $WORK/avant.txt $WORK/apres.txt > $WORK/ecrit.txt || fail "l'app a changé pendant l'essai : $(head -5 $WORK/ecrit.txt)"
 codesign --verify --deep --strict $APP || fail "signature invalide après l'essai"
