@@ -48,7 +48,11 @@ print "1. Signature et contenu…"
 codesign --verify --deep --strict $APP || fail "signature invalide"
 # Signed by the certificate of construction.toml, the .app and what it runs (ADR 0040).
 EXPECTED=$($RES/python/bin/python3 -I -B -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["signature"]["identity"])' $ROOT/scripts/construction.toml)
-signer() { codesign -dvv $1 2>&1 | awk -F= '/^Authority=/{print $2; exit} /^Signature=adhoc/{print "ad hoc"; exit}' }
+# Read whole before parsing: an early exit would close the pipe (SIGPIPE, then pipefail).
+signer() {
+  local shown=$(codesign -dvv $1 2>&1)
+  print -r -- $shown | awk -F= '/^Authority=/{print $2; exit} /^Signature=adhoc/{print "ad hoc"; exit}'
+}
 SIGNER=$(signer $APP)
 if [[ $SIGNER == "ad hoc" ]]; then
   [[ -z $PUBLICATION ]] || fail "signature ad hoc : une telle app ne se publie pas"
@@ -56,7 +60,9 @@ if [[ $SIGNER == "ad hoc" ]]; then
 else
   [[ $SIGNER == $EXPECTED ]] || fail "signée par « $SIGNER », pas par « $EXPECTED »"
 fi
-for inside in $RES/bin/ffmpeg $RES/bin/uv $RES/python/bin/python3.12 $(find $RES/python -name '*.so' | head -3); do
+LIBRARIES=(${(f)"$(find $RES/python -name '*.so')"})
+(( ${#LIBRARIES} )) || fail "aucune bibliothèque .so dans $RES/python"
+for inside in $RES/bin/ffmpeg $RES/bin/uv $RES/python/bin/python3.12 ${LIBRARIES[1,3]}; do
   [[ $(signer $inside) == $SIGNER ]] || fail "${inside#$RES/} n'est pas signé comme l'app ($(signer $inside))"
 done
 snapshot > $WORK/avant.txt
