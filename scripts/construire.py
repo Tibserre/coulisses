@@ -143,6 +143,8 @@ def update_settings(config: dict, ad_hoc: bool) -> dict[str, object]:
         "SUAutomaticallyUpdate": False,
         "SUScheduledCheckInterval": 86400,
         "SUVerifyUpdateBeforeExtraction": True,
+        # Only a feed signed with the update key (scripts/publier.py signs it).
+        "SURequireSignedFeed": True,
     }
     if not config["public_key"]:
         if not ad_hoc:

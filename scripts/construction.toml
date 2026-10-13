@@ -14,6 +14,10 @@ minimum_macos = "14.4"
 # it: every version is signed with the same one.
 identity = "Coulisses"
 
+[publication]
+# Where the versions are published (ADR 0040: the app's repository, public).
+repository = "Tibserre/coulisses"
+
 [sparkle]
 # The updates (ADR 0040), in the launcher of the published app only.
 version = "2.10.0"

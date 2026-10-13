@@ -32,6 +32,7 @@ NEVER_ON_ITS_OWN = {
     "SUEnableSystemProfiling": False,
     "SUAllowsAutomaticUpdates": False,
     "SUAutomaticallyUpdate": False,
+    "SURequireSignedFeed": True,  # a feed changed by someone else is refused
 }
 
 

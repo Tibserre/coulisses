@@ -211,7 +211,7 @@ Dictée, raccourcis globaux, transcription en temps réel, capture vidéo de la 
 | Vitesse | 80 min d'audio traitées en 15 min au plus par le moteur (≈ 10 min de calcul par heure d'audio mesurées), résumés en plus. |
 | Mémoire | Tient dans 64 Go avec les autres applis ouvertes. Pas deux gros modèles chargés en même temps sans nécessité. |
 | Robustesse | Crash pendant l'enregistrement : au plus quelques secondes perdues. Crash pendant le traitement : reprise à l'étape interrompue. |
-| Données | Un seul dossier visible `~/Coulisses/` : `Modèles/`, `Environnements/`, `Données/` ; sur le Mac de développement, aussi `App/` et `Moteur/` (les deux dépôts git, ADR 0016) et `Données-dev/`. Jamais dans un dossier synchronisé (ADR 0010). |
+| Données | Un seul dossier visible `~/Coulisses/` : `Modèles/`, `Environnements/`, `Données/` ; sur le Mac de développement, aussi `App/` et `Moteur/` (les deux dépôts git, ADR 0016), `Données-dev/` et `Publications/` (les versions publiées, ADR 0040). Jamais dans un dossier synchronisé (ADR 0010). |
 | Longues séances | 2 h sans dérive d'horodatage ni dégradation de la diarisation. |
 
 ## 11. Critères de réussite V1
