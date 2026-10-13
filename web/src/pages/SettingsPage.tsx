@@ -15,6 +15,7 @@ import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { DayStepper } from "../components/DayStepper.tsx";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
+import { UpdatesSection } from "../components/UpdatesSection.tsx";
 import { WritingModels } from "../components/WritingModels.tsx";
 import { setDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
@@ -23,7 +24,8 @@ import { useDevMode } from "../devMode.ts";
 
 /** Settings (spec §7.12): the audio's keeping (§7.10: how long, the notice, what is about to
  *  be purged, the log of every purge and deletion, the backups of the base), the export
- *  folder, Coulisses itself (its version, its folders shown in the Finder), developer mode. */
+ *  folder, Coulisses itself (its version, its folders shown in the Finder, its updates),
+ *  developer mode. */
 type Part = "general" | "modeles" | "redaction" | "donnees" | "avance";
 const PARTS: [Part, string][] = [
   ["general", "Général"],
@@ -279,6 +281,8 @@ export function SettingsPage({
                 </Text>
               )}
             </section>
+
+            <UpdatesSection />
 
             <section className="cl-settings__section">
               <Heading level={3}>Journal des suppressions</Heading>

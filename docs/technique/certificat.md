@@ -1,4 +1,4 @@
-# Le certificat qui signe Coulisses.app
+# Le certificat et la clé qui signent Coulisses.app
 
 L'ADR 0040 prévoit un certificat auto-signé, gardé dans le trousseau de ce Mac. Il signe chaque version de l'app : macOS reconnaît ainsi la même app d'une version à l'autre, et les amis gardent leurs permissions (micro, son de l'ordinateur). Il se crée une seule fois, à la main. Il n'entre jamais dans git.
 
@@ -36,11 +36,31 @@ L'ADR 0040 prévoit un certificat auto-signé, gardé dans le trousseau de ce Ma
 
 Sur un autre Mac, il suffit de double-cliquer sur le `.p12`, puis de refaire l'étape 2.
 
+## 4. La clé des mises à jour
+Sparkle vérifie chaque mise à jour par une seconde signature, avec une clé EdDSA. Elle prouve que le DMG téléchargé vient bien de vous. Comme le certificat, elle se crée une seule fois, ne quitte pas le trousseau, et sa perte empêcherait vos amis de recevoir les versions suivantes.
+
+1. Créez-la. Elle va dans le trousseau **session**, et la commande affiche sa **moitié publique** :
+
+   ```bash
+   ~/Library/Caches/Coulisses/construction/sparkle-2.10.0/extrait/bin/generate_keys
+   ```
+
+2. Copiez la moitié publique (une ligne de texte) dans `scripts/construction.toml`, section `[sparkle]`, à `public_key`. Elle n'a rien de secret : elle est publiée dans chaque app.
+3. Sauvegardez la moitié privée. C'est un texte, qui se range donc comme une note sécurisée de votre gestionnaire de mots de passe :
+
+   ```bash
+   ~/Library/Caches/Coulisses/construction/sparkle-2.10.0/extrait/bin/generate_keys -x ~/Desktop/cle-mises-a-jour.txt
+   ```
+
+   Collez son contenu dans le gestionnaire, puis supprimez le fichier du Bureau.
+
+Sur un autre Mac : `generate_keys -f fichier` la réimporte.
+
 ## Ensuite
 
 ```bash
 uv run python scripts/construire.py
-scripts/essai-paquet.sh dist/Coulisses.app
+scripts/essai-paquet.sh --publication dist/Coulisses.app
 ```
 
-L'essai vérifie que l'app et chacun de ses binaires sont signés par « Coulisses ».
+L'essai vérifie que l'app, chacun de ses binaires et Sparkle sont signés par « Coulisses ». Il vérifie aussi que l'app ne cherche ses mises à jour que sur GitHub, et ne les télécharge ni ne les installe jamais seule.

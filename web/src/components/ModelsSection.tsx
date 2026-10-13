@@ -140,8 +140,9 @@ export function ModelsSection() {
             <Text color="secondary">
               Tout ce qu'il faut pour traiter les séances est installé (
               {gigabytes(view.inventory.total_bytes)} sur ce Mac). Les modèles
-              ne se téléchargent que quand vous le demandez : c'est le seul
-              moment où Coulisses utilise internet.
+              ne se téléchargent que quand vous le demandez : Coulisses n'utilise
+              internet que pour cela, et pour ses mises à jour si vous
+              l'acceptez.
             </Text>
           )}
           <ul className="cl-models">
@@ -299,7 +300,7 @@ export function ModelsSection() {
         title="Télécharger ce modèle ?"
         description={
           asking?.what === "download" && asking.row.model
-            ? `${asking.row.purpose} (${asking.row.key}) : environ ${gigabytes(asking.row.model.announced_bytes)} depuis internet${dev ? ` (${asking.row.model.repo})` : ""}. C'est le seul moment où Coulisses utilise le réseau. Vous pouvez l'arrêter : il reprendra là où il s'est arrêté.`
+            ? `${asking.row.purpose} (${asking.row.key}) : environ ${gigabytes(asking.row.model.announced_bytes)} depuis internet${dev ? ` (${asking.row.model.repo})` : ""}. Coulisses n'utilise internet que pour cela, et pour ses mises à jour si vous l'acceptez. Vous pouvez l'arrêter : il reprendra là où il s'est arrêté.`
             : ""
         }
         actionLabel="Télécharger"
@@ -314,7 +315,7 @@ export function ModelsSection() {
         isOpen={asking?.what === "install"}
         onOpenChange={(open) => !open && setAsking(null)}
         title="Installer cet environnement ?"
-        description="Ses bibliothèques sont téléchargées depuis internet, une fois. C'est le seul moment où Coulisses utilise le réseau."
+        description="Ses bibliothèques sont téléchargées depuis internet, une fois. Coulisses n'utilise internet que pour cela, et pour ses mises à jour si vous l'acceptez."
         actionLabel="Installer"
         cancelLabel="Annuler"
         isActionLoading={working}
