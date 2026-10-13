@@ -32,6 +32,7 @@ const view = (
     models: [],
     partial_downloads: [],
     environments: [],
+    uv_stores: [],
     total_bytes: 0,
     ...over,
   },
@@ -163,14 +164,14 @@ test("what takes space outside the catalog has its row, to be removed", () => {
 });
 
 test("an old environment is said old, not interrupted", () => {
-  const env = { name: "diarizen", path: "", size_bytes: 1 };
+  const env = { name: "diarizen", path: "", size_bytes: 1, interpreter: null, interpreter_outside: false };
   assert.match(environmentState({ ...env, current: false, installed: false }), /^Ancienne version/);
   assert.equal(environmentState({ ...env, current: true, installed: true }), "Installé");
   assert.equal(environmentState({ ...env, current: true, installed: false }), "Installation interrompue");
 });
 
 test("only an environment the processing does not use can be removed, never while it installs", () => {
-  const env = { name: "diarizen", path: "", size_bytes: 1 };
+  const env = { name: "diarizen", path: "", size_bytes: 1, interpreter: null, interpreter_outside: false };
   const old = { ...env, current: false, installed: true };
   const interrupted = { ...env, current: true, installed: false };
   const used = { ...env, current: true, installed: true };
@@ -179,4 +180,38 @@ test("only an environment the processing does not use can be removed, never whil
   assert.equal(removableEnvironment(used, []), false);
   const installing = { ...task("diarizen", "running"), kind: "environment" as const };
   assert.equal(removableEnvironment(interrupted, [installing]), false);
+});
+
+test("uv's folders have their row, the cache said apart from the total; an empty one is left out", async () => {
+  const { uvStoreRows } = await import("./models.ts");
+  const rows = uvStoreRows(
+    view({
+      uv_stores: [
+        { kind: "python", path: "/E/uv/python", size_bytes: 70_000_000 },
+        { kind: "cache", path: "/E/uv/cache", size_bytes: 900_000_000 },
+        { kind: "cache", path: "/vide", size_bytes: 0 },
+      ],
+    }).inventory,
+  );
+  assert.deepEqual(
+    rows.map((r) => r.title),
+    ["Python des environnements", "Cache des installations"],
+  );
+  assert.match(rows[1].note, /Hors du total/);
+});
+
+test("an environment whose Python lives outside Coulisses says so", async () => {
+  const { interpreterNote } = await import("./models.ts");
+  const env = {
+    name: "diarizen",
+    path: "/E/diarizen-abc",
+    current: true,
+    installed: true,
+    size_bytes: 1,
+    interpreter: "/Users/x/.local/share/uv/python/cpython-3.10/bin/python3.10",
+    interpreter_outside: true,
+  };
+  assert.match(interpreterNote(env)!, /hors de Coulisses/);
+  assert.equal(interpreterNote({ ...env, interpreter_outside: false }), null);
+  assert.equal(interpreterNote({ ...env, installed: false }), null); // an interrupted install says that first
 });

@@ -1,6 +1,7 @@
 """What the service takes from the repository in development, and from Coulisses.app once
-built (ADR 0040): the built interface, the tools it and the engine run (ffmpeg, ffprobe,
-uv, the computer's sound program), and where uv keeps what it downloads.
+built (ADR 0040): the built interface, and the tools it and the engine run (ffmpeg,
+ffprobe, uv, the computer's sound program). Where uv keeps the Python and the cache of the
+engine's environments is the engine's own (v1.7.0: under `envs_dir()/uv`).
 
 The app in the Dock says the service runs from the .app by giving COULISSES_RESSOURCES,
 its `Contents/Resources` folder. Nothing is ever written there: the .app stays as signed.
@@ -14,9 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RESOURCES_ENV = "COULISSES_RESSOURCES"
-# The engine's environments folder, as its README documents it (contract).
-ENVS_DIR_ENV = "COULISSES_ENVS_DIR"
-DEFAULT_ENVS_DIR = Path.home() / "Coulisses" / "Environnements"
 REPOSITORY = Path(__file__).resolve().parents[2]
 
 SYSTEM_AUDIO_PROGRAM = "coulisses-son-ordinateur"
@@ -69,18 +67,9 @@ class Resources:
             )
 
     def environment(self, environ: Mapping[str, str]) -> dict[str, str]:
-        """The variables to set for the service and the engine it runs.
-
-        From the .app: its tools first on the PATH, and uv's Python and cache under the
-        engine's environments folder, so that everything stays in ~/Coulisses (ADR 0010,
-        0040). In a folder of its own (`uv/`): the engine takes `<engine>-<digest>` folders
-        for its environments. From the repository: nothing changes."""
+        """The variables to set for the service and the engine it runs: from the .app, its
+        tools first on the PATH; from the repository, nothing changes."""
         if self.tools_dir is None:
             return {}
-        envs = Path(environ.get(ENVS_DIR_ENV) or DEFAULT_ENVS_DIR).expanduser()
         path = environ.get("PATH", "")
-        return {
-            "PATH": f"{self.tools_dir}{os.pathsep}{path}" if path else str(self.tools_dir),
-            "UV_PYTHON_INSTALL_DIR": str(envs / "uv" / "python"),
-            "UV_CACHE_DIR": str(envs / "uv" / "cache"),
-        }
+        return {"PATH": f"{self.tools_dir}{os.pathsep}{path}" if path else str(self.tools_dir)}
