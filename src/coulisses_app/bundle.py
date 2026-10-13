@@ -67,9 +67,15 @@ class Resources:
             )
 
     def environment(self, environ: Mapping[str, str]) -> dict[str, str]:
-        """The variables to set for the service and the engine it runs: from the .app, its
-        tools first on the PATH; from the repository, nothing changes."""
+        """The variables to set for the service and the engine it runs. From the .app: its
+        tools first on the PATH, and no bytecode written by any Python it starts (the .app
+        stays as signed; the engine's steps inherit it, its README asks it of the caller).
+        The .app's launcher sets it before Python starts (ADR 0040, with `-B`); here, a
+        safeguard for whatever the service starts. From the repository, nothing changes."""
         if self.tools_dir is None:
             return {}
         path = environ.get("PATH", "")
-        return {"PATH": f"{self.tools_dir}{os.pathsep}{path}" if path else str(self.tools_dir)}
+        return {
+            "PATH": f"{self.tools_dir}{os.pathsep}{path}" if path else str(self.tools_dir),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
