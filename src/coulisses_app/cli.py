@@ -131,3 +131,7 @@ def main(argv: list[str] | None = None) -> None:
         uvicorn.run(app, host=HOST, port=port, log_level="warning", timeout_graceful_shutdown=2)
     finally:
         lock.close()
+
+
+if __name__ == "__main__":  # `python -m coulisses_app.cli`, from Coulisses.app
+    main()

@@ -1,0 +1,38 @@
+# What Coulisses.app is built from (ADR 0040, 0041): pinned versions, verified digests.
+# Downloaded once, on request (`scripts/construire.py --telecharger`), into
+# ~/Library/Caches/Coulisses/construction; never at run time (P1).
+
+[app]
+name = "Coulisses"
+# The published app's identifier: macOS ties the permissions to it (with the signature).
+identifier = "io.github.tibserre.coulisses"
+minimum_macos = "14.4"
+
+[uv]
+# Copied into the .app (the engine installs its environments with it), and the one that
+# picks the python-build-standalone release: the build refuses another version.
+version = "0.12.18"
+
+[python]
+# python-build-standalone, fetched and verified (digest) by `uv python install`.
+version = "3.12.14"
+
+[ffmpeg]
+version = "9.0.2"
+url = "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz"
+# As published by Homebrew's formula for the same archive: checked before anything else.
+sha256 = "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+# Audio only, LGPL, static, no network (ADR 0041). What the app, the engine and mlx-audio
+# ask of it: read a recording (file or pipe), write f32le, s16le or WAV, resampled.
+protocols = ["file", "pipe"]
+demuxers = ["wav", "w64", "aiff", "caf", "mov", "mp3", "flac", "ogg", "aac", "matroska"]
+decoders = [
+  "pcm_s16le", "pcm_s16be", "pcm_s24le", "pcm_s24be", "pcm_s32le", "pcm_s32be",
+  "pcm_f32le", "pcm_f32be", "pcm_f64le", "pcm_f64be", "pcm_u8", "pcm_alaw", "pcm_mulaw",
+  "aac", "alac", "mp3", "mp3float", "flac", "opus", "vorbis",
+]
+parsers = ["aac", "mpegaudio", "flac", "opus", "vorbis"]
+encoders = ["pcm_s16le", "pcm_f32le"]
+# Muxers by ffmpeg's names: `-f s16le` and `-f f32le` are pcm_s16le and pcm_f32le.
+muxers = ["wav", "pcm_s16le", "pcm_f32le"]
+filters = ["aresample", "aformat", "anull"]
