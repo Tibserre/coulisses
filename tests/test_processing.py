@@ -142,6 +142,41 @@ def test_resuming_reuses_the_runs_that_succeeded(data: DataDir, recording: Path)
     assert job_state(data, session_id).state == "done"
 
 
+def test_resuming_after_an_engine_update_never_mixes_two_versions(
+    data: DataDir, recording: Path
+) -> None:
+    """A chain interrupted, then resumed by another version of the engine (an update of
+    the app): what succeeded is made again by the engine now installed, and kept on disk."""
+    session_id = import_(data, recording, attendees=3)
+    Processor(data, REFUSED_DIARIZATION).run_job(claim(data))
+    before = {r["stage"]: r["id"] for r in runs(data, session_id) if r["status"] == "succeeded"}
+    conn = connect(data)
+    try:
+        with conn:  # as if an older engine had made them
+            conn.execute(
+                "UPDATE run SET engine_version = '0.0.1' WHERE session_id = ?", (session_id,)
+            )
+        jobs.requeue(conn, job_state(data, session_id).id)
+    finally:
+        conn.close()
+    result = Processor(data, FAKE_CHAIN).run_job(claim(data))
+    assert result.error is None
+    after = runs(data, session_id)
+    for stage in ("transcribe", "align"):
+        made = [r for r in after if r["stage"] == stage]
+        assert made[0]["id"] == before[stage]  # the older run stays
+        assert len(made) == 2 and made[1]["status"] == "succeeded"
+        assert made[1]["engine_version"] != "0.0.1"
+        assert data.run_dir(session_id, before[stage]).is_dir()
+    used = {
+        r["engine_version"]
+        for r in after
+        if r["status"] == "succeeded" and r["id"] not in before.values()
+    }
+    assert len(used) == 1  # the chain shown comes from one engine
+    assert job_state(data, session_id).state == "done"
+
+
 def test_stopping_the_application_records_the_run_and_queues_the_job_again(
     data: DataDir, recording: Path
 ) -> None:
