@@ -3,6 +3,8 @@
 Each stage is a run of the engine in its own folder (`sessions/<id>/runs/<run_id>/`),
 recorded in the database. A job resumes after a stop or a crash: the runs it already
 finished successfully are reused, the others start again in a new folder (P5, ADR 0018).
+Only those made by the engine now installed are reused: after an update of the engine, a
+resumed chain never mixes two versions (P7, ADR 0040); the older runs stay on disk.
 
 A job's runs become the session's version all at once, when every stage has succeeded: a
 rerun that stops halfway leaves the version shown as it was. The corrections of the
@@ -16,6 +18,7 @@ import secrets
 import sqlite3
 import threading
 from collections.abc import Callable
+from importlib.metadata import version
 from pathlib import Path
 
 from coulisses.api import (
@@ -298,23 +301,36 @@ class Processor:
                     "pas changé."
                 )
 
+        engine_now = version("coulisses")  # what the engine writes in its provenance
+
         def folder_of(stage: StageName) -> Path:
             kept = params.reuse.get(stage.value)
             if kept is not None:
-                # A rerun: this stage is the one of the version it starts from.
+                # A rerun: this stage is the one of the version it starts from, chosen by
+                # the user whatever engine made it (ADR 0028).
                 return runs_dir / kept
             conn = connect(self.data)
             try:
                 row = conn.execute(
-                    "SELECT id FROM run WHERE job_id = ? AND stage = ? AND status = 'succeeded'"
-                    " ORDER BY created_at DESC LIMIT 1",
+                    "SELECT id, engine_version FROM run WHERE job_id = ? AND stage = ?"
+                    " AND status = 'succeeded' ORDER BY created_at DESC LIMIT 1",
                     (job.id, stage.value),
                 ).fetchone()
             finally:
                 conn.close()
             if row is not None and (runs_dir / row["id"]).is_dir():
-                return runs_dir / row["id"]
-            # Never run, failed, or its folder deleted in the Finder: a new run.
+                if row["engine_version"] == engine_now:
+                    return runs_dir / row["id"]
+                log.info(
+                    "job %s: %s made by engine %s, made again by %s (%s kept)",
+                    job.id,
+                    stage.value,
+                    row["engine_version"],
+                    engine_now,
+                    row["id"],
+                )
+            # Never run, failed, its folder deleted in the Finder, or made by another
+            # version of the engine: a new run.
             return runs_dir / f"{stage.value}-{secrets.token_hex(4)}"
 
         def run_stage(

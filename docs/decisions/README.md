@@ -17,7 +17,7 @@ Nouvelle fiche : skill `/adr`.
 | [0010](0010-dossier-unique-coulisses.md) | Un seul dossier visible `~/Coulisses` : `Code/` (git), `Modèles/`, `Données/` | Acceptée |
 | [0016](0016-deux-depots-et-versions.md) | Deux dépôts (moteur avec son atelier, application seule), moteur installable et versionné, versions automatiques depuis les commits | Acceptée (dossiers : précisé par 0040) |
 | [0017](0017-direction-artistique.md) | Direction artistique sobre et éditoriale : fonds neutres, accent brique, DM Sans et Figtree, relecture en deux colonnes | Acceptée (échelle typographique : remplacée par 0038) |
-| [0018](0018-schema-de-donnees.md) | Schéma de données : SQLite fait foi, les exécutions restent des fichiers, corrections en journal | Acceptée (sauvegardes et séance supprimée : remplacé par 0029) |
+| [0018](0018-schema-de-donnees.md) | Schéma de données : SQLite fait foi, les exécutions restent des fichiers, corrections en journal | Acceptée (sauvegardes et séance supprimée : remplacé par 0029 ; reprise et version du moteur : précisé par 0040) |
 | [0020](0020-espaces.md) | Des espaces (troupe, équipe, client) plutôt qu'une troupe ; pas de type, des modèles de départ ; reconnaissance des voix sur option | Acceptée |
 | [0022](0022-generation-des-resumes.md) | Générer les résumés : une exécution de l'application, tokens estimés puis vérifiés, modèle en configuration | Acceptée |
 | [0024](0024-chapitres.md) | Les chapitres : détectés par le LLM local, placés sur une réplique, corrigés dans le journal | Acceptée |
