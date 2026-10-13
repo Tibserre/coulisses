@@ -3,6 +3,17 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.26.0 — 2026-10-13
+
+### Nouveautés
+
+- prépare, envoie et confirme une version pour les amis (publication)
+
+### Corrections
+
+- ne touche aux préférences de l'app publiée que pour les remettre (publication)
+- protège une préparation envoyée et éprouve mieux la version (publication)
+
 ## v0.25.1 — 2026-10-13
 
 ### Corrections
