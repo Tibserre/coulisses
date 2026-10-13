@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from coulisses.api import read_provenance
-from fastapi.testclient import TestClient
 
 from coulisses_app import corrections, jobs, sessions, versions
 from coulisses_app.api import create_app
@@ -17,7 +16,7 @@ from coulisses_app.spaces import SpaceError
 from coulisses_app.status import stage_views
 from coulisses_app.storage.db import connect, now_iso
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 from .test_processing import REFUSED_DIARIZATION, runs
 
 
@@ -235,7 +234,9 @@ def test_the_service_runs_a_stage_again_and_shows_the_versions(
     data: DataDir, recording: Path
 ) -> None:
     session_id = processed(data, recording)
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     first = client.get(f"/api/seances/{session_id}").json()["version"]
 
     answer = client.post(
@@ -292,7 +293,9 @@ def test_a_correction_meant_for_the_replaced_version_is_refused_not_misplaced(
         corrections.undo(data, session_id, old_edit)  # a correction of the former version
     assert len(view(data, session_id).edits) == before
 
-    client = TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
     refused = client.post(
         f"/api/seances/{session_id}/corrections?version={first}",
         json={"kind": "edit_text", "turn": 0, "text": "salut"},

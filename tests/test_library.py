@@ -23,12 +23,12 @@ from coulisses_app.paths import DataDir
 from coulisses_app.spaces import SpaceError
 from coulisses_app.storage.db import connect, now_iso
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 from .test_versions import processed
 
 
 def client_for(data: DataDir) -> TestClient:
-    return TestClient(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
+    return local_client(create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None))
 
 
 # -- projects --------------------------------------------------------------------------------

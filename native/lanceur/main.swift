@@ -174,7 +174,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         log.write("\n===== Coulisses démarre le \(Date()) =====\n".data(using: .utf8)!)
 
         let process = Process()
-        var environment = ProcessInfo.processInfo.environment
+        // Nothing inherited may change what runs: no injected library (DYLD_*), no other
+        // Python (PYTHON*), in either mode.
+        var environment = ProcessInfo.processInfo.environment.filter {
+            !$0.key.hasPrefix("DYLD_") && !$0.key.hasPrefix("PYTHON")
+        }
         if isStandalone {
             // Its own Python: -I takes nothing from the user's Python setup, -B writes
             // nothing into the .app; the engine's stages (without -I) are told the same.
@@ -185,8 +189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             environment["COULISSES_RESSOURCES"] = resourcesDir.path
             environment["PYTHONDONTWRITEBYTECODE"] = "1"
             environment["PYTHONNOUSERSITE"] = "1"
-            environment.removeValue(forKey: "PYTHONPATH")
-            environment.removeValue(forKey: "PYTHONHOME")
         } else {
             process.executableURL = URL(fileURLWithPath: uvPath)
             // Offline: uv never fetches anything when the app starts (P1).
@@ -360,7 +362,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         web.navigationDelegate = self
         web.uiDelegate = self
         web.allowsBackForwardNavigationGestures = false
-        web.isInspectable = true
+        // Safari's inspector runs any script in the page: in the development app only.
+        web.isInspectable = isDev
         web.setValue(false, forKey: "drawsBackground")
 
         window = NSWindow(
@@ -415,7 +418,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         _ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        guard let url = action.request.url else { return decisionHandler(.allow) }
+        guard let url = action.request.url else { return decisionHandler(.cancel) }
         if url.scheme == "coulisses" {
             decisionHandler(.cancel)
             if url.host == "relancer" {
@@ -426,13 +429,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             }
             return
         }
-        if action.shouldPerformDownload { return decisionHandler(.download) }
-        // Anything outside the service opens in the browser, never in this window.
-        if let host = url.host, host != "127.0.0.1", url.scheme == "http" || url.scheme == "https" {
-            NSWorkspace.shared.open(url)
-            return decisionHandler(.cancel)
+        // Only the service, and the launcher's own pages (loaded without a base URL), show in
+        // this window: not another port of this Mac (Ollama…), nor data:, blob:, file:.
+        let isService = url.scheme == "http" && url.host == base.host && url.port == base.port
+        if isService {
+            return decisionHandler(action.shouldPerformDownload ? .download : .allow)
         }
-        decisionHandler(.allow)
+        if url.absoluteString == "about:blank" { return decisionHandler(.allow) }
+        // Anything else on the web opens in the browser (a model's terms); the rest, nowhere.
+        if url.scheme == "http" || url.scheme == "https" { NSWorkspace.shared.open(url) }
+        decisionHandler(.cancel)
     }
 
     func webView(

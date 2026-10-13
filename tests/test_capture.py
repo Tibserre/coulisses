@@ -11,7 +11,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile as sf
-from fastapi.testclient import TestClient
 from numpy.typing import NDArray
 
 from coulisses_app import capture, sessions, wav
@@ -19,7 +18,7 @@ from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN
+from .conftest import FAKE_CHAIN, local_client
 
 BLOCK = 4800  # 0.1 s at 48 kHz
 
@@ -285,7 +284,7 @@ def test_the_interface_drives_the_recording(
     data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
 ) -> None:
     rec = recorder(data, mic, awake, clock, battery=True)
-    client = TestClient(
+    client = local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
     )
     assert client.get("/api/enregistrement").json() is None
@@ -418,7 +417,7 @@ def test_stopping_the_service_closes_the_recording(
 ) -> None:
     rec = recorder(data, mic, awake, clock, battery=True)
     app = create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
-    with TestClient(app) as client:
+    with local_client(app) as client:
         session_id = client.post("/api/enregistrement", json={}).json()["session_id"]
         mic.push(tone(0.3, 0.3))
         wait_for(lambda: rec.state().elapsed_s >= 0.3)  # type: ignore[union-attr]
@@ -435,7 +434,7 @@ def test_markers_and_notes_are_set_at_the_recorded_time_and_can_be_taken_back(
     data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
 ) -> None:
     rec = recorder(data, mic, awake, clock, battery=True)
-    client = TestClient(
+    client = local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
     )
     session_id = client.post("/api/enregistrement", json={}).json()["session_id"]
@@ -479,7 +478,7 @@ def test_a_note_taken_back_can_never_be_the_note_after_the_session_and_a_marker_
     from coulisses_app import notes as after_notes
 
     rec = recorder(data, mic, awake, clock, battery=True)
-    client = TestClient(
+    client = local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
     )
     session_id = client.post("/api/enregistrement", json={}).json()["session_id"]
@@ -855,7 +854,7 @@ def test_the_service_records_the_microphones_added(
         clock=clock,
         retry_wait_s=0.0,
     )
-    client = TestClient(
+    client = local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
     )
     twice = client.post(

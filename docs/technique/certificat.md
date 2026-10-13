@@ -49,10 +49,10 @@ Sparkle vérifie chaque mise à jour par une seconde signature, avec une clé Ed
 3. Sauvegardez la moitié privée. C'est un texte, qui se range donc comme une note sécurisée de votre gestionnaire de mots de passe :
 
    ```bash
-   ~/Library/Caches/Coulisses/construction/sparkle-2.10.0/extrait/bin/generate_keys -x ~/Desktop/cle-mises-a-jour.txt
+   ~/Library/Caches/Coulisses/construction/sparkle-2.10.0/extrait/bin/generate_keys -x /private/tmp/cle-mises-a-jour.txt
    ```
 
-   Collez son contenu dans le gestionnaire, puis supprimez le fichier du Bureau.
+   Collez son contenu dans le gestionnaire, puis supprimez le fichier. `/private/tmp` n'est synchronisé nulle part, contrairement au Bureau quand iCloud le synchronise.
 
 Sur un autre Mac : `generate_keys -f fichier` la réimporte.
 

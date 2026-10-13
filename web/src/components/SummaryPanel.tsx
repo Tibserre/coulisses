@@ -17,13 +17,16 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { formatDateTime, formatDuration } from "../format.ts";
+import { inertMarkdown } from "../inertMarkdown.ts";
 
 /** Nothing a generated text points to is ever fetched or opened (P1): images show their
  *  description, links their text. The parser's own forms (references included) all go
  *  through these renderers. */
 const SAFE_RENDERERS = {
   image: ({ alt }: { src: string; alt: string }) => <>{alt}</>,
-  link: ({ children }: { href: string; children: React.ReactNode }) => <>{children}</>,
+  link: ({ children }: { href: string; children: React.ReactNode }) => (
+    <>{children}</>
+  ),
 };
 
 /** The model to use: the default chosen last, or the first installed one. */
@@ -97,7 +100,9 @@ export function SummaryPanel({
     void refresh();
     api.actions().then(setActions, (e: Error) => setError(e.message));
     api.models().then(setModels, (e: Error) => setError(e.message));
-    api.spaceActions(spaceId).then(setSpacePrefs, (e: Error) => setError(e.message));
+    api
+      .spaceActions(spaceId)
+      .then(setSpacePrefs, (e: Error) => setError(e.message));
   }, [refresh, spaceId]);
 
   const seenKey = useRef(transcriptKey);
@@ -120,7 +125,8 @@ export function SummaryPanel({
   const shown: Generation | undefined =
     generations.find((g) => g.id === shownId) ?? generations[0];
   const preferred = spacePrefs.find((a) => a.auto_run)?.action_ref ?? null;
-  const chosenAction = action ?? shown?.action_ref ?? preferred ?? actions[0]?.ref ?? null;
+  const chosenAction =
+    action ?? shown?.action_ref ?? preferred ?? actions[0]?.ref ?? null;
 
   const generate = async (ref: string) => {
     try {
@@ -135,7 +141,7 @@ export function SummaryPanel({
   const copy = async () => {
     if (!shown?.output) return;
     try {
-      await navigator.clipboard.writeText(shown.output);
+      await navigator.clipboard.writeText(inertMarkdown(shown.output));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -242,13 +248,24 @@ export function SummaryPanel({
                   </ul>
                 }
               >
-                <button type="button" className="cl-iconbtn" aria-label="Exporter en Markdown" title="Exporter en Markdown">
+                <button
+                  type="button"
+                  className="cl-iconbtn"
+                  aria-label="Exporter en Markdown"
+                  title="Exporter en Markdown"
+                >
                   <Download size={15} strokeWidth={1.75} />
                 </button>
               </Popover>
             </div>
           </header>
-          {shown.problem && <Banner status="warning" title="Résumé incomplet" description={shown.problem} />}
+          {shown.problem && (
+            <Banner
+              status="warning"
+              title="Résumé incomplet"
+              description={shown.problem}
+            />
+          )}
           {shown.stale && (
             <div className="cl-summary__stale">
               <Text type="supporting">
@@ -265,7 +282,11 @@ export function SummaryPanel({
           )}
           {shown.output ? (
             <div className="cl-summary__body">
-              <Markdown headingLevelStart={3} contentWidth="100%" components={SAFE_RENDERERS}>
+              <Markdown
+                headingLevelStart={3}
+                contentWidth="100%"
+                components={SAFE_RENDERERS}
+              >
                 {shown.output}
               </Markdown>
             </div>
@@ -294,7 +315,8 @@ export function SummaryPanel({
       ) : (
         !data?.pending.length && (
           <Text color="secondary" as="p">
-            Pas encore de résumé : choisissez-en un et un modèle, puis « Générer ».
+            Pas encore de résumé : choisissez-en un et un modèle, puis « Générer
+            ».
           </Text>
         )
       )}
@@ -333,7 +355,9 @@ export function SummaryPanel({
       {generations.length > 1 && (
         <section className="cl-summary__history">
           <Text weight="medium">Historique</Text>
-          <Text type="supporting">Cochez deux résumés pour les lire côte à côte.</Text>
+          <Text type="supporting">
+            Cochez deux résumés pour les lire côte à côte.
+          </Text>
           <ul>
             {generations.map((g) => {
               const checked = compared.includes(g.id);
@@ -347,7 +371,9 @@ export function SummaryPanel({
                     aria-label={`Comparer ${g.action_name} du ${formatDateTime(g.created_at)}`}
                     onChange={() =>
                       setCompared((before) =>
-                        checked ? before.filter((id) => id !== g.id) : [...before, g.id],
+                        checked
+                          ? before.filter((id) => id !== g.id)
+                          : [...before, g.id],
                       )
                     }
                   />
@@ -368,7 +394,11 @@ export function SummaryPanel({
             })}
           </ul>
           {compared.length === 2 && (
-            <Button size="sm" label="Comparer les deux" clickAction={() => setComparing(true)} />
+            <Button
+              size="sm"
+              label="Comparer les deux"
+              clickAction={() => setComparing(true)}
+            />
           )}
         </section>
       )}
@@ -378,7 +408,10 @@ export function SummaryPanel({
         onOpenChange={(open) => !open && setComparing(false)}
         width="min(1240px, 96vw)"
       >
-        <DialogHeader title="Deux résumés côte à côte" onOpenChange={() => setComparing(false)} />
+        <DialogHeader
+          title="Deux résumés côte à côte"
+          onOpenChange={() => setComparing(false)}
+        />
         <div className="cl-compare">
           {compared
             .map((id) => generations.find((g) => g.id === id))
@@ -394,12 +427,18 @@ export function SummaryPanel({
                 </header>
                 {g.output ? (
                   <div className="cl-summary__body">
-                    <Markdown headingLevelStart={3} contentWidth="100%" components={SAFE_RENDERERS}>
+                    <Markdown
+                      headingLevelStart={3}
+                      contentWidth="100%"
+                      components={SAFE_RENDERERS}
+                    >
                       {g.output}
                     </Markdown>
                   </div>
                 ) : (
-                  <Text type="supporting">Texte introuvable dans le dossier de la séance.</Text>
+                  <Text type="supporting">
+                    Texte introuvable dans le dossier de la séance.
+                  </Text>
                 )}
               </article>
             ))}

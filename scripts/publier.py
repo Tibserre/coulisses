@@ -212,7 +212,7 @@ def test_everything(work: Path) -> None:
     shown(["uv", "run", "--offline", "ruff", "check", "."], work)
     shown(["uv", "run", "--offline", "pyright"], work)
     web = work / "web"
-    shown(["npm", "ci", "--offline", "--no-audit", "--no-fund"], web)
+    shown(["npm", "ci", "--offline", "--no-audit", "--no-fund", "--ignore-scripts"], web)
     for script in ("typecheck", "test", "lint"):
         shown(["npm", "run", "-s", script], web)
 

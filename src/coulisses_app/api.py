@@ -54,6 +54,7 @@ from coulisses_app import (
     summaries,
     versions,
 )
+from coulisses_app.local_only import LocalOnly
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -343,7 +344,11 @@ def create_app(
                     if processor is not None:
                         processor.stop()
 
-    app = FastAPI(title="Coulisses", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="Coulisses", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
+    )
+    # Only Coulisses' own page talks to the service: no other site, no other host name.
+    app.add_middleware(LocalOnly)
 
     @contextmanager
     def _db() -> Generator[sqlite3.Connection]:

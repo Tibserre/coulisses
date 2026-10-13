@@ -7,7 +7,8 @@ authors = [{ name = "Tibserre" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "coulisses[mlx-audio,pyannote,wav2vec2]",
-    "fastapi>=0.120",
+    # 0.142: a JSON body must be sent as JSON, so no other site can post one (CSRF).
+    "fastapi>=0.142",
     "numpy>=2.0",
     "sounddevice>=0.5",
     "pydantic>=2.13",

@@ -32,8 +32,10 @@ public_key = "FrX3p/sJ+KIF1J60fZxA1cwNBqbiw0hy8GuCXK5XsbY="
 
 [uv]
 # Copied into the .app (the engine installs its environments with it), and the one that
-# picks the python-build-standalone release: the build refuses another version.
+# picks the python-build-standalone release: the build refuses another version, or another
+# binary of it (Homebrew's, here; its digest when it was pinned).
 version = "0.12.18"
+sha256 = "7bf51afbac9c81fd1b8ed071abed642cbac277e745d7ddb5e5078f963bb7c481"
 
 [python]
 # python-build-standalone, fetched and verified (digest) by `uv python install`.
