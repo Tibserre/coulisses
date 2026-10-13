@@ -15,6 +15,7 @@ from coulisses.api import DEFAULT_PROFILE, ChainConfig, load_profile, profile_pa
 
 from coulisses_app import system_audio
 from coulisses_app.api import create_app
+from coulisses_app.bundle import IncompleteAppError, Resources
 from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
 from coulisses_app.paths import DataDir, RealDataRefusedError
@@ -32,11 +33,11 @@ DEV_PORT = 8766
 WEB_DIR_ENV = "COULISSES_WEB_DIR"
 
 
-def default_web_dir() -> Path:
+def default_web_dir(resources: Resources) -> Path:
     value = os.environ.get(WEB_DIR_ENV)
     if value:
         return Path(value).expanduser()
-    return Path(__file__).resolve().parents[2] / "web" / "dist"
+    return resources.web_dir
 
 
 def _prepare_system_audio() -> None:
@@ -78,6 +79,14 @@ def main(argv: list[str] | None = None) -> None:
     # itself never needs the Hugging Face hub.
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    # From the .app: its tools on the PATH, uv's downloads under ~/Coulisses (ADR 0040).
+    resources = Resources.from_env()
+    try:
+        resources.check()
+    except IncompleteAppError as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from exc
+    os.environ.update(resources.environment(os.environ))
 
     try:
         data, port = launch_settings(args)
@@ -107,7 +116,7 @@ def main(argv: list[str] | None = None) -> None:
         chain,
         profile=DEFAULT_PROFILE,
         processor=processor,
-        web_dir=default_web_dir(),
+        web_dir=default_web_dir(resources),
         recovery_problems=problems,
         recorder=Recorder(data, keep_awake=awake),
         watcher=Watcher(data),

@@ -1,7 +1,8 @@
 """The computer's sound, recorded with the microphone (ADR 0032).
 
-Python cannot tap what macOS plays: a small Swift program does (`native/son-ordinateur/`),
-built on this Mac with Apple's own compiler the first time it is needed. It puts the
+Python cannot tap what macOS plays: a small Swift program does (`native/son-ordinateur/`).
+Coulisses.app carries it built (ADR 0040); from the repository, it is built on this Mac
+with Apple's own compiler the first time it is needed. It puts the
 computer's sound beside the microphone in one stream on the microphone's clock, and hands
 it over as raw samples on its standard output: the service writes them as it writes any
 microphone (`capture.py`), into two files.
@@ -24,6 +25,7 @@ from typing import IO
 import numpy as np
 from numpy.typing import NDArray
 
+from coulisses_app.bundle import Resources
 from coulisses_app.spaces import SpaceError
 
 log = logging.getLogger(__name__)
@@ -61,8 +63,17 @@ def _up_to_date() -> bool:
     return all(source.stat().st_mtime <= built for source in _sources())
 
 
-def ensure_built() -> Path:
-    """The program, built again whenever its source changed. Raises `UnavailableError`."""
+def ensure_built(resources: Resources | None = None) -> Path:
+    """The program: the .app's, or, from the repository, built again whenever its source
+    changed (never anything written into the .app). Raises `UnavailableError`."""
+    shipped = (resources or Resources.from_env()).system_audio_program
+    if shipped is not None:
+        if not shipped.is_file():
+            raise UnavailableError(
+                "Le module qui capte le son de l'ordinateur manque dans Coulisses : "
+                "réinstallez-la depuis le DMG."
+            )
+        return shipped
     with _build_lock:
         if _up_to_date():
             return BUILT

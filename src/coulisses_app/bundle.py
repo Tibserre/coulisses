@@ -1,0 +1,86 @@
+"""What the service takes from the repository in development, and from Coulisses.app once
+built (ADR 0040): the built interface, the tools it and the engine run (ffmpeg, ffprobe,
+uv, the computer's sound program), and where uv keeps what it downloads.
+
+The app in the Dock says the service runs from the .app by giving COULISSES_RESSOURCES,
+its `Contents/Resources` folder. Nothing is ever written there: the .app stays as signed.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+from pathlib import Path
+
+RESOURCES_ENV = "COULISSES_RESSOURCES"
+# The engine's environments folder, as its README documents it (contract).
+ENVS_DIR_ENV = "COULISSES_ENVS_DIR"
+DEFAULT_ENVS_DIR = Path.home() / "Coulisses" / "Environnements"
+REPOSITORY = Path(__file__).resolve().parents[2]
+
+SYSTEM_AUDIO_PROGRAM = "coulisses-son-ordinateur"
+# Found by name on the PATH, by the service and by the engine (its README's prerequisites).
+TOOLS = ("ffmpeg", "ffprobe", "uv", SYSTEM_AUDIO_PROGRAM)
+
+
+class IncompleteAppError(RuntimeError):
+    """The .app lacks something it was built with. The message is shown to the user."""
+
+
+@dataclass(frozen=True)
+class Resources:
+    root: Path | None
+    """The .app's `Contents/Resources`; None when the service runs from the repository."""
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str] = os.environ) -> Resources:
+        value = environ.get(RESOURCES_ENV)
+        return cls(Path(value).expanduser() if value else None)
+
+    @property
+    def web_dir(self) -> Path:
+        return self.root / "web" if self.root else REPOSITORY / "web" / "dist"
+
+    @property
+    def tools_dir(self) -> Path | None:
+        return self.root / "bin" if self.root else None
+
+    @property
+    def system_audio_program(self) -> Path | None:
+        """Built with the .app; None from the repository, where it is built when needed."""
+        return self.tools_dir / SYSTEM_AUDIO_PROGRAM if self.tools_dir else None
+
+    def check(self) -> None:
+        """Raises `IncompleteAppError` if the .app lacks one of its parts."""
+        if self.root is None or self.tools_dir is None:
+            return
+        missing = [] if (self.web_dir / "index.html").is_file() else ["l'interface"]
+        missing += [
+            tool
+            for tool in TOOLS
+            if not (self.tools_dir / tool).is_file()
+            or not os.access(self.tools_dir / tool, os.X_OK)
+        ]
+        if missing:
+            raise IncompleteAppError(
+                f"Coulisses est incomplète : il manque {', '.join(missing)} dans {self.root}. "
+                "Réinstallez-la depuis le DMG."
+            )
+
+    def environment(self, environ: Mapping[str, str]) -> dict[str, str]:
+        """The variables to set for the service and the engine it runs.
+
+        From the .app: its tools first on the PATH, and uv's Python and cache under the
+        engine's environments folder, so that everything stays in ~/Coulisses (ADR 0010,
+        0040). In a folder of its own (`uv/`): the engine takes `<engine>-<digest>` folders
+        for its environments. From the repository: nothing changes."""
+        if self.tools_dir is None:
+            return {}
+        envs = Path(environ.get(ENVS_DIR_ENV) or DEFAULT_ENVS_DIR).expanduser()
+        path = environ.get("PATH", "")
+        return {
+            "PATH": f"{self.tools_dir}{os.pathsep}{path}" if path else str(self.tools_dir),
+            "UV_PYTHON_INSTALL_DIR": str(envs / "uv" / "python"),
+            "UV_CACHE_DIR": str(envs / "uv" / "cache"),
+        }
