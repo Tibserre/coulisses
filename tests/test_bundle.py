@@ -1,6 +1,6 @@
 """The service from Coulisses.app (ADR 0040): it finds the interface and its tools in the
-.app, never builds nor writes anything there, keeps uv's downloads under ~/Coulisses, and
-refuses to start from an incomplete .app. From the repository, nothing changes."""
+.app, never builds nor writes anything there, and refuses to start from an incomplete .app.
+From the repository, nothing changes."""
 
 from __future__ import annotations
 
@@ -71,21 +71,11 @@ def test_the_apps_tools_come_first_on_the_path(tmp_path: Path) -> None:
     assert Resources(root).environment({})["PATH"] == str(root / "bin")
 
 
-def test_uv_keeps_its_downloads_beside_the_engines_environments(tmp_path: Path) -> None:
-    root = make_app(tmp_path)
-    envs = tmp_path / "Environnements"
-    env = Resources(root).environment({bundle.ENVS_DIR_ENV: str(envs)})
-    assert env["UV_PYTHON_INSTALL_DIR"] == str(envs / "uv" / "python")
-    assert env["UV_CACHE_DIR"] == str(envs / "uv" / "cache")
-    # The engine takes `<engine>-<digest>` folders for its environments: never this one.
-    assert "-" not in Path(env["UV_CACHE_DIR"]).parent.name
-
-
-def test_uv_defaults_to_the_visible_coulisses_folder(tmp_path: Path) -> None:
-    env = Resources(make_app(tmp_path)).environment({})
-    assert env["UV_PYTHON_INSTALL_DIR"] == str(
-        Path.home() / "Coulisses" / "Environnements" / "uv" / "python"
-    )
+def test_where_uv_keeps_its_downloads_is_left_to_the_engine(tmp_path: Path) -> None:
+    """The engine (v1.7.0) puts uv's Python and cache under its environments folder; set
+    by the service, they would override it."""
+    env = Resources(make_app(tmp_path)).environment({"PATH": "/usr/bin"})
+    assert set(env) == {"PATH"}
 
 
 def test_the_apps_sound_program_is_used_as_shipped(
