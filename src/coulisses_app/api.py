@@ -166,7 +166,7 @@ class GenerationRequest(BaseModel):
 
 
 class ModelRequest(BaseModel):
-    model: str
+    model: str = Field(min_length=1)
 
 
 class TitleRequest(BaseModel):
@@ -177,6 +177,9 @@ class ModelsInfo(BaseModel):
     reachable: bool
     error: str | None
     default: str
+    """The summaries' model: the one offered first when a summary is asked."""
+    writings: dict[settings.Writing, str]
+    """The model of each writing: title, chapters, summaries (ADR 0039)."""
     models: list[InstalledModel]
 
 
@@ -653,20 +656,29 @@ def create_app(
     def models() -> ModelsInfo:
         conn = connect(data)
         try:
-            default = settings.default_model(conn)
+            writings = settings.writing_models(conn)
         finally:
             conn.close()
         try:
             found = model_client.models()
         except OllamaError as exc:
-            return ModelsInfo(reachable=False, error=str(exc), default=default, models=[])
-        return ModelsInfo(reachable=True, error=None, default=default, models=found)
+            return ModelsInfo(
+                reachable=False,
+                error=str(exc),
+                default=writings["resume"],
+                writings=writings,
+                models=[],
+            )
+        return ModelsInfo(
+            reachable=True, error=None, default=writings["resume"], writings=writings, models=found
+        )
 
-    @app.put("/api/reglages/modele")
-    def set_model(demande: ModelRequest) -> ModelsInfo:
+    @app.put("/api/reglages/modeles/{redaction}")
+    def set_writing_model(redaction: settings.Writing, demande: ModelRequest) -> ModelsInfo:
+        """The model a writing is made with, from now on (what is done keeps its own)."""
         conn = connect(data)
         try:
-            settings.set_default_model(conn, demande.model)
+            settings.set_writing_model(conn, redaction, demande.model)
         finally:
             conn.close()
         return models()
@@ -811,10 +823,11 @@ def create_app(
             raise HTTPException(status_code=409, detail="Le transcript n'est pas encore prêt.")
         conn = connect(data)
         try:
+            writing = settings.writing_of(demande.action_ref)
             if demande.model:
-                # Chosen by hand: it becomes the default (ADR 0022).
-                settings.set_default_model(conn, demande.model)
-            model = demande.model or settings.default_model(conn)
+                # Chosen by hand: it becomes this writing's model (ADR 0022, 0039).
+                settings.set_writing_model(conn, writing, demande.model)
+            model = demande.model or settings.writing_model(conn, writing)
             with conn:
                 jobs.enqueue_generation(
                     conn, session_id, action_ref=demande.action_ref, model=model
@@ -838,7 +851,10 @@ def create_app(
         try:
             with conn:
                 jobs.enqueue_generation(
-                    conn, session_id, action_ref=PHASES_REF, model=settings.default_model(conn)
+                    conn,
+                    session_id,
+                    action_ref=PHASES_REF,
+                    model=settings.writing_model(conn, "chapitres"),
                 )
         finally:
             conn.close()

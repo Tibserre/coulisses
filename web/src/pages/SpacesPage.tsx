@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -14,10 +16,14 @@ import {
   type SpaceAction,
   type SpaceTemplate,
 } from "../api.ts";
-import { speakerInk } from "../theme/shared.ts";
+import { Plus } from "lucide-react";
+import { EditableTitle } from "../components/EditableTitle.tsx";
+import { plural } from "../format.ts";
+import { speakerInk, speakerTint } from "../theme/shared.ts";
 
 /** A space's settings (a troupe, a team, a client; ADR 0020), opened from its « … » menu
- *  in the side column: its name, its people, its glossary, the summary it offers first.
+ *  in the side column: its name (the page's title, typed into in place), its people, its
+ *  glossary, the summary it offers first.
  *  Nothing is deleted here: people and terms are archived, so past sessions keep them. */
 export function SpacePage({ id, onChanged }: { id: number; onChanged: () => Promise<void> }) {
   const [spaces, setSpaces] = useState<Space[] | null>(null);
@@ -38,8 +44,7 @@ export function SpacePage({ id, onChanged }: { id: number; onChanged: () => Prom
   const space = spaces?.find((s) => s.id === id) ?? null;
   return (
     <main className="cl-spacepage">
-      <Heading level={2}>{space ? `Paramètres de ${space.name}` : "Paramètres de l'espace"}</Heading>
-      {error && <Banner status="error" title="Action refusée" description={error} />}
+      {error && <Banner status="error" title="Action refusée" description={error} isDismissable onDismiss={() => setError(null)} />}
       {spaces && !space && <Banner status="error" title="Espace introuvable" />}
       {space && (
         <SpaceDetail
@@ -103,15 +108,11 @@ function SpaceDetail({
   onChanged: () => Promise<void>;
   onError: (message: string | null) => void;
 }) {
-  const [name, setName] = useState(space.name);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [glossary, setGlossary] = useState<GlossaryEntry[]>([]);
+  const [people, setPeople] = useState<Person[] | null>(null);
+  const [glossary, setGlossary] = useState<GlossaryEntry[] | null>(null);
 
   const load = useCallback(async () => {
-    const [p, g] = await Promise.all([
-      api.people(space.id),
-      api.glossary(space.id),
-    ]);
+    const [p, g] = await Promise.all([api.people(space.id), api.glossary(space.id)]);
     setPeople(p);
     setGlossary(g);
   }, [space.id]);
@@ -119,66 +120,80 @@ function SpaceDetail({
     void load().catch((e: Error) => onError(e.message));
   }, [load, onError]);
 
-  const act = (action: () => Promise<unknown>) => async () => {
+  /** Done, then everything read again; refused, said at the top of the page. */
+  const attempt: Attempt = async (action) => {
     try {
       await action();
       await load();
       await onChanged();
       onError(null);
+      return true;
     } catch (e) {
       onError((e as Error).message);
+      return false;
     }
   };
 
+  const present = (people ?? []).filter((p) => !p.archived);
+  const members = present.filter((p) => p.kind === "member").length;
+  const guests = present.length - members;
+  const terms = (glossary ?? []).filter((e) => !e.archived).length;
+
   return (
     <div className="cl-space">
-      <div className="cl-space__head">
-        <TextInput
-          label="Nom de l'espace"
-          value={name}
-          onChange={setName}
-          onEnter={() => void act(() => api.updateSpace(space.id, { name }))()}
+      <header className="cl-space__head">
+        <Text type="supporting">Paramètres de l'espace</Text>
+        <EditableTitle
+          title={space.name}
+          onSave={async (name) => {
+            await api.updateSpace(space.id, { name });
+            await onChanged();
+          }}
         />
-        {name !== space.name && (
-          <Button
-            label="Renommer"
-            clickAction={act(() => api.updateSpace(space.id, { name }))}
-          />
-        )}
-        <Button
-          variant="ghost"
-          label={space.archived ? "Désarchiver" : "Archiver l'espace"}
-          clickAction={act(() =>
-            api.updateSpace(space.id, { archived: !space.archived }),
-          )}
-        />
-      </div>
+        <Text color="secondary" className="cl-space__counts">
+          {people !== null && glossary !== null && [
+            plural(members, "membre", "membres"),
+            guests ? plural(guests, "invité", "invités") : null,
+            plural(terms, "terme", "termes"),
+            space.archived ? "archivé" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
+      </header>
 
-      <Switch
-        label="Reconnaître les voix d'une séance à l'autre"
-        description="Désactivé, aucune signature vocale n'est créée : on nomme les voix à chaque séance. Activé, l'application pourra plus tard reconnaître les personnes de cet espace."
-        value={space.voice_recognition}
-        onChange={(on) =>
-          void act(() => api.updateSpace(space.id, { voice_recognition: on }))()
-        }
-      />
-
-      <PeopleSection
-        title="Membres"
-        kind="member"
-        spaceId={space.id}
-        people={people.filter((p) => p.kind === "member")}
-        act={act}
-      />
-      <PeopleSection
-        title="Invités"
-        kind="guest"
-        spaceId={space.id}
-        people={people.filter((p) => p.kind === "guest")}
-        act={act}
-      />
-      <GlossarySection spaceId={space.id} entries={glossary} act={act} />
+      <PeopleSection spaceId={space.id} people={people} attempt={attempt} />
+      <GlossarySection spaceId={space.id} entries={glossary} attempt={attempt} />
       <AutoSummaries spaceId={space.id} onError={onError} />
+
+      <section className="cl-space__section">
+        <Heading level={3}>Voix</Heading>
+        <Switch
+          label="Reconnaître les voix d'une séance à l'autre"
+          description="Désactivé, aucune signature vocale n'est créée : on nomme les voix à chaque séance. Activé, l'application pourra plus tard reconnaître les personnes de cet espace."
+          value={space.voice_recognition}
+          onChange={(on) => void attempt(() => api.updateSpace(space.id, { voice_recognition: on }))}
+        />
+      </section>
+
+      {/* At the end: archiving is rare, and never next to what one types. */}
+      <section className="cl-space__section">
+        <Heading level={3}>{space.archived ? "Espace archivé" : "Archiver l'espace"}</Heading>
+        <Text type="supporting">
+          {space.archived
+            ? "Il est rangé à part dans la colonne ; ses séances y restent."
+            : "Il est rangé à part dans la colonne, avec ses séances, qui restent consultables ; on n'y commence plus de séance. Rien n'est supprimé."}
+        </Text>
+        <div>
+          <Button
+            size="sm"
+            label={space.archived ? "Désarchiver" : "Archiver l'espace"}
+            clickAction={async () => {
+              await attempt(() => api.updateSpace(space.id, { archived: !space.archived }));
+            }}
+          />
+        </div>
+      </section>
     </div>
   );
 }
@@ -212,9 +227,8 @@ function AutoSummaries({ spaceId, onError }: { spaceId: number; onError: (m: str
       <Text type="supporting">
         Celui qui est proposé d'abord dans l'onglet Résumé des séances de cet espace. Aucun résumé ne se fait tout seul : vous le lancez, avec le modèle de votre choix.
       </Text>
-      <label className="cl-select">
-        <span>Résumé proposé</span>
-        <select value={offered} onChange={(e) => void offer(e.target.value)}>
+      <label className="cl-select cl-select--inline">
+        <select aria-label="Résumé proposé" value={offered} onChange={(e) => void offer(e.target.value)}>
           <option value="">Aucun en particulier</option>
           {actions.map((a) => (
             <option key={a.ref} value={a.ref}>
@@ -227,121 +241,220 @@ function AutoSummaries({ spaceId, onError }: { spaceId: number; onError: (m: str
   );
 }
 
-type Act = (action: () => Promise<unknown>) => () => Promise<void>;
+type Attempt = (action: () => Promise<unknown>) => Promise<boolean>;
 
-function PeopleSection({
-  title,
-  kind,
-  spaceId,
-  people,
-  act,
+/** A value typed into in place, like a document (no box until hovered): Enter or leaving it
+ *  saves, Escape gives back what was there; a name left empty gives it back too. A refused
+ *  value stays typed and marked as not saved (the refusal said at the top of the page),
+ *  until it is saved or given back. */
+function InlineField({
+  value,
+  label,
+  placeholder,
+  required = false,
+  className,
+  onSave,
 }: {
-  title: string;
-  kind: Person["kind"];
-  spaceId: number;
-  people: Person[];
-  act: Act;
+  value: string;
+  label: string;
+  placeholder?: string;
+  /** Left empty, it gives back what was there (a name), else it is cleared (a role). */
+  required?: boolean;
+  className?: string;
+  onSave: (value: string) => Promise<boolean>;
 }) {
+  const [draft, setDraft] = useState(value);
+  const [refused, setRefused] = useState(false);
+  const cancel = useRef(false);
+  useEffect(() => {
+    setDraft(value);
+    setRefused(false);
+  }, [value]);
+  return (
+    <input
+      className={`cl-inline ${className ?? ""}`}
+      aria-label={label}
+      aria-invalid={refused || undefined}
+      title={refused ? "Pas enregistré : Échap rend ce qui était là." : undefined}
+      value={draft}
+      placeholder={placeholder}
+      spellCheck
+      lang="fr"
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        else if (e.key === "Escape") {
+          cancel.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+      onBlur={() => {
+        const typed = draft.replace(/\s+/g, " ").trim();
+        if (cancel.current || typed === value || (required && !typed)) {
+          cancel.current = false;
+          setDraft(value);
+          setRefused(false);
+          return;
+        }
+        void onSave(typed).then((done) => setRefused(!done));
+      }}
+    />
+  );
+}
+
+/** The row that adds one more: « + Ajouter … », then a name typed in place (Enter adds and
+ *  stays open for the next one, Escape or leaving it empty closes it). */
+function AddRow({ label, placeholder, onAdd }: { label: string; placeholder: string; onAdd: (name: string) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const add = act(async () => {
-    await api.addPerson(spaceId, { name, kind, role: role || null });
-    setName("");
-    setRole("");
-  });
+  const [adding, setAdding] = useState(false);
+  if (!open)
+    return (
+      <button type="button" className="cl-people__add" onClick={() => setOpen(true)}>
+        <Plus size={16} strokeWidth={1.75} aria-hidden />
+        {label}
+      </button>
+    );
+  return (
+    <div className="cl-people__add" data-open>
+      <Plus size={16} strokeWidth={1.75} aria-hidden />
+      <input
+        className="cl-inline"
+        aria-label={label}
+        placeholder={placeholder}
+        value={name}
+        readOnly={adding}
+        autoFocus
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={async (e) => {
+          if (e.key === "Escape") {
+            setName("");
+            setOpen(false);
+          } else if (e.key === "Enter" && name.trim() && !adding) {
+            setAdding(true);
+            if (await onAdd(name.trim())) setName("");
+            setAdding(false);
+          }
+        }}
+        onBlur={() => {
+          if (!name.trim()) setOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
+type Filter = "all" | Person["kind"];
+
+/** The space's people, members and guests in one list: each one's name and role typed into
+ *  in place, a pill to make them a member or a guest, archived from their « … ». */
+function PeopleSection({ spaceId, people, attempt }: { spaceId: number; people: Person[] | null; attempt: Attempt }) {
+  const [filter, setFilter] = useState<Filter>("all");
+  const [showArchived, setShowArchived] = useState(false);
+  const shown = (people ?? []).filter((p) => filter === "all" || p.kind === filter);
+  const present = shown.filter((p) => !p.archived);
+  const archived = shown.filter((p) => p.archived);
   return (
     <section className="cl-space__section">
-      <Heading level={3}>{title}</Heading>
-      {people.length === 0 && (
-        <Text type="supporting">Personne pour l'instant.</Text>
-      )}
-      <ul className="cl-rows">
-        {people.map((p) => (
-          <PersonRow key={p.id} person={p} act={act} />
-        ))}
-      </ul>
-      <div className="cl-rows__add">
-        <TextInput
-          label="Nom"
-          value={name}
-          onChange={setName}
-          size="sm"
-          onEnter={() => void add()}
-        />
-        <TextInput
-          label="Rôle"
-          placeholder={
-            kind === "member"
-              ? "coach, comédienne, cheffe de projet…"
-              : "facultatif"
-          }
-          value={role}
-          onChange={setRole}
-          size="sm"
-          onEnter={() => void add()}
-        />
-        <Button
-          size="sm"
-          label="Ajouter"
-          clickAction={add}
-          isDisabled={!name.trim()}
-        />
+      <div className="cl-space__bar">
+        <Heading level={3}>Personnes</Heading>
+        <div className="cl-filter" role="group" aria-label="Montrer">
+          {(
+            [
+              ["all", "Tous"],
+              ["member", "Membres"],
+              ["guest", "Invités"],
+            ] as const
+          ).map(([key, label]) => (
+            <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
+      {people === null ? (
+        <RowsSkeleton />
+      ) : (
+        <ul className="cl-people">
+          {present.map((p) => (
+            <PersonRow key={p.id} person={p} attempt={attempt} />
+          ))}
+          {showArchived && archived.map((p) => <PersonRow key={p.id} person={p} attempt={attempt} />)}
+          <li>
+            <AddRow
+              label={filter === "guest" ? "Ajouter un invité" : "Ajouter une personne"}
+              placeholder="Prénom"
+              onAdd={(name) =>
+                attempt(() => api.addPerson(spaceId, { name, kind: filter === "guest" ? "guest" : "member", role: null }))
+              }
+            />
+          </li>
+        </ul>
+      )}
+      {archived.length > 0 && (
+        <div>
+          <Button
+            size="sm"
+            variant="ghost"
+            label={showArchived ? "Masquer les archivés" : `Voir ${plural(archived.length, "archivé", "archivés")}`}
+            onClick={() => setShowArchived(!showArchived)}
+          />
+        </div>
+      )}
     </section>
   );
 }
 
-function PersonRow({ person, act }: { person: Person; act: Act }) {
-  const [name, setName] = useState(person.name);
-  const [role, setRole] = useState(person.role ?? "");
-  const changed = name !== person.name || role !== (person.role ?? "");
+function PersonRow({ person, attempt }: { person: Person; attempt: Attempt }) {
+  const guest = person.kind === "guest";
   return (
-    <li className="cl-rows__item" data-archived={person.archived || undefined}>
+    <li className="cl-people__row" data-archived={person.archived || undefined}>
       <span
-        className="cl-dot"
-        style={{ background: speakerInk(person.color_slot) }}
+        className="cl-avatar"
+        style={{ background: speakerTint(person.color_slot), color: speakerInk(person.color_slot) }}
         aria-hidden
+      >
+        {person.name.trim().charAt(0).toUpperCase()}
+      </span>
+      <InlineField
+        className="cl-people__name"
+        label={`Nom de ${person.name}`}
+        value={person.name}
+        required
+        onSave={(name) => attempt(() => api.updatePerson(person.id, { name }))}
       />
-      <TextInput
-        label="Nom"
-        isLabelHidden
-        value={name}
-        onChange={setName}
-        size="sm"
+      <InlineField
+        className="cl-people__role"
+        label={`Rôle de ${person.name}`}
+        value={person.role ?? ""}
+        placeholder="Ajouter un rôle"
+        onSave={(role) => attempt(() => api.updatePerson(person.id, { role }))}
       />
-      <TextInput
-        label="Rôle"
-        isLabelHidden
-        placeholder="rôle"
-        value={role}
-        onChange={setRole}
-        size="sm"
-      />
-      {changed && (
-        <Button
+      <button
+        type="button"
+        className="cl-pill"
+        title={guest ? "Passer membre" : "Passer invité"}
+        onClick={() => void attempt(() => api.updatePerson(person.id, { kind: guest ? "member" : "guest" }))}
+      >
+        {guest ? "Invité" : "Membre"}
+      </button>
+      <span className="cl-people__more">
+        <MoreMenu
+          label={`Options de ${person.name}`}
           size="sm"
-          label="Enregistrer"
-          clickAction={act(() => api.updatePerson(person.id, { name, role }))}
+          alignment="end"
+          items={[
+            {
+              label: guest ? "Passer membre" : "Passer invité",
+              onClick: () => void attempt(() => api.updatePerson(person.id, { kind: guest ? "member" : "guest" })),
+            },
+            {
+              label: person.archived ? "Désarchiver" : "Archiver",
+              onClick: () => void attempt(() => api.updatePerson(person.id, { archived: !person.archived })),
+            },
+          ]}
         />
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        label={person.kind === "guest" ? "Passer membre" : "Passer invité"}
-        clickAction={act(() =>
-          api.updatePerson(person.id, {
-            kind: person.kind === "guest" ? "member" : "guest",
-          }),
-        )}
-      />
-      <Button
-        size="sm"
-        variant="ghost"
-        label={person.archived ? "Désarchiver" : "Archiver"}
-        clickAction={act(() =>
-          api.updatePerson(person.id, { archived: !person.archived }),
-        )}
-      />
+      </span>
     </li>
   );
 }
@@ -353,103 +466,102 @@ function splitVariants(text: string): string[] {
     .filter(Boolean);
 }
 
+/** The space's words, in the same list: each term and its known wrong spellings typed into
+ *  in place, archived from its « … ». */
 function GlossarySection({
   spaceId,
   entries,
-  act,
+  attempt,
 }: {
   spaceId: number;
-  entries: GlossaryEntry[];
-  act: Act;
+  entries: GlossaryEntry[] | null;
+  attempt: Attempt;
 }) {
-  const [term, setTerm] = useState("");
-  const [variants, setVariants] = useState("");
-  const add = act(async () => {
-    await api.addEntry(spaceId, { term, variants: splitVariants(variants) });
-    setTerm("");
-    setVariants("");
-  });
+  const [showArchived, setShowArchived] = useState(false);
+  const present = (entries ?? []).filter((e) => !e.archived);
+  const archived = (entries ?? []).filter((e) => e.archived);
   return (
     <section className="cl-space__section">
       <Heading level={3}>Glossaire</Heading>
       <Text type="supporting">
-        Prénoms, jargon, exercices, personnages récurrents, sigles. Ils aident
-        la transcription, et les graphies fautives connues sont signalées
-        pendant la relecture avec la bonne orthographe.
+        Prénoms, jargon, exercices, personnages récurrents, sigles. Ils aident la transcription ; les graphies fautives
+        connues sont signalées à la relecture.
       </Text>
-      <ul className="cl-rows">
-        {entries.map((e) => (
-          <GlossaryRow key={e.id} entry={e} act={act} />
-        ))}
-      </ul>
-      <div className="cl-rows__add">
-        <TextInput
-          label="Terme"
-          value={term}
-          onChange={setTerm}
-          size="sm"
-          onEnter={() => void add()}
-        />
-        <TextInput
-          label="Graphies fautives"
-          placeholder="Kathy, Katie"
-          value={variants}
-          onChange={setVariants}
-          size="sm"
-          onEnter={() => void add()}
-        />
-        <Button
-          size="sm"
-          label="Ajouter"
-          clickAction={add}
-          isDisabled={!term.trim()}
-        />
-      </div>
+      {entries === null ? (
+        <RowsSkeleton />
+      ) : (
+        <ul className="cl-people">
+          {present.map((e) => (
+            <GlossaryRow key={e.id} entry={e} attempt={attempt} />
+          ))}
+          {showArchived && archived.map((e) => <GlossaryRow key={e.id} entry={e} attempt={attempt} />)}
+          <li>
+            <AddRow
+              label="Ajouter un terme"
+              placeholder="Terme"
+              onAdd={(term) => attempt(() => api.addEntry(spaceId, { term, variants: [] }))}
+            />
+          </li>
+        </ul>
+      )}
+      {archived.length > 0 && (
+        <div>
+          <Button
+            size="sm"
+            variant="ghost"
+            label={showArchived ? "Masquer les archivés" : `Voir ${plural(archived.length, "archivé", "archivés")}`}
+            onClick={() => setShowArchived(!showArchived)}
+          />
+        </div>
+      )}
     </section>
   );
 }
 
-function GlossaryRow({ entry, act }: { entry: GlossaryEntry; act: Act }) {
-  const [term, setTerm] = useState(entry.term);
-  const [variants, setVariants] = useState(entry.variants.join(", "));
-  const changed = term !== entry.term || variants !== entry.variants.join(", ");
+function GlossaryRow({ entry, attempt }: { entry: GlossaryEntry; attempt: Attempt }) {
   return (
-    <li className="cl-rows__item" data-archived={entry.archived || undefined}>
-      <TextInput
-        label="Terme"
-        isLabelHidden
-        value={term}
-        onChange={setTerm}
-        size="sm"
+    <li className="cl-people__row cl-people__row--term" data-archived={entry.archived || undefined}>
+      <InlineField
+        className="cl-people__name"
+        label={`Terme ${entry.term}`}
+        value={entry.term}
+        required
+        onSave={(term) => attempt(() => api.updateEntry(entry.id, { term }))}
       />
-      <TextInput
-        label="Graphies fautives"
-        isLabelHidden
-        placeholder="graphies fautives"
-        value={variants}
-        onChange={setVariants}
-        size="sm"
+      <InlineField
+        className="cl-people__role"
+        label={`Graphies fautives de ${entry.term}`}
+        value={entry.variants.join(", ")}
+        placeholder="Ajouter des graphies fautives"
+        onSave={(variants) => attempt(() => api.updateEntry(entry.id, { variants: splitVariants(variants) }))}
       />
-      {changed && (
-        <Button
+      <span className="cl-people__more">
+        <MoreMenu
+          label={`Options de ${entry.term}`}
           size="sm"
-          label="Enregistrer"
-          clickAction={act(() =>
-            api.updateEntry(entry.id, {
-              term,
-              variants: splitVariants(variants),
-            }),
-          )}
+          alignment="end"
+          items={[
+            {
+              label: entry.archived ? "Désarchiver" : "Archiver",
+              onClick: () => void attempt(() => api.updateEntry(entry.id, { archived: !entry.archived })),
+            },
+          ]}
         />
-      )}
-      <Button
-        size="sm"
-        variant="ghost"
-        label={entry.archived ? "Désarchiver" : "Archiver"}
-        clickAction={act(() =>
-          api.updateEntry(entry.id, { archived: !entry.archived }),
-        )}
-      />
+      </span>
     </li>
+  );
+}
+
+/** A list while it is read: three rows' shapes. */
+function RowsSkeleton() {
+  return (
+    <div className="cl-people cl-skeleton" aria-busy="true">
+      {[0.3, 0.22, 0.26].map((w, i) => (
+        <div key={i} className="cl-people__row">
+          <Skeleton width={28} height={28} radius="rounded" index={i} />
+          <Skeleton width={`${w * 100}%`} height={12} radius={1} index={i} />
+        </div>
+      ))}
+    </div>
   );
 }

@@ -195,7 +195,7 @@ export function RecordingPage() {
     <div className="cl-page cl-recording">
       <header className="cl-recording__head">
         <a className="cl-back" href="#/">
-          <ArrowLeft size={16} strokeWidth={1.75} aria-hidden /> Enregistrements
+          <ArrowLeft size={16} strokeWidth={1.75} aria-hidden /> Accueil
         </a>
       </header>
       <main className="cl-recording__main">
@@ -203,7 +203,7 @@ export function RecordingPage() {
           <div className="cl-recording__none">
             <Heading level={2}>Aucun enregistrement en cours</Heading>
             <Text color="secondary">
-              Lancez-en un depuis la page des enregistrements.
+              Commencez-en un avec « Nouvelle séance », en haut à droite (⌘N).
             </Text>
             {note.trim() && (
               <Banner

@@ -5,7 +5,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Text } from "@astryxdesign/core/Text";
 import type { CorrectedView, EditInfo, Person, Session } from "../api.ts";
-import { formatDateTime, formatDuration, plural } from "../format.ts";
+import { formatDateTime } from "../format.ts";
 import type { ReviewModel } from "../transcript.ts";
 import { speakerTitle } from "../transcript.ts";
 import { inkOf } from "./TranscriptView.tsx";
@@ -13,32 +13,27 @@ import { inkOf } from "./TranscriptView.tsx";
 export function KeyFigures({
   view,
   model,
-  duration,
   dev,
 }: {
   view: CorrectedView;
   model: ReviewModel;
-  duration: number | null;
   dev: boolean;
 }) {
   const voices = model.speakers.filter((s) => s.label !== null).length;
+  // The duration is said under the title; here, what the review is about.
   return (
     <dl className="cl-figures">
       <div>
-        <dt>Durée</dt>
-        <dd>{formatDuration(duration)}</dd>
-      </div>
-      <div>
-        <dt>Voix</dt>
+        <dt>voix</dt>
         <dd>{voices}</dd>
       </div>
       <div>
-        <dt>Répliques</dt>
-        <dd>{view.turns.length}</dd>
+        <dt>{view.turns.length > 1 ? "répliques" : "réplique"}</dt>
+        <dd>{view.turns.length.toLocaleString("fr-FR")}</dd>
       </div>
       {dev && (
         <div>
-          <dt>Mots horodatés</dt>
+          <dt>mots horodatés</dt>
           <dd>{Math.round(view.timed_share * 100)} %</dd>
         </div>
       )}
@@ -50,9 +45,15 @@ export function KeyFigures({
  *  engine split one person, P3) are offered a merge. */
 export function Participants({
   model,
+  onShow,
+  onPoint,
   onMerge,
 }: {
   model: ReviewModel;
+  /** Shows a voice's lines only. */
+  onShow: (label: string) => void;
+  /** The voice pointed at: where it speaks is marked on the player bar. */
+  onPoint: (label: string | null) => void;
   onMerge: (source: string, target: string) => Promise<void>;
 }) {
   const total = model.speakers.reduce((sum, s) => sum + s.seconds, 0) || 1;
@@ -64,8 +65,8 @@ export function Participants({
       <Heading level={3}>Participants</Heading>
       <Text type="supporting">
         {unnamed > 0
-          ? `${plural(unnamed, "voix reste", "voix restent")} à nommer : cliquez sur un nom dans le transcript, ou appuyez sur N pendant l'écoute.`
-          : "Toutes les voix sont nommées."}
+          ? "Cliquez sur une voix pour n'afficher que ses répliques."
+          : "Toutes les voix sont nommées. Cliquez sur une voix pour n'afficher que ses répliques."}
       </Text>
       <ul className="cl-participants">
         {model.speakers.map((s, i) => {
@@ -81,14 +82,29 @@ export function Participants({
                   )
               : undefined;
           return (
-            <li key={s.label ?? "inconnu"}>
-              <span
-                className="cl-name"
-                data-unnamed={!s.named || undefined}
-                style={{ color: inkOf(s) }}
-              >
-                {speakerTitle(s)}
-              </span>
+            <li
+              key={s.label ?? "inconnu"}
+              onPointerEnter={() => s.label !== null && onPoint(s.label)}
+              onPointerLeave={() => onPoint(null)}
+              onFocus={() => s.label !== null && onPoint(s.label)}
+              onBlur={() => onPoint(null)}
+            >
+              {s.label !== null ? (
+                <button
+                  type="button"
+                  className="cl-name"
+                  data-unnamed={!s.named || undefined}
+                  style={{ color: inkOf(s) }}
+                  title={`N'afficher que les répliques de ${s.name}`}
+                  onClick={() => onShow(s.label!)}
+                >
+                  {speakerTitle(s)}
+                </button>
+              ) : (
+                <span className="cl-name" data-unnamed style={{ color: inkOf(s) }}>
+                  {speakerTitle(s)}
+                </span>
+              )}
               <span className="cl-share" aria-hidden>
                 <span
                   style={{
@@ -145,9 +161,42 @@ export function Attendees({
   const shown = people.filter(
     (p) => !p.archived || session.attendee_ids.includes(p.id),
   );
+  const [open, setOpen] = useState(false);
+  const count = session.attendee_ids.length + (session.unnamed_attendees ?? 0);
+  const names = people
+    .filter((p) => session.attendee_ids.includes(p.id))
+    .map((p) => p.name);
+  // People not read yet (or gone): said by their number, never left out silently.
+  const known = names.length === session.attendee_ids.length;
+  const unnamedText = session.unnamed_attendees
+    ? `${session.unnamed_attendees} non ${session.unnamed_attendees > 1 ? "nommés" : "nommé"}`
+    : null;
+  const listed = known ? [...names, ...(unnamedText ? [unnamedText] : [])] : [];
+  const sentence =
+    listed.length > 1 ? `${listed.slice(0, -1).join(", ")} et ${listed[listed.length - 1]}` : listed[0];
+  if (!open && !changed) {
+    return (
+      <section>
+        <div className="cl-side__line">
+          <Heading level={3}>Présents</Heading>
+          <Button size="sm" variant="ghost" label="Modifier" onClick={() => setOpen(true)} />
+        </div>
+        <Text type="supporting">
+          {count === 0
+            ? "Personne n'a été coché."
+            : known
+              ? sentence
+              : `${count} ${count > 1 ? "présents" : "présent"}`}
+        </Text>
+      </section>
+    );
+  }
   return (
     <section>
-      <Heading level={3}>Présents</Heading>
+      <div className="cl-side__line">
+        <Heading level={3}>Présents</Heading>
+        {!changed && <Button size="sm" variant="ghost" label="Fermer" onClick={() => setOpen(false)} />}
+      </div>
       {shown.length === 0 ? (
         <Text type="supporting">
           Aucune personne dans l'espace « {session.space_name} » : ajoutez-en
@@ -224,7 +273,10 @@ export function CorrectionsHistory({
   onRedo: (id: number) => Promise<void>;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
   if (edits.length === 0) return null;
+  const latest = [...edits].reverse();
+  const listed = all ? latest : latest.slice(0, SHOWN_EDITS);
   const run = (action: () => Promise<void>) => async () => {
     try {
       await action();
@@ -235,9 +287,12 @@ export function CorrectionsHistory({
   };
   return (
     <section>
-      <Heading level={3}>Corrections</Heading>
+      <div className="cl-side__line">
+        <Heading level={3}>Corrections</Heading>
+        <Text type="supporting">{edits.length}</Text>
+      </div>
       <ol className="cl-history">
-        {[...edits].reverse().map((e) => (
+        {listed.map((e) => (
           <li key={e.id} data-reverted={e.reverted || undefined}>
             <span className="cl-history__text">
               <Text hasStrikethrough={e.reverted}>{e.description}</Text>
@@ -263,6 +318,16 @@ export function CorrectionsHistory({
           </li>
         ))}
       </ol>
+      {latest.length > SHOWN_EDITS && (
+        <div>
+          <Button
+            size="sm"
+            variant="ghost"
+            label={all ? "N'afficher que les dernières" : `Voir les ${latest.length - SHOWN_EDITS} autres`}
+            onClick={() => setAll(!all)}
+          />
+        </div>
+      )}
       {error && (
         <Text as="p" color="primary" type="supporting">
           {error}
@@ -271,3 +336,6 @@ export function CorrectionsHistory({
     </section>
   );
 }
+
+/** The corrections listed at first: the latest; the others on demand (none hidden). */
+const SHOWN_EDITS = 3;

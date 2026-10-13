@@ -251,3 +251,104 @@ test("key moments and notes from the recording sit between the lines, by time", 
   // 0:00 line, 2–4 s untranscribed, the moment at 4.5 s, 5 s line, the note at 8 s, 9 s line.
   assert.deepEqual(rows, ["turn", "untranscribed", "moment", "turn", "note", "turn"]);
 });
+
+test("the same voice going on is not named again; anything between names it again", () => {
+  const turn = (index: number, speaker: string, start: number) => ({
+    index,
+    speaker,
+    start,
+    end: start + 1,
+    edited: false,
+    words: [word("mot", start)],
+  });
+  const view: CorrectedView = {
+    ...VIEW,
+    turns: [turn(0, "7", 0), turn(1, "7", 2), turn(2, "2", 4), turn(3, "2", 6), turn(4, "2", 30)],
+    untranscribed: [{ start: 20, end: 25 }],
+  };
+  const lines = buildModel(view).rows.filter((r): r is TurnRow => r.kind === "turn");
+  assert.deepEqual(
+    lines.map((r) => !!r.continued),
+    [false, true, false, true, false], // the stretch not transcribed, between 3 and 4
+  );
+});
+
+test("a chapter, a key moment or a note between two lines of a voice names it again", () => {
+  const turn = (index: number, speaker: string | null, start: number) => ({
+    index,
+    speaker,
+    start,
+    end: start + 1,
+    edited: false,
+    words: [word("mot", start)],
+  });
+  const view: CorrectedView = {
+    ...VIEW,
+    turns: [
+      turn(0, "7", 0),
+      turn(1, "7", 2), // a chapter starts here
+      turn(2, "7", 4),
+      turn(3, "7", 10), // a note at 8 s before it
+      turn(4, null, 12),
+      turn(5, null, 14), // no voice: never « continued »
+    ],
+    untranscribed: [],
+    phases: [{ ...CHAPTERED.phases[0], turn: 1, end_turn: 6 }],
+    markers: [],
+    timed_notes: [{ id: 1, at_s: 8, text: "une idée" }],
+  };
+  const lines = buildModel(view).rows.filter((r): r is TurnRow => r.kind === "turn");
+  assert.deepEqual(
+    lines.map((r) => !!r.continued),
+    [false, false, true, false, false, false],
+  );
+});
+
+test("naming a voice offers the people matching what is typed, then a guest or a free name", async () => {
+  const { nameChoices } = await import("./transcript.ts");
+  const person = (id: number, name: string, archived = false) =>
+    ({ id, space_id: 1, kind: "member", name, role: null, color_slot: id, archived }) as const;
+  const people = [person(1, "Elise"), person(2, "Nathalie"), person(3, "Lucie", true)];
+  const voice = (label: string | null, name: string) => ({ label, name }) as unknown as Speaker;
+  const me = voice("SPEAKER_01", "Nouvelle voix 1");
+  const voices = [me, voice("SPEAKER_02", "Elise"), voice(null, "Sans voix")];
+  const kinds = (c: { kind: string }[]) => c.map((x) => x.kind);
+
+  assert.deepEqual(kinds(nameChoices("who", me, people, voices, "")), ["person", "person"]); // archived left out
+  // A part of a name: the people it matches first, and still a new name.
+  assert.deepEqual(kinds(nameChoices("who", me, people, voices, "nath")), ["person", "guest", "free"]);
+  assert.deepEqual(kinds(nameChoices("who", me, people, voices, " elise ")), ["person"]); // the exact name: no guest
+  assert.deepEqual(nameChoices("who", me, people, voices, "  Lu  cie "), [
+    { kind: "guest", name: "Lu cie" },
+    { kind: "free", name: "Lu cie" },
+  ]);
+  // Who plays a character: everyone, whatever was typed on the first view.
+  assert.equal(nameChoices("character", me, people, voices, "nath").length, 2);
+  // The same as another voice: never itself, never a line without a voice.
+  assert.deepEqual(kinds(nameChoices("same", me, people, voices, "")), ["voice"]);
+  // A line without a voice: nothing to name.
+  assert.deepEqual(nameChoices("who", voice(null, "?"), people, voices, "Lucie"), []);
+});
+
+test("one voice shown: its lines, its chapters, the others folded into a count", async () => {
+  const { focusModel, speakerMarks, speakerExcerpt } = await import("./transcript.ts");
+  const model = buildModel(CHAPTERED);
+  const shape = (rows: { kind: string; count?: number; continued?: boolean }[]) =>
+    rows.map((r) => (r.kind === "others" ? `+${r.count}` : r.kind === "turn" && r.continued ? "turn…" : r.kind));
+
+  const marie = focusModel(model, "2");
+  // Its chapter only (« Accueil » has none of its lines); the line of the other voice
+  // before the chapter and the one after it, folded.
+  assert.deepEqual(shape(marie.rows), ["+1", "phase", "turn", "+1"]);
+  assert.deepEqual(marie.timed.map((r) => r.turn.index), [1]); // the arrows stay within it
+
+  const first = focusModel(model, "7");
+  assert.deepEqual(shape(first.rows), ["phase", "turn", "phase", "+1", "turn"]); // its name said again after a fold
+
+  assert.deepEqual(speakerMarks(model, "7"), [
+    { start: 0, end: 0.9 },
+    { start: 9, end: 9.3 },
+  ]);
+  assert.equal(speakerExcerpt(model, "7")?.turn.index, 0); // its longest line
+  assert.equal(speakerExcerpt(model, "absent"), null);
+});

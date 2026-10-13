@@ -44,6 +44,8 @@ export const coulissesTheme = defineTheme({
   color: { accent: ACCENT, neutralStyle: "neutral" },
 
   typography: {
+    // The scale itself is given below, size by size (ADR 0038): this ratio no longer
+    // shapes any size.
     scale: { base: 15, ratio: 1.333 },
     body: { family: "Figtree Variable", fallbacks: SANS_FALLBACKS },
     heading: {
@@ -76,6 +78,22 @@ export const coulissesTheme = defineTheme({
     "--color-text-primary": ["#1d1d1f", "#ededed"],
     "--color-text-secondary": ["#6b6b6b", "#a3a3a3"],
     "--color-border": ["#0000001a", "#ffffff17"],
+
+    // The type scale, for an interface: the ratio of 1.333 suits titles but crushes the
+    // small sizes (11 px, 8 px). Nothing under 12 px; supporting text at 13 px; titles in
+    // proportion to a window, not a poster.
+    "--font-size-4xs": "0.75rem",
+    "--font-size-3xs": "0.75rem",
+    "--font-size-2xs": "0.75rem",
+    "--font-size-xs": "0.75rem",
+    "--font-size-sm": "0.8125rem",
+    "--font-size-base": "0.9375rem",
+    "--font-size-lg": "1.125rem",
+    "--font-size-xl": "1.375rem",
+    "--font-size-2xl": "1.75rem",
+    "--font-size-3xl": "2.125rem",
+    "--font-size-4xl": "2.5rem",
+    "--font-size-5xl": "3rem",
 
     // Reading size for transcripts: 17px, roomy leading.
     "--text-large-size": "1.0625rem",

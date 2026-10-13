@@ -9,7 +9,7 @@ export type Route =
   | { page: "space"; id: number }
   | { page: "actions"; ref: string | null }
   | { page: "recording" }
-  | { page: "settings" };
+  | { page: "settings"; part: string | null };
 
 /** `#/seance/<id>?t=12.5` opens a session at a measured time (a search hit). */
 export function parseRoute(hash: string): Route {
@@ -28,7 +28,7 @@ export function parseRoute(hash: string): Route {
   const space = /^#\/espaces\/(\d+)/.exec(path);
   if (space) return { page: "space", id: Number(space[1]) };
   if (path.startsWith("#/enregistrement")) return { page: "recording" };
-  if (path.startsWith("#/reglages")) return { page: "settings" };
+  if (path.startsWith("#/reglages")) return { page: "settings", part: params.get("onglet") };
   const actions = /^#\/actions(?:\/([^/?#]+))?/.exec(path);
   if (actions) return { page: "actions", ref: actions[1] ? decodeURIComponent(actions[1]) : null };
   return { page: "home" };
@@ -47,6 +47,19 @@ export function sessionName(s: Pick<Session, "title" | "recorded_at">, now: Date
   if (s.title) return s.title;
   const [h, m] = HOUR.format(new Date(s.recorded_at)).split(":");
   return `Séance du ${formatDay(s.recorded_at, now)}, ${Number(h)} h ${m}`;
+}
+
+const SHORT_DAY = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+/** A day as the side column says it: « 30 sept. ». */
+export function shortDay(iso: string): string {
+  return SHORT_DAY.format(new Date(iso));
+}
+
+/** What a group of the side column shows at first: the `limit` latest, and any other one
+ *  that must stay in sight (open, recording, processing, failed). */
+export function visibleSessions<T>(list: T[], limit: number, pinned: (s: T) => boolean): T[] {
+  return list.filter((s, i) => i < limit || pinned(s));
 }
 
 export type SessionDot = "recording" | "processing" | "failed" | null;
@@ -106,4 +119,40 @@ export function libraryChanged(): void {
 export function onLibraryChanged(listener: () => void): () => void {
   window.addEventListener(CHANGED, listener);
   return () => window.removeEventListener(CHANGED, listener);
+}
+
+/** The space chosen last on the home page (this browser only). */
+const SPACE_KEY = "coulisses.accueil.espace";
+
+export function rememberedSpace(): number | null {
+  try {
+    const id = Number(localStorage.getItem(SPACE_KEY));
+    return Number.isInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberSpace(id: number): void {
+  try {
+    localStorage.setItem(SPACE_KEY, String(id));
+  } catch {
+    // Not remembered: the space of the latest session is offered next time.
+  }
+}
+
+/** Where a session started from the home page (its button, or ⌘N) goes: the space chosen
+ *  there, if still open; else the latest session's; else the first open one. */
+export function startSpace(
+  spaces: Pick<Space, "id" | "archived">[],
+  latestFirst: Pick<Session, "space_id">[],
+  chosen: number | null,
+): number | null {
+  const open = spaces.filter((s) => !s.archived);
+  return (
+    open.find((s) => s.id === chosen)?.id ??
+    open.find((s) => s.id === latestFirst[0]?.space_id)?.id ??
+    open[0]?.id ??
+    null
+  );
 }

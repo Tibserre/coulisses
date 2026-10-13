@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import {
   SegmentedControl,
@@ -28,10 +28,15 @@ export function PlayerBar({
   model,
   pb,
   current,
+  marks = [],
+  markInk,
 }: {
   model: ReviewModel;
   pb: Playback;
   current: TurnRow | null;
+  /** Where a voice speaks (the one shown, or pointed at), marked on the position bar. */
+  marks?: { start: number; end: number }[];
+  markInk?: string;
 }) {
   const timed = model.timed;
   const position = current ? timed.indexOf(current) : -1;
@@ -99,16 +104,21 @@ export function PlayerBar({
         {formatClock(pb.time)} /{" "}
         {pb.duration != null ? formatClock(pb.duration) : "—"}
       </Text>
-      <input
-        className="cl-player__seek"
-        type="range"
-        min={0}
-        max={pb.duration ?? 0}
-        step={0.1}
-        value={pb.time}
-        onChange={(e) => pb.seek(Number(e.target.value), pb.playing)}
-        aria-label="Position dans l'enregistrement"
-      />
+      <span className="cl-player__track">
+        <input
+          className="cl-player__seek"
+          type="range"
+          min={0}
+          max={pb.duration ?? 0}
+          step={0.1}
+          value={pb.time}
+          onChange={(e) => pb.seek(Number(e.target.value), pb.playing)}
+          aria-label="Position dans l'enregistrement"
+        />
+        {pb.duration != null && marks.length > 0 && (
+          <Marks marks={marks} duration={pb.duration} ink={markInk} seek={pb.seek} />
+        )}
+      </span>
       <SegmentedControl
         label="Vitesse de lecture"
         value={String(pb.rate)}
@@ -131,3 +141,36 @@ export function PlayerBar({
     </footer>
   );
 }
+
+/** Where a voice speaks, on the position bar: drawn once per voice, not at each frame of
+ *  playback (a talkative voice has hundreds of lines). */
+const Marks = memo(function Marks({
+  marks,
+  duration,
+  ink,
+  seek,
+}: {
+  marks: { start: number; end: number }[];
+  duration: number;
+  ink?: string;
+  seek: (t: number) => void;
+}) {
+  return (
+    <span className="cl-player__marks" style={{ color: ink }}>
+      {marks.map((m) => (
+        <button
+          key={m.start}
+          type="button"
+          tabIndex={-1}
+          className="cl-player__mark"
+          aria-label={`Aller à ${formatClock(m.start)}`}
+          style={{
+            left: `${(100 * m.start) / duration}%`,
+            width: `max(2px, ${(100 * (m.end - m.start)) / duration}%)`,
+          }}
+          onClick={() => seek(m.start)}
+        />
+      ))}
+    </span>
+  );
+});

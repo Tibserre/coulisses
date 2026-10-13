@@ -23,3 +23,16 @@ test("the header says what becomes of the audio, only when it matters", () => {
   assert.equal(audioLine({ ...base, state: "scheduled", purge_on: "2026-12-26T12:00:00Z" }, NOW), null);
   assert.equal(audioLine({ ...base, state: "never_processed" }, NOW), null);
 });
+
+test("− and + go from one usual value to the next, within their bounds", async () => {
+  const { nextStep } = await import("./retention.ts");
+  const steps = [7, 14, 30, 60, 90];
+  assert.equal(nextStep(steps, 30, true, 1, Infinity), 60);
+  assert.equal(nextStep(steps, 30, false, 1, Infinity), 14);
+  assert.equal(nextStep(steps, 45, true, 1, Infinity), 60); // set elsewhere, between two
+  assert.equal(nextStep(steps, 45, false, 1, Infinity), 30);
+  assert.equal(nextStep(steps, 90, true, 1, Infinity), 90); // the last: stays
+  assert.equal(nextStep(steps, 7, false, 1, Infinity), 7);
+  assert.equal(nextStep(steps, 14, false, 10, Infinity), 10); // the notice never above the keeping
+  assert.equal(nextStep(steps, 7, true, 1, 12), 12);
+});

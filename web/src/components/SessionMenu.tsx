@@ -73,17 +73,15 @@ export function SessionMenu({
             ? []
             : [
                 {
+                  // Short: the rule (kept from the purge, or purged after a notice) is said in
+                  // the Réglages; a purge always comes with a notice first (ADR 0029).
                   label: kept ? "Ne plus garder l'audio" : "Garder l'audio",
-                  description: kept
-                    ? "Il sera supprimé à échéance, après un préavis."
-                    : "Il ne sera jamais supprimé automatiquement.",
                   onClick: () => void run(async () => onChanged(await api.keepAudio(session.id, !kept)))(),
                 },
                 { label: "Supprimer l'audio…", onClick: () => setAsking("audio") },
               ]),
           {
             label: "Exporter vers le dossier",
-            description: "Le dernier résumé et la transcription, en Markdown, dans le dossier choisi dans les Réglages.",
             onClick: () => void exportNow(false),
           },
           { type: "divider" as const },

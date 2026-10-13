@@ -3,13 +3,16 @@
  * untranscribed stretches in between, a heading at each chapter, each line with its voice.
  * Times are the engine's, measured or absent: nothing here estimates one (P2).
  */
-import type { CorrectedView, Marker, Phase, PhaseKind, Speaker, TimedNote, Turn, Word } from "./api.ts";
+import type { CorrectedView, Marker, Person, Phase, PhaseKind, Speaker, TimedNote, Turn, Word } from "./api.ts";
 
 export interface TurnRow {
   kind: "turn";
   key: string;
   turn: Turn;
   speaker: Speaker;
+  /** The line just above is the same voice's, with nothing between: its name is not said
+   *  again (the line keeps its time, its selection, its actions). */
+  continued?: boolean;
 }
 
 export interface GapRow {
@@ -46,7 +49,15 @@ export interface NoteRow {
   note: TimedNote;
 }
 
-export type Row = TurnRow | GapRow | PhaseRow | MomentRow | NoteRow;
+/** Showing one voice only: the lines of the others between two of its lines, folded into
+ *  a count. */
+export interface OthersRow {
+  kind: "others";
+  key: string;
+  count: number;
+}
+
+export type Row = TurnRow | GapRow | PhaseRow | MomentRow | NoteRow | OthersRow;
 
 export interface ReviewModel {
   rows: Row[];
@@ -137,7 +148,12 @@ export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = ne
         opensSession: starts.phase.turn === view.turns[0]?.index,
       });
     }
-    if (!hidden) rows.push(row);
+    if (!hidden) {
+      const above = rows[rows.length - 1];
+      const continued =
+        above?.kind === "turn" && above.turn.speaker === row.turn.speaker && row.speaker.label !== null;
+      rows.push(continued ? { ...row, continued } : row);
+    }
   }
   while (g < gaps.length) {
     const gap = gaps[g++];
@@ -271,4 +287,103 @@ export function phaseSpans(view: Pick<CorrectedView, "phases" | "turns">, durati
     spans.push({ phase, number: i + 1, start, end: Math.max(start, next ?? duration) });
   });
   return spans;
+}
+
+/** What naming a voice offers, by view: who it is (the people of the space matching what is
+ *  typed, then, for a name not found, a new guest or a free name), who plays a character
+ *  (every person, whatever was typed before), or another voice it is the same as. A line
+ *  without a voice offers nothing: it is given to a voice instead. */
+export type NameChoice =
+  | { kind: "person"; person: Person }
+  | { kind: "guest"; name: string }
+  | { kind: "free"; name: string }
+  | { kind: "voice"; voice: Speaker };
+
+export function nameChoices(
+  view: "who" | "character" | "same",
+  speaker: Speaker,
+  people: Person[],
+  voices: Speaker[],
+  typed: string,
+): NameChoice[] {
+  if (speaker.label === null) return [];
+  const present = people.filter((p) => !p.archived);
+  const name = typed.replace(/\s+/g, " ").trim();
+  const q = name.toLowerCase();
+  if (view === "character") return present.map((person) => ({ kind: "person", person }));
+  if (view === "same")
+    return voices
+      .filter((v) => v.label !== null && v.label !== speaker.label && (!q || v.name.toLowerCase().includes(q)))
+      .map((voice) => ({ kind: "voice", voice }));
+  const matches: NameChoice[] = present
+    .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .map((person) => ({ kind: "person", person }));
+  if (!q || present.some((p) => p.name.toLowerCase() === q)) return matches;
+  return [...matches, { kind: "guest", name }, { kind: "free", name }];
+}
+
+/** The transcript as it is when only one voice is shown: its lines, the chapters they are
+ *  in, and between them how many lines of the other voices are left out. Its name is said
+ *  again after each fold. Moving from line to line (the player's arrows) stays within it. */
+export function focusModel(model: ReviewModel, label: string): ReviewModel {
+  const rows: Row[] = [];
+  let skipped = 0;
+  const fold = () => {
+    if (skipped) rows.push({ kind: "others", key: `o${rows.length}`, count: skipped });
+    skipped = 0;
+  };
+  for (const row of model.rows) {
+    if (row.kind === "turn") {
+      if (row.speaker.label !== label) {
+        skipped += 1;
+        continue;
+      }
+      fold();
+      const above = rows[rows.length - 1];
+      rows.push({ ...row, continued: above?.kind === "turn" || undefined });
+    } else if (row.kind === "phase") {
+      fold();
+      rows.push(row);
+    }
+  }
+  fold();
+  // A chapter with none of its lines says nothing here (read backwards: one pass).
+  const kept: Row[] = [];
+  let lineAfter = false;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r.kind === "turn") lineAfter = true;
+    if (r.kind === "phase") {
+      if (!lineAfter) continue;
+      lineAfter = false;
+    }
+    const last = kept[kept.length - 1];
+    if (r.kind === "others" && last?.kind === "others") last.count += r.count;
+    else kept.push(r);
+  }
+  kept.reverse();
+  return { ...model, rows: kept, timed: model.timed.filter((r) => r.speaker.label === label) };
+}
+
+/** Where a voice speaks, as stretches of the recording: measured times only (a line
+ *  without a measured end is a point, drawn as a thin stroke; P2). */
+export function speakerMarks(model: ReviewModel, label: string): { start: number; end: number }[] {
+  return model.timed
+    .filter((r) => r.speaker.label === label && r.turn.start != null)
+    .map((r) => ({ start: r.turn.start!, end: r.turn.end ?? r.turn.start! }));
+}
+
+/** The line to hear to recognise a voice: its longest measured one. */
+export function speakerExcerpt(model: ReviewModel, label: string): TurnRow | null {
+  let best: TurnRow | null = null;
+  let length = -1;
+  for (const r of model.timed) {
+    if (r.speaker.label !== label || r.turn.start == null || r.turn.end == null) continue;
+    const l = r.turn.end - r.turn.start;
+    if (l > length) {
+      best = r;
+      length = l;
+    }
+  }
+  return best;
 }

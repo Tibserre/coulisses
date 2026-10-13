@@ -4,6 +4,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { api, type EnvironmentInfo, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
@@ -107,7 +108,7 @@ export function ModelsSection() {
 
   return (
     <section className="cl-settings__section">
-      <Heading level={3}>Modèles</Heading>
+      <Heading level={3}>Modèles de transcription</Heading>
       {unreadable && (
         <Banner
           status="error"
@@ -124,9 +125,7 @@ export function ModelsSection() {
           onDismiss={() => setRefused(null)}
         />
       )}
-      {view === null && !unreadable && (
-        <Text color="secondary">Lecture des modèles…</Text>
-      )}
+      {view === null && !unreadable && <ModelsSkeleton />}
       {view && (
         <>
           {lacking ? (
@@ -479,4 +478,31 @@ function ModelActions({
         />
       ) : null;
   }
+}
+
+/** While the engine reads what is on the disk (sizes, a second or so): the list's shapes,
+ *  the rows the catalog usually has. */
+function ModelsSkeleton() {
+  return (
+    <div className="cl-skeleton" aria-busy="true" aria-label="Lecture des modèles">
+      <div className="cl-skeleton__text cl-skeleton__text--flush">
+        <Skeleton width="100%" height={12} radius={1} />
+        <Skeleton width="70%" height={12} radius={1} />
+      </div>
+      <ul className="cl-models">
+        {[0.5, 0.42, 0.56, 0.38, 0.47, 0.44].map((w, i) => (
+          <li key={i} className="cl-models__row">
+            <div className="cl-models__what">
+              <Skeleton width={`${w * 100}%`} height={14} radius={1} index={i} />
+              <Skeleton width="35%" height={11} radius={1} index={i} />
+            </div>
+            <Skeleton width="45%" height={11} radius={1} index={i} />
+            <div className="cl-models__actions">
+              <Skeleton width={84} height={28} radius={2} index={i} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }

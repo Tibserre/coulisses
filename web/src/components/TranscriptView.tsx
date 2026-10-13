@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Popover } from "@astryxdesign/core/Popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -21,7 +21,7 @@ import { speakerInk } from "../theme/shared.ts";
 import type { PhaseRow, ReviewModel, Row, TurnRow } from "../transcript.ts";
 import { KIND_LABEL, isDoubtful, speakerTitle, wordTip } from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
-import { NamePanel } from "./NamePanel.tsx";
+import { NameEditor } from "./NamePanel.tsx";
 
 
 /** The art direction's curve: lively start, soft landing, no bounce. */
@@ -46,6 +46,8 @@ export interface Editing {
   /** A line's text or a chapter title is being typed into: the page keeps the version on
    *  screen until it is left (a newer one would put other lines under the cursor). */
   setTyping: (on: boolean) => void;
+  /** Shows this voice's lines only. */
+  showSpeaker: (label: string) => void;
 }
 
 /** Refused because the version shown changed meanwhile: nothing was written, and the page
@@ -306,6 +308,24 @@ const TurnLine = memo(function TurnLine({
   voices: Speaker[];
 }) {
   const { turn, speaker } = row;
+  // Named in place, on the first line of its group (TranscriptView brings it there).
+  const naming = editing.namingTurn === turn.index && !row.continued;
+  const { setNamingTurn } = editing;
+  // Closed by Escape: the keyboard goes back to the voice's name.
+  const nameButton = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  const closeNaming = useCallback(
+    (byKeyboard: boolean) => {
+      refocus.current = byKeyboard;
+      setNamingTurn(null);
+    },
+    [setNamingTurn],
+  );
+  useEffect(() => {
+    if (naming || !refocus.current) return;
+    refocus.current = false;
+    nameButton.current?.focus();
+  }, [naming]);
   const isCurrent = currentWord !== null;
   const isSelected = editing.selected.has(turn.index);
   const [giving, setGiving] = useState(false);
@@ -321,6 +341,7 @@ const TurnLine = memo(function TurnLine({
   return (
     <div
       className="cl-turn"
+      data-continued={row.continued || undefined}
       data-current={isCurrent || undefined}
       data-selected={isSelected || undefined}
     >
@@ -341,36 +362,28 @@ const TurnLine = memo(function TurnLine({
       </div>
       <div className="cl-turn__body">
         <div className="cl-turn__head">
-          <Popover
-            isOpen={editing.namingTurn === turn.index}
-            onOpenChange={(open) =>
-              editing.setNamingTurn(open ? turn.index : null)
-            }
-            label={`Nommer ${speaker.name}`}
-            width={320}
-            content={
-              speaker.label !== null ? (
-                <NamePanel
-                  speaker={speaker}
-                  people={editing.people}
-                  voices={voices}
-                  onCorrect={async (c) => {
-                    await editing.correct(c);
-                    editing.setNamingTurn(null);
-                  }}
-                  onAddGuest={editing.addGuest}
-                />
-              ) : (
-                <p>Cette réplique n'a pas de voix : donnez-la à une voix.</p>
-              )
-            }
-          >
+          {naming ? (
+            <NameEditor
+              speaker={speaker}
+              people={editing.people}
+              voices={voices}
+              onCorrect={async (c) => {
+                await editing.correct(c);
+                editing.setNamingTurn(null);
+              }}
+              onAddGuest={editing.addGuest}
+              onShowLines={editing.showSpeaker}
+              onClose={closeNaming}
+            />
+          ) : (
             <button
+              ref={nameButton}
               type="button"
               className="cl-name"
               data-unnamed={!speaker.named || undefined}
               style={{ color: inkOf(speaker) }}
               title="Nommer cette voix (N)"
+              onClick={() => editing.setNamingTurn(turn.index)}
             >
               {speaker.name}
               {speaker.played_by && (
@@ -380,8 +393,8 @@ const TurnLine = memo(function TurnLine({
                 </span>
               )}
             </button>
-          </Popover>
-          {!speaker.named && speaker.label !== null && (
+          )}
+          {!naming && !speaker.named && speaker.label !== null && (
             <button
               type="button"
               className="cl-turn__nommer"
@@ -693,6 +706,30 @@ export function TranscriptView({
     }
   }, [currentIndex, pb.playing, virtualizer]);
 
+  // Naming a voice: on the first line of its group (a line that goes on hides its name),
+  // brought into view with room under it for the list, which floats over the lines below.
+  const naming = editing.namingTurn;
+  const { setNamingTurn } = editing;
+  const namingIndex = naming == null ? -1 : model.rows.findIndex((r) => r.kind === "turn" && r.turn.index === naming);
+  useEffect(() => {
+    if (namingIndex < 0) return;
+    let head = namingIndex;
+    while (head > 0 && (model.rows[head] as TurnRow).continued) head--;
+    const row = model.rows[head];
+    if (row.kind === "turn" && row.turn.index !== naming) {
+      setNamingTurn(row.turn.index);
+      return;
+    }
+    const box = scroller.current;
+    const line = box?.querySelector<HTMLElement>(`[data-index="${head}"]`);
+    if (!box || !line) {
+      virtualizer.scrollToIndex(head, { align: "start" });
+      return;
+    }
+    const top = line.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    if (top < 0 || top > box.clientHeight - 360) box.scrollBy({ top: top - 96, behavior: "smooth" });
+  }, [namingIndex, naming, model.rows, setNamingTurn, virtualizer]);
+
   return (
     <div ref={scroller} className="cl-transcript" aria-label="Transcription">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -709,6 +746,8 @@ export function TranscriptView({
                 left: 0,
                 right: 0,
                 transform: `translateY(${item.start}px)`,
+                // Its list floats over the lines under it.
+                zIndex: item.index === namingIndex ? 2 : undefined,
               }}
             >
               {row.kind === "turn" ? (
@@ -740,6 +779,8 @@ export function TranscriptView({
                     <PenLine size={14} strokeWidth={1.75} aria-hidden /> {row.note.text}
                   </span>
                 </div>
+              ) : row.kind === "others" ? (
+                <div className="cl-others">{plural(row.count, "réplique d'une autre voix", "répliques d'autres voix")}</div>
               ) : (
                 <div className="cl-gap">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />

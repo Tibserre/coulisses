@@ -12,7 +12,7 @@ test("a search hit opens its session at the measured time", () => {
   assert.equal(sessionHref("abc", 12.53), "#/seance/abc?t=12.5");
   assert.equal(sessionHref("abc", null, "summary"), "#/seance/abc?onglet=resume");
   assert.deepEqual(parseRoute("#/espaces/3"), { page: "space", id: 3 });
-  assert.deepEqual(parseRoute("#/reglages"), { page: "settings" });
+  assert.deepEqual(parseRoute("#/reglages"), { page: "settings", part: null });
   assert.deepEqual(parseRoute(""), { page: "home" });
 });
 
@@ -59,4 +59,31 @@ test("the tree groups sessions by space and project, the most recent first", () 
   assert.deepEqual(troupe.projects[1].sessions.map((s) => s.id), ["b", "a"]);
   assert.deepEqual(troupe.loose.map((s) => s.id), ["c"]);
   assert.deepEqual(troupe.archived[0].sessions.map((s) => s.id), ["d"]);
+});
+
+test("a group shows its latest sessions, and keeps in sight those that must be", async () => {
+  const { visibleSessions } = await import("./library.ts");
+  const ids = ["a", "b", "c", "d", "e", "f", "g"];
+  assert.deepEqual(visibleSessions(ids, 5, () => false), ["a", "b", "c", "d", "e"]);
+  assert.deepEqual(visibleSessions(ids, 5, (s) => s === "g"), ["a", "b", "c", "d", "e", "g"]);
+});
+
+test("the settings open on the tab the address asks for", () => {
+  assert.deepEqual(parseRoute("#/reglages?onglet=modeles"), { page: "settings", part: "modeles" });
+  assert.deepEqual(parseRoute("#/reglages"), { page: "settings", part: null });
+});
+
+test("the home page records where it was chosen, else where the latest session was", async () => {
+  const { startSpace } = await import("./library.ts");
+  const spaces = [
+    { id: 1, archived: false },
+    { id: 2, archived: false },
+    { id: 3, archived: true },
+  ];
+  const latest = [{ space_id: 2 }, { space_id: 1 }];
+  assert.equal(startSpace(spaces, latest, 1), 1);
+  assert.equal(startSpace(spaces, latest, null), 2);
+  assert.equal(startSpace(spaces, latest, 3), 2); // archived since: no session starts there
+  assert.equal(startSpace(spaces, [], 9), 1);
+  assert.equal(startSpace([], [], null), null);
 });
