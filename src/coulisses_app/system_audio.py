@@ -63,6 +63,49 @@ def _up_to_date() -> bool:
     return all(source.stat().st_mtime <= built for source in _sources())
 
 
+def compile_program(output: Path, minimum_macos: str = "14.4") -> None:
+    """Builds the program into `output` with Apple's compiler, for the repository and for
+    Coulisses.app (`scripts/construire.py`, which gives its minimum macOS). Raises
+    `UnavailableError`."""
+    swiftc = shutil.which("swiftc")
+    if swiftc is None:
+        raise UnavailableError(
+            "Pour enregistrer le son de l'ordinateur, Coulisses a besoin des outils de "
+            "développement d'Apple. Installez-les une fois avec « xcode-select --install » "
+            "dans le Terminal, puis réessayez."
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        swiftc,
+        "-O",
+        "-swift-version",
+        "5",
+        "-target",
+        f"arm64-apple-macosx{minimum_macos}",
+        str(SOURCE_DIR / "main.swift"),
+        "-o",
+        str(output),
+        # Its usage description, read by macOS when it asks for the permission.
+        *("-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist"),
+        *("-Xlinker", str(SOURCE_DIR / "Info.plist")),
+    ]
+    log.info("building %s", output)
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.exception("building the system audio helper")
+        raise UnavailableError(
+            f"Le module qui capte le son de l'ordinateur n'a pas pu être préparé : {exc}"
+        ) from exc
+    if done.returncode != 0:
+        log.error("swiftc failed:\n%s", done.stderr)
+        output.unlink(missing_ok=True)
+        raise UnavailableError(
+            "Le module qui capte le son de l'ordinateur n'a pas pu être préparé "
+            "(le détail est dans le journal du service)."
+        )
+
+
 def ensure_built(resources: Resources | None = None) -> Path:
     """The program: the .app's, or, from the repository, built again whenever its source
     changed (never anything written into the .app). Raises `UnavailableError`."""
@@ -77,45 +120,9 @@ def ensure_built(resources: Resources | None = None) -> Path:
     with _build_lock:
         if _up_to_date():
             return BUILT
-        swiftc = shutil.which("swiftc")
-        if swiftc is None:
-            raise UnavailableError(
-                "Pour enregistrer le son de l'ordinateur, Coulisses a besoin des outils de "
-                "développement d'Apple. Installez-les une fois avec « xcode-select --install » "
-                "dans le Terminal, puis réessayez."
-            )
-        BUILT.parent.mkdir(parents=True, exist_ok=True)
         partial = BUILT.with_name(BUILT.name + ".partiel")
         partial.unlink(missing_ok=True)
-        command = [
-            swiftc,
-            "-O",
-            "-swift-version",
-            "5",
-            "-target",
-            "arm64-apple-macosx14.4",
-            str(SOURCE_DIR / "main.swift"),
-            "-o",
-            str(partial),
-            # Its usage description, read by macOS when it asks for the permission.
-            *("-Xlinker", "-sectcreate", "-Xlinker", "__TEXT", "-Xlinker", "__info_plist"),
-            *("-Xlinker", str(SOURCE_DIR / "Info.plist")),
-        ]
-        log.info("building %s", BUILT)
-        try:
-            done = subprocess.run(command, capture_output=True, text=True, timeout=300)
-        except (OSError, subprocess.SubprocessError) as exc:
-            log.exception("building the system audio helper")
-            raise UnavailableError(
-                f"Le module qui capte le son de l'ordinateur n'a pas pu être préparé : {exc}"
-            ) from exc
-        if done.returncode != 0:
-            log.error("swiftc failed:\n%s", done.stderr)
-            partial.unlink(missing_ok=True)
-            raise UnavailableError(
-                "Le module qui capte le son de l'ordinateur n'a pas pu être préparé "
-                "(le détail est dans le journal du service)."
-            )
+        compile_program(partial)
         os.replace(partial, BUILT)
         return BUILT
 

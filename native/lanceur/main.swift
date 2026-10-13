@@ -5,13 +5,18 @@
 // first while a recording or a processing runs, then stops the service it started: nothing
 // runs once the app is closed. The service's output goes to ~/Library/Logs/Coulisses.
 //
-// The project's folder, uv and the PATH to give the service are written into Info.plist
-// when the app is built (`scripts/installer-lanceur.sh`), with its variant: « Coulisses
-// (dév) » (`--dev`) has its own name, port, data, log and permissions (ADR 0040).
+// Built by `scripts/construire.py`, the app carries its own Python, interface and tools,
+// and runs the service from them (ADR 0040). Built by `scripts/installer-lanceur.sh`, it
+// runs the service from a repository: the project's folder, uv and the PATH are written
+// into Info.plist, with its variant: « Coulisses (dév) » (`--dev`) has its own name, port,
+// data, log and permissions.
 
 import AppKit
 import WebKit
 
+let resourcesDir = Bundle.main.resourceURL ?? Bundle.main.bundleURL
+let bundledPython = resourcesDir.appendingPathComponent("python/bin/python3")
+let isStandalone = FileManager.default.isExecutableFile(atPath: bundledPython.path)
 let settings = Bundle.main.infoDictionary ?? [:]
 let projectDir = settings["CoulissesProjet"] as? String ?? ""
 let uvPath = settings["CoulissesUV"] as? String ?? "uv"
@@ -160,15 +165,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         log.write("\n===== Coulisses démarre le \(Date()) =====\n".data(using: .utf8)!)
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: uvPath)
-        // Offline: uv never fetches anything when the app starts (P1).
-        process.arguments =
-            ["run", "--project", projectDir, "--offline", "coulisses-app", "--sans-navigateur"]
-            + (isDev ? ["--dev"] : [])
-        process.currentDirectoryURL = URL(fileURLWithPath: projectDir)
         var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = servicePath
-        environment["PYTHONUNBUFFERED"] = "1"
+        if isStandalone {
+            // Its own Python: -I takes nothing from the user's Python setup, -B writes
+            // nothing into the .app; the engine's stages (without -I) are told the same.
+            process.executableURL = bundledPython
+            process.arguments = ["-I", "-B", "-u", "-m", "coulisses_app.cli", "--sans-navigateur"]
+            process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+            environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"  // its tools come first (bundle.py)
+            environment["COULISSES_RESSOURCES"] = resourcesDir.path
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
+            environment["PYTHONNOUSERSITE"] = "1"
+            environment.removeValue(forKey: "PYTHONPATH")
+            environment.removeValue(forKey: "PYTHONHOME")
+        } else {
+            process.executableURL = URL(fileURLWithPath: uvPath)
+            // Offline: uv never fetches anything when the app starts (P1).
+            process.arguments =
+                ["run", "--project", projectDir, "--offline", "coulisses-app", "--sans-navigateur"]
+                + (isDev ? ["--dev"] : [])
+            process.currentDirectoryURL = URL(fileURLWithPath: projectDir)
+            environment["PATH"] = servicePath
+            environment["PYTHONUNBUFFERED"] = "1"
+        }
         process.environment = environment
         process.standardOutput = log
         process.standardError = log

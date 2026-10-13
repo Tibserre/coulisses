@@ -39,6 +39,17 @@ Le service écoute alors sur le port 8766, sur `~/Coulisses/Données-dev` (ou le
 
 Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l'API passe par le service de dév ; `COULISSES_PORT` en vise un autre).
 
+## Construire l'app à donner
+
+Pour les amis (ADR 0040, 0041) : une `Coulisses.app` autonome, avec son Python, l'app, le moteur, l'interface, ffmpeg, ffprobe et uv. La première fois, `--telecharger` va chercher l'archive de ffmpeg et le Python autonome (versions et empreintes dans `scripts/construction.toml`) ; ensuite, rien ne passe plus par le réseau.
+
+```bash
+uv run python scripts/construire.py --telecharger
+scripts/essai-paquet.sh dist/Coulisses.app
+```
+
+L'essai lance le service de l'app comme son lanceur, réseau coupé et sans Homebrew, sur un dossier temporaire, et traite une séance synthétique avec les vrais modèles.
+
 ## Tests
 
 ```bash

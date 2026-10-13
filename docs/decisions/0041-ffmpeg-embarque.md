@@ -1,6 +1,6 @@
 # 0041 — ffmpeg et ffprobe embarqués dans Coulisses.app, compilés sur ce Mac (audio seul, LGPL, sans réseau)
 
-Statut : Acceptée (2026-10-13, choix de l'utilisateur : « compilé sur ce Mac »). Précise l'ADR 0040, dont la liste de ce que contient le .app oubliait ffmpeg.
+Statut : Acceptée (2026-10-13, choix de l'utilisateur : « compilé sur ce Mac »). Précise l'ADR 0040, dont la liste de ce que contient le .app oubliait ffmpeg. Protocoles et formats lus : précisés par 0042.
 
 ## Contexte
 L'app lit un fichier importé avec `ffprobe`. Le moteur, lui, décode l'audio avec `ffmpeg` et `ffprobe`, appelés par leur nom dans le PATH ; son README les compte parmi ses prérequis. Les amis n'ont pas ffmpeg. Celui de Homebrew ne peut pas être embarqué : il dépend des bibliothèques partagées de Homebrew, et il est compilé sous GPL, alors que l'app est publiée sous MIT. Depuis le lot 11b, le service met le dossier `bin/` du .app en tête du PATH, pour lui et pour le moteur.
