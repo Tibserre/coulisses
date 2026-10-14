@@ -8,6 +8,7 @@ the answer reports (`prompt_eval_count`, `eval_count`) against it.
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
@@ -16,6 +17,9 @@ from pydantic import BaseModel, ValidationError
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 """Local only: the one network access the application makes at run time (P1)."""
+
+
+log = logging.getLogger(__name__)
 
 
 class OllamaError(RuntimeError):
@@ -102,9 +106,19 @@ class OllamaClient:
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
             try:
-                detail = _Error.model_validate_json(raw).error
+                detail, from_ollama = _Error.model_validate_json(raw).error, True
             except ValidationError:
-                detail = raw  # not Ollama's JSON: shown as it is, never hidden
+                detail, from_ollama = raw, False  # shown as it is, never hidden
+            model = (body or {}).get("model")
+            # Only Ollama's own answer naming the model asked: another 404 (an older Ollama
+            # without this route answers « 404 page not found ») keeps its own words.
+            missing = from_ollama and model and model in detail and "not found" in detail.lower()
+            if exc.code == 404 and missing:
+                log.warning("model %s missing from Ollama: %s", model, detail)
+                raise OllamaError(
+                    f"Le modèle « {model} » n'est pas installé dans Ollama. Choisissez-en un "
+                    "dans Réglages > Rédaction, qui dit aussi comment en installer un."
+                ) from exc
             raise OllamaError(f"Ollama a refusé la demande : {detail}") from exc
         except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
             raise OllamaError(

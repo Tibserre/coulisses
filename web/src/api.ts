@@ -668,6 +668,17 @@ export interface InstalledModel {
 /** What a language model writes: a title, chapters, summaries (ADR 0039). */
 export type Writing = "titre" | "chapitres" | "resume";
 
+/** The language model advised to this Mac by its memory (lot 11g of the plan). */
+export interface WritingAdvice {
+  /** null: the Mac's memory could not be read. */
+  memory_gb: number | null;
+  /** null: none advised for this Mac yet (not measured on real sessions). */
+  model: string | null;
+  installed: boolean;
+  /** Under it, writing may run out of memory. */
+  minimum_gb: number;
+}
+
 export interface ModelsInfo {
   reachable: boolean;
   error: string | null;
@@ -676,6 +687,7 @@ export interface ModelsInfo {
   /** The model of each writing. */
   writings: Record<Writing, string>;
   models: InstalledModel[];
+  advice: WritingAdvice;
 }
 
 export interface ActionInfo {

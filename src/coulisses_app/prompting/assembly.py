@@ -34,6 +34,14 @@ FRENCH_INSTRUCTION = (
 )
 
 
+class Advice(BaseModel):
+    """The language model advised to a Mac from this much memory; empty until one is
+    measured on real sessions."""
+
+    min_memory_gb: int
+    model: str
+
+
 class Settings(BaseModel):
     default_model: str
     num_ctx: int
@@ -43,6 +51,10 @@ class Settings(BaseModel):
     chars_per_token: float
     temperature: float
     seed: int
+    advice: list[Advice]
+    """From the most memory to the least."""
+    writing_min_memory_gb: int
+    """Under it, writing may run out of memory: said, not refused."""
 
 
 def settings() -> Settings:
@@ -56,7 +68,18 @@ def settings() -> Settings:
         chars_per_token=raw["caracteres_par_token"],
         temperature=raw["temperature"],
         seed=raw["graine"],
+        advice=sorted(
+            (Advice(min_memory_gb=a["memoire_min_go"], model=a["modele"]) for a in raw["conseil"]),
+            key=lambda a: a.min_memory_gb,
+            reverse=True,
+        ),
+        writing_min_memory_gb=raw["memoire_min_redaction_go"],
     )
+
+
+def advice_for(memory_gb: float, advice: list[Advice]) -> Advice | None:
+    """The tier of a Mac with this much memory (the largest it reaches), if any."""
+    return next((a for a in advice if memory_gb >= a.min_memory_gb), None)
 
 
 def _text(name: str) -> str:
