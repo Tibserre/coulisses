@@ -210,9 +210,11 @@ kill -INT $SERVICE; wait $SERVICE 2>/dev/null || true; SERVICE=""
 
 print "5. L'app elle-même, lancée sans accord : rien ne sort du Mac…"
 # ADR 0040: Sparkle looks for updates only after consent. The app is launched for real (its
-# window opens), on a throwaway data folder, as a friend's app that was never asked: no
-# answer to Sparkle's question, which it asks on this second launch. Its connections are
-# read for 30 s. The preferences of this identifier are set aside before, put back after.
+# window opens), on a throwaway data folder, as a friend's app at its second launch, never
+# answered: Sparkle asks its question then, and must not look for anything before an answer.
+# Its connections are read every 0.2 s for 30 s. If someone at the Mac accepts meanwhile,
+# Sparkle rightly looks for updates: the test is then invalid, to run again, not a leak.
+# The preferences of this identifier are set aside before, put back after.
 BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw $PLIST)
 # An installed Coulisses of the same identifier, open now, would share these preferences.
 for pid in ${(f)"$(pgrep -f '\.app/Contents/MacOS/' || true)"}; do
@@ -227,15 +229,16 @@ defaults export $BUNDLE_ID $WORK/preferences.plist
 SAVED_PREFERENCES=$WORK/preferences.plist
 defaults delete $BUNDLE_ID 2>/dev/null || true
 defaults write $BUNDLE_ID SUHasLaunchedBefore -bool true
+print "   une fenêtre Coulisses s'ouvre 30 s et pose une question sur les mises à jour : n'y répondez pas, elle se ferme seule"
 {
   open -n --env COULISSES_DATA_DIR=$WORK/donnees-app $APP
   : > $WORK/connexions.txt
-  for _ in {1..30}; do
+  for _ in {1..150}; do  # every 0.2 s: a short request would slip between slower reads
     PIDS=(${(f)"$(pgrep -f "$APP/Contents/" || true)"})
     if (( ${#PIDS} )); then
       lsof -nP -a -i -p ${(j:,:)PIDS} 2>/dev/null | awk 'NR > 1 {print $9}' >> $WORK/connexions.txt || true
     fi
-    sleep 1
+    sleep 0.2
   done
   LAUNCHER=$(pgrep -f "$APP/Contents/MacOS/" || true)
   [[ -n $LAUNCHER ]] || fail "l'app ne s'est pas lancée"
@@ -249,12 +252,16 @@ defaults write $BUNDLE_ID SUHasLaunchedBefore -bool true
   # Nothing written after the put back.
   wait_end $LAUNCHER 30 || fail "l'app d'essai ne s'arrête pas ($LAUNCHER)"
   LAUNCHER=""
+  # Sparkle's question answered « yes » at the Mac: it then rightly looked for updates.
+  if [[ $(defaults read $BUNDLE_ID SUEnableAutomaticChecks 2>/dev/null || true) == 1 ]]; then
+    fail "essai invalide : la recherche automatique a été acceptée dans la fenêtre pendant l'essai ; relancez-le sans y répondre"
+  fi
   OUTSIDE=$(awk -F'->' 'NF > 1 {sub(/:[0-9]+$/, "", $2); print $2}' $WORK/connexions.txt |
     grep -vE '^(127\.0\.0\.1|\[::1\]|localhost)$' | sort -u || true)
   [[ -z $OUTSIDE ]] || fail "l'app s'est connectée hors du Mac sans accord : $OUTSIDE"
 }
 restore_preferences
-print "   aucune connexion hors de 127.0.0.1 en 30 s, sans réponse à Sparkle ; préférences de l'app remises telles quelles"
+print "   aucune connexion hors de 127.0.0.1 en 30 s, au deuxième lancement, sans réponse à Sparkle ; préférences de l'app remises telles quelles"
 
 print "6. Rien d'écrit dans l'app…"
 snapshot > $WORK/apres.txt
