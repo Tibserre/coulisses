@@ -296,7 +296,7 @@ wav2vec2 = [
 
 [[package]]
 name = "coulisses-app"
-version = "0.26.2"
+version = "0.26.3"
 source = { editable = "." }
 dependencies = [
     { name = "coulisses", extra = ["mlx-audio", "pyannote", "wav2vec2"] },

@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.26.3 — 2026-10-14
+
+### Corrections
+
+- distingue un accord donné pendant l'essai d'une connexion sans accord (construction)
+
 ## v0.26.2 — 2026-10-13
 
 ### Corrections
