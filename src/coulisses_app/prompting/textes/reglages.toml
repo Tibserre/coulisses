@@ -21,3 +21,20 @@ caracteres_par_token = 1.8
 
 temperature = 0.3
 graine = 42
+
+# Le modèle de langage conseillé à un Mac selon sa mémoire (onglet Rédaction ; lot 11g du
+# plan). Chaque tranche vaut à partir de sa mémoire, en Go. Un modèle n'y est nommé qu'après
+# une comparaison sur de vraies séances (skill /action-resume) : vide d'ici là.
+memoire_min_redaction_go = 16
+
+[[conseil]]
+memoire_min_go = 48
+modele = ""
+
+[[conseil]]
+memoire_min_go = 24
+modele = ""
+
+[[conseil]]
+memoire_min_go = 16
+modele = ""

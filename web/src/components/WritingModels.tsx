@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
+import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -13,6 +14,13 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { formatBytes } from "../format.ts";
+import {
+  OLLAMA_DOWNLOAD,
+  OLLAMA_LIBRARY,
+  adviceStep,
+  memoryUnknown,
+  shortMemory,
+} from "../writingAdvice.ts";
 
 /** What each model writes, as the page says it. */
 const WRITINGS: { writing: Writing; label: string; picker: string; description: string }[] = [
@@ -96,13 +104,7 @@ export function WritingModels() {
             onDismiss={() => setError(null)}
           />
         )}
-        {info && !info.reachable && (
-          <Banner
-            status="warning"
-            title="Ollama ne répond pas"
-            description={`${dev && info.error ? `${info.error} ` : ""}Lancez l'application Ollama pour voir les modèles installés et rédiger.`}
-          />
-        )}
+        {info && <WritingAdviceBanner info={info} dev={dev} />}
         {info === null && !error ? (
           <WritingSkeleton />
         ) : (
@@ -157,6 +159,104 @@ export function WritingModels() {
             </ul>
           )}
         </section>
+      )}
+    </>
+  );
+}
+
+/** What gets writing going on this Mac (lot 11g of the plan): install Ollama, install the
+ *  model advised for its memory, or pick one; a warning under the memory writing needs.
+ *  Coulisses downloads nothing itself (P1): it says what to do. */
+function WritingAdviceBanner({
+  info,
+  dev,
+}: {
+  info: ModelsInfo;
+  dev: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const step = adviceStep(info);
+  const short = shortMemory(info);
+  const copy = async (command: string) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false); // the command stays shown, to select by hand
+    }
+  };
+  return (
+    <>
+      {memoryUnknown(info) && (
+        <Text type="supporting">
+          La mémoire de ce Mac n'a pas pu être lue : aucun modèle ne peut lui être
+          conseillé.
+        </Text>
+      )}
+      {short !== null && (
+        <Banner
+          status="warning"
+          title={`Ce Mac a ${short} Go de mémoire`}
+          description={`Il en faut au moins ${info.advice.minimum_gb} Go pour rédiger : les titres, les chapitres et les résumés risquent d'échouer faute de mémoire. La transcription, elle, fonctionne.`}
+        />
+      )}
+      {step.kind === "install-ollama" && (
+        <Banner
+          status="warning"
+          title="Ollama ne répond pas"
+          description={
+            <>
+              {dev && info.error ? `${info.error} ` : ""}
+              S'il n'est pas installé, téléchargez-le, ouvrez-le, puis revenez
+              ici. S'il l'est déjà, lancez l'application Ollama.{" "}
+              <a href={OLLAMA_DOWNLOAD} target="_blank" rel="noreferrer">
+                Télécharger Ollama
+              </a>
+            </>
+          }
+        />
+      )}
+      {step.kind === "pull" && (
+        <Banner
+          status="info"
+          title={`Modèle conseillé pour ce Mac : ${step.model}`}
+          description={
+            <>
+              Pour l'installer, ouvrez le Terminal et lancez cette commande,
+              puis choisissez-le ci-dessous :{" "}
+              <code className="cl-code">{step.command}</code>
+            </>
+          }
+          endContent={
+            <Button
+              label={copied ? "Copié" : "Copier la commande"}
+              variant="ghost"
+              size="sm"
+              onClick={() => void copy(step.command)}
+            />
+          }
+        />
+      )}
+      {step.kind === "ready" && (
+        <Text type="supporting">
+          Le modèle conseillé pour ce Mac, {step.model}, est installé.
+        </Text>
+      )}
+      {step.kind === "choose" && (
+        <Banner
+          status="info"
+          title="Aucun modèle de langage n'est installé dans Ollama"
+          description={
+            <>
+              Installez-en un depuis la bibliothèque d'Ollama, puis
+              choisissez-le ci-dessous.{" "}
+              <a href={OLLAMA_LIBRARY} target="_blank" rel="noreferrer">
+                Ouvrir la bibliothèque d'Ollama
+              </a>
+            </>
+          }
+        />
       )}
     </>
   );

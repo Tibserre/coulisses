@@ -55,9 +55,11 @@ from coulisses_app import (
     versions,
 )
 from coulisses_app.local_only import LocalOnly
+from coulisses_app.machine import memory_gb
 from coulisses_app.media import UnreadableAudioError
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
+from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, ModelClient
 from coulisses_app.prompting.ollama import InstalledModel, OllamaClient, OllamaError
 from coulisses_app.status import StageView, stage_views
@@ -174,6 +176,31 @@ class TitleRequest(BaseModel):
     title: str
 
 
+class WritingAdvice(BaseModel):
+    """The language model advised to this Mac (Rédaction tab; lot 11g of the plan)."""
+
+    memory_gb: float | None
+    """None: the Mac's memory could not be read."""
+    model: str | None
+    """None: none advised for this Mac yet (not measured), or under the minimum."""
+    installed: bool
+    minimum_gb: int
+    """Under it, writing may run out of memory."""
+
+
+def writing_advice(found: list[InstalledModel]) -> WritingAdvice:
+    rules = assembly.settings()
+    memory = memory_gb()
+    tier = assembly.advice_for(memory, rules.advice) if memory is not None else None
+    model = tier.model if tier is not None and tier.model else None
+    return WritingAdvice(
+        memory_gb=memory,
+        model=model,
+        installed=model is not None and any(m.name == model for m in found),
+        minimum_gb=rules.writing_min_memory_gb,
+    )
+
+
 class ModelsInfo(BaseModel):
     reachable: bool
     error: str | None
@@ -182,6 +209,7 @@ class ModelsInfo(BaseModel):
     writings: dict[settings.Writing, str]
     """The model of each writing: title, chapters, summaries (ADR 0039)."""
     models: list[InstalledModel]
+    advice: WritingAdvice
 
 
 class RecordingRequest(BaseModel):
@@ -673,9 +701,15 @@ def create_app(
                 default=writings["resume"],
                 writings=writings,
                 models=[],
+                advice=writing_advice([]),
             )
         return ModelsInfo(
-            reachable=True, error=None, default=writings["resume"], writings=writings, models=found
+            reachable=True,
+            error=None,
+            default=writings["resume"],
+            writings=writings,
+            models=found,
+            advice=writing_advice(found),
         )
 
     @app.put("/api/reglages/modeles/{redaction}")
