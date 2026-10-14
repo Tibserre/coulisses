@@ -48,6 +48,23 @@ Des hooks bloquent une partie de ces violations (`.claude/hooks/`). Un blocage n
 - **Messages de commit : Conventional Commits, description en français à l'impératif** : `type(portée): description`, ex. `feat(enregistrement): ajoute la pause`. Types : `feat` (nouveauté, version mineure), `fix` (correction, version corrective), `perf` (plus rapide, version corrective), `refactor`, `docs`, `test`, `build`, `chore`, `style` (aucune version). `!` après la portée = changement incompatible (version majeure ; avant 1.0.0, mineure). Les fusions : `fusionne <branche>`. Un hook refuse les messages hors convention.
 - **Versions : jamais à la main.** À chaque fusion dans `main`, `scripts/release.py` (hook `post-merge`) calcule la version suivante, met à jour les fichiers listés dans `release.toml` et `CHANGELOG.md`, commite `chore(version): vX.Y.Z` et pose l'étiquette. Dès que l'application a un `pyproject.toml` ou un `package.json`, ajoute-les à `release.toml` (`fichiers`), et le dossier de son `uv.lock` à `verrous`.
 
+## Organisation des conversations
+Plusieurs conversations travaillent en parallèle, **une par rôle**. Chacune reste dans son territoire. Si un sujet déborde, elle écrit une note de relais (ce qui est fait, où, la suite, ce qui attend l'utilisateur) et le travail continue dans la conversation du rôle.
+
+| Rôle | Territoire |
+|---|---|
+| Pilotage | `docs/produit/plan-v1.md`, `questions-ouvertes.md`, ordre des lots, jalons |
+| Moteur | le dépôt `~/Coulisses/Moteur`, seul ; publie des étiquettes, jamais de code ici |
+| Interface | `web/`, direction artistique |
+| Distribution | construction, publication, mises à jour, lanceur, sécurité, GitHub |
+| Rédaction et modèles | `prompting/` (prompts, `reglages.toml`), choix et mesure des modèles (`scripts/mesurer-modeles.py`) |
+| Ponctuelle | un sujet borné (exploration, enquête) ; close une fois le sujet traité |
+
+- **Chaque conversation de l'app travaille dans son propre worktree** (`.claude/worktrees/…`) : jamais de changement de branche dans `~/Coulisses/App`, que d'autres utilisent.
+- **Le fil commun est le dépôt** (plan, ADR, CHANGELOG, branches), pas la mémoire d'une conversation.
+- **Une fusion dans `main` est annoncée** aux conversations dont le territoire est touché (message entre conversations : ce qui a changé, s'il faut se remettre à jour sur `main`). Un message n'arrive que quand l'autre conversation est active ; il ne vaut jamais accord de l'utilisateur.
+- Ce qui manque au moteur lui est demandé par un prompt structuré, à transmettre à la conversation Moteur.
+
 ## Langues
 Code, identifiants, commentaires et logs techniques en anglais. Docs, commits, interface, messages d'erreur montrés à l'utilisateur et prompts en français (prompts rédigés en français natif, jamais traduits).
 
