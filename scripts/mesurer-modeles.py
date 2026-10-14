@@ -15,8 +15,9 @@ Then `--fiches` writes, for the models chosen, a blind sheet per session and sum
 summaries in a random order, named A, B, C…; the key apart.
 
 Usage:
-    uv run python scripts/mesurer-modeles.py --seance ID:ACTION … --modele M …  [--sortie D]
+    uv run python scripts/mesurer-modeles.py --seance ID[:ACTION] … --modele M …  [--sortie D]
     uv run python scripts/mesurer-modeles.py --fiches D --modele M …
+A session given without an action gets its chapters and title only.
 Everything goes to ~/Coulisses/Mesures/<date> by default: it holds copies of the real base
 and real transcripts, and is deleted by hand once the choice is made.
 """
@@ -197,7 +198,7 @@ Generate = Callable[[DataDir, str, str, str, TimedClient], Provenance]
 
 def measure(
     out: Path,
-    sessions_asked: list[tuple[str, str]],
+    sessions_asked: list[tuple[str, str | None]],
     models: list[str],
     source: DataDir,
     client: TimedClient,
@@ -232,7 +233,9 @@ def measure(
     # A session asked with several summaries: its chapters and title made once.
     by_session: dict[str, list[str]] = {}
     for session_id, action_ref in sessions_asked:
-        by_session.setdefault(session_id, []).append(action_ref)
+        refs = by_session.setdefault(session_id, [])
+        if action_ref is not None:
+            refs.append(action_ref)
     for model in models:
         data = DataDir(out / "donnees" / slug(model))
         if (data.root / DONE).exists():
@@ -329,7 +332,7 @@ def sheets(out: Path, models: list[str], seed: int | None = None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Mesure des modèles de rédaction.")
-    parser.add_argument("--seance", action="append", default=[], help="ID:ACTION")
+    parser.add_argument("--seance", action="append", default=[], help="ID[:ACTION]")
     parser.add_argument("--modele", action="append", required=True)
     parser.add_argument("--sortie", type=Path)
     parser.add_argument("--fiches", type=Path, help="dossier de mesures à mettre en fiches")
@@ -338,14 +341,17 @@ def main() -> None:
         sheets(args.fiches, args.modele)
         return
     if not args.seance:
-        fail("au moins une --seance ID:ACTION")
-    asked = [tuple(s.split(":", 1)) for s in args.seance]
-    if any(len(a) != 2 for a in asked):
-        fail("--seance attend ID:ACTION, par exemple 20261006-160856-4bdx:resume-impro")
+        fail("au moins une --seance ID[:ACTION]")
+    asked: list[tuple[str, str | None]] = []
+    for given in args.seance:
+        session_id, colon, action_ref = given.partition(":")
+        if not session_id or (colon and not action_ref):
+            fail("--seance attend ID[:ACTION], par exemple 20261006-160856-4bdx:resume-impro")
+        asked.append((session_id, action_ref or None))
     out = args.sortie or MEASURES / datetime.now().strftime("%Y%m%d-%H%M%S")
     measure(
         out,
-        [(s, a) for s, a in asked],
+        asked,
         args.modele,
         DataDir(DEFAULT_DATA_DIR),
         TimedClient(OllamaClient()),

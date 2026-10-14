@@ -301,3 +301,14 @@ def test_two_summaries_of_one_session_share_its_chapters_and_title(
     mesure.measure(out, asked, ["petit:4b"], source, FakeClient(), fake_run())
     results = json.loads((out / "resultats.json").read_text())
     assert [r["task"] for r in results] == ["chapitres", "titre", "resume-impro", "resume-court"]
+
+
+def test_a_session_without_an_action_gets_its_chapters_and_title_only(
+    mesure, monkeypatch, real: Path, tmp_path: Path
+) -> None:
+    source = make_source(tmp_path / "source", ["s1"])
+    monkeypatch.setattr(mesure, "ollama_command", lambda *a: "")
+    out = tmp_path / "mesures"
+    mesure.measure(out, [("s1", None)], ["petit:4b"], source, FakeClient(), fake_run())
+    results = json.loads((out / "resultats.json").read_text())
+    assert [r["task"] for r in results] == ["chapitres", "titre"]
