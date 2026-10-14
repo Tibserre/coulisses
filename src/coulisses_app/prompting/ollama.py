@@ -40,6 +40,11 @@ class ChatAnswer(BaseModel):
     eval_count: int | None
     done_reason: str | None
     total_duration_s: float | None
+    load_duration_s: float | None = None
+    """Loading the model, when it was not in memory yet."""
+    prompt_eval_duration_s: float | None = None
+    eval_duration_s: float | None = None
+    """Writing the answer: eval_count over it is the writing speed."""
 
 
 # -- what Ollama answers (the part we read) ----------------------------------------------
@@ -75,6 +80,14 @@ class _Chat(BaseModel):
     eval_count: int | None = None
     done_reason: str | None = None
     total_duration: int | None = None
+    load_duration: int | None = None
+    prompt_eval_duration: int | None = None
+    eval_duration: int | None = None
+
+
+def _seconds(nanoseconds: int | None) -> float | None:
+    # 0 is a measure (no loading: the model was in memory), not an unknown.
+    return nanoseconds / 1e9 if nanoseconds is not None else None
 
 
 class _Version(BaseModel):
@@ -182,5 +195,8 @@ class OllamaClient:
             prompt_eval_count=answer.prompt_eval_count,
             eval_count=answer.eval_count,
             done_reason=answer.done_reason,
-            total_duration_s=answer.total_duration / 1e9 if answer.total_duration else None,
+            total_duration_s=_seconds(answer.total_duration),
+            load_duration_s=_seconds(answer.load_duration),
+            prompt_eval_duration_s=_seconds(answer.prompt_eval_duration),
+            eval_duration_s=_seconds(answer.eval_duration),
         )
