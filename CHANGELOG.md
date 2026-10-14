@@ -3,6 +3,12 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.27.0 — 2026-10-14
+
+### Nouveautés
+
+- guide l'installation d'Ollama et conseille un modèle selon la mémoire (redaction)
+
 ## v0.26.3 — 2026-10-14
 
 ### Corrections
