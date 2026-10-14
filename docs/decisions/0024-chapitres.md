@@ -1,6 +1,6 @@
 # 0024 — Les chapitres : détectés par le LLM local, placés sur une réplique, corrigés dans le journal
 
-Statut : Acceptée (2026-10-06 : l'utilisateur retient la détection par le LLM, aucune migration du schéma, et le mot « chapitre » dans l'interface). Les résumés ne suivent plus la détection d'eux-mêmes : ils se lancent à la demande (ADR 0025).
+Statut : Acceptée (2026-10-06 : l'utilisateur retient la détection par le LLM, aucune migration du schéma, et le mot « chapitre » dans l'interface). Les résumés ne suivent plus la détection d'eux-mêmes : ils se lancent à la demande (ADR 0025). La lecture en un appel est précisée par l'ADR 0044 : par parties.
 
 ## Contexte
 La spec (§7.5) demande de découper la séance en phases (scène, discussion, autre), de les corriger en relecture, et de s'en servir à l'affichage et dans le transcript envoyé au modèle. L'ADR 0020 veut un découpage valable pour toute réunion. La méthode de détection était une question ouverte (M7). Un essai le 2026-10-06, sur une vraie séance de 1 h 32 avec `qwen3.6`, a donné 14 chapitres plausibles en un appel de 40 s.

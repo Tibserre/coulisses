@@ -17,11 +17,12 @@ from coulisses_app.phases import (
     DetectedPhase,
     PhaseAnswerError,
     PhaseDetection,
+    join_parts,
     parse_time,
     snap,
 )
 from coulisses_app.prompting import assembly
-from coulisses_app.prompting.generate import PHASES_REF, _sections, generate
+from coulisses_app.prompting.generate import PHASES_REF, _sections, _sections_by_time, generate
 
 from .conftest import FakeModel
 from .test_corrections import PEOPLE, TRANSCRIPT, journal
@@ -350,6 +351,42 @@ def test_a_chapter_cut_by_hand_alone_can_be_removed() -> None:
     assert v.phases == []
 
 
+def test_the_chapters_are_read_in_sections_of_the_same_length() -> None:
+    # 70 minutes, slices of 25 at most: three of about 23 minutes.
+    lines = [assembly.Line(float(m * 60), f"[{m}:00] Marie : oui") for m in range(71)]
+    lines.insert(30, assembly.Line(None, "[--:--] Marie : sans heure"))
+    slices = _sections_by_time(lines, 25)
+    assert len(slices) == 3
+    assert [s[0].start for s in slices] == [0.0, 24 * 60.0, 47 * 60.0]
+    assert sum(len(s) for s in slices) == len(lines)  # nothing lost
+    assert slices[1][6].start is None  # a line without a time stays where it was
+    assert len(_sections_by_time(lines[:20], 25)) == 1
+
+
+def test_the_model_is_told_how_many_chapters_to_aim_at_for_the_length() -> None:
+    assert "environ 23 minutes : vise entre 2 et 6 chapitres" in assembly.phases_scale(23)
+    assert "environ 1 minute : vise entre 1 et 2 chapitres" in assembly.phases_scale(0.4)
+    assert "entre 9 et 23" in assembly.phases_prompt("Découpe.", 92)
+
+
+def test_a_part_that_goes_on_with_the_previous_chapter_is_joined_to_it() -> None:
+    first = answer(("0:00", "discussion", "Accueil"), ("0:05", "scene", "Le marché"))
+    goes_on = answer(("0:06", "scene", " le  Marché"), ("0:08", "discussion", "Retours"))
+    found, joined = join_parts([first, goes_on])
+    assert joined == [True]
+    assert [p.title for p in snap(found, LINES).phases] == ["Accueil", "Le marché", "Retours"]
+    other = answer(("0:06", "scene", "La gare"))
+    assert join_parts([first, other])[1] == [False]
+    # A part that is all the previous chapter adds nothing; an unreadable one is passed
+    # on as it is, for snap to say why.
+    whole = answer(("0:06", "scene", "Le marché"))
+    assert json.loads(join_parts([first, whole])[0][1]) == {"chapitres": []}
+    assert join_parts([first, "pas du JSON"]) == ([first, "pas du JSON"], [False])
+    long_title = "x" * 200
+    a, b = answer(("0:00", "scene", long_title)), answer(("0:06", "scene", long_title + "y"))
+    assert join_parts([a, b])[1] == [True]  # compared as kept: the first 120 characters
+
+
 def test_a_long_session_is_detected_in_parts_and_the_cuts_they_force_are_said(
     client: TestClient,  # noqa: F811
     data: DataDir,
@@ -531,3 +568,32 @@ def test_a_marker_after_the_last_line_cuts_nothing() -> None:
         markers=[marker("scene", 99.0)],
     )
     assert [(p.turn, p.marked) for p in v.phases] == [(0, False), (2, False)]
+
+
+def test_a_session_longer_than_a_section_is_read_in_parts_that_follow_each_other(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    sliced = assembly.settings().model_copy(update={"phases_section_min": 25})
+    monkeypatch.setattr(assembly, "settings", lambda: sliced)
+    hour = [assembly.Line(float(m * 60), f"[{m}:00] Marie : on reprend") for m in range(60)]
+    monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: hour)
+    calls_before = len(fake_model.calls)
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    assert prov.strategy == "sections"  # though the hour fits in the window
+    assert len(prov.calls) == 3
+    second = fake_model.calls[calls_before + 1][1][0]["content"]
+    assert "partie 2" in second and "« Essai » (type `discussion`)" in second
+    assert "vise entre" in second
+    spec = json.loads((data.run_dir(session_id, prov.run_id) / "spec.json").read_text())
+    assert spec["phases_section_min"] == 25  # P7
+    folder = data.run_dir(session_id, prov.run_id)
+    said = json.loads((folder / "output.json").read_text())["adjustments"]
+    # The fake model answers « Essai » each time: each part goes on with it.
+    assert sum("continue le chapitre précédent" in a for a in said) == 2

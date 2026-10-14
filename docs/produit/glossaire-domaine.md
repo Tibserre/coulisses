@@ -48,6 +48,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Mot | `word` | Unité du transcript : texte, début et fin (mesurés, ou absents avant alignement), confiance de la transcription (`asr_confidence`), locuteur. |
 | Segment de locuteur | `speaker_segment` | Intervalle où un locuteur parle, produit par la diarisation. Les segments peuvent se chevaucher. |
 | Tranche | `chunk` | Portion d'audio transcrite d'un seul tenant ; bornes = positions de coupe. À ne pas confondre avec un segment de locuteur. |
+| Partie | `section` | Portion de la transcription lue en un appel au LLM quand une rédaction ne lit pas la séance d'un coup : les chapitres, par parties de même durée (ADR 0044) ; un résumé trop long pour la fenêtre du modèle (ADR 0022). À ne pas confondre avec une tranche. |
 | Part horodatée | `timed_share` | Part des mots d'un transcript qui portent un temps mesuré (ADR 0011). |
 | Locuteur principal | `speaker` (d'un mot attribué) | Locuteur qui couvre le plus longtemps un mot ; les autres locuteurs actifs sont gardés (`speakers`). |
 | Mot incertain | `uncertain` | Mot rattaché à un locuteur par une règle, pas par le recouvrement de son temps avec la diarisation : mot dans un blanc rattaché au segment le plus proche (moins de 0,5 s), ou mot sans temps rattaché à ses voisins. Voir ADR 0011. |

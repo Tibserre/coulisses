@@ -13,6 +13,9 @@ reserve_reponse = 6144
 reserve_titre = 128
 # Les chapitres : une liste JSON (début, type, titre), une ligne par chapitre.
 reserve_chapitres = 4096
+# Les chapitres se lisent par parties d'au plus cette durée, en minutes (ADR 0044) : un
+# petit modèle perd le fil d'une séance entière. Les parties ont toutes la même durée.
+partie_chapitres_min = 25
 
 # Caractères par token, volontairement bas pour surestimer la taille du prompt : Ollama
 # ne permet pas de compter les tokens avant l'envoi (ADR 0022). Mesuré le 2026-10-06 avec

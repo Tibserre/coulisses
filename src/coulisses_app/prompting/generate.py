@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import secrets
 import sqlite3
 import time
@@ -26,7 +27,15 @@ from pydantic import BaseModel
 from coulisses_app import actions, corrections, notes, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
-from coulisses_app.phases import ANSWER_SCHEMA, KIND_WORD, PhaseAnswerError, snap
+from coulisses_app.phases import (
+    ANSWER_SCHEMA,
+    KIND_WORD,
+    TITLE_MAX,
+    PhaseAnswerError,
+    join_parts,
+    last_chapter,
+    snap,
+)
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaError
 from coulisses_app.storage.db import connect, now_iso
@@ -181,6 +190,34 @@ def _sections(
     return sections
 
 
+def _minutes(starts: list[float | None]) -> float:
+    """From the first time to the last, in minutes."""
+    timed = [s for s in starts if s is not None]
+    return (timed[-1] - timed[0]) / 60 if timed else 0.0
+
+
+def _sections_by_time(lines: list[assembly.Line], minutes: int) -> list[list[assembly.Line]]:
+    """Consecutive lines in sections of the same length, each at most `minutes` long
+    (ADR 0044). A line without a time stays with the one before it."""
+    starts = [line.start for line in lines if line.start is not None]
+    if not starts or minutes <= 0:
+        return [lines]
+    span = starts[-1] - starts[0]
+    count = max(1, math.ceil(span / (minutes * 60)))
+    length = span / count
+    sections: list[list[assembly.Line]] = [[]]
+    for line in lines:
+        if (
+            line.start is not None
+            and sections[-1]
+            and len(sections) < count
+            and line.start >= starts[0] + len(sections) * length
+        ):
+            sections.append([])
+        sections[-1].append(line)
+    return sections
+
+
 def generate(
     data: DataDir,
     session_id: str,
@@ -326,6 +363,8 @@ def generate(
                     "source_run_id": view.run_id,
                     "edit_ids": edit_ids,
                     "phases_run_id": phases_run_id,
+                    # How long a section of the chapters may be (ADR 0044).
+                    **({"phases_section_min": cfg.phases_section_min} if is_phases else {}),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -352,31 +391,60 @@ def generate(
         else:
             lines = assembly.transcript_lines(view, with_phases=not is_phases)
             whole = "\n".join(line.text for line in lines)
-            prompt = assembly.assemble(chosen.prompt, context, whole)
+            starts_all = [line.start for line in lines if line.start is not None]
+            prompt = assembly.assemble(
+                assembly.phases_prompt(chosen.prompt, _minutes(starts_all))
+                if is_phases
+                else chosen.prompt,
+                context,
+                whole,
+            )
             budget = cfg.num_ctx - reserve
             size = assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
-            cut_prompt = assembly.phases_section_prompt if is_phases else assembly.section_prompt
+            # The chapters are read in sections of a set length, whatever the window (ADR 0044).
+            by_time = _sections_by_time(lines, cfg.phases_section_min) if is_phases else [lines]
             answers: list[str] = []
             part_firsts: list[str] = []
-            if size <= budget:
+            if size <= budget and len(by_time) == 1:
                 output = call("unique", prompt, None)
                 answers.append(output)
             else:
                 strategy = "sections"
+                longest_previous = ("discussion", "x" * TITLE_MAX)
                 fixed = assembly.estimate_tokens(
-                    cut_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
+                    (
+                        assembly.phases_section_prompt(
+                            chosen.prompt, 99, 99, "00:00:00", "00:00:00", 999, longest_previous
+                        )
+                        if is_phases
+                        else assembly.section_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
+                    )
                     + assembly.assemble("", context, "").system
                     + assembly.assemble("", context, "").user,
                     cfg.chars_per_token,
                 )
                 parts: list[str] = []
-                chunks = _sections(lines, budget - fixed, cfg.chars_per_token)
+                chunks = [
+                    chunk
+                    for piece in by_time
+                    for chunk in _sections(piece, budget - fixed, cfg.chars_per_token)
+                ]
                 for k, chunk in enumerate(chunks, start=1):
                     starts = [line.start for line in chunk if line.start is not None]
                     first = clock(starts[0]) if starts else "?"
                     last = clock(starts[-1]) if starts else "?"
                     part_prompt = assembly.assemble(
-                        cut_prompt(chosen.prompt, k, len(chunks), first, last),
+                        assembly.phases_section_prompt(
+                            chosen.prompt,
+                            k,
+                            len(chunks),
+                            first,
+                            last,
+                            _minutes(starts),
+                            last_chapter(parts[-1]) if parts else None,
+                        )
+                        if is_phases
+                        else assembly.section_prompt(chosen.prompt, k, len(chunks), first, last),
                         context,
                         "\n".join(line.text for line in chunk),
                     )
@@ -384,12 +452,19 @@ def generate(
                     part_firsts.append(first)
                 answers = parts
             if is_phases:
-                # Each part's chapters, put on the lines they name: no merging call needed.
+                # Each part's chapters, put on the lines they name: no merging call needed. A
+                # part that goes on with the chapter the previous one ended on is joined to it.
+                answers, joined = join_parts(answers)
                 detection = snap(answers, [(t.index, t.start) for t in view.turns])
-                for k, first in enumerate(part_firsts[1:], start=2):
+                for k, (first, was_joined) in enumerate(
+                    zip(part_firsts[1:], joined, strict=True), start=2
+                ):
                     detection.adjustments.append(
-                        f"Séance lue en {len(part_firsts)} parties : un chapitre commence à "
-                        f"{first} parce que la partie {k} y commence."
+                        f"Séance lue en {len(part_firsts)} parties : la partie {k}, à {first}, "
+                        "continue le chapitre précédent."
+                        if was_joined
+                        else f"Séance lue en {len(part_firsts)} parties : un chapitre commence "
+                        f"à {first} parce que la partie {k} y commence."
                     )
                 output = detection.model_dump_json(indent=2)
             elif strategy == "sections":

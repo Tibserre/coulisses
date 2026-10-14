@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from itertools import pairwise
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -92,6 +93,55 @@ def parse_time(text: str) -> int | None:
     if int(seconds) >= 60:
         return None
     return int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)
+
+
+def _kept_title(title: str) -> str:
+    """A chapter's title as snap keeps it: spaces put right, at most TITLE_MAX characters."""
+    return " ".join(title.split())[:TITLE_MAX]
+
+
+def last_chapter(raw: str) -> tuple[str, str] | None:
+    """The (type, titre) of the last chapter of one answer, the title as snap keeps it;
+    none when the answer gives none (snap then says why)."""
+    try:
+        chapters = _Answer.model_validate_json(raw).chapitres
+    except ValueError:
+        return None
+    return (chapters[-1].type, _kept_title(chapters[-1].titre)) if chapters else None
+
+
+def _same(a: str, b: str) -> bool:
+    return _kept_title(a).casefold() == _kept_title(b).casefold()
+
+
+def join_parts(answers: list[str]) -> tuple[list[str], list[bool]]:
+    """The answers of a session read in parts, where a part that opens by going on with the
+    previous part's last chapter (the same type and title, as asked) loses that opening
+    chapter: the previous one runs on, uncut by the part's start.
+
+    Returns the answers to snap and, for each part after the first, whether it was joined.
+    An answer that cannot be read is passed on untouched: snap says why."""
+    kept = answers[:1]
+    joined: list[bool] = []
+    for previous, raw in pairwise(answers):
+        before = last_chapter(previous)
+        try:
+            chapters = _Answer.model_validate_json(raw).chapitres
+        except ValueError:
+            kept.append(raw)
+            joined.append(False)
+            continue
+        goes_on = (
+            before is not None
+            and len(chapters) > 0
+            and _same(chapters[0].type, before[0])
+            and _same(chapters[0].titre, before[1])
+        )
+        if goes_on:
+            chapters = chapters[1:]
+        kept.append(_Answer(chapitres=chapters).model_dump_json())
+        joined.append(goes_on)
+    return kept, joined
 
 
 def snap(answers: list[str], turns: Sequence[tuple[int, float | None]]) -> PhaseDetection:
