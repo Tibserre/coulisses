@@ -50,6 +50,13 @@ class Settings(BaseModel):
     phases_reserve: int
     phases_section_min: int
     """The chapters are read in sections of at most this many minutes."""
+    phases_overlap_min: float
+    """Each section of the chapters but the first is sent after this many minutes of the
+    one before, to cut nothing in them (0: none)."""
+    phases_minutes_per_chapter: tuple[float, float]
+    """How long a chapter lasts, shortest and longest, in minutes: what the model aims at."""
+    phases_num_ctx: int
+    """The context window of the chapters, read in short sections (0: `num_ctx`)."""
     chars_per_token: float
     temperature: float
     seed: int
@@ -68,6 +75,9 @@ def settings() -> Settings:
         title_reserve=raw["reserve_titre"],
         phases_reserve=raw["reserve_chapitres"],
         phases_section_min=raw["partie_chapitres_min"],
+        phases_overlap_min=raw["rappel_chapitres_min"],
+        phases_minutes_per_chapter=tuple(raw["minutes_par_chapitre"]),
+        phases_num_ctx=raw["num_ctx_chapitres"],
         chars_per_token=raw["caracteres_par_token"],
         temperature=raw["temperature"],
         seed=raw["graine"],
@@ -312,12 +322,14 @@ def section_prompt(action_prompt: str, index: int, count: int, start: str, end: 
     )
 
 
-def phases_scale(minutes: float) -> str:
-    """How many chapters to aim at for this many minutes (ADR 0044): a small model left
-    without it cuts at nearly every exchange."""
+def phases_scale(minutes: float, per_chapter: tuple[float, float]) -> str:
+    """How many chapters to aim at for this many minutes (ADR 0044), from how many minutes
+    a chapter lasts (shortest, longest): a small model left without it cuts at nearly every
+    exchange, or too seldom."""
     rounded = max(1, round(minutes))
-    low = max(1, round(minutes / 10))
-    high = max(low + 1, round(minutes / 4))
+    shortest, longest = per_chapter
+    low = max(1, round(minutes / longest))
+    high = max(low + 1, round(minutes / shortest))
     return (
         f"Ce passage dure environ {rounded} minute{'s' if rounded > 1 else ''} : vise entre "
         f"{low} et {high} chapitres. Mieux vaut un chapitre un peu long qu'une coupure à chaque "
@@ -325,9 +337,9 @@ def phases_scale(minutes: float) -> str:
     )
 
 
-def phases_prompt(action_prompt: str, minutes: float) -> str:
+def phases_prompt(action_prompt: str, minutes: float, per_chapter: tuple[float, float]) -> str:
     """The chapters of a session read at once."""
-    return f"{action_prompt}\n\n{phases_scale(minutes)}"
+    return f"{action_prompt}\n\n{phases_scale(minutes, per_chapter)}"
 
 
 def phases_section_prompt(
@@ -338,15 +350,24 @@ def phases_section_prompt(
     end: str,
     minutes: float,
     previous: tuple[str, str] | None = None,
+    *,
+    per_chapter: tuple[float, float],
+    recalled: bool = False,
 ) -> str:
     """`previous`: the (type, titre) the part before ended on, for the part to go on with
-    it rather than cut there."""
+    it rather than cut there. `recalled`: the end of the part before comes first in the
+    transcript sent, up to `section_start_line`."""
     text = (
         f"{action_prompt}\n\n"
         f"La séance est lue en {count} parties : cette demande ne porte que sur la partie "
         f"{index}, de {start} à {end}. Découpe cette partie seule : son premier chapitre "
-        f"commence à sa première réplique. {phases_scale(minutes)}"
+        f"commence à sa première réplique. {phases_scale(minutes, per_chapter)}"
     )
+    if recalled:
+        text += (
+            " Les répliques qui précèdent la ligne « Début de la partie à découper » sont "
+            "rappelées pour que tu voies ce qui se passait juste avant : ne les découpe pas."
+        )
     if previous is not None:
         kind, title = previous
         text += (
@@ -356,6 +377,11 @@ def phases_section_prompt(
             f"son propre titre."
         )
     return text
+
+
+def section_start_line(start: str) -> str:
+    """Where the part to cut starts, after the lines recalled from the part before."""
+    return f"[{start}] ── Début de la partie à découper ──"
 
 
 def consolidation_prompt(action_prompt: str, count: int) -> str:

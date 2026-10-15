@@ -16,6 +16,15 @@ reserve_chapitres = 4096
 # Les chapitres se lisent par parties d'au plus cette durée, en minutes (ADR 0044) : un
 # petit modèle perd le fil d'une séance entière. Les parties ont toutes la même durée.
 partie_chapitres_min = 25
+# Chaque partie, sauf la première, est précédée d'autant de minutes de la précédente,
+# rappelées sans être découpées, pour juger si elle la continue (0 : aucun rappel).
+rappel_chapitres_min = 0
+# Combien dure un chapitre, au plus court et au plus long, en minutes : le modèle reçoit
+# l'ordre de grandeur qui en découle pour chaque partie (ADR 0044).
+minutes_par_chapitre = [4, 10]
+# La fenêtre des chapitres, qui se lisent par parties courtes : plus petite, elle tient
+# moins de mémoire (0 : celle de num_ctx).
+num_ctx_chapitres = 0
 
 # Caractères par token, volontairement bas pour surestimer la taille du prompt : Ollama
 # ne permet pas de compter les tokens avant l'envoi (ADR 0022). Mesuré le 2026-10-06 avec

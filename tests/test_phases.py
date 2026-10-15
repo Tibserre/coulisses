@@ -17,6 +17,7 @@ from coulisses_app.phases import (
     DetectedPhase,
     PhaseAnswerError,
     PhaseDetection,
+    drop_before,
     join_parts,
     parse_time,
     snap,
@@ -364,9 +365,10 @@ def test_the_chapters_are_read_in_sections_of_the_same_length() -> None:
 
 
 def test_the_model_is_told_how_many_chapters_to_aim_at_for_the_length() -> None:
-    assert "environ 23 minutes : vise entre 2 et 6 chapitres" in assembly.phases_scale(23)
-    assert "environ 1 minute : vise entre 1 et 2 chapitres" in assembly.phases_scale(0.4)
-    assert "entre 9 et 23" in assembly.phases_prompt("Découpe.", 92)
+    assert "environ 23 minutes : vise entre 2 et 6 chapitres" in assembly.phases_scale(23, (4, 10))
+    assert "environ 1 minute : vise entre 1 et 2 chapitres" in assembly.phases_scale(0.4, (4, 10))
+    assert "entre 9 et 23" in assembly.phases_prompt("Découpe.", 92, (4, 10))
+    assert "entre 4 et 8" in assembly.phases_scale(15, (2, 4))
 
 
 def test_a_part_that_goes_on_with_the_previous_chapter_is_joined_to_it() -> None:
@@ -597,3 +599,74 @@ def test_a_session_longer_than_a_section_is_read_in_parts_that_follow_each_other
     said = json.loads((folder / "output.json").read_text())["adjustments"]
     # The fake model answers « Essai » each time: each part goes on with it.
     assert sum("continue le chapitre précédent" in a for a in said) == 2
+
+
+def test_a_chapter_set_in_lines_recalled_from_the_part_before_is_left_out() -> None:
+    raw = answer(("19:00", "scene", "Rappelée"), ("20:00", "scene", "B"), ("1:02:03", "x", "C"))
+    kept, dropped = drop_before(raw, "20:00")
+    assert dropped == 1
+    assert [c["titre"] for c in json.loads(kept)["chapitres"]] == ["B", "C"]
+    assert drop_before("pas du JSON", "20:00") == ("pas du JSON", 0)
+    # A part left with no chapter of its own goes on with the one before.
+    assert join_parts([answer(("0:00", "scene", "A")), answer()])[1] == [True]
+    # The chapter the part before ended on, set in the recalled lines: the part goes on
+    # with it, then cuts where it said.
+    before = answer(("0:00", "discussion", "Accueil"), ("15:00", "scene", "Le marché"))
+    goes_on = answer(("19:00", "scene", "Le marché"), ("24:00", "discussion", "Retours"))
+    kept, _ = drop_before(goes_on, "20:00", ("scene", "Le marché"))
+    found, joined = join_parts([before, kept])
+    assert joined == [True]
+    assert [c["titre"] for c in json.loads(found[1])["chapitres"]] == ["Retours"]
+
+
+def test_the_chapters_may_have_their_own_window_and_the_summaries_keep_theirs(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    own = assembly.settings().model_copy(update={"phases_num_ctx": 16384})
+    monkeypatch.setattr(assembly, "settings", lambda: own)
+    calls_before = len(fake_model.calls)
+    generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    generate(data, session_id, "resume-impro", "modele-essai", fake_model)
+    windows = [options["num_ctx"] for _, _, options in fake_model.calls[calls_before:]]
+    assert windows == [16384, own.num_ctx]
+
+
+def test_each_part_can_be_sent_after_the_end_of_the_one_before_which_it_does_not_cut(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    recalling = assembly.settings().model_copy(
+        update={"phases_section_min": 25, "phases_overlap_min": 3}
+    )
+    monkeypatch.setattr(assembly, "settings", lambda: recalling)
+    hour = [assembly.Line(float(m * 60), f"[{m}:00] Marie : ligne {m}") for m in range(60)]
+    monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: hour)
+    calls_before = len(fake_model.calls)
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    second = fake_model.calls[calls_before + 1][1]
+    sent = second[1]["content"]
+    # Parts start at 0, 20 and 40 minutes: the second recalls minutes 17 to 19.
+    assert "[17:00] Marie : ligne 17" in sent and "[16:00]" not in sent
+    assert (
+        sent.index("ligne 19")
+        < sent.index("Début de la partie à découper")
+        < sent.index("ligne 20")
+    )
+    assert "rappelées" in second[0]["content"]
+    folder = data.run_dir(session_id, prov.run_id)
+    said = json.loads((folder / "output.json").read_text())["adjustments"]
+    # The fake model sets « Essai » at 0:00 each time: in the recalled lines, left out.
+    assert any("2 chapitre(s) placé(s) dans les répliques rappelées" in a for a in said)
+    assert json.loads((folder / "spec.json").read_text())["phases_overlap_min"] == 3

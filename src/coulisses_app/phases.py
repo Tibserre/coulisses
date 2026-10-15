@@ -110,6 +110,30 @@ def last_chapter(raw: str) -> tuple[str, str] | None:
     return (chapters[-1].type, _kept_title(chapters[-1].titre)) if chapters else None
 
 
+def drop_before(raw: str, start: str, previous: tuple[str, str] | None = None) -> tuple[str, int]:
+    """One answer without the chapters it set before `start` (as written in the
+    transcript): in lines recalled from the part before, which are that part's to cut.
+    When one of them is `previous` (type, titre), the chapter the part before ended on,
+    the part opens by going on with it (join_parts then joins them). An answer that
+    cannot be read, or a time that cannot, is passed on: snap says why."""
+    limit = parse_time(start)
+    try:
+        chapters = _Answer.model_validate_json(raw).chapitres
+    except ValueError:
+        return raw, 0
+    if limit is None:
+        return raw, 0
+    kept = [c for c in chapters if (t := parse_time(c.debut)) is None or t >= limit]
+    dropped = [c for c in chapters if c not in kept]
+    if (
+        previous is not None
+        and any(_same(c.type, previous[0]) and _same(c.titre, previous[1]) for c in dropped)
+        and not (kept and _same(kept[0].type, previous[0]) and _same(kept[0].titre, previous[1]))
+    ):
+        kept.insert(0, _Chapter(debut=start, type=previous[0], titre=previous[1]))
+    return _Answer(chapitres=kept).model_dump_json(), len(dropped)
+
+
 def _same(a: str, b: str) -> bool:
     return _kept_title(a).casefold() == _kept_title(b).casefold()
 
@@ -131,13 +155,13 @@ def join_parts(answers: list[str]) -> tuple[list[str], list[bool]]:
             kept.append(raw)
             joined.append(False)
             continue
-        goes_on = (
+        # A part with no chapter of its own goes on with the one before as well.
+        goes_on = not chapters or (
             before is not None
-            and len(chapters) > 0
             and _same(chapters[0].type, before[0])
             and _same(chapters[0].titre, before[1])
         )
-        if goes_on:
+        if chapters and goes_on:
             chapters = chapters[1:]
         kept.append(_Answer(chapitres=chapters).model_dump_json())
         joined.append(goes_on)

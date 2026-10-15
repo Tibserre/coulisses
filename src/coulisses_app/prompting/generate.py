@@ -32,6 +32,7 @@ from coulisses_app.phases import (
     KIND_WORD,
     TITLE_MAX,
     PhaseAnswerError,
+    drop_before,
     join_parts,
     last_chapter,
     snap,
@@ -196,6 +197,15 @@ def _minutes(starts: list[float | None]) -> float:
     return (timed[-1] - timed[0]) / 60 if timed else 0.0
 
 
+def _recalled(before: list[assembly.Line], start: float, minutes: float) -> list[assembly.Line]:
+    """The timed lines of the part before within `minutes` of this part's start."""
+    if minutes <= 0:
+        return []
+    return [
+        line for line in before if line.start is not None and line.start >= start - minutes * 60
+    ]
+
+
 def _sections_by_time(lines: list[assembly.Line], minutes: int) -> list[list[assembly.Line]]:
     """Consecutive lines in sections of the same length, each at most `minutes` long
     (ADR 0044). A line without a time stays with the one before it."""
@@ -256,8 +266,10 @@ def generate(
     reserve = (
         cfg.title_reserve if is_title else cfg.phases_reserve if is_phases else cfg.response_reserve
     )
+    # The chapters, read in short sections, may have a smaller window (ADR 0044).
+    num_ctx = cfg.phases_num_ctx if is_phases and cfg.phases_num_ctx else cfg.num_ctx
     options: dict[str, object] = {
-        "num_ctx": cfg.num_ctx,
+        "num_ctx": num_ctx,
         "num_predict": reserve,
         "temperature": cfg.temperature,
         "seed": cfg.seed,
@@ -343,7 +355,7 @@ def generate(
         record.done_reason = answer.done_reason
         record.response_file = f"calls/{index:02d}-response.{'json' if is_phases else 'md'}"
         _write_new(folder / record.response_file, answer.content)
-        _check(answer, estimated, cfg.num_ctx, first_line_only=is_title)
+        _check(answer, estimated, num_ctx, first_line_only=is_title)
         return answer.content.strip()
 
     try:
@@ -363,8 +375,18 @@ def generate(
                     "source_run_id": view.run_id,
                     "edit_ids": edit_ids,
                     "phases_run_id": phases_run_id,
-                    # How long a section of the chapters may be (ADR 0044).
-                    **({"phases_section_min": cfg.phases_section_min} if is_phases else {}),
+                    # How the chapters were read (ADR 0044): sections, recall, the scale
+                    # aimed at, the window asked (0: num_ctx).
+                    **(
+                        {
+                            "phases_section_min": cfg.phases_section_min,
+                            "phases_overlap_min": cfg.phases_overlap_min,
+                            "phases_minutes_per_chapter": list(cfg.phases_minutes_per_chapter),
+                            "phases_num_ctx": cfg.phases_num_ctx,
+                        }
+                        if is_phases
+                        else {}
+                    ),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -393,18 +415,22 @@ def generate(
             whole = "\n".join(line.text for line in lines)
             starts_all = [line.start for line in lines if line.start is not None]
             prompt = assembly.assemble(
-                assembly.phases_prompt(chosen.prompt, _minutes(starts_all))
+                assembly.phases_prompt(
+                    chosen.prompt, _minutes(starts_all), cfg.phases_minutes_per_chapter
+                )
                 if is_phases
                 else chosen.prompt,
                 context,
                 whole,
             )
-            budget = cfg.num_ctx - reserve
+            budget = num_ctx - reserve
             size = assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
             # The chapters are read in sections of a set length, whatever the window (ADR 0044).
             by_time = _sections_by_time(lines, cfg.phases_section_min) if is_phases else [lines]
             answers: list[str] = []
             part_firsts: list[str] = []
+            recalled_out = 0
+            unrecalled: list[int] = []
             if size <= budget and len(by_time) == 1:
                 output = call("unique", prompt, None)
                 answers.append(output)
@@ -414,7 +440,15 @@ def generate(
                 fixed = assembly.estimate_tokens(
                     (
                         assembly.phases_section_prompt(
-                            chosen.prompt, 99, 99, "00:00:00", "00:00:00", 999, longest_previous
+                            chosen.prompt,
+                            99,
+                            99,
+                            "00:00:00",
+                            "00:00:00",
+                            999,
+                            longest_previous,
+                            per_chapter=cfg.phases_minutes_per_chapter,
+                            recalled=True,
                         )
                         if is_phases
                         else assembly.section_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
@@ -433,22 +467,60 @@ def generate(
                     starts = [line.start for line in chunk if line.start is not None]
                     first = clock(starts[0]) if starts else "?"
                     last = clock(starts[-1]) if starts else "?"
-                    part_prompt = assembly.assemble(
-                        assembly.phases_section_prompt(
-                            chosen.prompt,
-                            k,
-                            len(chunks),
-                            first,
-                            last,
-                            _minutes(starts),
-                            last_chapter(parts[-1]) if parts else None,
-                        )
-                        if is_phases
-                        else assembly.section_prompt(chosen.prompt, k, len(chunks), first, last),
-                        context,
-                        "\n".join(line.text for line in chunk),
+                    text = "\n".join(line.text for line in chunk)
+                    # The end of the part before, recalled for the model to see whether this
+                    # one goes on with it (ADR 0044); left out when it would not fit.
+                    recalled = (
+                        _recalled(chunks[k - 2], starts[0], cfg.phases_overlap_min)
+                        if is_phases and k > 1 and starts
+                        else []
                     )
-                    parts.append(call("section", part_prompt, f"{first} à {last}"))
+                    while True:
+                        if is_phases:
+                            part_prompt = assembly.assemble(
+                                assembly.phases_section_prompt(
+                                    chosen.prompt,
+                                    k,
+                                    len(chunks),
+                                    first,
+                                    last,
+                                    _minutes(starts),
+                                    last_chapter(parts[-1]) if parts else None,
+                                    per_chapter=cfg.phases_minutes_per_chapter,
+                                    recalled=bool(recalled),
+                                ),
+                                context,
+                                "\n".join(
+                                    [line.text for line in recalled]
+                                    + [assembly.section_start_line(first), text]
+                                )
+                                if recalled
+                                else text,
+                            )
+                        else:
+                            part_prompt = assembly.assemble(
+                                assembly.section_prompt(chosen.prompt, k, len(chunks), first, last),
+                                context,
+                                text,
+                            )
+                        too_long = (
+                            assembly.estimate_tokens(
+                                part_prompt.system + part_prompt.user, cfg.chars_per_token
+                            )
+                            > budget
+                        )
+                        if not (recalled and too_long):
+                            break
+                        recalled = []
+                        unrecalled.append(k)
+                    previous = last_chapter(parts[-1]) if parts else None
+                    answer = call("section", part_prompt, f"{first} à {last}")
+                    if recalled:
+                        # Chapters set in the recalled lines are the part before's to cut;
+                        # the one it ended on, set there, still says the part goes on with it.
+                        answer, dropped = drop_before(answer, first, previous)
+                        recalled_out += dropped
+                    parts.append(answer)
                     part_firsts.append(first)
                 answers = parts
             if is_phases:
@@ -465,6 +537,16 @@ def generate(
                         if was_joined
                         else f"Séance lue en {len(part_firsts)} parties : un chapitre commence "
                         f"à {first} parce que la partie {k} y commence."
+                    )
+                if recalled_out:
+                    detection.adjustments.append(
+                        f"{recalled_out} chapitre(s) placé(s) dans les répliques rappelées d'une "
+                        "partie précédente, laissé(s) de côté : c'est à elle de les couper."
+                    )
+                if unrecalled:
+                    detection.adjustments.append(
+                        f"Partie(s) {', '.join(map(str, unrecalled))} lue(s) sans le rappel de la "
+                        "précédente : la fenêtre du modèle est trop petite pour les deux."
                     )
                 output = detection.model_dump_json(indent=2)
             elif strategy == "sections":
