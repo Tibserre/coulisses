@@ -39,20 +39,25 @@ Chaque lot est une branche, relue par `gardien-principes`, close par un essai à
 
 Demandée par l'utilisateur le 2026-10-16 (« elle est franchement lourde »). Conduite par une conversation dédiée, qui mesure, propose et coordonne ; chaque lot reste fait dans le territoire de son rôle (construction : Distribution ; moteur : Moteur, par un prompt structuré ; modèles de langage : Rédaction et modèles). Aucun gain n'est retenu sans mesure avant et après, ni s'il coûte en qualité (banc d'essai du moteur, comparaison à l'aveugle) ou en données (P5, P8).
 
-Point de départ, mesuré le 2026-10-14 sur v0.24.0 et ce Mac :
+Point de départ, remesuré le 2026-10-16 sur v0.28.0 par `scripts/mesurer-tailles.py` (lot 12a), en Go décimaux comme le Finder ; référence dans `docs/technique/tailles/2026-10-16-v0.28.0.md` (et `.json`) :
 
 | | Taille |
 |---|---|
-| DMG | 640 à 730 Mo selon la compression (740 Mo publié) |
-| App installée | 1,9 Go, dont 1,8 Go de Python : bibliothèques natives 730 Mo (torch 400 Mo), sources `.py` et leur `.pyc` environ 550 Mo, code GPU de MLX 180 Mo, tests, en-têtes et stubs 130 Mo |
-| Modèles du moteur | 5,9 Go (transcription 4,4 Go, alignement 1,2 Go, voix 0,3 Go) |
-| Environnement DiariZen | 0,9 Go, avec son propre torch |
-| Modèle de langage (Ollama) | 18 à 21 Go par modèle avant le lot 11g |
-| Enregistrement fait dans l'app | environ 490 Mo par heure (WAV 48 kHz, 24 bits) |
+| DMG | 773 Mo (ULFO) |
+| App installée | 1,99 Go, dont torch environ 0,6 Go, mlx 0,2 Go, sources `.py` et leurs `.pyc` environ 0,55 Go, tests, en-têtes et stubs 0,13 Go |
+| Modèles du moteur | 6,30 Go (transcription, alignement, voix) |
+| Environnement DiariZen et son Python | 0,88 Go, avec son propre torch |
+| Modèle de langage par défaut (Ollama) | 21,9 Go |
+| Une heure d'enregistrement | 518 Mo par piste mono ; 2,07 Go pour une réunion avec le son de l'ordinateur (4 pistes : micro, ordinateur, mix, mix d'écoute) |
 
-- **12a — Mesure de référence.** Un relevé reproductible des tailles ci-dessus (DMG, app par grande famille, modèles, environnements, audio par heure), relancé après chaque lot.
-- **12b — Élaguer le paquet** (Distribution, `scripts/construire.py`). Retirer tests, en-têtes, stubs et sources C des bibliothèques (en gardant ce qu'elles chargent elles-mêmes, comme `torch/testing`), compresser le DMG en lzma, étudier un Python sans sources (`.pyc` seuls) ; l'essai du paquet prouve que tout marche encore. Gain estimé : 0,3 à 0,4 Go installé, 0,1 à 0,2 Go de DMG.
-- **12c — Dépendances du moteur** (Moteur). `librosa` (et numba, llvmlite) ne semble plus importé ; `pyannote-audio` tire lightning, matplotlib, pandas, la télémétrie (opentelemetry, grpc) pour une simple inférence ; torch présent deux fois (app et DiariZen). Puis, à décider par un ADR : les étapes à torch dans des environnements installés à la demande, ce qui rendrait l'app et ses mises à jour bien plus légères. Gain estimé : 0,5 à 0,9 Go, jusqu'à 0,8 Go de plus avec les environnements à la demande.
-- **12d — Modèles du moteur plus légers** (Moteur, banc d'essai). Transcription quantifiée (8 ou 4 bits), alignement en demi-précision, retenus seulement si la justesse et les horodatages tiennent. Gain estimé : 2,5 à 3,5 Go.
-- **12e — Enregistrements compressés sans perte** (application). FLAC au lieu de WAV pour les sources (environ deux fois moins, rejouable à l'identique, P5) ; mix et mix d'écoute refaits à la demande plutôt que gardés. ADR, et migration des séances existantes seulement avec accord.
-- **12f — Modèle de langage léger** : suivi au lot 11g (Rédaction et modèles), le plus gros poste chez un ami.
+Total chez un ami : environ 31 Go, dont 70 % pour le modèle de langage.
+
+Ordre validé par l'utilisateur le 2026-10-16 : d'abord, en parallèle, 12b, 12c-1 et 12d (relais envoyés à Distribution et à Moteur) ; puis 12e ; puis 12c-2 ; 12f suivi par le lot 11g.
+
+- **12a — Mesure de référence.** Un relevé reproductible des tailles ci-dessus (DMG, app par grande famille, modèles, environnements, audio par heure), relancé après chaque lot. **Fait** (2026-10-16) : `scripts/mesurer-tailles.py`, en lecture seule, avec ses tests ; référence de v0.28.0 dans `docs/technique/tailles/`.
+- **12b — Élaguer le paquet** (Distribution, `scripts/construire.py`, relais envoyé). Retirer tests, en-têtes, stubs et sources C des bibliothèques (en gardant ce qu'elles chargent elles-mêmes, comme `torch/testing`), compresser le DMG en lzma, étudier un Python sans sources (`.pyc` seuls) ; l'essai du paquet prouve que tout marche encore. Gain estimé : environ 0,28 Go installé, 0,1 à 0,2 Go de DMG.
+- **12c-1 — Dépendances du moteur** (Moteur, relais envoyé). `librosa` (et numba, llvmlite) ne semble plus importé ; `pyannote-audio` tire lightning, matplotlib, pandas, la télémétrie (opentelemetry, grpc) pour une simple inférence. Gain estimé : 0,3 à 0,45 Go.
+- **12c-2 — Les étapes à torch à la demande** (Moteur, après 12c-1, ADR d'abord). Les étapes à torch dans des environnements installés à la demande, comme DiariZen (torch y est déjà une seconde fois) : l'app et chacune de ses mises à jour s'allègent. Gain estimé : 0,8 à 1 Go par app et par mise à jour.
+- **12d — Modèles du moteur plus légers** (Moteur, banc d'essai, relais envoyé). Transcription quantifiée (8 ou 4 bits), alignement en demi-précision, retenus seulement si la justesse et les horodatages tiennent. Gain estimé : 2,5 à 3,5 Go.
+- **12e — Enregistrements compressés sans perte** (conversation Alléger Coulisses). FLAC au lieu de WAV pour les sources : −44 % mesuré sur `Données-dev`, identique au bit près (P5) ; mix et mix d'écoute refaits à la demande plutôt que gardés. Gain estimé par heure : répétition 518 → environ 290 Mo ; réunion avec le son de l'ordinateur 2,07 → environ 0,6 Go. ADR d'abord, avec l'accord de l'utilisateur ; migration des séances existantes seulement avec accord.
+- **12f — Modèle de langage léger** : suivi au lot 11g (Rédaction et modèles), le plus gros poste chez un ami (14 à 18 Go de gain possible).
