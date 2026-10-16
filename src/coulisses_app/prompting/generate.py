@@ -16,7 +16,7 @@ import math
 import secrets
 import sqlite3
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -36,7 +36,6 @@ from coulisses_app.phases import (
     drop_before,
     join_parts,
     last_chapter,
-    regroup_onto,
     review_kind,
     snap,
 )
@@ -195,7 +194,7 @@ def _sections(
     return sections
 
 
-def _minutes(starts: list[float | None]) -> float:
+def _minutes(starts: Sequence[float | None]) -> float:
     """From the first time to the last, in minutes."""
     timed = [s for s in starts if s is not None]
     return (timed[-1] - timed[0]) / 60 if timed else 0.0
@@ -287,12 +286,7 @@ def generate(
     reserve = (
         cfg.title_reserve if is_title else cfg.phases_reserve if is_phases else cfg.response_reserve
     )
-    # The chapters, read in short sections, may have a smaller window (ADR 0044).
-    num_ctx = cfg.phases_num_ctx if is_phases and cfg.phases_num_ctx else cfg.num_ctx
-    # Grouped after, the chapters are first cut finer (ADR 0045).
-    cut_scale = (
-        cfg.phases_cut_minutes_per_chapter if cfg.phases_regroup else cfg.phases_minutes_per_chapter
-    )
+    num_ctx = cfg.num_ctx
     options: dict[str, object] = {
         "num_ctx": num_ctx,
         "num_predict": reserve,
@@ -402,18 +396,15 @@ def generate(
                     "source_run_id": view.run_id,
                     "edit_ids": edit_ids,
                     "phases_run_id": phases_run_id,
-                    # How the chapters were read (ADR 0044): sections, recall, the scale
-                    # aimed at, the window asked (0: num_ctx).
+                    # How the chapters were read (ADR 0044, 0045): sections, recall, the
+                    # scale aimed at, the check of their kind.
                     **(
                         {
                             "phases_section_min": cfg.phases_section_min,
                             "phases_overlap_min": cfg.phases_overlap_min,
                             "phases_minutes_per_chapter": list(cfg.phases_minutes_per_chapter),
-                            "phases_cut_minutes_per_chapter": list(cut_scale),
                             "phases_review_kinds": cfg.phases_review_kinds,
-                            "phases_regroup": cfg.phases_regroup,
                             "review_format": REVIEW_SCHEMA,
-                            "phases_num_ctx": cfg.phases_num_ctx,
                         }
                         if is_phases
                         else {}
@@ -473,7 +464,9 @@ def generate(
             whole = "\n".join(line.text for line in lines)
             starts_all = [line.start for line in lines if line.start is not None]
             prompt = assembly.assemble(
-                assembly.phases_prompt(chosen.prompt, _minutes(starts_all), cut_scale)
+                assembly.phases_prompt(
+                    chosen.prompt, _minutes(starts_all), cfg.phases_minutes_per_chapter
+                )
                 if is_phases
                 else chosen.prompt,
                 context,
@@ -503,7 +496,7 @@ def generate(
                             "00:00:00",
                             999,
                             longest_previous,
-                            per_chapter=cut_scale,
+                            per_chapter=cfg.phases_minutes_per_chapter,
                             recalled=True,
                         )
                         if is_phases
@@ -542,7 +535,7 @@ def generate(
                                     last,
                                     _minutes(starts),
                                     last_chapter(parts[-1]) if parts else None,
-                                    per_chapter=cut_scale,
+                                    per_chapter=cfg.phases_minutes_per_chapter,
                                     recalled=bool(recalled),
                                 ),
                                 context,
@@ -605,38 +598,6 @@ def generate(
                         "précédente : la fenêtre du modèle est trop petite pour les deux."
                     )
                 start_of = {t.index: t.start for t in view.turns}
-                if cfg.phases_regroup and len(detection.phases) > 1:
-                    # The chapters, listed alone, grouped into fewer (ADR 0045).
-                    ends = [start_of.get(p.turn) for p in detection.phases[1:]]
-                    ends.append(max((s for s in start_of.values() if s is not None), default=0))
-                    listed = [
-                        f"[{clock(start_of.get(p.turn) or 0)}] ({KIND_WORD[p.kind]}, "
-                        f"{max(1, round(((until or 0) - (start_of.get(p.turn) or 0)) / 60))} min) "
-                        f"{p.title}"
-                        for p, until in zip(detection.phases, ends, strict=True)
-                    ]
-                    regroup = assembly.assemble(
-                        assembly.phase_regroup_prompt(
-                            _minutes(starts_all), cfg.phases_minutes_per_chapter
-                        ),
-                        context,
-                        "\n".join(listed),
-                        heading="Chapitres à regrouper",
-                    )
-                    if (
-                        assembly.estimate_tokens(regroup.system + regroup.user, cfg.chars_per_token)
-                        > budget
-                    ):
-                        grouped, told = (
-                            detection.phases,
-                            ["Trop de chapitres pour les regrouper d'un coup : ils sont gardés."],
-                        )
-                    else:
-                        said = call("consolidation", regroup, "regroupement des chapitres")
-                        grouped, told = regroup_onto(said, detection.phases, start_of)
-                    detection = detection.model_copy(
-                        update={"phases": grouped, "adjustments": [*detection.adjustments, *told]}
-                    )
                 if cfg.phases_review_kinds:
                     # Each chapter read again alone: played or not (ADR 0045).
                     bounds = [start_of.get(p.turn) for p in detection.phases]

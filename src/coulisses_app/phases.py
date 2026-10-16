@@ -106,61 +106,6 @@ def parse_time(text: str) -> int | None:
     return int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)
 
 
-def regroup_onto(
-    raw: str, phases: list[DetectedPhase], start_of: dict[int, float | None]
-) -> tuple[list[DetectedPhase], list[str]]:
-    """The chapters `phases` grouped as one answer says (ADR 0045): each group starts at one
-    of them, never at a new cut. A start that is none of theirs goes to the nearest one;
-    an answer that cannot be read, or gives no group, leaves the chapters as they were.
-    Returns the chapters and what was adjusted, in words (P8)."""
-    timed = [(p, int(t)) for p in phases if (t := start_of.get(p.turn)) is not None]
-    try:
-        groups = _Answer.model_validate_json(raw).chapitres
-    except ValueError:
-        return phases, ["Regroupement illisible : les chapitres détectés sont gardés."]
-    if not groups or not timed:
-        return phases, ["Regroupement vide : les chapitres détectés sont gardés."]
-    adjustments: list[str] = []
-    found: dict[int, DetectedPhase] = {}
-    for group in groups:
-        title = _kept_title(group.titre)
-        kind = KIND_FOR_MODEL.get(group.type.strip().lower())
-        if kind is None:
-            adjustments.append(
-                f"« {title} » : type « {group.type} » inconnu au regroupement, mis à discussion."
-            )
-            kind = "discussion"
-        seconds = parse_time(group.debut)
-        if seconds is None:
-            adjustments.append(f"« {title} » : heure « {group.debut} » illisible au regroupement.")
-            continue
-        at = next((p for p, t in timed if t == seconds), None)
-        if at is None:
-            at = min(timed, key=lambda pt: abs(pt[1] - seconds))[0]
-            adjustments.append(
-                f"« {title} » : aucun chapitre à {clock(seconds)} au regroupement, placé sur "
-                f"celui de {clock(start_of[at.turn] or 0)}."
-            )
-        if at.turn in found:
-            adjustments.append(
-                f"« {title} » : commence sur le même chapitre que « {found[at.turn].title} » "
-                "au regroupement, laissé de côté."
-            )
-            continue
-        found[at.turn] = DetectedPhase(turn=at.turn, kind=kind, title=title)
-    order = {p.turn: k for k, p in enumerate(phases)}
-    grouped = sorted(found.values(), key=lambda p: order[p.turn])
-    if not grouped:
-        return phases, [*adjustments, "Regroupement sans chapitre utilisable : gardés."]
-    if grouped[0].turn != phases[0].turn:
-        adjustments.append(
-            f"« {grouped[0].title} » commence désormais au premier chapitre, comme demandé."
-        )
-        grouped[0] = grouped[0].model_copy(update={"turn": phases[0].turn})
-    adjustments.append(f"{len(phases)} chapitres détectés, regroupés en {len(grouped)}.")
-    return grouped, adjustments
-
-
 class _Review(BaseModel):
     type: str
 
