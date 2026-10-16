@@ -14,8 +14,8 @@
 | M3 | Moteur et seuil de diarisation qui maximisent la pureté en discussion sans exploser le nombre de locuteurs. |
 | M4 | La déréverbération aide-t-elle la diarisation ? Et la transcription ? |
 | M5 | Le glossaire améliore-t-il vraiment la transcription des prénoms et du jargon (selon le moteur) ? |
-| M6 | Modèle de génération par défaut, `num_ctx` nécessaire, et seuil de bascule vers le résumé par sections. |
-| M7 | ~~Méthode de détection des phases.~~ Tranché : le LLM local, en un appel (ADR 0024, 2026-10-06) ; à revoir si les corrections de chapitres sont nombreuses. |
+| M6 | Modèle de génération par défaut, `num_ctx` nécessaire, et seuil de bascule vers le résumé par sections. Tranché en partie (2026-10-16) : un modèle par rédaction (ADR 0039), `qwen3.5:4b-mlx` pour les chapitres et le titre, au choix de l'utilisateur après mesure contre des références. Reste ouvert : le modèle des résumés (après les avoir raccourcis, comparaison à l'aveugle), `num_ctx` et le seuil de bascule (lot 11g). |
+| M7 | ~~Méthode de détection des phases.~~ Tranché : le LLM local (ADR 0024, 2026-10-06), lu par parties de 15 min depuis le 2026-10-14 (ADR 0044, 0045) ; à revoir si les corrections de chapitres sont nombreuses. |
 | M8 | Faut-il des réglages de diarisation différents en scène et en discussion ? |
 
 ## Risques identifiés
