@@ -47,7 +47,18 @@ class Settings(BaseModel):
     num_ctx: int
     response_reserve: int
     title_reserve: int
+    title_max_words: int
+    """A title longer than this is asked once more, shorter; never cut."""
     phases_reserve: int
+    phases_section_min: int
+    """The chapters are read in sections of at most this many minutes."""
+    phases_overlap_min: float
+    """Each section of the chapters but the first is sent after this many minutes of the
+    one before, to cut nothing in them (0: none)."""
+    phases_minutes_per_chapter: tuple[float, float]
+    """How long a chapter lasts, shortest and longest, in minutes: what the model aims at."""
+    phases_review_kinds: bool
+    """Each chapter detected is read again alone, to check whether it is played (ADR 0045)."""
     chars_per_token: float
     temperature: float
     seed: int
@@ -64,7 +75,12 @@ def settings() -> Settings:
         num_ctx=raw["num_ctx"],
         response_reserve=raw["reserve_reponse"],
         title_reserve=raw["reserve_titre"],
+        title_max_words=raw["mots_max_titre"],
         phases_reserve=raw["reserve_chapitres"],
+        phases_section_min=raw["partie_chapitres_min"],
+        phases_overlap_min=raw["rappel_chapitres_min"],
+        phases_minutes_per_chapter=tuple(raw["minutes_par_chapitre"]),
+        phases_review_kinds=raw["verifier_types_chapitres"],
         chars_per_token=raw["caracteres_par_token"],
         temperature=raw["temperature"],
         seed=raw["graine"],
@@ -135,6 +151,25 @@ PHASES = Action(
     description="La séance découpée en chapitres : jeu, discussion ou autre.",
     prompt=_text("chapitres.md").strip(),
 )
+
+PHASE_REVIEW_PROMPT = _text("chapitres-relecture.md").strip()
+"""Each chapter read again alone: played or not (ADR 0045)."""
+
+
+def title_retry_prompt(action_prompt: str, previous: str, words: int, max_words: int) -> str:
+    """The title asked once more, when the first one is too long."""
+    return (
+        f"{action_prompt}\n\n"
+        f"Ta première proposition, « {previous} », fait {words} mots : c'est trop long pour une "
+        f"liste. Propose un titre de {max_words} mots au plus, qui garde le sujet principal."
+    )
+
+
+def phase_review_prompt(start: str, end: str) -> str:
+    return (
+        f"{PHASE_REVIEW_PROMPT}\n\n"
+        f"Le chapitre va de {start} à {end} : tu reçois ses seules répliques."
+    )
 
 
 def system_frame() -> str:
@@ -309,13 +344,66 @@ def section_prompt(action_prompt: str, index: int, count: int, start: str, end: 
     )
 
 
-def phases_section_prompt(action_prompt: str, index: int, count: int, start: str, end: str) -> str:
+def phases_scale(minutes: float, per_chapter: tuple[float, float]) -> str:
+    """How many chapters to aim at for this many minutes (ADR 0044), from how many minutes
+    a chapter lasts (shortest, longest): a small model left without it cuts at nearly every
+    exchange, or too seldom."""
+    rounded = max(1, round(minutes))
+    shortest, longest = per_chapter
+    low = max(1, round(minutes / longest))
+    high = max(low + 1, round(minutes / shortest))
     return (
-        f"{action_prompt}\n\n"
-        f"La séance est trop longue pour être lue d'un coup : cette demande ne porte que sur la "
-        f"partie {index} sur {count}, de {start} à {end}. Découpe cette partie seule : son "
-        f"premier chapitre commence à sa première réplique."
+        f"Ce passage dure environ {rounded} minute{'s' if rounded > 1 else ''} : vise entre "
+        f"{low} et {high} chapitres. Mieux vaut un chapitre un peu long qu'une coupure à chaque "
+        f"échange."
     )
+
+
+def phases_prompt(action_prompt: str, minutes: float, per_chapter: tuple[float, float]) -> str:
+    """The chapters of a session read at once."""
+    return f"{action_prompt}\n\n{phases_scale(minutes, per_chapter)}"
+
+
+def phases_section_prompt(
+    action_prompt: str,
+    index: int,
+    count: int,
+    start: str,
+    end: str,
+    minutes: float,
+    previous: tuple[str, str] | None = None,
+    *,
+    per_chapter: tuple[float, float],
+    recalled: bool = False,
+) -> str:
+    """`previous`: the (type, titre) the part before ended on, for the part to go on with
+    it rather than cut there. `recalled`: the end of the part before comes first in the
+    transcript sent, up to `section_start_line`."""
+    text = (
+        f"{action_prompt}\n\n"
+        f"La séance est lue en {count} parties : cette demande ne porte que sur la partie "
+        f"{index}, de {start} à {end}. Découpe cette partie seule : son premier chapitre "
+        f"commence à sa première réplique. {phases_scale(minutes, per_chapter)}"
+    )
+    if recalled:
+        text += (
+            " Les répliques qui précèdent la ligne « Début de la partie à découper » sont "
+            "rappelées pour que tu voies ce qui se passait juste avant : ne les découpe pas."
+        )
+    if previous is not None:
+        kind, title = previous
+        text += (
+            f" La partie précédente se terminait sur le chapitre « {title} » (type `{kind}`). "
+            f"Si cette partie commence par la suite de ce même moment, donne à ton premier "
+            f"chapitre exactement ce type et ce titre : les deux seront réunis. Sinon, donne-lui "
+            f"son propre titre."
+        )
+    return text
+
+
+def section_start_line(start: str) -> str:
+    """Where the part to cut starts, after the lines recalled from the part before."""
+    return f"[{start}] ── Début de la partie à découper ──"
 
 
 def consolidation_prompt(action_prompt: str, count: int) -> str:

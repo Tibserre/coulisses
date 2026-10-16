@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import secrets
 import sqlite3
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -26,7 +27,18 @@ from pydantic import BaseModel
 from coulisses_app import actions, corrections, notes, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
-from coulisses_app.phases import ANSWER_SCHEMA, KIND_WORD, PhaseAnswerError, snap
+from coulisses_app.phases import (
+    ANSWER_SCHEMA,
+    KIND_WORD,
+    REVIEW_SCHEMA,
+    TITLE_MAX,
+    PhaseAnswerError,
+    drop_before,
+    join_parts,
+    last_chapter,
+    review_kind,
+    snap,
+)
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaError
 from coulisses_app.storage.db import connect, now_iso
@@ -56,7 +68,8 @@ class ModelClient(Protocol):
 
 class Call(BaseModel):
     index: int
-    kind: Literal["unique", "section", "consolidation"]
+    kind: Literal["unique", "section", "consolidation", "review"]
+    """`review`: a chapter read again alone, for its kind (ADR 0045)."""
     covers: str | None = None
     """For a section: the stretch of the session it covers."""
     prompt_file: str
@@ -181,6 +194,60 @@ def _sections(
     return sections
 
 
+def _minutes(starts: Sequence[float | None]) -> float:
+    """From the first time to the last, in minutes."""
+    timed = [s for s in starts if s is not None]
+    return (timed[-1] - timed[0]) / 60 if timed else 0.0
+
+
+def _between(
+    lines: list[assembly.Line], begin: float | None, until: float | None
+) -> list[assembly.Line]:
+    """The lines from `begin` (included) to `until` (excluded): a chapter's. A line
+    without a time goes with the one before it."""
+    out: list[assembly.Line] = []
+    inside = begin is None
+    for line in lines:
+        if line.start is not None:
+            inside = (begin is None or line.start >= begin) and (
+                until is None or line.start < until
+            )
+        if inside:
+            out.append(line)
+    return out
+
+
+def _recalled(before: list[assembly.Line], start: float, minutes: float) -> list[assembly.Line]:
+    """The timed lines of the part before within `minutes` of this part's start."""
+    if minutes <= 0:
+        return []
+    return [
+        line for line in before if line.start is not None and line.start >= start - minutes * 60
+    ]
+
+
+def _sections_by_time(lines: list[assembly.Line], minutes: int) -> list[list[assembly.Line]]:
+    """Consecutive lines in sections of the same length, each at most `minutes` long
+    (ADR 0044). A line without a time stays with the one before it."""
+    starts = [line.start for line in lines if line.start is not None]
+    if not starts or minutes <= 0:
+        return [lines]
+    span = starts[-1] - starts[0]
+    count = max(1, math.ceil(span / (minutes * 60)))
+    length = span / count
+    sections: list[list[assembly.Line]] = [[]]
+    for line in lines:
+        if (
+            line.start is not None
+            and sections[-1]
+            and len(sections) < count
+            and line.start >= starts[0] + len(sections) * length
+        ):
+            sections.append([])
+        sections[-1].append(line)
+    return sections
+
+
 def generate(
     data: DataDir,
     session_id: str,
@@ -219,8 +286,9 @@ def generate(
     reserve = (
         cfg.title_reserve if is_title else cfg.phases_reserve if is_phases else cfg.response_reserve
     )
+    num_ctx = cfg.num_ctx
     options: dict[str, object] = {
-        "num_ctx": cfg.num_ctx,
+        "num_ctx": num_ctx,
         "num_predict": reserve,
         "temperature": cfg.temperature,
         "seed": cfg.seed,
@@ -282,9 +350,11 @@ def generate(
     ollama_version: str | None = None
 
     def call(
-        kind: Literal["unique", "section", "consolidation"],
+        kind: Literal["unique", "section", "consolidation", "review"],
         prompt: assembly.Prompt,
         covers: str | None,
+        *,
+        answer_format: dict[str, object] | None = answer_format,
     ) -> str:
         index = len(calls) + 1
         prompt_file = f"calls/{index:02d}-prompt.txt"
@@ -306,7 +376,7 @@ def generate(
         record.done_reason = answer.done_reason
         record.response_file = f"calls/{index:02d}-response.{'json' if is_phases else 'md'}"
         _write_new(folder / record.response_file, answer.content)
-        _check(answer, estimated, cfg.num_ctx, first_line_only=is_title)
+        _check(answer, estimated, num_ctx, first_line_only=is_title)
         return answer.content.strip()
 
     try:
@@ -326,6 +396,19 @@ def generate(
                     "source_run_id": view.run_id,
                     "edit_ids": edit_ids,
                     "phases_run_id": phases_run_id,
+                    # How the chapters were read (ADR 0044, 0045): sections, recall, the
+                    # scale aimed at, the check of their kind.
+                    **(
+                        {
+                            "phases_section_min": cfg.phases_section_min,
+                            "phases_overlap_min": cfg.phases_overlap_min,
+                            "phases_minutes_per_chapter": list(cfg.phases_minutes_per_chapter),
+                            "phases_review_kinds": cfg.phases_review_kinds,
+                            "review_format": REVIEW_SCHEMA,
+                        }
+                        if is_phases
+                        else {}
+                    ),
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -349,48 +432,214 @@ def generate(
                     "num_ctx dans les réglages de génération."
                 )
             output = call("unique", prompt, None)
+            # Too long: asked once more, never cut. The shorter of the two is kept; both
+            # stay in calls/ (P8). The first, valid, is kept when the second cannot be had.
+            words = len(_clean_title(output).split())
+            if words > cfg.title_max_words:
+                shorter = assembly.assemble(
+                    assembly.title_retry_prompt(
+                        chosen.prompt, _clean_title(output), words, cfg.title_max_words
+                    ),
+                    context,
+                    title_input.text,
+                    heading=title_input.heading,
+                )
+                if (
+                    assembly.estimate_tokens(shorter.system + shorter.user, cfg.chars_per_token)
+                    > cfg.num_ctx - reserve
+                ):
+                    log.warning("title %s: too long to ask again within the window", run_id)
+                else:
+                    try:
+                        again = call("unique", shorter, "titre redemandé, plus court")
+                    except (GenerationFailedError, OllamaError) as exc:
+                        # Its call stays in the provenance, saying why: not hidden (P8).
+                        calls[-1].covers = f"titre redemandé en vain, le premier est gardé : {exc}"
+                        log.warning("title %s asked again in vain: %s", run_id, exc)
+                    else:
+                        if len(_clean_title(again).split()) < words:
+                            output = again
         else:
             lines = assembly.transcript_lines(view, with_phases=not is_phases)
             whole = "\n".join(line.text for line in lines)
-            prompt = assembly.assemble(chosen.prompt, context, whole)
-            budget = cfg.num_ctx - reserve
+            starts_all = [line.start for line in lines if line.start is not None]
+            prompt = assembly.assemble(
+                assembly.phases_prompt(
+                    chosen.prompt, _minutes(starts_all), cfg.phases_minutes_per_chapter
+                )
+                if is_phases
+                else chosen.prompt,
+                context,
+                whole,
+            )
+            budget = num_ctx - reserve
             size = assembly.estimate_tokens(prompt.system + prompt.user, cfg.chars_per_token)
-            cut_prompt = assembly.phases_section_prompt if is_phases else assembly.section_prompt
+            # The chapters are read in sections of a set length, whatever the window (ADR 0044).
+            by_time = _sections_by_time(lines, cfg.phases_section_min) if is_phases else [lines]
             answers: list[str] = []
             part_firsts: list[str] = []
-            if size <= budget:
+            recalled_out = 0
+            unrecalled: list[int] = []
+            if size <= budget and len(by_time) == 1:
                 output = call("unique", prompt, None)
                 answers.append(output)
             else:
                 strategy = "sections"
+                longest_previous = ("discussion", "x" * TITLE_MAX)
                 fixed = assembly.estimate_tokens(
-                    cut_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
+                    (
+                        assembly.phases_section_prompt(
+                            chosen.prompt,
+                            99,
+                            99,
+                            "00:00:00",
+                            "00:00:00",
+                            999,
+                            longest_previous,
+                            per_chapter=cfg.phases_minutes_per_chapter,
+                            recalled=True,
+                        )
+                        if is_phases
+                        else assembly.section_prompt(chosen.prompt, 99, 99, "00:00:00", "00:00:00")
+                    )
                     + assembly.assemble("", context, "").system
                     + assembly.assemble("", context, "").user,
                     cfg.chars_per_token,
                 )
                 parts: list[str] = []
-                chunks = _sections(lines, budget - fixed, cfg.chars_per_token)
+                chunks = [
+                    chunk
+                    for piece in by_time
+                    for chunk in _sections(piece, budget - fixed, cfg.chars_per_token)
+                ]
                 for k, chunk in enumerate(chunks, start=1):
                     starts = [line.start for line in chunk if line.start is not None]
                     first = clock(starts[0]) if starts else "?"
                     last = clock(starts[-1]) if starts else "?"
-                    part_prompt = assembly.assemble(
-                        cut_prompt(chosen.prompt, k, len(chunks), first, last),
-                        context,
-                        "\n".join(line.text for line in chunk),
+                    text = "\n".join(line.text for line in chunk)
+                    # The end of the part before, recalled for the model to see whether this
+                    # one goes on with it (ADR 0044); left out when it would not fit.
+                    recalled = (
+                        _recalled(chunks[k - 2], starts[0], cfg.phases_overlap_min)
+                        if is_phases and k > 1 and starts
+                        else []
                     )
-                    parts.append(call("section", part_prompt, f"{first} à {last}"))
+                    while True:
+                        if is_phases:
+                            part_prompt = assembly.assemble(
+                                assembly.phases_section_prompt(
+                                    chosen.prompt,
+                                    k,
+                                    len(chunks),
+                                    first,
+                                    last,
+                                    _minutes(starts),
+                                    last_chapter(parts[-1]) if parts else None,
+                                    per_chapter=cfg.phases_minutes_per_chapter,
+                                    recalled=bool(recalled),
+                                ),
+                                context,
+                                "\n".join(
+                                    [line.text for line in recalled]
+                                    + [assembly.section_start_line(first), text]
+                                )
+                                if recalled
+                                else text,
+                            )
+                        else:
+                            part_prompt = assembly.assemble(
+                                assembly.section_prompt(chosen.prompt, k, len(chunks), first, last),
+                                context,
+                                text,
+                            )
+                        too_long = (
+                            assembly.estimate_tokens(
+                                part_prompt.system + part_prompt.user, cfg.chars_per_token
+                            )
+                            > budget
+                        )
+                        if not (recalled and too_long):
+                            break
+                        recalled = []
+                        unrecalled.append(k)
+                    previous = last_chapter(parts[-1]) if parts else None
+                    answer = call("section", part_prompt, f"{first} à {last}")
+                    if recalled:
+                        # Chapters set in the recalled lines are the part before's to cut;
+                        # the one it ended on, set there, still says the part goes on with it.
+                        answer, dropped = drop_before(answer, first, previous)
+                        recalled_out += dropped
+                    parts.append(answer)
                     part_firsts.append(first)
                 answers = parts
             if is_phases:
-                # Each part's chapters, put on the lines they name: no merging call needed.
+                # Each part's chapters, put on the lines they name: no merging call needed. A
+                # part that goes on with the chapter the previous one ended on is joined to it.
+                answers, joined = join_parts(answers)
                 detection = snap(answers, [(t.index, t.start) for t in view.turns])
-                for k, first in enumerate(part_firsts[1:], start=2):
+                for k, (first, was_joined) in enumerate(
+                    zip(part_firsts[1:], joined, strict=True), start=2
+                ):
                     detection.adjustments.append(
-                        f"Séance lue en {len(part_firsts)} parties : un chapitre commence à "
-                        f"{first} parce que la partie {k} y commence."
+                        f"Séance lue en {len(part_firsts)} parties : la partie {k}, à {first}, "
+                        "continue le chapitre précédent."
+                        if was_joined
+                        else f"Séance lue en {len(part_firsts)} parties : un chapitre commence "
+                        f"à {first} parce que la partie {k} y commence."
                     )
+                if recalled_out:
+                    detection.adjustments.append(
+                        f"{recalled_out} chapitre(s) placé(s) dans les répliques rappelées d'une "
+                        "partie précédente, laissé(s) de côté : c'est à elle de les couper."
+                    )
+                if unrecalled:
+                    detection.adjustments.append(
+                        f"Partie(s) {', '.join(map(str, unrecalled))} lue(s) sans le rappel de la "
+                        "précédente : la fenêtre du modèle est trop petite pour les deux."
+                    )
+                start_of = {t.index: t.start for t in view.turns}
+                if cfg.phases_review_kinds:
+                    # Each chapter read again alone: played or not (ADR 0045).
+                    bounds = [start_of.get(p.turn) for p in detection.phases]
+                    for k, phase in enumerate(detection.phases):
+                        begin = bounds[k]
+                        until = next((b for b in bounds[k + 1 :] if b is not None), None)
+                        own = _between(lines, begin, until)
+                        first = clock(begin) if begin is not None else "0:00"
+                        last = clock(until) if until is not None else "la fin"
+                        review = assembly.assemble(
+                            assembly.phase_review_prompt(first, last),
+                            context,
+                            "\n".join(line.text for line in own),
+                        )
+                        if (
+                            assembly.estimate_tokens(
+                                review.system + review.user, cfg.chars_per_token
+                            )
+                            > budget
+                        ):
+                            detection.adjustments.append(
+                                f"« {phase.title} » : trop long pour vérifier son type seul, "
+                                "type gardé."
+                            )
+                            continue
+                        said = call(
+                            "review",
+                            review,
+                            f"{first} à {last}",
+                            answer_format=REVIEW_SCHEMA,
+                        )
+                        kind = review_kind(said)
+                        if kind is None:
+                            detection.adjustments.append(
+                                f"« {phase.title} » : vérification du type illisible, type gardé."
+                            )
+                        elif kind != phase.kind:
+                            detection.adjustments.append(
+                                f"« {phase.title} » : {KIND_WORD[phase.kind]} à la découpe, "
+                                f"{KIND_WORD[kind]} à la vérification : {KIND_WORD[kind]} retenu."
+                            )
+                            detection.phases[k] = phase.model_copy(update={"kind": kind})
                 output = detection.model_dump_json(indent=2)
             elif strategy == "sections":
                 merged = "\n\n".join(
@@ -516,12 +765,19 @@ def _title_input(
     None: the transcript itself."""
     named = [p for p in view.phases if p.title]
     if named:
+        # With how long each lasts, for the title to tell what weighed most.
         return _TitleInput(
             "chapters",
             "Chapitres de la séance",
             "\n".join(
                 f"- [{clock(p.start) if p.start is not None else '--:--'}] {p.title} "
-                f"({KIND_WORD[p.kind]})"
+                f"({KIND_WORD[p.kind]}"
+                + (
+                    f", {max(1, round((p.end - p.start) / 60))} min"
+                    if p.start is not None and p.end is not None
+                    else ""
+                )
+                + ")"
                 for p in named
             ),
             view.phases_run_id,

@@ -15,7 +15,8 @@ import pytest
 
 from coulisses_app import paths
 from coulisses_app.paths import DataDir
-from coulisses_app.prompting import ollama
+from coulisses_app.phases import DetectedPhase
+from coulisses_app.prompting import assembly, ollama
 from coulisses_app.prompting.generate import GenerationError, Provenance
 from coulisses_app.prompting.ollama import ChatAnswer, InstalledModel, OllamaClient
 
@@ -301,3 +302,46 @@ def test_two_summaries_of_one_session_share_its_chapters_and_title(
     mesure.measure(out, asked, ["petit:4b"], source, FakeClient(), fake_run())
     results = json.loads((out / "resultats.json").read_text())
     assert [r["task"] for r in results] == ["chapitres", "titre", "resume-impro", "resume-court"]
+
+
+def test_a_session_without_an_action_gets_its_chapters_and_title_only(
+    mesure, monkeypatch, real: Path, tmp_path: Path
+) -> None:
+    source = make_source(tmp_path / "source", ["s1"])
+    monkeypatch.setattr(mesure, "ollama_command", lambda *a: "")
+    out = tmp_path / "mesures"
+    mesure.measure(out, [("s1", None)], ["petit:4b"], source, FakeClient(), fake_run())
+    results = json.loads((out / "resultats.json").read_text())
+    assert [r["task"] for r in results] == ["chapitres", "titre"]
+
+
+def test_chapters_are_scored_on_cuts_within_a_minute_and_kinds_over_time(mesure) -> None:
+    # Ten lines, one a minute; the reference cuts at 3 and 6 minutes.
+    turns = [(i, i * 60.0) for i in range(10)]
+    reference = [
+        DetectedPhase(turn=0, kind="discussion", title="a"),
+        DetectedPhase(turn=3, kind="scene", title="b"),
+        DetectedPhase(turn=6, kind="discussion", title="c"),
+    ]
+    # Found: 4 minutes (one off, within the tolerance), 8 minutes (wrong), 6 missed.
+    found = [
+        DetectedPhase(turn=0, kind="discussion", title="a"),
+        DetectedPhase(turn=4, kind="scene", title="b"),
+        DetectedPhase(turn=8, kind="scene", title="x"),
+    ]
+    scores = mesure.score_session(found, reference, turns)
+    assert (scores["chapters"], scores["reference_chapters"]) == (3, 3)
+    assert scores["precision"] == 0.5 and scores["recall"] == 0.5
+    # Kinds wrong over minutes 3, 6, 7 and 8: 5 of the 9 measured minutes right.
+    assert scores["kinds"] == pytest.approx(5 / 9)
+
+
+def test_a_setting_changed_for_a_measure_is_put_in_place_and_an_unknown_one_refused(
+    mesure, monkeypatch
+) -> None:
+    monkeypatch.setattr(assembly, "settings", assembly.settings)  # restored after
+    changed = mesure.with_settings(["temperature=0", "phases_section_min=20"])
+    assert changed == {"temperature": 0, "phases_section_min": 20}
+    assert assembly.settings().phases_section_min == 20
+    with pytest.raises(SystemExit):
+        mesure.with_settings(["inconnu=1"])

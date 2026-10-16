@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from itertools import pairwise
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -28,6 +29,10 @@ KIND_FOR_MODEL: dict[str, PhaseKind] = {
 KIND_WORD: dict[PhaseKind, str] = {"scene": "jeu", "discussion": "discussion", "other": "autre"}
 """How a kind is written in the transcript sent to the model."""
 
+DETECTED_KINDS = ["scene", "discussion"]
+"""What the detection may propose (ADR 0045): « autre » is the user's only, set by hand.
+An « autre » answered all the same is still read (KIND_FOR_MODEL)."""
+
 ANSWER_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
@@ -37,7 +42,7 @@ ANSWER_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "properties": {
                     "debut": {"type": "string"},
-                    "type": {"type": "string", "enum": list(KIND_FOR_MODEL)},
+                    "type": {"type": "string", "enum": DETECTED_KINDS},
                     "titre": {"type": "string"},
                 },
                 "required": ["debut", "type", "titre"],
@@ -47,6 +52,13 @@ ANSWER_SCHEMA: dict[str, object] = {
     "required": ["chapitres"],
 }
 """Given to Ollama (`format`): the answer is this JSON, nothing else."""
+
+REVIEW_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {"type": {"type": "string", "enum": DETECTED_KINDS}},
+    "required": ["type"],
+}
+"""The answer of a chapter's review (ADR 0045): played or not."""
 
 TITLE_MAX = 120
 
@@ -92,6 +104,93 @@ def parse_time(text: str) -> int | None:
     if int(seconds) >= 60:
         return None
     return int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)
+
+
+class _Review(BaseModel):
+    type: str
+
+
+def review_kind(raw: str) -> PhaseKind | None:
+    """The kind a chapter's review gives; none when it cannot be read (the caller keeps
+    the kind it had and says so)."""
+    try:
+        said = _Review.model_validate_json(raw).type.strip().lower()
+    except ValueError:
+        return None
+    return KIND_FOR_MODEL.get(said) if said in DETECTED_KINDS else None
+
+
+def _kept_title(title: str) -> str:
+    """A chapter's title as snap keeps it: spaces put right, at most TITLE_MAX characters."""
+    return " ".join(title.split())[:TITLE_MAX]
+
+
+def last_chapter(raw: str) -> tuple[str, str] | None:
+    """The (type, titre) of the last chapter of one answer, the title as snap keeps it;
+    none when the answer gives none (snap then says why)."""
+    try:
+        chapters = _Answer.model_validate_json(raw).chapitres
+    except ValueError:
+        return None
+    return (chapters[-1].type, _kept_title(chapters[-1].titre)) if chapters else None
+
+
+def drop_before(raw: str, start: str, previous: tuple[str, str] | None = None) -> tuple[str, int]:
+    """One answer without the chapters it set before `start` (as written in the
+    transcript): in lines recalled from the part before, which are that part's to cut.
+    When one of them is `previous` (type, titre), the chapter the part before ended on,
+    the part opens by going on with it (join_parts then joins them). An answer that
+    cannot be read, or a time that cannot, is passed on: snap says why."""
+    limit = parse_time(start)
+    try:
+        chapters = _Answer.model_validate_json(raw).chapitres
+    except ValueError:
+        return raw, 0
+    if limit is None:
+        return raw, 0
+    kept = [c for c in chapters if (t := parse_time(c.debut)) is None or t >= limit]
+    dropped = [c for c in chapters if c not in kept]
+    if (
+        previous is not None
+        and any(_same(c.type, previous[0]) and _same(c.titre, previous[1]) for c in dropped)
+        and not (kept and _same(kept[0].type, previous[0]) and _same(kept[0].titre, previous[1]))
+    ):
+        kept.insert(0, _Chapter(debut=start, type=previous[0], titre=previous[1]))
+    return _Answer(chapitres=kept).model_dump_json(), len(dropped)
+
+
+def _same(a: str, b: str) -> bool:
+    return _kept_title(a).casefold() == _kept_title(b).casefold()
+
+
+def join_parts(answers: list[str]) -> tuple[list[str], list[bool]]:
+    """The answers of a session read in parts, where a part that opens by going on with the
+    previous part's last chapter (the same type and title, as asked) loses that opening
+    chapter: the previous one runs on, uncut by the part's start.
+
+    Returns the answers to snap and, for each part after the first, whether it was joined.
+    An answer that cannot be read is passed on untouched: snap says why."""
+    kept = answers[:1]
+    joined: list[bool] = []
+    for previous, raw in pairwise(answers):
+        before = last_chapter(previous)
+        try:
+            chapters = _Answer.model_validate_json(raw).chapitres
+        except ValueError:
+            kept.append(raw)
+            joined.append(False)
+            continue
+        # A part with no chapter of its own goes on with the one before as well.
+        goes_on = not chapters or (
+            before is not None
+            and _same(chapters[0].type, before[0])
+            and _same(chapters[0].titre, before[1])
+        )
+        if chapters and goes_on:
+            chapters = chapters[1:]
+        kept.append(_Answer(chapitres=chapters).model_dump_json())
+        joined.append(goes_on)
+    return kept, joined
 
 
 def snap(answers: list[str], turns: Sequence[tuple[int, float | None]]) -> PhaseDetection:

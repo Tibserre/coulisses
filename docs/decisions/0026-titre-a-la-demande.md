@@ -1,6 +1,6 @@
 # 0026 — Le titre à la demande, fait à partir des chapitres
 
-Statut : Acceptée (2026-10-06, choix de l'utilisateur). Remplace, dans l'ADR 0025, le titre automatique après le traitement.
+Statut : Acceptée (2026-10-06, choix de l'utilisateur). Remplace, dans l'ADR 0025, le titre automatique après le traitement. Précisé le 2026-10-16 (ADR 0045, lot 11g) : les chapitres sont donnés avec leur durée, et un titre de plus de huit mots est redemandé une fois, jamais coupé.
 
 ## Contexte
 Après l'ADR 0025, la fin du traitement lançait encore deux appels à Ollama : les chapitres, puis le titre. Chacun relisait la transcription entière, soit environ 36 000 tokens pour une séance de 1 h 30 et deux minutes de calcul intensif avec qwen3.8. L'utilisateur veut éviter de consommer pour rien, surtout sur batterie, et juge qu'un titre n'a pas besoin de toute la transcription.
