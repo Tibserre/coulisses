@@ -3,6 +3,16 @@
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 
+## v0.28.0 — 2026-10-16
+
+### Nouveautés
+
+- nomme le sujet principal et un détail distinctif, et redemande un titre trop long (titre)
+- vise un chapitre toutes les 6 à 10 min et vérifie leur type par défaut (chapitres)
+- laisse « autre » à la main, vérifie le type de chaque chapitre et regroupe les chapitres voisins (chapitres)
+- note les chapitres contre des références et ajoute rappel, finesse et fenêtre réglables (chapitres)
+- lit la séance par parties de 25 min avec un ordre de grandeur et un prompt généraliste (chapitres)
+
 ## v0.27.0 — 2026-10-14
 
 ### Nouveautés
