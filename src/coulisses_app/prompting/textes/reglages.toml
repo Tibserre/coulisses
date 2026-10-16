@@ -25,6 +25,15 @@ minutes_par_chapitre = [4, 10]
 # La fenêtre des chapitres, qui se lisent par parties courtes : plus petite, elle tient
 # moins de mémoire (0 : celle de num_ctx).
 num_ctx_chapitres = 0
+# Une fois découpés, le type de chaque chapitre est vérifié : le chapitre est relu seul pour
+# dire s'il est joué ou non (ADR 0045). Un appel court de plus par chapitre.
+verifier_types_chapitres = false
+# Une fois découpés, les chapitres voisins qui forment un même moment sont regroupés par un
+# appel qui ne lit que leur liste (ADR 0045) : moins de chapitres, plus lisibles.
+regrouper_chapitres = false
+# Quand ils sont regroupés, la découpe vise d'abord des chapitres plus courts, de cette durée
+# en minutes ; le regroupement les ramène ensuite à minutes_par_chapitre.
+minutes_par_chapitre_decoupe = [2, 5]
 
 # Caractères par token, volontairement bas pour surestimer la taille du prompt : Ollama
 # ne permet pas de compter les tokens avant l'envoi (ADR 0022). Mesuré le 2026-10-06 avec

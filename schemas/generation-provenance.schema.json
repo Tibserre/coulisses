@@ -10,7 +10,8 @@
           "enum": [
             "unique",
             "section",
-            "consolidation"
+            "consolidation",
+            "review"
           ],
           "title": "Kind",
           "type": "string"

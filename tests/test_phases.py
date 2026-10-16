@@ -11,15 +11,20 @@ from fastapi.testclient import TestClient
 
 from coulisses_app import corrections
 from coulisses_app.corrections import RemovePhase, SetPhase, _replay
+from coulisses_app.format import clock
 from coulisses_app.marks import Marker, TimedNote
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import (
+    ANSWER_SCHEMA,
+    REVIEW_SCHEMA,
     DetectedPhase,
     PhaseAnswerError,
     PhaseDetection,
     drop_before,
     join_parts,
     parse_time,
+    regroup_onto,
+    review_kind,
     snap,
 )
 from coulisses_app.prompting import assembly
@@ -669,4 +674,176 @@ def test_each_part_can_be_sent_after_the_end_of_the_one_before_which_it_does_not
     said = json.loads((folder / "output.json").read_text())["adjustments"]
     # The fake model sets « Essai » at 0:00 each time: in the recalled lines, left out.
     assert any("2 chapitre(s) placé(s) dans les répliques rappelées" in a for a in said)
-    assert json.loads((folder / "spec.json").read_text())["phases_overlap_min"] == 3
+    spec = json.loads((folder / "spec.json").read_text())
+    assert spec["phases_overlap_min"] == 3  # P7, with the other ways the chapters were read
+    assert {"phases_review_kinds", "phases_regroup", "review_format"} <= spec.keys()
+
+
+def test_the_detection_proposes_play_or_discussion_and_leaves_other_to_the_user() -> None:
+    proposed = ANSWER_SCHEMA["properties"]["chapitres"]["items"]["properties"]["type"]["enum"]  # type: ignore[index]
+    assert proposed == ["scene", "discussion"]
+    assert "`autre`" not in assembly.PHASES.prompt
+    # An « autre » answered all the same is still read, not lost.
+    assert snap([answer(("0:00", "autre", "Essais"))], LINES).phases[0].kind == "other"
+    assert review_kind('{"type": "scene"}') == "scene"
+    assert review_kind('{"type": "autre"}') is None
+    assert review_kind("pas du JSON") is None
+
+
+@pytest.mark.parametrize(
+    ("long", "review_answer", "said"),
+    [
+        (True, '{"type": "scene"}', "trop long pour vérifier son type seul, type gardé"),
+        (False, "pas du JSON", "vérification du type illisible, type gardé"),
+    ],
+)
+def test_a_kind_that_cannot_be_checked_is_kept_and_said(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+    long: bool,
+    review_answer: str,
+    said: str,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    checking = assembly.settings().model_copy(
+        update={"phases_review_kinds": True}
+        | ({"num_ctx": 6000, "phases_reserve": 500} if long else {})
+    )
+    monkeypatch.setattr(assembly, "settings", lambda: checking)
+    # Long: read in parts that each go on with « Essai », one chapter too long to check alone.
+    lines = [
+        assembly.Line(float(i * 10), f"[{i // 6}:{i % 6}0] Marie : " + "on reprend " * 30)
+        for i in range(60 if long else 3)
+    ]
+    monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: lines)
+    chat = fake_model.chat
+
+    def answering(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        answer_ = chat(model, messages, options, answer_format=answer_format)
+        if answer_format == REVIEW_SCHEMA:
+            return answer_.model_copy(update={"content": review_answer})
+        return answer_
+
+    monkeypatch.setattr(fake_model, "chat", answering)
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    folder = data.run_dir(session_id, prov.run_id)
+    detection = json.loads((folder / "output.json").read_text())
+    assert detection["phases"][0]["kind"] == "discussion"  # kept
+    assert any(said in a for a in detection["adjustments"])
+    assert ("review" in [c.kind for c in prov.calls]) is not long
+
+
+def test_each_chapter_can_be_read_again_alone_and_its_kind_changed_and_said(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    reviewing = assembly.settings().model_copy(update={"phases_review_kinds": True})
+    monkeypatch.setattr(assembly, "settings", lambda: reviewing)
+    hour = [assembly.Line(float(m * 60), f"[{m}:00] Marie : ligne {m}") for m in range(10)]
+    monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: hour)
+    fake_model.phases_answer = answer(("0:00", "discussion", "Accueil"))
+    chat = fake_model.chat
+
+    def answering(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        said = chat(model, messages, options, answer_format=answer_format)
+        if answer_format == REVIEW_SCHEMA:
+            return said.model_copy(update={"content": '{"type": "scene"}'})
+        return said
+
+    monkeypatch.setattr(fake_model, "chat", answering)
+    calls_before = len(fake_model.calls)
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    assert [c.kind for c in prov.calls] == ["unique", "review"]
+    reviewed = fake_model.calls[calls_before + 1][1]
+    assert assembly.FRENCH_INSTRUCTION in reviewed[0]["content"]  # through the assembly, P4
+    assert "joué ou non" in reviewed[0]["content"]
+    assert "ligne 9" in reviewed[1]["content"]  # the chapter's own lines
+    folder = data.run_dir(session_id, prov.run_id)
+    detection = json.loads((folder / "output.json").read_text())
+    assert detection["phases"][0]["kind"] == "scene"
+    assert any(
+        "discussion à la découpe, jeu à la vérification" in a for a in detection["adjustments"]
+    )
+    assert (folder / "calls" / "02-response.json").read_text() == '{"type": "scene"}'
+
+
+def test_the_chapters_are_grouped_only_at_cuts_already_detected_and_it_is_said() -> None:
+    starts = {0: 0.0, 1: 60.0, 2: 120.0, 3: 400.0, 4: 700.0}
+    detected = [
+        DetectedPhase(turn=0, kind="discussion", title="Accueil"),
+        DetectedPhase(turn=2, kind="scene", title="Scène 1"),
+        DetectedPhase(turn=3, kind="scene", title="Scène 2"),
+        DetectedPhase(turn=4, kind="discussion", title="Retours"),
+    ]
+    # Scenes 1 and 2 together; « 6:50 » is no chapter's start: put on the nearest (6:40).
+    said = answer(
+        ("0:00", "discussion", "Accueil"),
+        ("2:00", "scene", "L'impro"),
+        ("6:50", "discussion", "Retours"),
+    )
+    grouped, told = regroup_onto(said, detected, starts)
+    assert [(p.turn, p.kind, p.title) for p in grouped] == [
+        (0, "discussion", "Accueil"),
+        (2, "scene", "L'impro"),
+        (3, "discussion", "Retours"),
+    ]
+    assert any("aucun chapitre à 6:50" in t for t in told)
+    assert any("4 chapitres détectés, regroupés en 3" in t for t in told)
+    # Nothing usable: the chapters detected are kept, and said.
+    kept, told = regroup_onto("pas du JSON", detected, starts)
+    assert kept == detected and "illisible" in told[0]
+
+
+def test_a_regrouping_call_reads_the_list_of_chapters_only(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    grouping = assembly.settings().model_copy(update={"phases_regroup": True})
+    monkeypatch.setattr(assembly, "settings", lambda: grouping)
+    # The recording has one line: three, two minutes apart, for three chapters.
+    real = corrections.build_view(data, session_id)
+    assert real is not None
+    first = real.turns[0]
+    three = real.model_copy(
+        update={
+            "turns": [
+                first.model_copy(update={"index": i, "start": i * 120.0, "end": i * 120.0 + 60})
+                for i in range(3)
+            ]
+        }
+    )
+    monkeypatch.setattr(corrections, "build_view", lambda *_a, **_k: three)
+    picked = [0.0, 120.0, 240.0]
+    titles = [("discussion", "Accueil"), ("scene", "Le marché"), ("scene", "La gare")]
+    fake_model.phases_answer = answer(
+        *((clock(t), kind, title) for t, (kind, title) in zip(picked, titles, strict=True))
+    )
+    calls_before = len(fake_model.calls)
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    assert [c.kind for c in prov.calls] == ["unique", "consolidation"]
+    grouping_call = fake_model.calls[calls_before + 1][1]
+    assert assembly.FRENCH_INSTRUCTION in grouping_call[0]["content"]  # P4
+    sent = grouping_call[1]["content"]
+    assert f"[{clock(picked[1])}] (jeu, 2 min) Le marché" in sent
+    assert "Chapitres à regrouper" in sent
+    folder = data.run_dir(session_id, prov.run_id)
+    said = json.loads((folder / "output.json").read_text())["adjustments"]
+    # The fake model answers the same three chapters: nothing grouped, and said.
+    assert any("3 chapitres détectés, regroupés en 3" in a for a in said)

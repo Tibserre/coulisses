@@ -57,6 +57,14 @@ class Settings(BaseModel):
     """How long a chapter lasts, shortest and longest, in minutes: what the model aims at."""
     phases_num_ctx: int
     """The context window of the chapters, read in short sections (0: `num_ctx`)."""
+    phases_cut_minutes_per_chapter: tuple[float, float]
+    """When the chapters are grouped: the finer length the cutting aims at, before the
+    grouping brings them to `phases_minutes_per_chapter` (ADR 0045)."""
+    phases_review_kinds: bool
+    """Each chapter detected is read again alone, to check whether it is played (ADR 0045)."""
+    phases_regroup: bool
+    """The chapters detected are grouped into fewer, longer ones by one more call, which
+    reads only their list (ADR 0045)."""
     chars_per_token: float
     temperature: float
     seed: int
@@ -78,6 +86,9 @@ def settings() -> Settings:
         phases_overlap_min=raw["rappel_chapitres_min"],
         phases_minutes_per_chapter=tuple(raw["minutes_par_chapitre"]),
         phases_num_ctx=raw["num_ctx_chapitres"],
+        phases_cut_minutes_per_chapter=tuple(raw["minutes_par_chapitre_decoupe"]),
+        phases_review_kinds=raw["verifier_types_chapitres"],
+        phases_regroup=raw["regrouper_chapitres"],
         chars_per_token=raw["caracteres_par_token"],
         temperature=raw["temperature"],
         seed=raw["graine"],
@@ -148,6 +159,24 @@ PHASES = Action(
     description="La séance découpée en chapitres : jeu, discussion ou autre.",
     prompt=_text("chapitres.md").strip(),
 )
+
+PHASE_REVIEW_PROMPT = _text("chapitres-relecture.md").strip()
+"""Each chapter read again alone: played or not (ADR 0045)."""
+
+
+PHASE_REGROUP_PROMPT = _text("chapitres-regroupement.md").strip()
+"""The chapters detected, grouped into fewer, longer ones (ADR 0045)."""
+
+
+def phase_regroup_prompt(minutes: float, per_chapter: tuple[float, float]) -> str:
+    return f"{PHASE_REGROUP_PROMPT}\n\n{phases_scale(minutes, per_chapter)}"
+
+
+def phase_review_prompt(start: str, end: str) -> str:
+    return (
+        f"{PHASE_REVIEW_PROMPT}\n\n"
+        f"Le chapitre va de {start} à {end} : tu reçois ses seules répliques."
+    )
 
 
 def system_frame() -> str:

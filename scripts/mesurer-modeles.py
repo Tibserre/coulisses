@@ -357,13 +357,13 @@ def _cuts(phases: list[DetectedPhase], start_of: dict[int, float | None]) -> lis
     return [t for p in phases[1:] if (t := start_of.get(p.turn)) is not None]
 
 
-def _matched(found: list[float], wanted: list[float]) -> int:
+def _matched(found: list[float], wanted: list[float], tolerance_s: float) -> int:
     """Cuts found within the tolerance of a wanted one, each used once, closest first."""
     pairs = sorted(
         (abs(f - w), i, j)
         for i, f in enumerate(found)
         for j, w in enumerate(wanted)
-        if abs(f - w) <= TOLERANCE_S
+        if abs(f - w) <= tolerance_s
     )
     used_f: set[int] = set()
     used_w: set[int] = set()
@@ -379,12 +379,16 @@ def _kinds_agree(
     wanted: list[DetectedPhase],
     turns: list[tuple[int, float | None]],
 ) -> float:
-    """The share of the session's time where the kind found is the kind wanted."""
+    """The share of the session's time where the kind found is the kind wanted: played or
+    not, « autre » counted as discussion (the detection no longer proposes it, ADR 0045)."""
+
+    def played(kind: str) -> str:
+        return "scene" if kind == "scene" else "discussion"
 
     def kind_at(phases: list[DetectedPhase]) -> dict[int, str]:
-        starts = {p.turn: p.kind for p in phases}
+        starts = {p.turn: played(p.kind) for p in phases}
         out: dict[int, str] = {}
-        current = phases[0].kind
+        current = played(phases[0].kind)
         for index, _ in turns:
             current = starts.get(index, current)
             out[index] = current
@@ -405,10 +409,11 @@ def score_session(
     found: list[DetectedPhase],
     reference: list[DetectedPhase],
     turns: list[tuple[int, float | None]],
+    tolerance_s: float = TOLERANCE_S,
 ) -> dict[str, Any]:
     start_of = dict(turns)
     cuts, wanted = _cuts(found, start_of), _cuts(reference, start_of)
-    hits = _matched(cuts, wanted)
+    hits = _matched(cuts, wanted, tolerance_s)
     precision = hits / len(cuts) if cuts else 1.0
     recall = hits / len(wanted) if wanted else 1.0
     return {
@@ -421,7 +426,7 @@ def score_session(
     }
 
 
-def score(out: Path, references: Path) -> None:
+def score(out: Path, references: Path, tolerance_s: float = TOLERANCE_S) -> None:
     results = json.loads((out / RESULTS).read_text("utf-8"))
     rows: list[dict[str, Any]] = []
     for r in results:
@@ -444,7 +449,7 @@ def score(out: Path, references: Path) -> None:
         found = PhaseDetection.model_validate_json(
             (Path(r["run"]) / "output.json").read_text("utf-8")
         )
-        row |= score_session(found.phases, reference.phases, turns)
+        row |= score_session(found.phases, reference.phases, turns, tolerance_s)
         row["duration_s"] = r.get("duration_s")
         row["memory"] = (r.get("memory") or {}).get("SIZE")
         rows.append(row)
@@ -489,13 +494,16 @@ def main() -> None:
     parser.add_argument("--fiches", type=Path, help="dossier de mesures à mettre en fiches")
     parser.add_argument("--noter", type=Path, help="dossier de mesures dont noter les chapitres")
     parser.add_argument("--references", type=Path, help="dossier des chapitres de référence")
+    parser.add_argument(
+        "--tolerance", type=float, default=TOLERANCE_S, help="écart admis pour une coupure, en s"
+    )
     parser.add_argument("--reglage", action="append", default=[], help="cle=valeur")
     parser.add_argument("--reflexion", action="store_true", help="le modèle réfléchit d'abord")
     args = parser.parse_args()
     if args.noter:
         if not args.references:
             fail("--noter attend --references")
-        score(args.noter, args.references)
+        score(args.noter, args.references, args.tolerance)
         return
     if not args.modele:
         fail("au moins un --modele")

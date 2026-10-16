@@ -30,11 +30,14 @@ from coulisses_app.paths import DataDir
 from coulisses_app.phases import (
     ANSWER_SCHEMA,
     KIND_WORD,
+    REVIEW_SCHEMA,
     TITLE_MAX,
     PhaseAnswerError,
     drop_before,
     join_parts,
     last_chapter,
+    regroup_onto,
+    review_kind,
     snap,
 )
 from coulisses_app.prompting import assembly
@@ -66,7 +69,8 @@ class ModelClient(Protocol):
 
 class Call(BaseModel):
     index: int
-    kind: Literal["unique", "section", "consolidation"]
+    kind: Literal["unique", "section", "consolidation", "review"]
+    """`review`: a chapter read again alone, for its kind (ADR 0045)."""
     covers: str | None = None
     """For a section: the stretch of the session it covers."""
     prompt_file: str
@@ -197,6 +201,23 @@ def _minutes(starts: list[float | None]) -> float:
     return (timed[-1] - timed[0]) / 60 if timed else 0.0
 
 
+def _between(
+    lines: list[assembly.Line], begin: float | None, until: float | None
+) -> list[assembly.Line]:
+    """The lines from `begin` (included) to `until` (excluded): a chapter's. A line
+    without a time goes with the one before it."""
+    out: list[assembly.Line] = []
+    inside = begin is None
+    for line in lines:
+        if line.start is not None:
+            inside = (begin is None or line.start >= begin) and (
+                until is None or line.start < until
+            )
+        if inside:
+            out.append(line)
+    return out
+
+
 def _recalled(before: list[assembly.Line], start: float, minutes: float) -> list[assembly.Line]:
     """The timed lines of the part before within `minutes` of this part's start."""
     if minutes <= 0:
@@ -268,6 +289,10 @@ def generate(
     )
     # The chapters, read in short sections, may have a smaller window (ADR 0044).
     num_ctx = cfg.phases_num_ctx if is_phases and cfg.phases_num_ctx else cfg.num_ctx
+    # Grouped after, the chapters are first cut finer (ADR 0045).
+    cut_scale = (
+        cfg.phases_cut_minutes_per_chapter if cfg.phases_regroup else cfg.phases_minutes_per_chapter
+    )
     options: dict[str, object] = {
         "num_ctx": num_ctx,
         "num_predict": reserve,
@@ -331,9 +356,11 @@ def generate(
     ollama_version: str | None = None
 
     def call(
-        kind: Literal["unique", "section", "consolidation"],
+        kind: Literal["unique", "section", "consolidation", "review"],
         prompt: assembly.Prompt,
         covers: str | None,
+        *,
+        answer_format: dict[str, object] | None = answer_format,
     ) -> str:
         index = len(calls) + 1
         prompt_file = f"calls/{index:02d}-prompt.txt"
@@ -382,6 +409,10 @@ def generate(
                             "phases_section_min": cfg.phases_section_min,
                             "phases_overlap_min": cfg.phases_overlap_min,
                             "phases_minutes_per_chapter": list(cfg.phases_minutes_per_chapter),
+                            "phases_cut_minutes_per_chapter": list(cut_scale),
+                            "phases_review_kinds": cfg.phases_review_kinds,
+                            "phases_regroup": cfg.phases_regroup,
+                            "review_format": REVIEW_SCHEMA,
                             "phases_num_ctx": cfg.phases_num_ctx,
                         }
                         if is_phases
@@ -415,9 +446,7 @@ def generate(
             whole = "\n".join(line.text for line in lines)
             starts_all = [line.start for line in lines if line.start is not None]
             prompt = assembly.assemble(
-                assembly.phases_prompt(
-                    chosen.prompt, _minutes(starts_all), cfg.phases_minutes_per_chapter
-                )
+                assembly.phases_prompt(chosen.prompt, _minutes(starts_all), cut_scale)
                 if is_phases
                 else chosen.prompt,
                 context,
@@ -447,7 +476,7 @@ def generate(
                             "00:00:00",
                             999,
                             longest_previous,
-                            per_chapter=cfg.phases_minutes_per_chapter,
+                            per_chapter=cut_scale,
                             recalled=True,
                         )
                         if is_phases
@@ -486,7 +515,7 @@ def generate(
                                     last,
                                     _minutes(starts),
                                     last_chapter(parts[-1]) if parts else None,
-                                    per_chapter=cfg.phases_minutes_per_chapter,
+                                    per_chapter=cut_scale,
                                     recalled=bool(recalled),
                                 ),
                                 context,
@@ -548,6 +577,81 @@ def generate(
                         f"Partie(s) {', '.join(map(str, unrecalled))} lue(s) sans le rappel de la "
                         "précédente : la fenêtre du modèle est trop petite pour les deux."
                     )
+                start_of = {t.index: t.start for t in view.turns}
+                if cfg.phases_regroup and len(detection.phases) > 1:
+                    # The chapters, listed alone, grouped into fewer (ADR 0045).
+                    ends = [start_of.get(p.turn) for p in detection.phases[1:]]
+                    ends.append(max((s for s in start_of.values() if s is not None), default=0))
+                    listed = [
+                        f"[{clock(start_of.get(p.turn) or 0)}] ({KIND_WORD[p.kind]}, "
+                        f"{max(1, round(((until or 0) - (start_of.get(p.turn) or 0)) / 60))} min) "
+                        f"{p.title}"
+                        for p, until in zip(detection.phases, ends, strict=True)
+                    ]
+                    regroup = assembly.assemble(
+                        assembly.phase_regroup_prompt(
+                            _minutes(starts_all), cfg.phases_minutes_per_chapter
+                        ),
+                        context,
+                        "\n".join(listed),
+                        heading="Chapitres à regrouper",
+                    )
+                    if (
+                        assembly.estimate_tokens(regroup.system + regroup.user, cfg.chars_per_token)
+                        > budget
+                    ):
+                        grouped, told = (
+                            detection.phases,
+                            ["Trop de chapitres pour les regrouper d'un coup : ils sont gardés."],
+                        )
+                    else:
+                        said = call("consolidation", regroup, "regroupement des chapitres")
+                        grouped, told = regroup_onto(said, detection.phases, start_of)
+                    detection = detection.model_copy(
+                        update={"phases": grouped, "adjustments": [*detection.adjustments, *told]}
+                    )
+                if cfg.phases_review_kinds:
+                    # Each chapter read again alone: played or not (ADR 0045).
+                    bounds = [start_of.get(p.turn) for p in detection.phases]
+                    for k, phase in enumerate(detection.phases):
+                        begin = bounds[k]
+                        until = next((b for b in bounds[k + 1 :] if b is not None), None)
+                        own = _between(lines, begin, until)
+                        first = clock(begin) if begin is not None else "0:00"
+                        last = clock(until) if until is not None else "la fin"
+                        review = assembly.assemble(
+                            assembly.phase_review_prompt(first, last),
+                            context,
+                            "\n".join(line.text for line in own),
+                        )
+                        if (
+                            assembly.estimate_tokens(
+                                review.system + review.user, cfg.chars_per_token
+                            )
+                            > budget
+                        ):
+                            detection.adjustments.append(
+                                f"« {phase.title} » : trop long pour vérifier son type seul, "
+                                "type gardé."
+                            )
+                            continue
+                        said = call(
+                            "review",
+                            review,
+                            f"{first} à {last}",
+                            answer_format=REVIEW_SCHEMA,
+                        )
+                        kind = review_kind(said)
+                        if kind is None:
+                            detection.adjustments.append(
+                                f"« {phase.title} » : vérification du type illisible, type gardé."
+                            )
+                        elif kind != phase.kind:
+                            detection.adjustments.append(
+                                f"« {phase.title} » : {KIND_WORD[phase.kind]} à la découpe, "
+                                f"{KIND_WORD[kind]} à la vérification : {KIND_WORD[kind]} retenu."
+                            )
+                            detection.phases[k] = phase.model_copy(update={"kind": kind})
                 output = detection.model_dump_json(indent=2)
             elif strategy == "sections":
                 merged = "\n\n".join(
