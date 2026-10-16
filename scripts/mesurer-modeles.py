@@ -18,7 +18,8 @@ Usage:
     uv run python scripts/mesurer-modeles.py --seance ID[:ACTION] … --modele M …  [--sortie D]
     uv run python scripts/mesurer-modeles.py --fiches D --modele M …
     uv run python scripts/mesurer-modeles.py --noter D --references R
-A session given without an action gets its chapters and title only. `--reglage cle=valeur`
+A session given without an action gets its chapters and title only; `--taches titre`
+measures the title alone, from the chapters copied with the session. `--reglage cle=valeur`
 changes a generation setting for the measure (written in `variante.json`), `--reflexion`
 lets the model reason before answering. `--noter` scores the chapters against reference
 chapters written by hand (`R/reference-<séance>.json`, the answer's format): cuts right
@@ -219,6 +220,7 @@ def measure(
     source: DataDir,
     client: TimedClient,
     run: Generate = generate,
+    tasks: tuple[str, ...] = (PHASES_REF, TITLE_REF),
 ) -> None:
     check_place(out)
     installed = {m.name for m in client.models()}
@@ -261,7 +263,9 @@ def measure(
         copy_sessions(source, data, list(by_session))
         for session_id, action_refs in by_session.items():
             own_phases: str | None = None
-            for ref in (PHASES_REF, TITLE_REF, *action_refs):
+            # Without the chapters, the title reads those copied from the real base: the
+            # same for every model measured.
+            for ref in (*(t for t in (PHASES_REF, TITLE_REF) if t in tasks), *action_refs):
                 say(f"   {session_id} · {ref}…")
                 client.answers = []
                 record: dict[str, Any] = {"model": model, "session": session_id, "task": ref}
@@ -285,9 +289,13 @@ def measure(
                     # Made from the chapters of another model (those copied from the real
                     # base) when this one's failed. A title read from the transcript or a
                     # summary used no chapters.
-                    if ref == TITLE_REF and prov.input_kind == "chapters":
+                    if ref == TITLE_REF and prov.input_kind == "chapters" and PHASES_REF in tasks:
                         record["own_chapters"] = prov.input_run_id == own_phases
-                    elif ref not in (PHASES_REF, TITLE_REF) and prov.phases_run_id is not None:
+                    elif (
+                        ref not in (PHASES_REF, TITLE_REF)
+                        and prov.phases_run_id is not None
+                        and PHASES_REF in tasks
+                    ):
                         record["own_chapters"] = prov.phases_run_id == own_phases
                 except GenerationFailedError as exc:
                     record |= {"status": "failed", "error": str(exc)}
@@ -499,6 +507,11 @@ def main() -> None:
     )
     parser.add_argument("--reglage", action="append", default=[], help="cle=valeur")
     parser.add_argument("--reflexion", action="store_true", help="le modèle réfléchit d'abord")
+    parser.add_argument(
+        "--taches",
+        default=f"{PHASES_REF},{TITLE_REF}",
+        help="chapitres et titre à faire avant les résumés, séparés par des virgules",
+    )
     args = parser.parse_args()
     if args.noter:
         if not args.references:
@@ -510,6 +523,9 @@ def main() -> None:
     if args.fiches:
         sheets(args.fiches, args.modele)
         return
+    tasks = tuple(t for t in args.taches.split(",") if t)
+    if not set(tasks) <= {PHASES_REF, TITLE_REF}:
+        fail(f"--taches attend {PHASES_REF} et/ou {TITLE_REF}, séparés par des virgules")
     if not args.seance:
         fail("au moins une --seance ID[:ACTION]")
     asked: list[tuple[str, str | None]] = []
@@ -532,6 +548,7 @@ def main() -> None:
         args.modele,
         DataDir(DEFAULT_DATA_DIR),
         TimedClient(OllamaClient(), think=True if args.reflexion else None),
+        tasks=tasks,
     )
 
 

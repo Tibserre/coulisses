@@ -116,12 +116,83 @@ def test_a_title_asked_for_reads_the_chapters_not_the_transcript(
     assert session["title"] == "Scène du marché"  # cleaned: no quotes, no final point
     _model, messages, options = fake_model.calls[-1]
     assert options["stop"] == ["\n"]  # one line: never cut for going on (P8)
-    assert "# Chapitres de la séance\n- [0:00] Essai (discussion)" in messages[1]["content"]
+    # The chapters, each with how long it lasts.
+    assert "# Chapitres de la séance\n- [0:00] Essai (discussion, 1 min)" in messages[1]["content"]
     assert "Locuteur 1 : bonjour" not in messages[1]["content"]  # not the transcript
     assert assembly.FRENCH_INSTRUCTION in messages[0]["content"]  # the assembly still (P4)
     view = client.get(f"/api/seances/{session_id}/transcript").json()
     prov = generate(data, session_id, "titre", "modele-essai", fake_model)
     assert (prov.input_kind, prov.input_run_id) == ("chapters", view["phases_run_id"])
+
+
+def test_a_title_too_long_is_asked_once_more_never_cut(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    answers = iter(
+        [
+            "Avenir du métier, chantier, organisation, scène, costumes, journal, pétanque, photos",
+            "Le journal joué et l'avenir du métier",
+        ]
+    )
+    chat = fake_model.chat
+
+    def answering(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        said = chat(model, messages, options, answer_format=answer_format)
+        return said.model_copy(update={"content": next(answers)})
+
+    fake_model.chat = answering  # type: ignore[method-assign]
+    calls_before = len(fake_model.calls)
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    assert [c.covers for c in prov.calls] == [None, "titre redemandé, plus court"]
+    retry = fake_model.calls[calls_before + 1][1][0]["content"]
+    assert "fait 10 mots" in retry and "8 mots au plus" in retry
+    assert assembly.FRENCH_INSTRUCTION in retry  # P4
+    folder = data.run_dir(session_id, prov.run_id)
+    assert (folder / "output.md").read_text().strip() == "Le journal joué et l'avenir du métier"
+    # Still too long the second time: the shorter is kept, as it is, never cut.
+    answers = iter(
+        [
+            "Un deux trois quatre cinq six sept huit neuf dix onze",
+            "Un deux trois quatre cinq six sept huit neuf",
+        ]
+    )
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    folder = data.run_dir(session_id, prov.run_id)
+    assert (
+        folder / "output.md"
+    ).read_text().strip() == "Un deux trois quatre cinq six sept huit neuf"
+    # Longer the second time: the first is kept.
+    first = "Un deux trois quatre cinq six sept huit neuf"
+    answers = iter([first, first + " dix onze"])
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert (data.run_dir(session_id, prov.run_id) / "output.md").read_text().strip() == first
+
+
+def test_a_title_asked_again_in_vain_keeps_the_first_and_says_why(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    first = "Un deux trois quatre cinq six sept huit neuf dix"
+    chat = fake_model.chat
+    asked = 0
+
+    def answering(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        nonlocal asked
+        asked += 1
+        said = chat(model, messages, options, answer_format=answer_format)
+        if asked == 1:
+            return said.model_copy(update={"content": first})
+        return said.model_copy(update={"done_reason": "length", "content": "Tronqué"})
+
+    fake_model.chat = answering  # type: ignore[method-assign]
+    prov = generate(data, session_id, "titre", "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    assert (data.run_dir(session_id, prov.run_id) / "output.md").read_text().strip() == first
+    assert prov.calls[1].covers is not None and "en vain" in prov.calls[1].covers
 
 
 def test_without_chapters_a_title_reads_the_latest_summary_then_the_transcript(

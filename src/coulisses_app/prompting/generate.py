@@ -441,6 +441,33 @@ def generate(
                     "num_ctx dans les réglages de génération."
                 )
             output = call("unique", prompt, None)
+            # Too long: asked once more, never cut. The shorter of the two is kept; both
+            # stay in calls/ (P8). The first, valid, is kept when the second cannot be had.
+            words = len(_clean_title(output).split())
+            if words > cfg.title_max_words:
+                shorter = assembly.assemble(
+                    assembly.title_retry_prompt(
+                        chosen.prompt, _clean_title(output), words, cfg.title_max_words
+                    ),
+                    context,
+                    title_input.text,
+                    heading=title_input.heading,
+                )
+                if (
+                    assembly.estimate_tokens(shorter.system + shorter.user, cfg.chars_per_token)
+                    > cfg.num_ctx - reserve
+                ):
+                    log.warning("title %s: too long to ask again within the window", run_id)
+                else:
+                    try:
+                        again = call("unique", shorter, "titre redemandé, plus court")
+                    except (GenerationFailedError, OllamaError) as exc:
+                        # Its call stays in the provenance, saying why: not hidden (P8).
+                        calls[-1].covers = f"titre redemandé en vain, le premier est gardé : {exc}"
+                        log.warning("title %s asked again in vain: %s", run_id, exc)
+                    else:
+                        if len(_clean_title(again).split()) < words:
+                            output = again
         else:
             lines = assembly.transcript_lines(view, with_phases=not is_phases)
             whole = "\n".join(line.text for line in lines)
@@ -777,12 +804,19 @@ def _title_input(
     None: the transcript itself."""
     named = [p for p in view.phases if p.title]
     if named:
+        # With how long each lasts, for the title to tell what weighed most.
         return _TitleInput(
             "chapters",
             "Chapitres de la séance",
             "\n".join(
                 f"- [{clock(p.start) if p.start is not None else '--:--'}] {p.title} "
-                f"({KIND_WORD[p.kind]})"
+                f"({KIND_WORD[p.kind]}"
+                + (
+                    f", {max(1, round((p.end - p.start) / 60))} min"
+                    if p.start is not None and p.end is not None
+                    else ""
+                )
+                + ")"
                 for p in named
             ),
             view.phases_run_id,

@@ -11,6 +11,8 @@ num_ctx = 65536
 # Place gardée pour la réponse, en tokens : le prompt doit tenir dans num_ctx moins cela.
 reserve_reponse = 6144
 reserve_titre = 128
+# Un titre plus long est redemandé une fois, plus court ; il n'est jamais coupé.
+mots_max_titre = 8
 # Les chapitres : une liste JSON (début, type, titre), une ligne par chapitre.
 reserve_chapitres = 4096
 # Les chapitres se lisent par parties d'au plus cette durée, en minutes (ADR 0044) : un

@@ -47,6 +47,8 @@ class Settings(BaseModel):
     num_ctx: int
     response_reserve: int
     title_reserve: int
+    title_max_words: int
+    """A title longer than this is asked once more, shorter; never cut."""
     phases_reserve: int
     phases_section_min: int
     """The chapters are read in sections of at most this many minutes."""
@@ -81,6 +83,7 @@ def settings() -> Settings:
         num_ctx=raw["num_ctx"],
         response_reserve=raw["reserve_reponse"],
         title_reserve=raw["reserve_titre"],
+        title_max_words=raw["mots_max_titre"],
         phases_reserve=raw["reserve_chapitres"],
         phases_section_min=raw["partie_chapitres_min"],
         phases_overlap_min=raw["rappel_chapitres_min"],
@@ -170,6 +173,15 @@ PHASE_REGROUP_PROMPT = _text("chapitres-regroupement.md").strip()
 
 def phase_regroup_prompt(minutes: float, per_chapter: tuple[float, float]) -> str:
     return f"{PHASE_REGROUP_PROMPT}\n\n{phases_scale(minutes, per_chapter)}"
+
+
+def title_retry_prompt(action_prompt: str, previous: str, words: int, max_words: int) -> str:
+    """The title asked once more, when the first one is too long."""
+    return (
+        f"{action_prompt}\n\n"
+        f"Ta première proposition, « {previous} », fait {words} mots : c'est trop long pour une "
+        f"liste. Propose un titre de {max_words} mots au plus, qui garde le sujet principal."
+    )
 
 
 def phase_review_prompt(start: str, end: str) -> str:

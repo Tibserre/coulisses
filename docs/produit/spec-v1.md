@@ -153,7 +153,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 - **Historique des générations** par séance. Chaque génération conserve le prompt complet envoyé, le modèle et ses réglages (P7).
 - **Comparaison côte à côte** de deux générations : on coche deux résumés de l'historique, puis « Comparer les deux ».
 - **Choix du modèle local** au moment de générer, dans la liste des modèles d'Ollama ; le dernier choisi devient le défaut (ADR 0025).
-- **Titre de séance** : proposé à la demande (« Proposer un titre », sous le titre), à partir des titres des chapitres, sinon du dernier résumé, sinon de la transcription ; modifiable ; un titre écrit à la main n'est jamais remplacé (ADR 0026).
+- **Titre de séance** : proposé à la demande (« Proposer un titre », sous le titre), à partir des titres des chapitres et de leur durée, sinon du dernier résumé, sinon de la transcription ; il nomme le sujet principal et, si possible, un détail qui distingue la séance ; trois à huit mots : un titre plus long est redemandé une fois, jamais coupé, et le plus court des deux est gardé ; modifiable ; un titre écrit à la main n'est jamais remplacé (ADR 0026).
 - Le copier-coller fonctionne partout, clic droit compris.
 
 ### 7.10 Conservation de l'audio
