@@ -96,8 +96,9 @@ def test_after_processing_only_the_chapters_are_made(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    # Only the chapters (JSON asked): the title and the summaries are on demand (ADR 0026).
-    assert len(fake_model.calls) == 1 and fake_model.formats[0] is not None
+    # Only the chapters (JSON asked), then the check of their kind (ADR 0045): the title and
+    # the summaries are on demand (ADR 0026).
+    assert len(fake_model.calls) == 2 and all(f is not None for f in fake_model.formats)
     assert client.get(f"/api/seances/{session_id}").json()["session"]["title"] is None
     listed = client.get(f"/api/seances/{session_id}/resumes").json()
     assert listed == {"generations": [], "pending": []}
@@ -491,7 +492,15 @@ def test_each_writing_is_made_with_its_own_model(
     run_all(data, fake_model)
     client.post(f"/api/seances/{session_id}/chapitres")  # detected again
     run_all(data, fake_model)
-    assert [model for model, _, _ in fake_model.calls] == ["moyen", "petit", "grand", "moyen"]
+    # The chapters are detected then their kind checked, with the same model (ADR 0045).
+    assert [model for model, _, _ in fake_model.calls] == [
+        "moyen",
+        "moyen",
+        "petit",
+        "grand",
+        "moyen",
+        "moyen",
+    ]
 
 
 def test_the_model_chosen_before_stays_for_every_writing(client: TestClient, data: DataDir) -> None:

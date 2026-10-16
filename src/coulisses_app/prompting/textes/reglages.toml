@@ -15,19 +15,19 @@ reserve_titre = 128
 reserve_chapitres = 4096
 # Les chapitres se lisent par parties d'au plus cette durée, en minutes (ADR 0044) : un
 # petit modèle perd le fil d'une séance entière. Les parties ont toutes la même durée.
-partie_chapitres_min = 25
+partie_chapitres_min = 15
 # Chaque partie, sauf la première, est précédée d'autant de minutes de la précédente,
 # rappelées sans être découpées, pour juger si elle la continue (0 : aucun rappel).
-rappel_chapitres_min = 0
+rappel_chapitres_min = 3
 # Combien dure un chapitre, au plus court et au plus long, en minutes : le modèle reçoit
 # l'ordre de grandeur qui en découle pour chaque partie (ADR 0044).
-minutes_par_chapitre = [4, 10]
+minutes_par_chapitre = [6, 10]
 # La fenêtre des chapitres, qui se lisent par parties courtes : plus petite, elle tient
 # moins de mémoire (0 : celle de num_ctx).
 num_ctx_chapitres = 0
 # Une fois découpés, le type de chaque chapitre est vérifié : le chapitre est relu seul pour
 # dire s'il est joué ou non (ADR 0045). Un appel court de plus par chapitre.
-verifier_types_chapitres = false
+verifier_types_chapitres = true
 # Une fois découpés, les chapitres voisins qui forment un même moment sont regroupés par un
 # appel qui ne lit que leur liste (ADR 0045) : moins de chapitres, plus lisibles.
 regrouper_chapitres = false

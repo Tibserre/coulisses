@@ -340,8 +340,8 @@ def test_a_setting_changed_for_a_measure_is_put_in_place_and_an_unknown_one_refu
     mesure, monkeypatch
 ) -> None:
     monkeypatch.setattr(assembly, "settings", assembly.settings)  # restored after
-    changed = mesure.with_settings(["temperature=0", "phases_section_min=15"])
-    assert changed == {"temperature": 0, "phases_section_min": 15}
-    assert assembly.settings().phases_section_min == 15
+    changed = mesure.with_settings(["temperature=0", "phases_section_min=20"])
+    assert changed == {"temperature": 0, "phases_section_min": 20}
+    assert assembly.settings().phases_section_min == 20
     with pytest.raises(SystemExit):
         mesure.with_settings(["inconnu=1"])

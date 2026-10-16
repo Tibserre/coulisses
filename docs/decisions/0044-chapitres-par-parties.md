@@ -1,6 +1,6 @@
 # 0044 — Les chapitres lus par parties, avec un ordre de grandeur, par un prompt généraliste
 
-Statut : Acceptée (2026-10-14 : l'utilisateur accepte la lecture par parties, jugée à l'œil sur trois vraies séances). Précise l'ADR 0024, qui lisait la séance en un appel.
+Statut : Acceptée (2026-10-14 : l'utilisateur accepte la lecture par parties, jugée à l'œil sur trois vraies séances). Précise l'ADR 0024, qui lisait la séance en un appel. Valeurs précisées par l'ADR 0045 : parties de 15 min, rappel de la partie précédente, 6 à 10 min par chapitre.
 
 ## Contexte
 L'utilisateur veut un petit modèle pour les chapitres (ADR 0039, lot 11g), qui tienne sur un Mac de 16 Go. Le 2026-10-14, quatre petits modèles (`qwen3.5:2b` et `4b`, `gemma4:e2b` et `e4b`, en MLX) ont lu en un appel trois vraies séances (deux impros de 1 h 32 et 1 h 44, une réunion de 40 min). Ils sont rapides (3 à 36 s) et légers (4 à 11 Go), mais ils perdent le fil d'une longue séance. Sur l'impro de 1 h 44, un seul chapitre couvre 1 h 20, voire la séance presque entière. Le prompt, écrit pour l'impro, donnait aussi un plancher (« en général plus d'une minute ») que Gemma suit à la lettre : un chapitre par minute. Enfin, les petits modèles recopient les titres donnés en exemple : « Retours sur la scène du catch » pour une séance sans catch.

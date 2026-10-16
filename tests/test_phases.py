@@ -586,7 +586,9 @@ def test_a_session_longer_than_a_section_is_read_in_parts_that_follow_each_other
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    sliced = assembly.settings().model_copy(update={"phases_section_min": 25})
+    sliced = assembly.settings().model_copy(
+        update={"phases_section_min": 25, "phases_overlap_min": 0, "phases_review_kinds": False}
+    )
     monkeypatch.setattr(assembly, "settings", lambda: sliced)
     hour = [assembly.Line(float(m * 60), f"[{m}:00] Marie : on reprend") for m in range(60)]
     monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: hour)
@@ -633,7 +635,9 @@ def test_the_chapters_may_have_their_own_window_and_the_summaries_keep_theirs(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    own = assembly.settings().model_copy(update={"phases_num_ctx": 16384})
+    own = assembly.settings().model_copy(
+        update={"phases_num_ctx": 16384, "phases_review_kinds": False}
+    )
     monkeypatch.setattr(assembly, "settings", lambda: own)
     calls_before = len(fake_model.calls)
     generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
@@ -814,7 +818,9 @@ def test_a_regrouping_call_reads_the_list_of_chapters_only(
 ) -> None:
     session_id = imported(client, recording)
     run_all(data, fake_model)
-    grouping = assembly.settings().model_copy(update={"phases_regroup": True})
+    grouping = assembly.settings().model_copy(
+        update={"phases_regroup": True, "phases_review_kinds": False}
+    )
     monkeypatch.setattr(assembly, "settings", lambda: grouping)
     # The recording has one line: three, two minutes apart, for three chapters.
     real = corrections.build_view(data, session_id)
