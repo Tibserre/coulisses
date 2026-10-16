@@ -15,8 +15,9 @@ Preparing, in this order, each step stopping the next:
 5. the previous published app makes a base with a session, the new one opens it
    (migrations), network cut, with empty models;
 6. the DMG (the app inside signed, the image itself not); its EdDSA signature; the notes,
-   from CHANGELOG.md; the appcast, signed too (the app requires it), without any remote
-   resource.
+   from this repository's CHANGELOG.md, which must hold the tag (a section written from the
+   commits is read again before publishing, and corrected after its tag if need be); the
+   appcast, signed too (the app requires it), without any remote resource.
 Everything is kept in ~/Coulisses/Publications/vX.Y.Z.
 
 Sending (--envoyer) takes that preparation as it is (never built again), pushes the tag and
@@ -187,6 +188,11 @@ def checked_out(tag: str) -> Path:
         fail("le dépôt a des changements non commités : commitez ou rangez-les d'abord")
     if not run(["git", "-C", ROOT, "tag", "--list", tag]).stdout.strip():
         fail(f"l'étiquette {tag} n'existe pas (elle naît d'une fusion dans main)")
+    # The notes come from this checkout's CHANGELOG.md: it must hold the tag, so that its
+    # section is the one written for it (and corrected since, if need be).
+    merged = subprocess.run(["git", "-C", ROOT, "merge-base", "--is-ancestor", tag, "HEAD"])
+    if merged.returncode != 0:
+        fail(f"ce dépôt ne contient pas {tag} : lancez la publication depuis main à jour")
     work = CACHE / f"publication-{tag}"
     if work.exists():
         say(f"   l'essai précédent de {tag} ({work}) est retiré")
@@ -440,7 +446,9 @@ def prepare(tag: str, first: bool) -> Path:
     dmg = out / f"Coulisses-{version}.dmg"
     make_dmg(app, dmg)
     signature, length = parse_signature(run([tools / "sign_update", dmg]).stdout)
-    notes = release_notes((work / "CHANGELOG.md").read_text(encoding="utf-8"), version)
+    # The notes from this repository's CHANGELOG.md, not the tag's: a section written by
+    # release.py from the commits can be corrected after the tag, which never moves.
+    notes = release_notes((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), version)
     (out / "notes.md").write_text(notes, encoding="utf-8")
     feed = out / "appcast.xml"
     feed.write_text(

@@ -2,16 +2,14 @@
 
 Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
+Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
 ## v0.28.0 — 2026-10-16
 
 ### Nouveautés
 
-- nomme le sujet principal et un détail distinctif, et redemande un titre trop long (titre)
-- vise un chapitre toutes les 6 à 10 min et vérifie leur type par défaut (chapitres)
-- laisse « autre » à la main, vérifie le type de chaque chapitre et regroupe les chapitres voisins (chapitres)
-- note les chapitres contre des références et ajoute rappel, finesse et fenêtre réglables (chapitres)
-- lit la séance par parties de 25 min avec un ordre de grandeur et un prompt généraliste (chapitres)
+- Les chapitres suivent mieux la séance, impro comme réunion : environ un toutes les 6 à 10 minutes, en Jeu ou Discussion (« Autre » se choisit à la main), avec un type vérifié.
+- Le titre proposé nomme le sujet principal et un détail qui distingue la séance, et reste court.
 
 ## v0.27.0 — 2026-10-14
 
