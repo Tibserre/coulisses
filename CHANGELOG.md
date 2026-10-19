@@ -6,51 +6,54 @@ Une section peut être réécrite ensuite pour les utilisateurs : la publication
 
 ## v0.33.1 — 2026-10-19
 
-### Corrections
+### Nouveautés depuis la 0.28.0
 
-- donne au ffmpeg de l'app l'encodeur et le format FLAC (construction)
+- Coulisses pèse 183 Mo au lieu de 2 Go : ses mises à jour se téléchargent bien plus vite.
+- Une partie du traitement s'installe désormais à part, une seule fois : l'environnement « torch » (environ 1,3 Go), depuis Réglages > Transcription, qui dit aussi à quoi sert chaque environnement.
+- La transcription passe à un modèle presque deux fois plus léger (2,5 Go au lieu de 4,7 Go) et plus rapide, aussi juste. Au lancement, une fenêtre propose de le télécharger, puis de supprimer l'ancien.
+- Les enregistrements finis sont gardés en FLAC : environ deux fois moins de place, sans rien perdre du son.
 
 ## v0.33.0 — 2026-10-19
 
 ### Nouveautés
 
-- explique au lancement les mises à jour qui attendent une action (modeles)
+- Au lancement, une fenêtre explique les mises à jour qui attendent un geste de votre part : télécharger le nouveau, supprimer l'ancien.
 
 ## v0.32.0 — 2026-10-19
 
 ### Nouveautés
 
-- passe au moteur v1.10.0, qui transcrit avec Qwen3 en 8 bits (moteur)
+- La transcription passe à un modèle en 8 bits, plus léger et plus rapide, aussi juste.
 
 ## v0.31.0 — 2026-10-19
 
 ### Nouveautés
 
-- dit le rôle de chaque environnement, selon le moteur v1.9.0 (modeles)
+- Réglages > Transcription dit à quoi sert chaque environnement.
 
 ## v0.30.1 — 2026-10-19
 
 ### Corrections
 
-- passe au moteur v1.8.2, qui rend à la transcription sa justesse (moteur)
+- Rend à la transcription sa justesse, perdue dans la 0.30.0, jamais publiée.
 
 ## v0.30.0 — 2026-10-19
 
 ### Nouveautés
 
-- passe au moteur v1.8.0, qui sort torch de l'app dans l'environnement « torch » (moteur)
+- Une partie du traitement s'installe à part, une seule fois : l'environnement « torch ». Version jamais publiée (transcription moins juste, corrigée en 0.30.1).
 
 ## v0.29.0 — 2026-10-19
 
 ### Nouveautés
 
-- garde les enregistrements en FLAC, sans perte, une fois finis (enregistrement)
+- Les enregistrements finis sont gardés en FLAC, sans perte : environ deux fois moins de place.
 
 ## v0.28.1 — 2026-10-19
 
 ### Corrections
 
-- passe au moteur v1.7.2, qui ne tire plus librosa (moteur)
+- Coulisses prend environ 170 Mo de moins : une bibliothèque audio qui ne servait plus est retirée.
 
 ## v0.28.0 — 2026-10-16
 
