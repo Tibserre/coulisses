@@ -4,6 +4,12 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.32.0 — 2026-10-19
+
+### Nouveautés
+
+- passe au moteur v1.10.0, qui transcrit avec Qwen3 en 8 bits (moteur)
+
 ## v0.31.0 — 2026-10-19
 
 ### Nouveautés
