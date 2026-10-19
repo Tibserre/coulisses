@@ -4,6 +4,12 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.31.0 — 2026-10-19
+
+### Nouveautés
+
+- dit le rôle de chaque environnement, selon le moteur v1.9.0 (modeles)
+
 ## v0.30.1 — 2026-10-19
 
 ### Corrections
