@@ -14,7 +14,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import soundfile as sf
 from numpy.typing import NDArray
 
 from coulisses_app import capture, jobs, mixing, retention, sessions, system_audio, wav
@@ -23,6 +22,7 @@ from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.storage.db import connect
 
+from . import wav_reader
 from .conftest import FAKE_CHAIN, local_client
 from .test_capture import MIC, PHONE, Clock, CountingAwake, FakeMic, tone, wait_for
 
@@ -91,8 +91,7 @@ def start_online(rec: capture.Recorder, *, phone: bool = False) -> capture.Recor
 
 
 def read(path: Path) -> NDArray[np.float64]:
-    samples, _ = sf.read(str(path), always_2d=True, dtype="float64")
-    return np.asarray(samples, dtype=np.float64)
+    return wav_reader.read(path, always_2d=True)
 
 
 def test_the_computers_sound_is_its_own_file_on_the_same_clock(

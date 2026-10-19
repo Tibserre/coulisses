@@ -10,7 +10,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import soundfile as sf
 from numpy.typing import NDArray
 
 from coulisses_app import capture, sessions, wav
@@ -18,6 +17,7 @@ from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect
 
+from . import wav_reader
 from .conftest import FAKE_CHAIN, local_client
 
 BLOCK = 4800  # 0.1 s at 48 kHz
@@ -134,15 +134,10 @@ def test_the_wav_is_24_bit_48_khz_and_its_header_follows_what_is_written(tmp_pat
     writer = wav.WavWriter(path, 48_000, 1, sync_s=0.0)  # header rewritten on every block
     sound = tone(1.0, 0.5)
     writer.write(sound)
-    info = sf.info(str(path))  # read while still open: the header is already true
-    assert (info.samplerate, info.channels, info.subtype, info.frames) == (
-        48_000,
-        1,
-        "PCM_24",
-        48_000,
-    )
+    info = wav_reader.info(path)  # read while still open: the header is already true
+    assert (info.samplerate, info.channels, info.bits, info.frames) == (48_000, 1, 24, 48_000)
     writer.close()
-    back, _ = sf.read(str(path), dtype="float32")
+    back = wav_reader.read(path)
     assert np.max(np.abs(back - sound[:, 0])) < 1e-6  # as captured, nothing processed
 
 
@@ -151,9 +146,9 @@ def test_an_interrupted_file_is_repaired_from_what_is_on_disk(tmp_path: Path) ->
     writer = wav.WavWriter(path, 48_000, 1, sync_s=3600)  # the header stays at 0 frames
     writer.write(tone(2.0, 0.3))
     writer._file.flush()  # the process dies here: the data is on disk, the header is not
-    assert sf.info(str(path)).frames == 0
+    assert wav_reader.info(path).frames == 0
     assert wav.repair(path) == 96_000
-    assert sf.info(str(path)).frames == 96_000
+    assert wav_reader.info(path).frames == 96_000
     with pytest.raises(ValueError, match="lisible"):
         (tmp_path / "autre.wav").write_bytes(b"pas un wav")
         wav.repair(tmp_path / "autre.wav")
@@ -379,10 +374,8 @@ def test_lost_sound_and_a_full_file_are_said_and_what_was_written_is_kept(
     assert state is not None and state.dropouts == 1 and "taille maximale" in (state.error or "")
     stopped = rec.stop(profile="essai")
     assert stopped.duration_s == pytest.approx(0.5)  # everything up to the limit
-    assert (
-        sf.info(str(capture.sessions.reference_audio_path(data, stopped.session_id))).frames
-        == 24_000
-    )
+    recorded = capture.sessions.reference_audio_path(data, stopped.session_id)
+    assert recorded is not None and wav_reader.info(recorded).frames == 24_000
 
 
 def test_an_empty_recording_cannot_be_processed(
@@ -579,7 +572,7 @@ def test_two_microphones_record_two_files_paused_together(
     [phone] = sessions.other_sources(data, session_id)
     assert (phone.source_id, phone.device, phone.capture_state) == ("mic2", PHONE.name, "complete")
     assert phone.duration_s == pytest.approx(2.0)
-    assert sf.info(str(second_file)).frames == 2 * capture.SAMPLE_RATE
+    assert wav_reader.info(second_file).frames == 2 * capture.SAMPLE_RATE
     reference = sessions.reference_source(data, session_id)
     assert reference is not None and reference.file_name == "ref.wav"  # processed alone
     assert awake.held == 0

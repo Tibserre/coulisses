@@ -10,12 +10,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import soundfile as sf
 from numpy.typing import NDArray
 
 from coulisses_app import listening, mixing
 from coulisses_app.paths import DataDir
 
+from . import wav_reader
 from .test_system_audio import recorded
 
 RATE = 48_000
@@ -83,8 +83,8 @@ def test_the_page_hears_the_listening_mix_the_engine_the_plain_one(data: DataDir
     path = mixing.processing_path(data, session_id)
     folder = data.sources_dir(session_id)
     assert path == folder / mixing.MIX_FILE
-    plain, _ = sf.read(str(folder / mixing.MIX_FILE), dtype="float64")
-    heard, _ = sf.read(str(folder / mixing.LISTENING_FILE), dtype="float64")
+    plain = wav_reader.read(folder / mixing.MIX_FILE)
+    heard = wav_reader.read(folder / mixing.LISTENING_FILE)
     np.testing.assert_allclose(plain, (mic + computer)[:, 0], atol=2 / 2**23)  # untouched
     facts = mixing.read_facts(data, session_id)
     assert facts is not None and facts.listening_mix is not None
