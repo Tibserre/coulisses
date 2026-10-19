@@ -119,6 +119,10 @@ export interface EnvironmentInfo {
   /** Its Python lives outside the engine's folder (installed before v1.7.0, usually in
    *  ~/.local/share/uv): it works as long as that one stays, and is not counted. */
   interpreter_outside: boolean;
+  /** What it is for, in French, said by the engine (v1.9.0): shown as it is. */
+  label: string;
+  /** The stages of the retained chain that run in it (engine v1.9.0). */
+  stages: StageName[];
 }
 
 /** uv's Python interpreters, or its download cache, for the environments (engine v1.7.0). */
@@ -145,6 +149,8 @@ export interface MissingPiece {
   stage: StageName;
   model: string | null;
   environment: string | null;
+  /** For a missing environment: what it is for, in French, said by the engine (v1.9.0). */
+  label: string | null;
   message: string;
 }
 

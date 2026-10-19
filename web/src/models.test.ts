@@ -115,6 +115,7 @@ test("what the chain lacks is said in one sentence", () => {
       stage: "transcribe",
       model: "asr",
       environment: null,
+      label: null,
       message: "",
     },
     {
@@ -122,12 +123,21 @@ test("what the chain lacks is said in one sentence", () => {
       stage: "diarize",
       model: null,
       environment: "diarizen",
+      label: "Diarisation DiariZen : qui parle quand",
+      message: "",
+    },
+    {
+      code: "environment_missing",
+      stage: "align",
+      model: null,
+      environment: "diarizen",
+      label: "Diarisation DiariZen : qui parle quand",
       message: "",
     },
   ]);
   assert.equal(
     readinessLine(lacking.readiness, lacking.inventory),
-    "Les séances ne peuvent pas être traitées : il manque le modèle « asr », l'environnement de calcul « diarizen ».",
+    "Les séances ne peuvent pas être traitées : il manque le modèle « asr », l'environnement de calcul « Diarisation DiariZen : qui parle quand ».",
   );
 });
 
@@ -164,14 +174,14 @@ test("what takes space outside the catalog has its row, to be removed", () => {
 });
 
 test("an old environment is said old, not interrupted", () => {
-  const env = { name: "diarizen", path: "", size_bytes: 1, interpreter: null, interpreter_outside: false };
+  const env = { name: "diarizen", path: "", size_bytes: 1, interpreter: null, interpreter_outside: false, label: "", stages: [] };
   assert.match(environmentState({ ...env, current: false, installed: false }), /^Ancienne version/);
   assert.equal(environmentState({ ...env, current: true, installed: true }), "Installé");
   assert.equal(environmentState({ ...env, current: true, installed: false }), "Installation interrompue");
 });
 
 test("only an environment the processing does not use can be removed, never while it installs", () => {
-  const env = { name: "diarizen", path: "", size_bytes: 1, interpreter: null, interpreter_outside: false };
+  const env = { name: "diarizen", path: "", size_bytes: 1, interpreter: null, interpreter_outside: false, label: "", stages: [] };
   const old = { ...env, current: false, installed: true };
   const interrupted = { ...env, current: true, installed: false };
   const used = { ...env, current: true, installed: true };
@@ -210,8 +220,28 @@ test("an environment whose Python lives outside Coulisses says so", async () => 
     size_bytes: 1,
     interpreter: "/Users/x/.local/share/uv/python/cpython-3.10/bin/python3.10",
     interpreter_outside: true,
+    label: "Diarisation DiariZen : qui parle quand",
+    stages: ["diarize" as const],
   };
   assert.match(interpreterNote(env)!, /hors de Coulisses/);
   assert.equal(interpreterNote({ ...env, interpreter_outside: false }), null);
   assert.equal(interpreterNote({ ...env, installed: false }), null); // an interrupted install says that first
+});
+
+test("an environment several stages need is listed once, with its role", async () => {
+  const { missingEnvironments } = await import("./models.ts");
+  const piece = (stage: "transcribe" | "align", label: string | null) => ({
+    code: "environment_missing" as const,
+    stage,
+    model: null,
+    environment: "torch",
+    label,
+    message: "",
+  });
+  const lacking = view({}, [piece("transcribe", "Calcul des modèles"), piece("align", null)]);
+  assert.deepEqual(missingEnvironments(lacking.readiness, lacking.inventory), [
+    ["torch", "Calcul des modèles"],
+  ]);
+  const unnamed = view({}, [piece("align", null)]);
+  assert.deepEqual(missingEnvironments(unnamed.readiness, unnamed.inventory), [["torch", ""]]);
 });

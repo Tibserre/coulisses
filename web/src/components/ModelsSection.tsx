@@ -11,6 +11,7 @@ import { useDevMode } from "../devMode.ts";
 import {
   environmentState,
   interpreterNote,
+  missingEnvironments,
   gigabytes,
   modelRows,
   percent,
@@ -101,12 +102,7 @@ export function ModelsSection() {
   const rows = view ? modelRows(view, actions) : [];
   const lacking = view ? readinessLine(view.readiness, view.inventory) : null;
   const environments = view?.inventory.environments ?? [];
-  const missingEnvironments = (view?.readiness.missing ?? [])
-    .map((p) => p.environment)
-    .filter(
-      (name): name is string =>
-        !!name && !environments.some((e) => e.name === name && e.installed),
-    );
+  const missing = view ? missingEnvironments(view.readiness, view.inventory) : [];
 
   return (
     <section className="cl-settings__section">
@@ -188,9 +184,8 @@ export function ModelsSection() {
               <li key={env.path} className="cl-models__row">
                 <div className="cl-models__what">
                   <Text weight="medium">Environnement de calcul</Text>
-                  <Text type="supporting">
-                    {env.name} · pour qui parle quand
-                  </Text>
+                  <Text type="supporting">{env.label || env.name}</Text>
+                  {dev && <Text type="supporting">{env.name}</Text>}
                   {dev && <Text type="supporting">{env.path}</Text>}
                 </div>
                 <div className="cl-models__what">
@@ -229,7 +224,7 @@ export function ModelsSection() {
                 <div className="cl-models__actions" />
               </li>
             ))}
-            {missingEnvironments.map((name) => {
+            {missing.map(([name, label]) => {
               const action = actions.find(
                 (a) => a.kind === "environment" && a.name === name,
               );
@@ -238,8 +233,9 @@ export function ModelsSection() {
                   <div className="cl-models__what">
                     <Text weight="medium">Environnement de calcul</Text>
                     <Text type="supporting">
-                      {name} · nécessaire au traitement
+                      {label || name} · nécessaire au traitement
                     </Text>
+                    {dev && <Text type="supporting">{name}</Text>}
                   </div>
                   <Text type="supporting">
                     {action?.state === "running"
