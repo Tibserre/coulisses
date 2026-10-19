@@ -446,7 +446,8 @@ def engine_facts() -> dict:
         "models": {m.key: m.size_bytes for m in stock.models},
         # Replaced by another and required by no profile (engine v1.10.0): only takes room
         # until the user removes it.
-        "replaced": {m.key: m.size_bytes for m in stock.models if getattr(m, "replaced_by", None)},
+        "replaced": {m.key: m.size_bytes for m in stock.models if m.replaced_by},
+        "required": sorted(m.key for m in stock.models if m.required),
         "environments": environments,
         "uv_stores": {s.kind: s.size_bytes for s in stock.uv_stores},
         "total": stock.total_bytes,
@@ -731,7 +732,7 @@ def report(facts: dict, before: dict | None) -> str:
         table(
             [
                 (
-                    k + (" (remplacé, ne sert plus)" if k in engine.get("replaced", {}) else ""),
+                    k + (" (remplacé, ne sert plus)" if k in engine["replaced"] else ""),
                     human(v),
                 )
                 for k, v in sorted(engine["models"].items(), key=lambda kv: -kv[1])
@@ -860,7 +861,7 @@ def main() -> None:
         "models": sum(
             size
             for key, size in facts["engine"]["models"].items()
-            if key not in facts["engine"]["replaced"]
+            if key in facts["engine"]["required"]
         ),
         "environments": sum(e["size"] + e["outside"] for e in environments)
         # The cache is not counted, as in the engine's total: on APFS its files are cloned

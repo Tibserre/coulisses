@@ -189,8 +189,48 @@
     }
    },
    "exclusive": {
+    "uvicorn": {
+     "size": 917504,
+     "with": []
+    },
+    "idna": {
+     "size": 585728,
+     "with": []
+    },
+    "opentelemetry-api": {
+     "size": 569344,
+     "with": []
+    },
+    "starlette": {
+     "size": 806912,
+     "with": []
+    },
+    "httpcore": {
+     "size": 774144,
+     "with": []
+    },
+    "tqdm": {
+     "size": 630784,
+     "with": []
+    },
+    "filelock": {
+     "size": 954368,
+     "with": []
+    },
+    "hf-xet": {
+     "size": 8151040,
+     "with": []
+    },
+    "typing-extensions": {
+     "size": 368640,
+     "with": []
+    },
     "python-multipart": {
      "size": 249856,
+     "with": []
+    },
+    "anyio": {
+     "size": 1507328,
      "with": []
     },
     "cffi": {
@@ -199,16 +239,8 @@
       "pycparser"
      ]
     },
-    "fsspec": {
-     "size": 2093056,
-     "with": []
-    },
-    "hf-xet": {
-     "size": 8151040,
-     "with": []
-    },
-    "typing-inspection": {
-     "size": 122880,
+    "pydantic-core": {
+     "size": 4644864,
      "with": []
     },
     "huggingface-hub": {
@@ -226,56 +258,6 @@
      "size": 36147200,
      "with": []
     },
-    "click": {
-     "size": 1044480,
-     "with": []
-    },
-    "pycparser": {
-     "size": 487424,
-     "with": []
-    },
-    "anyio": {
-     "size": 1507328,
-     "with": []
-    },
-    "fastapi": {
-     "size": 3244032,
-     "with": [
-      "starlette",
-      "opentelemetry-api",
-      "annotated-doc"
-     ]
-    },
-    "certifi": {
-     "size": 303104,
-     "with": []
-    },
-    "filelock": {
-     "size": 954368,
-     "with": []
-    },
-    "sounddevice": {
-     "size": 4075520,
-     "with": [
-      "cffi",
-      "pycparser"
-     ]
-    },
-    "uvicorn": {
-     "size": 917504,
-     "with": []
-    },
-    "pydantic-core": {
-     "size": 4644864,
-     "with": []
-    },
-    "pydantic": {
-     "size": 9023488,
-     "with": [
-      "pydantic-core",
-      "annotated-types"
-     ]
-    },
     "coulisses": {
      "size": 24727552,
      "with": [
@@ -292,52 +274,66 @@
       "truststore"
      ]
     },
-    "tqdm": {
-     "size": 630784,
+    "pyyaml": {
+     "size": 983040,
      "with": []
     },
-    "idna": {
-     "size": 585728,
+    "typing-inspection": {
+     "size": 122880,
      "with": []
+    },
+    "pydantic": {
+     "size": 9023488,
+     "with": [
+      "pydantic-core",
+      "annotated-types"
+     ]
     },
     "packaging": {
      "size": 1118208,
      "with": []
     },
-    "annotated-types": {
-     "size": 94208,
+    "pycparser": {
+     "size": 487424,
      "with": []
     },
-    "pyyaml": {
-     "size": 983040,
-     "with": []
-    },
-    "httpcore": {
-     "size": 774144,
+    "click": {
+     "size": 1044480,
      "with": []
     },
     "annotated-doc": {
      "size": 45056,
      "with": []
     },
+    "certifi": {
+     "size": 303104,
+     "with": []
+    },
     "h11": {
      "size": 270336,
      "with": []
     },
-    "opentelemetry-api": {
-     "size": 569344,
-     "with": []
+    "sounddevice": {
+     "size": 4075520,
+     "with": [
+      "cffi",
+      "pycparser"
+     ]
+    },
+    "fastapi": {
+     "size": 3244032,
+     "with": [
+      "starlette",
+      "opentelemetry-api",
+      "annotated-doc"
+     ]
     },
     "truststore": {
      "size": 163840,
      "with": []
     },
-    "starlette": {
-     "size": 806912,
-     "with": []
-    },
-    "typing-extensions": {
-     "size": 368640,
+    "annotated-types": {
+     "size": 94208,
      "with": []
     },
     "httpx": {
@@ -346,6 +342,10 @@
       "httpcore",
       "certifi"
      ]
+    },
+    "fsspec": {
+     "size": 2093056,
+     "with": []
     }
    },
    "required_by": {
@@ -477,6 +477,13 @@
   "replaced": {
    "qwen3-asr-1.7b": 4703057174
   },
+  "required": [
+   "diarizen-wavlm-large-s80-md-v2",
+   "pyannote-community-1",
+   "pyannote-wespeaker-resnet34-lm",
+   "qwen3-asr-1.7b-8bit",
+   "wav2vec2-ctc-french"
+  ],
   "environments": {
    "diarizen-9a0c99a57206": {
     "size": 804515293,
