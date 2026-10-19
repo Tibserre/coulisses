@@ -4,6 +4,12 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.33.1 — 2026-10-19
+
+### Corrections
+
+- donne au ffmpeg de l'app l'encodeur et le format FLAC (construction)
+
 ## v0.33.0 — 2026-10-19
 
 ### Nouveautés
