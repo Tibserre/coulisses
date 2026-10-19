@@ -1,0 +1,565 @@
+{
+ "date": "2026-10-19",
+ "measured": {
+  "app": "Coulisses-essai-1.8.2.dmg",
+  "data": "Données-dev"
+ },
+ "dmg": {
+  "size": 112174514,
+  "format": "ULFO"
+ },
+ "app": {
+  "version": "0.30.0",
+  "size": 229183488,
+  "parts": {
+   "lanceur, icône, licences": 401408,
+   "signature (liste des fichiers signés)": 2166784,
+   "outil : ffmpeg": 3829760,
+   "outil : coulisses-son-ordinateur": 114688,
+   "outil : uv": 42672128,
+   "outil : ffprobe": 3657728,
+   "Python : interpréteur et le reste": 19890176,
+   "Python : bibliothèque standard": 56094720,
+   "Python : paquets (site-packages)": 96473088,
+   "interface (web)": 1474560,
+   "framework : Sparkle.framework": 2408448
+  },
+  "kinds": {
+   "other": 12140544,
+   "native": 62083072,
+   "sources": 2523136,
+   "py": 36818944,
+   "pyc": 40087552,
+   "tests": 16805888,
+   "stubs": 1896448,
+   "static": 102400
+  },
+  "stdlib_kinds": {
+   "native": 23093248,
+   "other": 6197248,
+   "sources": 28672,
+   "py": 12959744,
+   "pyc": 13807616,
+   "static": 8192
+  },
+  "stdlib_dirs": {
+   "__pycache__": 5570560,
+   "encodings": 2539520,
+   "idlelib": 2457600,
+   "ensurepip": 1884160,
+   "asyncio": 1277952,
+   "lib2to3": 1052672,
+   "pydoc_data": 1052672,
+   "email": 966656
+  },
+  "python": {
+   "unowned": 4096,
+   "packages": {
+    "sounddevice": {
+     "version": "0.5.6",
+     "size": 2412544
+    },
+    "cffi": {
+     "version": "2.1.1",
+     "size": 1175552
+    },
+    "typing-extensions": {
+     "version": "4.16.0",
+     "size": 368640
+    },
+    "coulisses-app": {
+     "version": "0.30.0",
+     "size": 1429504
+    },
+    "uvicorn": {
+     "version": "0.54.0",
+     "size": 917504
+    },
+    "numpy": {
+     "version": "2.5.3",
+     "size": 36147200
+    },
+    "packaging": {
+     "version": "26.3",
+     "size": 1118208
+    },
+    "truststore": {
+     "version": "0.10.4",
+     "size": 163840
+    },
+    "opentelemetry-api": {
+     "version": "1.45.0",
+     "size": 569344
+    },
+    "httpcore": {
+     "version": "1.0.9",
+     "size": 774144
+    },
+    "click": {
+     "version": "8.5.0",
+     "size": 1044480
+    },
+    "h11": {
+     "version": "0.16.0",
+     "size": 270336
+    },
+    "huggingface-hub": {
+     "version": "1.33.0",
+     "size": 7561216
+    },
+    "hf-xet": {
+     "version": "1.6.0",
+     "size": 8151040
+    },
+    "annotated-types": {
+     "version": "0.8.0",
+     "size": 94208
+    },
+    "pycparser": {
+     "version": "3.0",
+     "size": 487424
+    },
+    "fsspec": {
+     "version": "2026.9.0",
+     "size": 2093056
+    },
+    "pydantic-core": {
+     "version": "2.46.5",
+     "size": 4644864
+    },
+    "starlette": {
+     "version": "1.7.0",
+     "size": 806912
+    },
+    "coulisses": {
+     "version": "1.8.2",
+     "size": 1228800
+    },
+    "idna": {
+     "version": "3.20",
+     "size": 585728
+    },
+    "filelock": {
+     "version": "4.0.11",
+     "size": 954368
+    },
+    "pip": {
+     "version": "26.2.1",
+     "size": 12771328
+    },
+    "tqdm": {
+     "version": "4.70.1",
+     "size": 630784
+    },
+    "anyio": {
+     "version": "4.15.1",
+     "size": 1507328
+    },
+    "pydantic": {
+     "version": "2.13.5",
+     "size": 4284416
+    },
+    "httpx": {
+     "version": "0.28.1",
+     "size": 749568
+    },
+    "certifi": {
+     "version": "2026.7.22",
+     "size": 303104
+    },
+    "python-multipart": {
+     "version": "0.0.32",
+     "size": 249856
+    },
+    "annotated-doc": {
+     "version": "0.0.5",
+     "size": 45056
+    },
+    "pyyaml": {
+     "version": "6.0.3",
+     "size": 983040
+    },
+    "fastapi": {
+     "version": "0.142.2",
+     "size": 1822720
+    },
+    "typing-inspection": {
+     "version": "0.4.4",
+     "size": 122880
+    }
+   },
+   "exclusive": {
+    "starlette": {
+     "size": 806912,
+     "with": []
+    },
+    "python-multipart": {
+     "size": 249856,
+     "with": []
+    },
+    "huggingface-hub": {
+     "size": 21491712,
+     "with": [
+      "hf-xet",
+      "fsspec",
+      "packaging",
+      "pyyaml",
+      "filelock",
+      "tqdm"
+     ]
+    },
+    "idna": {
+     "size": 585728,
+     "with": []
+    },
+    "hf-xet": {
+     "size": 8151040,
+     "with": []
+    },
+    "numpy": {
+     "size": 36147200,
+     "with": []
+    },
+    "coulisses": {
+     "size": 24711168,
+     "with": [
+      "hf-xet",
+      "huggingface-hub",
+      "fsspec",
+      "packaging",
+      "pyyaml",
+      "filelock",
+      "httpcore",
+      "httpx",
+      "tqdm",
+      "certifi",
+      "truststore"
+     ]
+    },
+    "packaging": {
+     "size": 1118208,
+     "with": []
+    },
+    "pydantic": {
+     "size": 9023488,
+     "with": [
+      "pydantic-core",
+      "annotated-types"
+     ]
+    },
+    "pyyaml": {
+     "size": 983040,
+     "with": []
+    },
+    "annotated-types": {
+     "size": 94208,
+     "with": []
+    },
+    "click": {
+     "size": 1044480,
+     "with": []
+    },
+    "typing-extensions": {
+     "size": 368640,
+     "with": []
+    },
+    "sounddevice": {
+     "size": 4075520,
+     "with": [
+      "cffi",
+      "pycparser"
+     ]
+    },
+    "truststore": {
+     "size": 163840,
+     "with": []
+    },
+    "annotated-doc": {
+     "size": 45056,
+     "with": []
+    },
+    "typing-inspection": {
+     "size": 122880,
+     "with": []
+    },
+    "pydantic-core": {
+     "size": 4644864,
+     "with": []
+    },
+    "tqdm": {
+     "size": 630784,
+     "with": []
+    },
+    "certifi": {
+     "size": 303104,
+     "with": []
+    },
+    "httpx": {
+     "size": 1826816,
+     "with": [
+      "httpcore",
+      "certifi"
+     ]
+    },
+    "uvicorn": {
+     "size": 917504,
+     "with": []
+    },
+    "pycparser": {
+     "size": 487424,
+     "with": []
+    },
+    "h11": {
+     "size": 270336,
+     "with": []
+    },
+    "fastapi": {
+     "size": 3244032,
+     "with": [
+      "starlette",
+      "opentelemetry-api",
+      "annotated-doc"
+     ]
+    },
+    "filelock": {
+     "size": 954368,
+     "with": []
+    },
+    "httpcore": {
+     "size": 774144,
+     "with": []
+    },
+    "cffi": {
+     "size": 1662976,
+     "with": [
+      "pycparser"
+     ]
+    },
+    "anyio": {
+     "size": 1507328,
+     "with": []
+    },
+    "fsspec": {
+     "size": 2093056,
+     "with": []
+    },
+    "opentelemetry-api": {
+     "size": 569344,
+     "with": []
+    }
+   },
+   "required_by": {
+    "uvicorn": [
+     "coulisses-app"
+    ],
+    "h11": [
+     "httpcore",
+     "uvicorn"
+    ],
+    "click": [
+     "huggingface-hub",
+     "uvicorn"
+    ],
+    "python-multipart": [
+     "coulisses-app"
+    ],
+    "pydantic": [
+     "coulisses",
+     "coulisses-app",
+     "fastapi"
+    ],
+    "typing-inspection": [
+     "fastapi",
+     "pydantic"
+    ],
+    "typing-extensions": [
+     "anyio",
+     "fastapi",
+     "huggingface-hub",
+     "opentelemetry-api",
+     "pydantic",
+     "pydantic-core",
+     "starlette",
+     "typing-inspection"
+    ],
+    "pydantic-core": [
+     "pydantic"
+    ],
+    "annotated-types": [
+     "pydantic"
+    ],
+    "sounddevice": [
+     "coulisses-app"
+    ],
+    "cffi": [
+     "sounddevice"
+    ],
+    "pycparser": [
+     "cffi"
+    ],
+    "numpy": [
+     "coulisses",
+     "coulisses-app"
+    ],
+    "fastapi": [
+     "coulisses-app"
+    ],
+    "opentelemetry-api": [
+     "fastapi"
+    ],
+    "annotated-doc": [
+     "fastapi"
+    ],
+    "starlette": [
+     "fastapi"
+    ],
+    "anyio": [
+     "httpx",
+     "starlette"
+    ],
+    "idna": [
+     "anyio",
+     "httpx"
+    ],
+    "coulisses": [
+     "coulisses-app"
+    ],
+    "truststore": [
+     "coulisses"
+    ],
+    "huggingface-hub": [
+     "coulisses"
+    ],
+    "tqdm": [
+     "huggingface-hub"
+    ],
+    "pyyaml": [
+     "huggingface-hub"
+    ],
+    "packaging": [
+     "huggingface-hub"
+    ],
+    "httpx": [
+     "coulisses",
+     "huggingface-hub"
+    ],
+    "httpcore": [
+     "httpx"
+    ],
+    "certifi": [
+     "httpcore",
+     "httpx"
+    ],
+    "hf-xet": [
+     "huggingface-hub"
+    ],
+    "fsspec": [
+     "huggingface-hub"
+    ],
+    "filelock": [
+     "huggingface-hub"
+    ]
+   },
+   "not_required": [
+    "pip"
+   ]
+  }
+ },
+ "engine": {
+  "models": {
+   "diarizen-wavlm-large-s80-md-v2": 278341479,
+   "pyannote-community-1": 32822476,
+   "pyannote-wespeaker-resnet34-lm": 26646200,
+   "qwen3-asr-1.7b": 4703057174,
+   "wav2vec2-ctc-french": 1262021827
+  },
+  "environments": {
+   "diarizen-9a0c99a57206": {
+    "size": 804515293,
+    "current": true,
+    "installed": true,
+    "outside": 72503296,
+    "packages": {
+     "torch": 309653504,
+     "scipy": 87732224,
+     "numpy": 51589120,
+     "transformers": 51523584,
+     "pandas": 48635904,
+     "sympy": 39682048
+    }
+   },
+   "torch-660f4bf2ebe8": {
+    "size": 1279483086,
+    "current": true,
+    "installed": true,
+    "outside": 0,
+    "packages": {
+     "torch": 556855296,
+     "mlx-metal": 213327872,
+     "scipy": 74858496,
+     "transformers": 55365632,
+     "pandas": 42393600,
+     "grpcio": 41254912
+    }
+   }
+  },
+  "uv_stores": {
+   "python": 65117562,
+   "cache": 1190972400
+  },
+  "total": 8452005097
+ },
+ "ollama": {
+  "default": "qwen3.6:35b-mlx",
+  "models": {
+   "gemma4:12b-mlx": 7714253126,
+   "gemma4:26b-mlx": 18334652006,
+   "gemma4:31b-mlx": 20234756907,
+   "gemma4:e2b-mlx": 7477040957,
+   "gemma4:e4b-mlx": 9462065336,
+   "ministral-3:8b": 6022237474,
+   "qwen3.5:2b-mlx": 3117608523,
+   "qwen3.5:4b-mlx": 3973455509,
+   "qwen3.5:9b-nvfp4": 7152863422,
+   "qwen3.6:35b-mlx": 21909210142,
+   "qwen3.8:27b-mlx": 18174721847
+  },
+  "blobs": 122352631808
+ },
+ "audio": {
+  "track_per_hour": {
+   "une piste mono": 518400000,
+   "une réunion avec le son de l'ordinateur (4 pistes mono)": 2073600000
+  },
+  "by_file": {
+   "importé (.m4a)": {
+    "bytes": 46538752,
+    "seconds": 5544.704,
+    "count": 1
+   },
+   "ref.wav": {
+    "bytes": 896208896,
+    "seconds": 6223.648,
+    "count": 1
+   }
+  },
+  "by_session_kind": {
+   "enregistrée dans l'app": {
+    "bytes": 896208896,
+    "seconds": 6223.648,
+    "count": 1
+   },
+   "importée": {
+    "bytes": 46538752,
+    "seconds": 5544.704,
+    "count": 1
+   }
+  }
+ },
+ "totals": {
+  "models": 6302889156,
+  "environments": 2221619237,
+  "ollama_default": 21909210142,
+  "audio_hour": 518400000
+ }
+}
