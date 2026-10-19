@@ -19,6 +19,8 @@ const model = (
   terms_url: null,
   engine: null,
   required_by: ["chaine-retenue"],
+  replaced_by: null,
+  replacement_note: null,
 });
 
 const view = (
@@ -82,6 +84,8 @@ test("each model is installed, damaged, half downloaded, missing, or downloading
           size_bytes: 9,
           downloaded_at: null,
           problem: null,
+          required: true,
+          replaced_by: null,
         },
       ],
       partial_downloads: [{ key: "voix", size_bytes: 5 }],
@@ -151,6 +155,8 @@ const there = (key: string, over: Partial<ModelsView["inventory"]["models"][numb
   size_bytes: 9,
   downloaded_at: null,
   problem: null,
+  required: false,
+  replaced_by: null,
   ...over,
 });
 
@@ -244,4 +250,13 @@ test("an environment several stages need is listed once, with its role", async (
   ]);
   const unnamed = view({}, [piece("align", null)]);
   assert.deepEqual(missingEnvironments(unnamed.readiness, unnamed.inventory), [["torch", ""]]);
+});
+
+test("a replaced model says by what, with the engine's note", () => {
+  const catalog = { models: [{ ...model("ancien"), required_by: [], replaced_by: "asr", replacement_note: "Il ne sert plus." }, model("asr")] };
+  const rows = modelRows({ ...view({ models: [there("ancien", { replaced_by: "asr" }), there("asr", { required: true })] }), catalog }, []);
+  assert.deepEqual(rows.map((r) => r.state.kind === "installed" && r.state.replacement), [
+    { by: "asr", note: "Il ne sert plus." },
+    null,
+  ]);
 });

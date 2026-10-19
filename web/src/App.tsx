@@ -11,6 +11,7 @@ import { MotionConfig } from "motion/react";
 import { api, type AppInfo, type Project, type RecordingState, type Session, type Space } from "./api.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { NewSessionDialog, type Way } from "./components/NewSessionDialog.tsx";
+import { UpdateNoticesDialog, useUpdateNotices } from "./components/UpdateNotices.tsx";
 import { SearchBox } from "./components/SearchBox.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { buildTree, onLibraryChanged, parseRoute, rememberedSpace, sessionHref, startSpace, type Route } from "./library.ts";
@@ -99,6 +100,10 @@ function Shell({ route }: { route: Route }) {
     };
   }, [narrow, overlay]);
   const [asking, setAsking] = useState<{ spaceId: number | null; projectId: number | null; way?: Way } | null>(null);
+  // What an update (or the first launch) asks on this Mac (ADR 0049): a window at launch,
+  // a dot on « Réglages » while one not kept for good is left.
+  const updates = useUpdateNotices(route.page === "recording");
+  const closeUpdates = useCallback(() => updates.setOpen(false), [updates.setOpen]);
   const [newSpace, setNewSpace] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -217,6 +222,7 @@ function Shell({ route }: { route: Route }) {
             tree={tree.filter((n) => !n.space.archived)}
             archived={tree.filter((n) => n.space.archived)}
             recordingId={recording?.session_id ?? null}
+            stepsLeft={updates.notices.length}
             current={{
               sessionId: route.page === "session" ? route.id : route.page === "recording" ? (recording?.session_id ?? null) : null,
               spaceId: route.page === "space" ? route.id : null,
@@ -259,6 +265,16 @@ function Shell({ route }: { route: Route }) {
           </ErrorBoundary>
         </div>
       </div>
+      <UpdateNoticesDialog
+        isOpen={updates.open}
+        notices={updates.notices}
+        actions={updates.actions}
+        failed={updates.failed}
+        onChoose={updates.choose}
+        onStop={updates.stop}
+        onClose={closeUpdates}
+        onFailedRead={updates.clearFailed}
+      />
       <NewSessionDialog
         isOpen={asking !== null}
         onClose={() => setAsking(null)}

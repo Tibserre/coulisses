@@ -104,6 +104,11 @@ class EnvironmentRemoval(BaseModel):
     """The environment's folder, as the inventory gives it."""
 
 
+class StepsDismissal(BaseModel):
+    gestes: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(max_length=100)
+    """The requested steps not to be reminded of (ADR 0049)."""
+
+
 class Activity(BaseModel):
     """What quitting the app would interrupt (ADR 0034)."""
 
@@ -472,6 +477,18 @@ def create_app(
     @app.delete("/api/moteur/modeles/{cle}", status_code=204)
     def remove_model(cle: str) -> None:
         engine_store.remove(cle)
+
+    # -- the requested steps (ADR 0049): what the user asked not to be reminded of --------
+
+    @app.get("/api/gestes-ecartes")
+    def dismissed_steps() -> list[str]:
+        with _db() as conn:
+            return settings.dismissed_steps(conn)
+
+    @app.post("/api/gestes-ecartes")
+    def dismiss_steps(demande: StepsDismissal) -> list[str]:
+        with _db() as conn:
+            return settings.dismiss_steps(conn, demande.gestes)
 
     @app.get("/api/activite")
     def activity() -> Activity:

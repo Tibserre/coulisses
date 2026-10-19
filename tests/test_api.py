@@ -301,3 +301,14 @@ def test_a_recording_in_progress_is_what_quitting_would_interrupt(data: DataDir)
         "processing": False,
         "downloading": False,
     }
+
+
+def test_dismissed_steps_are_kept_and_never_forgotten(client: TestClient) -> None:
+    """« Ne plus me rappeler » (ADR 0049): the ids are added, in order, once each."""
+    assert client.get("/api/gestes-ecartes").json() == []
+    first = client.post("/api/gestes-ecartes", json={"gestes": ["supprimer:ancien", "x"]})
+    assert first.json() == ["supprimer:ancien", "x"]
+    again = client.post("/api/gestes-ecartes", json={"gestes": ["x", "installer:torch", "x"]})
+    assert again.json() == ["supprimer:ancien", "x", "installer:torch"]
+    assert client.get("/api/gestes-ecartes").json() == again.json()
+    assert client.post("/api/gestes-ecartes", json={"gestes": [""]}).status_code == 422

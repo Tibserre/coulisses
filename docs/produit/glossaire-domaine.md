@@ -39,6 +39,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Référence de modèle | `model_ref` | Dépôt et révision épinglée d'un modèle, choisis par un profil, jamais par un moteur. |
 | Profil | `profile` | Choix d'un moteur + réglages pour chaque étape. Un seul en V1 : `chaine-retenue`, défini par le moteur. |
 | Provenance | `provenance` | Moteur, version, modèle, réglages, durée, mémoire max, date d'une exécution. |
+| Geste demandé | `requested_step` | Ce que l'état du moteur demande à l'utilisateur sur ce Mac : télécharger un modèle, installer un environnement, supprimer un modèle remplacé ou un ancien environnement (ADR 0049). |
+| Mise à jour qui attend une action | `update_notice` | Un ou plusieurs gestes demandés pour une même raison (un modèle remplacé, ce qui manque au traitement, d'anciens environnements), montrés ensemble au lancement avec deux sorties (ADR 0049). Gardée pour de bon (« Garder l'ancien modèle », « La garder ») : `dismissed`. |
 | Locuteur | `speaker` | Voix distincte trouvée par la diarisation dans une séance (« Locuteur 3 »). Pas encore une personne. Dans l'interface, on dit « voix » pour le désigner (« Nommer cette voix », « Une nouvelle voix »). |
 | Rattachement | `speaker_assignment` | Lien d'un locuteur vers une personne, ou vers un personnage joué par une personne. |
 | Personnage | `character` | Rôle joué pendant une scène. Un locuteur peut être « personnage joué par Marie ». |
