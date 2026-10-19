@@ -444,6 +444,9 @@ def engine_facts() -> dict:
         warn(f"téléchargement interrompu d'un modèle, non compté : {partial}")
     return {
         "models": {m.key: m.size_bytes for m in stock.models},
+        # Replaced by another and required by no profile (engine v1.10.0): only takes room
+        # until the user removes it.
+        "replaced": {m.key: m.size_bytes for m in stock.models if getattr(m, "replaced_by", None)},
         "environments": environments,
         "uv_stores": {s.kind: s.size_bytes for s in stock.uv_stores},
         "total": stock.total_bytes,
@@ -614,7 +617,7 @@ def summary(facts: dict, before: dict | None) -> list[str]:
         rows.append((["dmg", "size"], f"DMG ({facts['dmg']['format']})"))
     rows += [
         (["app", "size"], f"App installée ({facts['app']['version']})"),
-        (["totals", "models"], "Modèles du moteur"),
+        (["totals", "models"], "Modèles du moteur (exigés)"),
         (["totals", "environments"], "Environnements du moteur (et leur Python)"),
         (
             ["totals", "ollama_default"],
@@ -726,7 +729,13 @@ def report(facts: dict, before: dict | None) -> str:
     out += ["## Modèles du moteur", ""]
     out.append(
         table(
-            [(k, human(v)) for k, v in sorted(engine["models"].items(), key=lambda kv: -kv[1])],
+            [
+                (
+                    k + (" (remplacé, ne sert plus)" if k in engine.get("replaced", {}) else ""),
+                    human(v),
+                )
+                for k, v in sorted(engine["models"].items(), key=lambda kv: -kv[1])
+            ],
             ("Modèle", "Taille"),
         )
     )
@@ -848,7 +857,11 @@ def main() -> None:
     facts["audio"] = audio_facts(args.donnees)
     environments = facts["engine"]["environments"].values()
     facts["totals"] = {
-        "models": sum(facts["engine"]["models"].values()),
+        "models": sum(
+            size
+            for key, size in facts["engine"]["models"].items()
+            if key not in facts["engine"]["replaced"]
+        ),
         "environments": sum(e["size"] + e["outside"] for e in environments)
         # The cache is not counted, as in the engine's total: on APFS its files are cloned
         # into the environments, counted there (model-inventory.schema.json).
