@@ -1,6 +1,6 @@
 # 0046 — Les enregistrements gardés en FLAC, sans perte, une fois l'enregistrement fini
 
-Statut : Proposée (2026-10-16, lot 12e du plan). Elle précisera l'ADR 0027 (format) et changera la spec §7.2.
+Statut : Acceptée (2026-10-19, choix de l'utilisateur : le mix d'écoute est gardé en FLAC ; l'empreinte des échantillons entre dans le schéma). Lot 12e du plan. Précise l'ADR 0027 (format) ; la spec §7.2 change avec le code.
 
 ## Contexte
 L'app enregistre en WAV PCM 24 bits à 48 kHz (ADR 0027), soit 518 Mo par heure et par piste mono. Une réunion avec le son de l'ordinateur garde 4 pistes : le micro, l'ordinateur, le mix que le moteur entend, le mix d'écoute (ADR 0032, 0037). Cela fait 2,07 Go par heure. La source est le relevé `docs/technique/tailles/2026-10-16-v0.28.0.md`.
@@ -38,14 +38,14 @@ Ce que l'existant permet déjà :
 - **Place par heure** : environ 290 Mo pour une répétition au lieu de 518, environ 1,16 Go pour une réunion au lieu de 2,07. Les 90 jours de conservation coûtent d'autant moins.
 - **Un passage de plus à la fin de l'enregistrement**, en tâche de fond : encodage, puis vérification. Le traitement part du `mix` ou de `ref` en FLAC, une fois la conversion finie. Ce délai est à mesurer.
 - La provenance des exécutions nommera `ref.flac`. Les anciennes exécutions gardent le nom `ref.wav` : c'est du texte, elles restent lisibles.
-- **À vérifier avant de l'accepter** :
+- **Vérifié par les tests du lot 12e, avant toute mise en service** :
   - le moteur donne des sorties identiques sur le WAV et sur son FLAC ;
   - la lecture et le déplacement dans le temps sont précis dans la fenêtre de l'app ;
-  - le type `audio/flac` est servi.
+  - l'audio est servi en `audio/flac`, et non en `audio/x-flac` comme Python le propose par défaut.
 - La spec §7.2 et l'ADR 0027 seront mis à jour dans le même commit que le code.
 
 ## Alternatives écartées
-- **Refaire les mixes à la demande au lieu de les garder** (environ 0,6 Go par heure de réunion) : un mix refait par une autre version de l'app peut différer de celui que le moteur a entendu, ce qui contredit P5. Le mix d'écoute pourrait l'être ; on le garde pour qu'il soit simple de l'entendre tout de suite. **À trancher par l'utilisateur.**
+- **Refaire les mixes à la demande au lieu de les garder** (environ 0,6 Go par heure de réunion) : un mix refait par une autre version de l'app peut différer de celui que le moteur a entendu, ce qui contredit P5. Le mix d'écoute pourrait l'être (environ 0,3 Go de moins par heure de réunion), mais l'utilisateur le garde pour l'entendre tout de suite (2026-10-19).
 - **Enregistrer directement en FLAC** : un fichier interrompu par un plantage ne se répare pas aussi sûrement qu'un WAV tenu à jour (ADR 0027).
 - **Un format avec perte** (AAC, Opus) : la captation est brute (spec §7.2), et le moteur doit pouvoir rejouer à l'identique.
 - **Encoder avec `soundfile` (libsndfile)** : c'est une dépendance native de plus, alors que le moteur s'apprête à ne plus la tirer (lot 12c).
