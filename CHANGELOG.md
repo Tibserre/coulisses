@@ -4,6 +4,12 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.28.1 — 2026-10-19
+
+### Corrections
+
+- passe au moteur v1.7.2, qui ne tire plus librosa (moteur)
+
 ## v0.28.0 — 2026-10-16
 
 ### Nouveautés
