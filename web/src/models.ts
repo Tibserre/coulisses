@@ -15,7 +15,9 @@ export function gigabytes(bytes: number): string {
 
 export type ModelState =
   | { kind: "running"; action: ModelAction }
-  | { kind: "installed"; size: number; outdated: boolean }
+  /** `replacement`: no longer needed, another model does its job (engine v1.10.0); the
+   *  engine's note says why, in French. */
+  | { kind: "installed"; size: number; outdated: boolean; replacement: { by: string; note: string | null } | null }
   /** Damaged, or a folder Coulisses did not install: to remove, then download again. */
   | { kind: "altered"; size: number; problem: string | null }
   | { kind: "partial"; done: number }
@@ -34,12 +36,28 @@ export interface ModelRow {
   last: ModelAction | null;
 }
 
-function stateOf(key: string, inventory: Inventory, action: ModelAction | null): ModelState {
+/** What a model of the catalog is for, said to the user. */
+export function purposeOf(model: CatalogModel): string {
+  return STAGE_WORDS[model.stage] ?? model.role;
+}
+
+function stateOf(
+  key: string,
+  inventory: Inventory,
+  action: ModelAction | null,
+  model: CatalogModel | null,
+): ModelState {
   const there = inventory.models.find((m) => m.key === key);
   const partial = inventory.partial_downloads.find((p) => p.key === key);
   if (action?.state === "running") return { kind: "running", action };
   if (there && there.state !== "intact") return { kind: "altered", size: there.size_bytes, problem: there.problem };
-  if (there) return { kind: "installed", size: there.size_bytes, outdated: there.outdated };
+  if (there)
+    return {
+      kind: "installed",
+      size: there.size_bytes,
+      outdated: there.outdated,
+      replacement: there.replaced_by ? { by: there.replaced_by, note: model?.replacement_note ?? null } : null,
+    };
   if (partial) return { kind: "partial", done: partial.size_bytes };
   return { kind: "missing" };
 }
@@ -55,9 +73,9 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
     return {
       key: model.key,
       model,
-      purpose: STAGE_WORDS[model.stage] ?? model.role,
+      purpose: purposeOf(model),
       required: model.required_by.includes(readiness.profile),
-      state: stateOf(model.key, inventory, action),
+      state: stateOf(model.key, inventory, action, model),
       last: action && action.state !== "running" ? action : null,
     };
   });
@@ -72,7 +90,7 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
       model: null,
       purpose: "Hors catalogue",
       required: false,
-      state: stateOf(key, inventory, action),
+      state: stateOf(key, inventory, action, null),
       last: action && action.state !== "running" ? action : null,
     });
   }

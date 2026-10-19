@@ -41,6 +41,7 @@ export function Sidebar({
   tree,
   archived,
   recordingId,
+  stepsLeft = 0,
   current,
   onNewSession,
   onNewSpace,
@@ -51,6 +52,8 @@ export function Sidebar({
   /** Archived spaces: shown apart, folded, their sessions still there. */
   archived: SpaceNode[];
   recordingId: string | null;
+  /** Steps an update asks on this Mac, not dismissed (ADR 0049): a dot on « Réglages ». */
+  stepsLeft?: number;
   /** What the main pane shows: a session, or a space's settings. */
   current: { sessionId: string | null; spaceId: number | null; page: string };
   onNewSession: (spaceId: number, projectId: number | null) => void;
@@ -330,6 +333,14 @@ export function Sidebar({
           aria-current={current.page === "settings" ? "page" : undefined}
         >
           <Settings size={16} strokeWidth={1.75} aria-hidden /> Réglages
+          {stepsLeft > 0 && (
+            <span
+              className="cl-tree__dot cl-sidebar__dot"
+              data-dot="steps"
+              title="Une mise à jour demande un geste sur ce Mac"
+              aria-label="Une mise à jour demande un geste sur ce Mac"
+            />
+          )}
         </a>
       </div>
     </nav>

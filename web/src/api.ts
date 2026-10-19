@@ -84,6 +84,19 @@ export interface CatalogModel {
   engine: string | null;
   /** The engine's profiles that need it (the retained chain: « chaine-retenue »). */
   required_by: string[];
+  /** The model that does this one's job in the retained chain now (engine v1.10.0). */
+  replaced_by: string | null;
+  /** Why, in French, written by the engine for the user: shown as it is (engine v1.10.0). */
+  replacement_note: string | null;
+  /** For a replaced model, measured at the engine's bench (engine v1.11.0), null when not
+   *  measured: how many times faster its successor is… */
+  replacement_speedup?: number | null;
+  /** …how right it is compared with this one (`same`: within the measure's noise)… */
+  replacement_quality?: "same" | "better" | "worse" | null;
+  /** …the peak memory it saves… */
+  replacement_memory_saved_bytes?: number | null;
+  /** …and where these figures come from (developer mode). */
+  replacement_evidence?: string | null;
 }
 
 /** model-inventory.schema.json */
@@ -99,6 +112,11 @@ export interface InstalledEngineModel {
   size_bytes: number;
   downloaded_at: string | null;
   problem: string | null;
+  /** A profile of the engine needs it. */
+  required: boolean;
+  /** Installed, no longer needed, replaced by this model: it only takes space (engine
+   *  v1.10.0). Its removal is offered, the user decides (P8). */
+  replaced_by: string | null;
 }
 
 export interface PartialDownload {
@@ -847,6 +865,9 @@ export const api = {
   removeModel: (key: string) => send<void>("DELETE", `/api/moteur/modeles/${encodeURIComponent(key)}`),
   /** An environment the processing does not use (an older one, or interrupted). */
   removeEnvironment: (path: string) => send<void>("POST", "/api/moteur/environnements/retirer", { chemin: path }),
+  /** The requested steps the user asked not to be reminded of (ADR 0049). */
+  dismissedSteps: () => getJson<string[]>("/api/gestes-ecartes"),
+  dismissSteps: (ids: string[]) => send<string[]>("POST", "/api/gestes-ecartes", { gestes: ids }),
   openFolder: (which: FolderName) => send<void>("POST", `/api/dossiers/${which}/ouvrir`),
   projects: () => getJson<Project[]>("/api/projets"),
   createProject: (spaceId: number, name: string) =>

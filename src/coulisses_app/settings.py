@@ -52,3 +52,26 @@ def set_writing_model(conn: sqlite3.Connection, writing: Writing, model: str) ->
             " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
             (f"{MODEL_KEY}.{writing}", json.dumps(model)),
         )
+
+
+DISMISSED_KEY = "gestes_ecartes"
+"""The requested steps the user asked not to be reminded of (ADR 0049): their ids, as the
+interface makes them from the engine's state."""
+
+
+def dismissed_steps(conn: sqlite3.Connection) -> list[str]:
+    row = conn.execute("SELECT value FROM app_setting WHERE key = ?", (DISMISSED_KEY,)).fetchone()
+    return list(json.loads(row[0])) if row else []
+
+
+def dismiss_steps(conn: sqlite3.Connection, ids: list[str]) -> list[str]:
+    """Added to those already dismissed (none is forgotten), in the order they came."""
+    kept = dismissed_steps(conn)
+    kept += [i for i in dict.fromkeys(ids) if i not in kept]
+    with conn:
+        conn.execute(
+            "INSERT INTO app_setting (key, value) VALUES (?, ?)"
+            " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            (DISMISSED_KEY, json.dumps(kept)),
+        )
+    return kept

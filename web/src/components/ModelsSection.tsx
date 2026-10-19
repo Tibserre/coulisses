@@ -8,6 +8,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { api, type EnvironmentInfo, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
+import { stepsChanged } from "../steps.ts";
 import {
   environmentState,
   interpreterNote,
@@ -47,6 +48,7 @@ export function ModelsSection() {
       setView(next);
       setActions(next.actions);
       setUnreadable(null);
+      stepsChanged(next);
     } catch (e) {
       setUnreadable((e as Error).message);
     }
@@ -346,7 +348,7 @@ export function ModelsSection() {
         }
         description={
           asking?.what === "remove"
-            ? `${asking.row.key} est supprimé de ce Mac${asking.row.state.kind === "partial" ? " (la partie déjà téléchargée)" : ""}.${asking.row.required ? " Le traitement en a besoin : les séances ne pourront plus être traitées tant qu'il n'est pas retéléchargé." : ""}`
+            ? `${asking.row.key} est supprimé de ce Mac${asking.row.state.kind === "partial" ? " (la partie déjà téléchargée)" : ""}.${asking.row.state.kind === "installed" && asking.row.state.replacement ? ` Il a été remplacé : le traitement ne s'en sert plus. ${gigabytes(asking.row.state.size)} sont libérés.` : ""}${asking.row.required ? " Le traitement en a besoin : les séances ne pourront plus être traitées tant qu'il n'est pas retéléchargé." : ""}`
             : ""
         }
         actionLabel="Supprimer"
@@ -412,6 +414,16 @@ function ModelStateText({ row, dev }: { row: ModelRow; dev: boolean }) {
       );
     }
     case "installed":
+      // Replaced (ADR 0049): it only takes space, the engine says why.
+      if (state.replacement)
+        return (
+          <div className="cl-models__what">
+            <Text type="supporting" weight="medium">
+              Remplacé, ne sert plus · {gigabytes(state.size)}
+            </Text>
+            {state.replacement.note && <Text type="supporting">{state.replacement.note}</Text>}
+          </div>
+        );
       return (
         <Text type="supporting">
           Installé · {gigabytes(state.size)}
@@ -470,6 +482,12 @@ function ModelActions({
         <Button label="Arrêter" size="sm" variant="ghost" onClick={onCancel} />
       );
     case "installed":
+      // A replaced model's removal is put forward (still confirmed: P8).
+      return row.state.replacement ? (
+        <Button label="Supprimer" size="sm" variant="primary" onClick={onRemove} isDisabled={working} />
+      ) : (
+        remove
+      );
     case "altered":
       return remove;
     case "partial":
