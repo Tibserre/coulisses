@@ -42,6 +42,7 @@ from coulisses_app import (
     engine_models,
     exports,
     jobs,
+    lossless,
     marks,
     mixing,
     notes,
@@ -1017,7 +1018,11 @@ def create_app(
                 "L'enregistrement est introuvable dans le dossier de la séance. "
                 "A-t-il été déplacé ou supprimé dans le Finder ?"
             )
-        media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        media_type = (
+            lossless.MEDIA_TYPE
+            if path.suffix.lower() == lossless.SUFFIX
+            else mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        )
         return FileResponse(path, media_type=media_type)
 
     # -- projects, search, export to a folder (step 8, ADR 0030) -----------------------

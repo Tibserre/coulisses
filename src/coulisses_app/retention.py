@@ -64,7 +64,9 @@ class AudioStatus(BaseModel):
 class LogEntry(BaseModel):
     id: int
     at: str
-    kind: Literal["purge", "audio_deletion", "session_deletion"]
+    kind: Literal["purge", "audio_deletion", "session_deletion", "conversion"]
+    """`conversion`: WAV tracks removed once kept in FLAC (ADR 0046); `bytes` is then the
+    room freed."""
     session_id: str
     session_title: str | None
     files: int
@@ -233,8 +235,13 @@ def _busy(conn: sqlite3.Connection, session_id: str, *, waiting_counts: bool) ->
     """Why the session cannot lose its files now, if it cannot. `waiting_counts`: a
     processing waiting in the queue needs the audio too (the session's deletion takes its
     queue with it)."""
-    from coulisses_app import mixing  # it reads the sessions, which read this module
+    from coulisses_app import lossless, mixing  # they read the sessions, which read this
 
+    if lossless.busy(session_id):
+        return (
+            "Les pistes de cette séance sont en train d'être gardées en FLAC : réessayez dans "
+            "un instant."
+        )
     if mixing.busy(session_id):
         return (
             "Le micro et le son de l'ordinateur de cette séance sont en train d'être réunis : "

@@ -254,8 +254,16 @@ def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
     assert path.stat().st_mtime_ns == made  # the same sources: kept
     conn = connect(data)
     with conn:
+        # Another file, the same samples (a track kept in FLAC, ADR 0046): kept.
         conn.execute(
-            "UPDATE audio_source SET sha256 = 'autre' WHERE session_id = ? AND source_id = ?",
+            "UPDATE audio_source SET sha256 = 'fichier' WHERE session_id = ? AND source_id = ?",
+            (session_id, "system"),
+        )
+    mixing.processing_path(data, session_id)
+    assert path.stat().st_mtime_ns == made
+    with conn:
+        conn.execute(
+            "UPDATE audio_source SET pcm_sha256 = 'autre' WHERE session_id = ? AND source_id = ?",
             (session_id, "system"),
         )
     conn.close()
