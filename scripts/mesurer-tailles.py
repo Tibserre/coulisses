@@ -630,7 +630,7 @@ def summary(facts: dict, before: dict | None) -> list[str]:
         if before is not None:
             old = value_at(before, path)
             if isinstance(old, (int, float)) and isinstance(new, (int, float)):
-                cells.append(human(new - old) if new != old else "=")
+                cells.append(("+" if new > old else "") + human(new - old) if new != old else "=")
             else:
                 cells.append("—")
         lines.append("| " + " | ".join(cells) + " |")

@@ -1,0 +1,1887 @@
+{
+ "date": "2026-10-19",
+ "measured": {
+  "app": "Coulisses-essai-1.7.2.dmg",
+  "data": "Données-dev"
+ },
+ "dmg": {
+  "size": 695989656,
+  "format": "ULFO"
+ },
+ "app": {
+  "version": "0.28.0",
+  "size": 1819594752,
+  "parts": {
+   "lanceur, icône, licences": 401408,
+   "signature (liste des fichiers signés)": 19234816,
+   "outil : ffmpeg": 3829760,
+   "outil : coulisses-son-ordinateur": 114688,
+   "outil : uv": 42672128,
+   "outil : ffprobe": 3657728,
+   "Python : interpréteur et le reste": 20029440,
+   "Python : bibliothèque standard": 56094720,
+   "Python : paquets (site-packages)": 1669677056,
+   "interface (web)": 1474560,
+   "framework : Sparkle.framework": 2408448
+  },
+  "kinds": {
+   "other": 39645184,
+   "native": 684290048,
+   "sources": 81547264,
+   "py": 276692992,
+   "pyc": 309547008,
+   "tests": 156598272,
+   "stubs": 7057408,
+   "static": 102400,
+   "metal": 190320640
+  },
+  "stdlib_kinds": {
+   "native": 23093248,
+   "other": 6197248,
+   "sources": 28672,
+   "py": 12959744,
+   "pyc": 13807616,
+   "static": 8192
+  },
+  "stdlib_dirs": {
+   "__pycache__": 5570560,
+   "encodings": 2539520,
+   "idlelib": 2457600,
+   "ensurepip": 1884160,
+   "asyncio": 1277952,
+   "lib2to3": 1052672,
+   "pydoc_data": 1052672,
+   "email": 966656
+  },
+  "python": {
+   "unowned": 90112,
+   "packages": {
+    "threadpoolctl": {
+     "version": "3.7.0",
+     "size": 184320
+    },
+    "matplotlib": {
+     "version": "3.11.2",
+     "size": 36470784
+    },
+    "docopt": {
+     "version": "0.6.2",
+     "size": 98304
+    },
+    "sounddevice": {
+     "version": "0.5.6",
+     "size": 2412544
+    },
+    "miniaudio": {
+     "version": "1.71",
+     "size": 1146880
+    },
+    "setuptools": {
+     "version": "84.0.0",
+     "size": 6832128
+    },
+    "sympy": {
+     "version": "1.14.0",
+     "size": 76406784
+    },
+    "six": {
+     "version": "1.17.0",
+     "size": 106496
+    },
+    "cffi": {
+     "version": "2.1.1",
+     "size": 1175552
+    },
+    "typing-extensions": {
+     "version": "4.16.0",
+     "size": 368640
+    },
+    "shellingham": {
+     "version": "1.5.4",
+     "size": 98304
+    },
+    "coulisses-app": {
+     "version": "0.28.0",
+     "size": 1347584
+    },
+    "opentelemetry-proto": {
+     "version": "1.45.0",
+     "size": 479232
+    },
+    "uvicorn": {
+     "version": "0.54.0",
+     "size": 917504
+    },
+    "numpy": {
+     "version": "2.5.3",
+     "size": 36147200
+    },
+    "pytorch-lightning": {
+     "version": "2.6.6",
+     "size": 6938624
+    },
+    "mdurl": {
+     "version": "0.1.2",
+     "size": 86016
+    },
+    "packaging": {
+     "version": "26.3",
+     "size": 1118208
+    },
+    "scikit-learn": {
+     "version": "1.9.1",
+     "size": 50569216
+    },
+    "aiohttp": {
+     "version": "3.14.3",
+     "size": 3428352
+    },
+    "truststore": {
+     "version": "0.10.4",
+     "size": 163840
+    },
+    "opentelemetry-api": {
+     "version": "1.45.0",
+     "size": 569344
+    },
+    "mlx-audio": {
+     "version": "0.5.7",
+     "size": 22319104
+    },
+    "lightning": {
+     "version": "2.6.6",
+     "size": 6926336
+    },
+    "cloudpickle": {
+     "version": "3.1.2",
+     "size": 159744
+    },
+    "pyannote-core": {
+     "version": "6.0.1",
+     "size": 458752
+    },
+    "kiwisolver": {
+     "version": "1.5.1",
+     "size": 299008
+    },
+    "tokenizers": {
+     "version": "0.23.2",
+     "size": 10137600
+    },
+    "primepy": {
+     "version": "1.3",
+     "size": 36864
+    },
+    "httpcore": {
+     "version": "1.0.9",
+     "size": 774144
+    },
+    "cycler": {
+     "version": "0.12.1",
+     "size": 69632
+    },
+    "networkx": {
+     "version": "3.7",
+     "size": 18857984
+    },
+    "colorlog": {
+     "version": "6.12.0",
+     "size": 81920
+    },
+    "torchmetrics": {
+     "version": "1.9.0",
+     "size": 8847360
+    },
+    "lightning-utilities": {
+     "version": "0.15.3",
+     "size": 303104
+    },
+    "markupsafe": {
+     "version": "3.0.4",
+     "size": 155648
+    },
+    "click": {
+     "version": "8.5.0",
+     "size": 1044480
+    },
+    "torch": {
+     "version": "2.14.1",
+     "size": 617213952
+    },
+    "sortedcontainers": {
+     "version": "2.4.0",
+     "size": 311296
+    },
+    "fonttools": {
+     "version": "4.66.1",
+     "size": 20811776
+    },
+    "einops": {
+     "version": "0.8.2",
+     "size": 655360
+    },
+    "h11": {
+     "version": "0.16.0",
+     "size": 270336
+    },
+    "joblib": {
+     "version": "1.6.0",
+     "size": 2514944
+    },
+    "protobuf": {
+     "version": "7.36.2",
+     "size": 3022848
+    },
+    "huggingface-hub": {
+     "version": "1.33.0",
+     "size": 7561216
+    },
+    "hf-xet": {
+     "version": "1.6.0",
+     "size": 8151040
+    },
+    "pyannote-audio": {
+     "version": "4.0.7",
+     "size": 2940928
+    },
+    "transformers": {
+     "version": "5.18.0",
+     "size": 117374976
+    },
+    "julius": {
+     "version": "0.2.8",
+     "size": 167936
+    },
+    "torchaudio": {
+     "version": "2.11.0",
+     "size": 4108288
+    },
+    "sqlalchemy": {
+     "version": "2.1.3",
+     "size": 21032960
+    },
+    "annotated-types": {
+     "version": "0.8.0",
+     "size": 94208
+    },
+    "attrs": {
+     "version": "26.1.0",
+     "size": 585728
+    },
+    "pygments": {
+     "version": "2.21.0",
+     "size": 9908224
+    },
+    "pyannote-metrics": {
+     "version": "4.1",
+     "size": 462848
+    },
+    "mako": {
+     "version": "1.4.3",
+     "size": 815104
+    },
+    "pycparser": {
+     "version": "3.0",
+     "size": 487424
+    },
+    "propcache": {
+     "version": "0.5.4",
+     "size": 262144
+    },
+    "requests": {
+     "version": "2.34.2",
+     "size": 589824
+    },
+    "typer": {
+     "version": "0.27.2",
+     "size": 1187840
+    },
+    "opentelemetry-exporter-otlp-proto-grpc": {
+     "version": "1.45.0",
+     "size": 151552
+    },
+    "grpcio": {
+     "version": "1.84.0",
+     "size": 41598976
+    },
+    "mpmath": {
+     "version": "1.3.0",
+     "size": 4960256
+    },
+    "rich": {
+     "version": "15.0.0",
+     "size": 3055616
+    },
+    "pyparsing": {
+     "version": "3.3.3",
+     "size": 1122304
+    },
+    "jinja2": {
+     "version": "3.1.6",
+     "size": 1290240
+    },
+    "yarl": {
+     "version": "1.25.1",
+     "size": 552960
+    },
+    "opentelemetry-semantic-conventions": {
+     "version": "0.66b0",
+     "size": 1892352
+    },
+    "opentelemetry-sdk": {
+     "version": "1.45.0",
+     "size": 1347584
+    },
+    "opentelemetry-exporter-otlp": {
+     "version": "1.45.0",
+     "size": 40960
+    },
+    "opentelemetry-exporter-otlp-proto-common": {
+     "version": "1.45.0",
+     "size": 139264
+    },
+    "opentelemetry-exporter-otlp-proto-http": {
+     "version": "1.45.0",
+     "size": 180224
+    },
+    "opentelemetry-exporter-otlp-common": {
+     "version": "0.66b0",
+     "size": 98304
+    },
+    "opentelemetry-exporter-http-transport": {
+     "version": "0.66b0",
+     "size": 86016
+    },
+    "frozenlist": {
+     "version": "1.8.0",
+     "size": 237568
+    },
+    "fsspec": {
+     "version": "2026.9.0",
+     "size": 2093056
+    },
+    "pyannote-database": {
+     "version": "6.1.1",
+     "size": 385024
+    },
+    "googleapis-common-protos": {
+     "version": "1.75.5",
+     "size": 1499136
+    },
+    "pydantic-core": {
+     "version": "2.46.5",
+     "size": 4644864
+    },
+    "starlette": {
+     "version": "1.7.0",
+     "size": 806912
+    },
+    "markdown-it-py": {
+     "version": "4.2.0",
+     "size": 847872
+    },
+    "coulisses": {
+     "version": "1.7.2",
+     "size": 1105920
+    },
+    "pyannote-pipeline": {
+     "version": "4.0.0",
+     "size": 184320
+    },
+    "sentencepiece": {
+     "version": "0.2.2",
+     "size": 3624960
+    },
+    "idna": {
+     "version": "3.20",
+     "size": 585728
+    },
+    "mlx": {
+     "version": "0.32.3",
+     "size": 2879488
+    },
+    "filelock": {
+     "version": "4.0.11",
+     "size": 954368
+    },
+    "aiohappyeyeballs": {
+     "version": "2.7.1",
+     "size": 102400
+    },
+    "torchcodec": {
+     "version": "0.17.0",
+     "size": 14516224
+    },
+    "regex": {
+     "version": "2026.9.29",
+     "size": 1892352
+    },
+    "contourpy": {
+     "version": "1.4.0",
+     "size": 1298432
+    },
+    "pip": {
+     "version": "26.2.1",
+     "size": 12771328
+    },
+    "charset-normalizer": {
+     "version": "3.5.2",
+     "size": 1470464
+    },
+    "alembic": {
+     "version": "1.20.0",
+     "size": 2662400
+    },
+    "pillow": {
+     "version": "12.3.0",
+     "size": 15216640
+    },
+    "torch-audiomentations": {
+     "version": "0.12.0",
+     "size": 466944
+    },
+    "safetensors": {
+     "version": "0.8.0",
+     "size": 1339392
+    },
+    "tqdm": {
+     "version": "4.70.1",
+     "size": 630784
+    },
+    "pyannoteai-sdk": {
+     "version": "0.4.0",
+     "size": 77824
+    },
+    "multidict": {
+     "version": "6.9.1",
+     "size": 364544
+    },
+    "anyio": {
+     "version": "4.15.1",
+     "size": 1507328
+    },
+    "urllib3": {
+     "version": "2.8.0",
+     "size": 1110016
+    },
+    "pydantic": {
+     "version": "2.13.5",
+     "size": 4284416
+    },
+    "httpx": {
+     "version": "0.28.1",
+     "size": 749568
+    },
+    "certifi": {
+     "version": "2026.7.22",
+     "size": 303104
+    },
+    "python-multipart": {
+     "version": "0.0.32",
+     "size": 249856
+    },
+    "python-dateutil": {
+     "version": "2.9.0.post0",
+     "size": 860160
+    },
+    "annotated-doc": {
+     "version": "0.0.5",
+     "size": 45056
+    },
+    "pyyaml": {
+     "version": "6.0.3",
+     "size": 983040
+    },
+    "num2words": {
+     "version": "0.5.14",
+     "size": 1323008
+    },
+    "narwhals": {
+     "version": "2.26.0",
+     "size": 5373952
+    },
+    "optuna": {
+     "version": "5.0.0",
+     "size": 4435968
+    },
+    "pytorch-metric-learning": {
+     "version": "2.9.0",
+     "size": 1363968
+    },
+    "fastapi": {
+     "version": "0.142.2",
+     "size": 1822720
+    },
+    "aiosignal": {
+     "version": "1.4.0",
+     "size": 40960
+    },
+    "torch-pitch-shift": {
+     "version": "1.2.5",
+     "size": 53248
+    },
+    "asteroid-filterbanks": {
+     "version": "0.4.0",
+     "size": 282624
+    },
+    "typing-inspection": {
+     "version": "0.4.4",
+     "size": 122880
+    },
+    "pandas": {
+     "version": "3.0.6",
+     "size": 75190272
+    },
+    "mlx-metal": {
+     "version": "0.32.3",
+     "size": 217300992
+    },
+    "scipy": {
+     "version": "1.18.1",
+     "size": 104939520
+    }
+   },
+   "exclusive": {
+    "coulisses": {
+     "size": 1597911040,
+     "with": [
+      "torch",
+      "mlx-metal",
+      "transformers",
+      "scipy",
+      "sympy",
+      "pandas",
+      "scikit-learn",
+      "grpcio",
+      "matplotlib",
+      "mlx-audio",
+      "sqlalchemy",
+      "fonttools",
+      "networkx",
+      "pillow",
+      "torchcodec",
+      "tokenizers",
+      "pygments",
+      "torchmetrics",
+      "hf-xet",
+      "huggingface-hub",
+      "pytorch-lightning",
+      "lightning",
+      "setuptools",
+      "narwhals",
+      "mpmath",
+      "optuna",
+      "torchaudio",
+      "sentencepiece",
+      "aiohttp",
+      "rich",
+      "protobuf",
+      "pyannote-audio",
+      "mlx",
+      "alembic",
+      "joblib",
+      "fsspec",
+      "regex",
+      "opentelemetry-semantic-conventions",
+      "googleapis-common-protos",
+      "charset-normalizer",
+      "pytorch-metric-learning",
+      "opentelemetry-sdk",
+      "safetensors",
+      "num2words",
+      "contourpy",
+      "jinja2",
+      "typer",
+      "miniaudio",
+      "pyparsing",
+      "packaging",
+      "urllib3",
+      "pyyaml",
+      "filelock",
+      "python-dateutil",
+      "markdown-it-py",
+      "mako",
+      "httpcore",
+      "httpx",
+      "einops",
+      "tqdm",
+      "requests",
+      "attrs",
+      "yarl",
+      "opentelemetry-proto",
+      "torch-audiomentations",
+      "pyannote-metrics",
+      "pyannote-core",
+      "pyannote-database",
+      "multidict",
+      "sortedcontainers",
+      "certifi",
+      "lightning-utilities",
+      "kiwisolver",
+      "asteroid-filterbanks",
+      "propcache",
+      "frozenlist",
+      "threadpoolctl",
+      "pyannote-pipeline",
+      "opentelemetry-exporter-otlp-proto-http",
+      "julius",
+      "truststore",
+      "cloudpickle",
+      "markupsafe",
+      "opentelemetry-exporter-otlp-proto-grpc",
+      "opentelemetry-exporter-otlp-proto-common",
+      "six",
+      "aiohappyeyeballs",
+      "docopt",
+      "opentelemetry-exporter-otlp-common",
+      "shellingham",
+      "mdurl",
+      "opentelemetry-exporter-http-transport",
+      "colorlog",
+      "pyannoteai-sdk",
+      "cycler",
+      "torch-pitch-shift",
+      "aiosignal",
+      "opentelemetry-exporter-otlp",
+      "primepy"
+     ]
+    },
+    "primepy": {
+     "size": 36864,
+     "with": []
+    },
+    "numpy": {
+     "size": 36147200,
+     "with": []
+    },
+    "tokenizers": {
+     "size": 10137600,
+     "with": []
+    },
+    "annotated-types": {
+     "size": 94208,
+     "with": []
+    },
+    "fonttools": {
+     "size": 20811776,
+     "with": []
+    },
+    "tqdm": {
+     "size": 630784,
+     "with": []
+    },
+    "networkx": {
+     "size": 18857984,
+     "with": []
+    },
+    "narwhals": {
+     "size": 5373952,
+     "with": []
+    },
+    "transformers": {
+     "size": 130691072,
+     "with": [
+      "tokenizers",
+      "regex",
+      "typer",
+      "shellingham"
+     ]
+    },
+    "torchaudio": {
+     "size": 4108288,
+     "with": []
+    },
+    "opentelemetry-sdk": {
+     "size": 3239936,
+     "with": [
+      "opentelemetry-semantic-conventions"
+     ]
+    },
+    "colorlog": {
+     "size": 81920,
+     "with": []
+    },
+    "joblib": {
+     "size": 2674688,
+     "with": [
+      "cloudpickle"
+     ]
+    },
+    "certifi": {
+     "size": 303104,
+     "with": []
+    },
+    "mdurl": {
+     "size": 86016,
+     "with": []
+    },
+    "regex": {
+     "size": 1892352,
+     "with": []
+    },
+    "setuptools": {
+     "size": 6832128,
+     "with": []
+    },
+    "matplotlib": {
+     "size": 75288576,
+     "with": [
+      "fonttools",
+      "pillow",
+      "contourpy",
+      "pyparsing",
+      "kiwisolver",
+      "cycler"
+     ]
+    },
+    "hf-xet": {
+     "size": 8151040,
+     "with": []
+    },
+    "protobuf": {
+     "size": 3022848,
+     "with": []
+    },
+    "uvicorn": {
+     "size": 917504,
+     "with": []
+    },
+    "pydantic": {
+     "size": 9023488,
+     "with": [
+      "pydantic-core",
+      "annotated-types"
+     ]
+    },
+    "googleapis-common-protos": {
+     "size": 1499136,
+     "with": []
+    },
+    "annotated-doc": {
+     "size": 45056,
+     "with": []
+    },
+    "pyannoteai-sdk": {
+     "size": 2138112,
+     "with": [
+      "charset-normalizer",
+      "requests"
+     ]
+    },
+    "mlx": {
+     "size": 220180480,
+     "with": [
+      "mlx-metal"
+     ]
+    },
+    "torchcodec": {
+     "size": 14516224,
+     "with": []
+    },
+    "safetensors": {
+     "size": 1339392,
+     "with": []
+    },
+    "grpcio": {
+     "size": 41598976,
+     "with": []
+    },
+    "aiosignal": {
+     "size": 40960,
+     "with": []
+    },
+    "scipy": {
+     "size": 104939520,
+     "with": []
+    },
+    "rich": {
+     "size": 13897728,
+     "with": [
+      "pygments",
+      "markdown-it-py",
+      "mdurl"
+     ]
+    },
+    "pyparsing": {
+     "size": 1122304,
+     "with": []
+    },
+    "huggingface-hub": {
+     "size": 15712256,
+     "with": [
+      "hf-xet"
+     ]
+    },
+    "cffi": {
+     "size": 1662976,
+     "with": [
+      "pycparser"
+     ]
+    },
+    "yarl": {
+     "size": 552960,
+     "with": []
+    },
+    "httpcore": {
+     "size": 774144,
+     "with": []
+    },
+    "sqlalchemy": {
+     "size": 21032960,
+     "with": []
+    },
+    "pandas": {
+     "size": 75190272,
+     "with": []
+    },
+    "asteroid-filterbanks": {
+     "size": 282624,
+     "with": []
+    },
+    "lightning": {
+     "size": 19439616,
+     "with": [
+      "pytorch-lightning",
+      "aiohttp",
+      "attrs",
+      "yarl",
+      "multidict",
+      "propcache",
+      "frozenlist",
+      "aiohappyeyeballs",
+      "aiosignal"
+     ]
+    },
+    "click": {
+     "size": 1044480,
+     "with": []
+    },
+    "httpx": {
+     "size": 1523712,
+     "with": [
+      "httpcore"
+     ]
+    },
+    "jinja2": {
+     "size": 1290240,
+     "with": []
+    },
+    "six": {
+     "size": 106496,
+     "with": []
+    },
+    "pytorch-metric-learning": {
+     "size": 1363968,
+     "with": []
+    },
+    "starlette": {
+     "size": 806912,
+     "with": []
+    },
+    "truststore": {
+     "size": 163840,
+     "with": []
+    },
+    "pygments": {
+     "size": 9908224,
+     "with": []
+    },
+    "typing-extensions": {
+     "size": 368640,
+     "with": []
+    },
+    "pytorch-lightning": {
+     "size": 6938624,
+     "with": []
+    },
+    "fsspec": {
+     "size": 7667712,
+     "with": [
+      "aiohttp",
+      "attrs",
+      "yarl",
+      "multidict",
+      "propcache",
+      "frozenlist",
+      "aiohappyeyeballs",
+      "aiosignal"
+     ]
+    },
+    "threadpoolctl": {
+     "size": 184320,
+     "with": []
+    },
+    "miniaudio": {
+     "size": 1146880,
+     "with": []
+    },
+    "docopt": {
+     "size": 98304,
+     "with": []
+    },
+    "opentelemetry-exporter-http-transport": {
+     "size": 86016,
+     "with": []
+    },
+    "anyio": {
+     "size": 1507328,
+     "with": []
+    },
+    "fastapi": {
+     "size": 2629632,
+     "with": [
+      "starlette"
+     ]
+    },
+    "opentelemetry-exporter-otlp-common": {
+     "size": 98304,
+     "with": []
+    },
+    "pillow": {
+     "size": 15216640,
+     "with": []
+    },
+    "lightning-utilities": {
+     "size": 303104,
+     "with": []
+    },
+    "mlx-metal": {
+     "size": 217300992,
+     "with": []
+    },
+    "markdown-it-py": {
+     "size": 933888,
+     "with": [
+      "mdurl"
+     ]
+    },
+    "aiohttp": {
+     "size": 5574656,
+     "with": [
+      "attrs",
+      "yarl",
+      "multidict",
+      "propcache",
+      "frozenlist",
+      "aiohappyeyeballs",
+      "aiosignal"
+     ]
+    },
+    "urllib3": {
+     "size": 1110016,
+     "with": []
+    },
+    "charset-normalizer": {
+     "size": 1470464,
+     "with": []
+    },
+    "packaging": {
+     "size": 1118208,
+     "with": []
+    },
+    "contourpy": {
+     "size": 1298432,
+     "with": []
+    },
+    "julius": {
+     "size": 167936,
+     "with": []
+    },
+    "opentelemetry-proto": {
+     "size": 479232,
+     "with": []
+    },
+    "python-multipart": {
+     "size": 249856,
+     "with": []
+    },
+    "aiohappyeyeballs": {
+     "size": 102400,
+     "with": []
+    },
+    "typing-inspection": {
+     "size": 122880,
+     "with": []
+    },
+    "kiwisolver": {
+     "size": 299008,
+     "with": []
+    },
+    "sympy": {
+     "size": 81367040,
+     "with": [
+      "mpmath"
+     ]
+    },
+    "cycler": {
+     "size": 69632,
+     "with": []
+    },
+    "einops": {
+     "size": 655360,
+     "with": []
+    },
+    "torch": {
+     "size": 725561344,
+     "with": [
+      "sympy",
+      "networkx",
+      "setuptools",
+      "mpmath",
+      "jinja2"
+     ]
+    },
+    "sortedcontainers": {
+     "size": 311296,
+     "with": []
+    },
+    "pycparser": {
+     "size": 487424,
+     "with": []
+    },
+    "opentelemetry-exporter-otlp-proto-http": {
+     "size": 266240,
+     "with": [
+      "opentelemetry-exporter-http-transport"
+     ]
+    },
+    "pyannote-audio": {
+     "size": 348045312,
+     "with": [
+      "pandas",
+      "scikit-learn",
+      "grpcio",
+      "matplotlib",
+      "sqlalchemy",
+      "fonttools",
+      "pillow",
+      "torchcodec",
+      "torchmetrics",
+      "pytorch-lightning",
+      "lightning",
+      "narwhals",
+      "optuna",
+      "torchaudio",
+      "aiohttp",
+      "protobuf",
+      "alembic",
+      "joblib",
+      "opentelemetry-semantic-conventions",
+      "googleapis-common-protos",
+      "charset-normalizer",
+      "pytorch-metric-learning",
+      "opentelemetry-sdk",
+      "contourpy",
+      "pyparsing",
+      "urllib3",
+      "python-dateutil",
+      "mako",
+      "einops",
+      "requests",
+      "attrs",
+      "yarl",
+      "opentelemetry-proto",
+      "torch-audiomentations",
+      "pyannote-metrics",
+      "pyannote-core",
+      "pyannote-database",
+      "multidict",
+      "sortedcontainers",
+      "lightning-utilities",
+      "kiwisolver",
+      "asteroid-filterbanks",
+      "propcache",
+      "frozenlist",
+      "pyannote-pipeline",
+      "threadpoolctl",
+      "opentelemetry-exporter-otlp-proto-http",
+      "julius",
+      "cloudpickle",
+      "opentelemetry-exporter-otlp-proto-grpc",
+      "opentelemetry-exporter-otlp-proto-common",
+      "six",
+      "aiohappyeyeballs",
+      "opentelemetry-exporter-otlp-common",
+      "opentelemetry-exporter-http-transport",
+      "colorlog",
+      "pyannoteai-sdk",
+      "cycler",
+      "torch-pitch-shift",
+      "aiosignal",
+      "opentelemetry-exporter-otlp",
+      "primepy"
+     ]
+    },
+    "torch-audiomentations": {
+     "size": 724992,
+     "with": [
+      "julius",
+      "torch-pitch-shift",
+      "primepy"
+     ]
+    },
+    "alembic": {
+     "size": 3477504,
+     "with": [
+      "mako"
+     ]
+    },
+    "pydantic-core": {
+     "size": 4644864,
+     "with": []
+    },
+    "pyannote-metrics": {
+     "size": 462848,
+     "with": []
+    },
+    "opentelemetry-exporter-otlp-proto-common": {
+     "size": 139264,
+     "with": []
+    },
+    "markupsafe": {
+     "size": 155648,
+     "with": []
+    },
+    "propcache": {
+     "size": 262144,
+     "with": []
+    },
+    "sounddevice": {
+     "size": 2412544,
+     "with": []
+    },
+    "idna": {
+     "size": 585728,
+     "with": []
+    },
+    "shellingham": {
+     "size": 98304,
+     "with": []
+    },
+    "torchmetrics": {
+     "size": 8847360,
+     "with": []
+    },
+    "opentelemetry-semantic-conventions": {
+     "size": 1892352,
+     "with": []
+    },
+    "cloudpickle": {
+     "size": 159744,
+     "with": []
+    },
+    "opentelemetry-exporter-otlp-proto-grpc": {
+     "size": 41750528,
+     "with": [
+      "grpcio"
+     ]
+    },
+    "torch-pitch-shift": {
+     "size": 90112,
+     "with": [
+      "primepy"
+     ]
+    },
+    "sentencepiece": {
+     "size": 3624960,
+     "with": []
+    },
+    "multidict": {
+     "size": 364544,
+     "with": []
+    },
+    "mpmath": {
+     "size": 4960256,
+     "with": []
+    },
+    "frozenlist": {
+     "size": 237568,
+     "with": []
+    },
+    "mako": {
+     "size": 815104,
+     "with": []
+    },
+    "pyyaml": {
+     "size": 983040,
+     "with": []
+    },
+    "typer": {
+     "size": 1286144,
+     "with": [
+      "shellingham"
+     ]
+    },
+    "opentelemetry-exporter-otlp": {
+     "size": 47296512,
+     "with": [
+      "grpcio",
+      "protobuf",
+      "googleapis-common-protos",
+      "opentelemetry-proto",
+      "opentelemetry-exporter-otlp-proto-http",
+      "opentelemetry-exporter-otlp-proto-grpc",
+      "opentelemetry-exporter-otlp-proto-common",
+      "opentelemetry-exporter-otlp-common",
+      "opentelemetry-exporter-http-transport"
+     ]
+    },
+    "h11": {
+     "size": 270336,
+     "with": []
+    },
+    "attrs": {
+     "size": 585728,
+     "with": []
+    },
+    "optuna": {
+     "size": 29028352,
+     "with": [
+      "sqlalchemy",
+      "alembic",
+      "mako",
+      "colorlog"
+     ]
+    },
+    "num2words": {
+     "size": 1421312,
+     "with": [
+      "docopt"
+     ]
+    },
+    "python-dateutil": {
+     "size": 966656,
+     "with": [
+      "six"
+     ]
+    },
+    "pyannote-pipeline": {
+     "size": 29212672,
+     "with": [
+      "sqlalchemy",
+      "optuna",
+      "alembic",
+      "mako",
+      "colorlog"
+     ]
+    },
+    "requests": {
+     "size": 2060288,
+     "with": [
+      "charset-normalizer"
+     ]
+    },
+    "scikit-learn": {
+     "size": 58802176,
+     "with": [
+      "narwhals",
+      "joblib",
+      "threadpoolctl",
+      "cloudpickle"
+     ]
+    },
+    "pyannote-core": {
+     "size": 770048,
+     "with": [
+      "sortedcontainers"
+     ]
+    },
+    "pyannote-database": {
+     "size": 385024,
+     "with": []
+    },
+    "opentelemetry-api": {
+     "size": 569344,
+     "with": []
+    },
+    "filelock": {
+     "size": 954368,
+     "with": []
+    },
+    "mlx-audio": {
+     "size": 243646464,
+     "with": [
+      "mlx-metal",
+      "mlx",
+      "miniaudio"
+     ]
+    }
+   },
+   "required_by": {
+    "uvicorn": [
+     "coulisses-app"
+    ],
+    "h11": [
+     "httpcore",
+     "uvicorn"
+    ],
+    "click": [
+     "huggingface-hub",
+     "uvicorn"
+    ],
+    "python-multipart": [
+     "coulisses-app"
+    ],
+    "pydantic": [
+     "coulisses",
+     "coulisses-app",
+     "fastapi"
+    ],
+    "typing-inspection": [
+     "fastapi",
+     "pydantic"
+    ],
+    "typing-extensions": [
+     "aiohttp",
+     "aiosignal",
+     "alembic",
+     "anyio",
+     "asteroid-filterbanks",
+     "fastapi",
+     "grpcio",
+     "huggingface-hub",
+     "lightning",
+     "lightning-utilities",
+     "opentelemetry-api",
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http",
+     "opentelemetry-sdk",
+     "opentelemetry-semantic-conventions",
+     "pydantic",
+     "pydantic-core",
+     "pytorch-lightning",
+     "sqlalchemy",
+     "starlette",
+     "torch",
+     "typing-inspection"
+    ],
+    "pydantic-core": [
+     "pydantic"
+    ],
+    "annotated-types": [
+     "pydantic"
+    ],
+    "sounddevice": [
+     "coulisses-app",
+     "mlx-audio"
+    ],
+    "cffi": [
+     "miniaudio",
+     "sounddevice"
+    ],
+    "pycparser": [
+     "cffi"
+    ],
+    "numpy": [
+     "asteroid-filterbanks",
+     "contourpy",
+     "coulisses",
+     "coulisses-app",
+     "matplotlib",
+     "mlx-audio",
+     "optuna",
+     "pandas",
+     "pyannote-core",
+     "pyannote-metrics",
+     "pytorch-metric-learning",
+     "scikit-learn",
+     "scipy",
+     "torchmetrics",
+     "transformers"
+    ],
+    "fastapi": [
+     "coulisses-app"
+    ],
+    "opentelemetry-api": [
+     "fastapi",
+     "opentelemetry-exporter-http-transport",
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http",
+     "opentelemetry-sdk",
+     "opentelemetry-semantic-conventions",
+     "pyannote-audio"
+    ],
+    "annotated-doc": [
+     "fastapi",
+     "typer"
+    ],
+    "starlette": [
+     "fastapi"
+    ],
+    "anyio": [
+     "httpx",
+     "starlette"
+    ],
+    "idna": [
+     "anyio",
+     "httpx",
+     "requests",
+     "yarl"
+    ],
+    "coulisses": [
+     "coulisses-app"
+    ],
+    "transformers": [
+     "coulisses",
+     "mlx-audio"
+    ],
+    "tqdm": [
+     "huggingface-hub",
+     "lightning",
+     "mlx-audio",
+     "optuna",
+     "pyannote-pipeline",
+     "pytorch-lightning",
+     "pytorch-metric-learning",
+     "transformers"
+    ],
+    "safetensors": [
+     "pyannote-audio",
+     "transformers"
+    ],
+    "typer": [
+     "transformers"
+    ],
+    "rich": [
+     "pyannote-audio",
+     "typer"
+    ],
+    "pygments": [
+     "rich"
+    ],
+    "markdown-it-py": [
+     "rich"
+    ],
+    "mdurl": [
+     "markdown-it-py"
+    ],
+    "shellingham": [
+     "typer"
+    ],
+    "tokenizers": [
+     "transformers"
+    ],
+    "huggingface-hub": [
+     "coulisses",
+     "mlx-audio",
+     "pyannote-audio",
+     "tokenizers",
+     "transformers"
+    ],
+    "pyyaml": [
+     "huggingface-hub",
+     "lightning",
+     "optuna",
+     "pyannote-database",
+     "pyannote-pipeline",
+     "pytorch-lightning",
+     "transformers"
+    ],
+    "packaging": [
+     "huggingface-hub",
+     "lightning",
+     "lightning-utilities",
+     "matplotlib",
+     "optuna",
+     "pytorch-lightning",
+     "torch-pitch-shift",
+     "torchmetrics",
+     "transformers"
+    ],
+    "httpx": [
+     "coulisses",
+     "huggingface-hub"
+    ],
+    "httpcore": [
+     "httpx"
+    ],
+    "certifi": [
+     "httpcore",
+     "httpx",
+     "requests"
+    ],
+    "hf-xet": [
+     "huggingface-hub"
+    ],
+    "fsspec": [
+     "huggingface-hub",
+     "lightning",
+     "pytorch-lightning",
+     "torch"
+    ],
+    "filelock": [
+     "huggingface-hub",
+     "pyannote-pipeline",
+     "torch"
+    ],
+    "regex": [
+     "transformers"
+    ],
+    "torch": [
+     "asteroid-filterbanks",
+     "coulisses",
+     "julius",
+     "lightning",
+     "pyannote-audio",
+     "pytorch-lightning",
+     "pytorch-metric-learning",
+     "torch-audiomentations",
+     "torch-pitch-shift",
+     "torchmetrics"
+    ],
+    "jinja2": [
+     "torch"
+    ],
+    "markupsafe": [
+     "jinja2",
+     "mako"
+    ],
+    "networkx": [
+     "torch"
+    ],
+    "sympy": [
+     "torch"
+    ],
+    "mpmath": [
+     "sympy"
+    ],
+    "setuptools": [
+     "torch"
+    ],
+    "num2words": [
+     "coulisses"
+    ],
+    "docopt": [
+     "num2words"
+    ],
+    "pyannote-audio": [
+     "coulisses"
+    ],
+    "torchmetrics": [
+     "lightning",
+     "pyannote-audio",
+     "pytorch-lightning"
+    ],
+    "lightning-utilities": [
+     "lightning",
+     "pytorch-lightning",
+     "torchmetrics"
+    ],
+    "torchcodec": [
+     "pyannote-audio"
+    ],
+    "torchaudio": [
+     "pyannote-audio",
+     "torch-audiomentations",
+     "torch-pitch-shift"
+    ],
+    "torch-audiomentations": [
+     "pyannote-audio"
+    ],
+    "torch-pitch-shift": [
+     "torch-audiomentations"
+    ],
+    "primepy": [
+     "torch-pitch-shift"
+    ],
+    "julius": [
+     "torch-audiomentations"
+    ],
+    "pytorch-metric-learning": [
+     "pyannote-audio"
+    ],
+    "scikit-learn": [
+     "pyannote-metrics",
+     "pytorch-metric-learning"
+    ],
+    "threadpoolctl": [
+     "scikit-learn"
+    ],
+    "narwhals": [
+     "scikit-learn"
+    ],
+    "joblib": [
+     "scikit-learn"
+    ],
+    "cloudpickle": [
+     "joblib"
+    ],
+    "scipy": [
+     "mlx-audio",
+     "pyannote-metrics",
+     "scikit-learn"
+    ],
+    "pyannoteai-sdk": [
+     "pyannote-audio"
+    ],
+    "requests": [
+     "pyannoteai-sdk"
+    ],
+    "urllib3": [
+     "opentelemetry-exporter-http-transport",
+     "requests"
+    ],
+    "charset-normalizer": [
+     "requests"
+    ],
+    "pyannote-pipeline": [
+     "pyannote-audio"
+    ],
+    "pyannote-database": [
+     "pyannote-audio",
+     "pyannote-metrics",
+     "pyannote-pipeline"
+    ],
+    "pyannote-core": [
+     "pyannote-audio",
+     "pyannote-database",
+     "pyannote-metrics",
+     "pyannote-pipeline"
+    ],
+    "sortedcontainers": [
+     "pyannote-core"
+    ],
+    "pandas": [
+     "pyannote-core",
+     "pyannote-database",
+     "pyannote-metrics"
+    ],
+    "python-dateutil": [
+     "matplotlib",
+     "pandas"
+    ],
+    "six": [
+     "python-dateutil"
+    ],
+    "optuna": [
+     "pyannote-pipeline"
+    ],
+    "sqlalchemy": [
+     "alembic",
+     "optuna"
+    ],
+    "colorlog": [
+     "optuna"
+    ],
+    "alembic": [
+     "optuna"
+    ],
+    "mako": [
+     "alembic"
+    ],
+    "pyannote-metrics": [
+     "pyannote-audio"
+    ],
+    "opentelemetry-sdk": [
+     "opentelemetry-exporter-otlp-common",
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http",
+     "pyannote-audio"
+    ],
+    "opentelemetry-semantic-conventions": [
+     "opentelemetry-sdk"
+    ],
+    "opentelemetry-exporter-otlp": [
+     "pyannote-audio"
+    ],
+    "opentelemetry-exporter-otlp-proto-http": [
+     "opentelemetry-exporter-otlp"
+    ],
+    "opentelemetry-proto": [
+     "opentelemetry-exporter-otlp-proto-common",
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http"
+    ],
+    "protobuf": [
+     "googleapis-common-protos",
+     "opentelemetry-proto"
+    ],
+    "opentelemetry-exporter-otlp-proto-common": [
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http"
+    ],
+    "opentelemetry-exporter-otlp-common": [
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http"
+    ],
+    "opentelemetry-exporter-http-transport": [
+     "opentelemetry-exporter-otlp-proto-http"
+    ],
+    "googleapis-common-protos": [
+     "opentelemetry-exporter-otlp-proto-grpc",
+     "opentelemetry-exporter-otlp-proto-http"
+    ],
+    "opentelemetry-exporter-otlp-proto-grpc": [
+     "opentelemetry-exporter-otlp"
+    ],
+    "grpcio": [
+     "opentelemetry-exporter-otlp-proto-grpc"
+    ],
+    "matplotlib": [
+     "pyannote-audio"
+    ],
+    "pyparsing": [
+     "matplotlib"
+    ],
+    "pillow": [
+     "matplotlib"
+    ],
+    "kiwisolver": [
+     "matplotlib"
+    ],
+    "fonttools": [
+     "matplotlib"
+    ],
+    "cycler": [
+     "matplotlib"
+    ],
+    "contourpy": [
+     "matplotlib"
+    ],
+    "lightning": [
+     "pyannote-audio"
+    ],
+    "pytorch-lightning": [
+     "lightning"
+    ],
+    "aiohttp": [
+     "fsspec"
+    ],
+    "yarl": [
+     "aiohttp"
+    ],
+    "propcache": [
+     "aiohttp",
+     "yarl"
+    ],
+    "multidict": [
+     "aiohttp",
+     "yarl"
+    ],
+    "frozenlist": [
+     "aiohttp",
+     "aiosignal"
+    ],
+    "attrs": [
+     "aiohttp"
+    ],
+    "aiosignal": [
+     "aiohttp"
+    ],
+    "aiohappyeyeballs": [
+     "aiohttp"
+    ],
+    "einops": [
+     "pyannote-audio"
+    ],
+    "asteroid-filterbanks": [
+     "pyannote-audio"
+    ],
+    "sentencepiece": [
+     "coulisses"
+    ],
+    "mlx-audio": [
+     "coulisses"
+    ],
+    "mlx": [
+     "mlx-audio"
+    ],
+    "mlx-metal": [
+     "mlx"
+    ],
+    "miniaudio": [
+     "mlx-audio"
+    ],
+    "truststore": [
+     "coulisses"
+    ]
+   },
+   "not_required": [
+    "pip"
+   ]
+  }
+ },
+ "engine": {
+  "models": {
+   "diarizen-wavlm-large-s80-md-v2": 278341479,
+   "pyannote-community-1": 32822476,
+   "pyannote-wespeaker-resnet34-lm": 26646200,
+   "qwen3-asr-1.7b": 4703057174,
+   "wav2vec2-ctc-french": 1262021827
+  },
+  "environments": {
+   "diarizen-9a0c99a57206": {
+    "size": 804512935,
+    "current": true,
+    "installed": true,
+    "outside": 72503296,
+    "packages": {
+     "torch": 309653504,
+     "scipy": 87732224,
+     "numpy": 51589120,
+     "transformers": 51523584,
+     "pandas": 48635904,
+     "sympy": 39682048
+    }
+   }
+  },
+  "uv_stores": {
+   "python": 0,
+   "cache": 0
+  },
+  "total": 7107402091
+ },
+ "ollama": {
+  "default": "qwen3.6:35b-mlx",
+  "models": {
+   "gemma4:12b-mlx": 7714253126,
+   "gemma4:26b-mlx": 18334652006,
+   "gemma4:31b-mlx": 20234756907,
+   "gemma4:e2b-mlx": 7477040957,
+   "gemma4:e4b-mlx": 9462065336,
+   "ministral-3:8b": 6022237474,
+   "qwen3.5:2b-mlx": 3117608523,
+   "qwen3.5:4b-mlx": 3973455509,
+   "qwen3.5:9b-nvfp4": 7152863422,
+   "qwen3.6:35b-mlx": 21909210142,
+   "qwen3.8:27b-mlx": 18174721847
+  },
+  "blobs": 122352631808
+ },
+ "audio": {
+  "track_per_hour": {
+   "une piste mono": 518400000,
+   "une réunion avec le son de l'ordinateur (4 pistes mono)": 2073600000
+  },
+  "by_file": {
+   "importé (.m4a)": {
+    "bytes": 46538752,
+    "seconds": 5544.704,
+    "count": 1
+   },
+   "ref.wav": {
+    "bytes": 896208896,
+    "seconds": 6223.648,
+    "count": 1
+   }
+  },
+  "by_session_kind": {
+   "enregistrée dans l'app": {
+    "bytes": 896208896,
+    "seconds": 6223.648,
+    "count": 1
+   },
+   "importée": {
+    "bytes": 46538752,
+    "seconds": 5544.704,
+    "count": 1
+   }
+  }
+ },
+ "totals": {
+  "models": 6302889156,
+  "environments": 877016231,
+  "ollama_default": 21909210142,
+  "audio_hour": 518400000
+ }
+}
