@@ -126,11 +126,28 @@ export function percent(action: ModelAction): number | null {
 export function readinessLine(readiness: Readiness, inventory: Inventory): string | null {
   if (readiness.ready) return null;
   const parts = readiness.missing.map((piece) => {
-    if (piece.environment) return `l'environnement de calcul « ${piece.environment} »`;
+    if (piece.environment)
+      return `l'environnement de calcul « ${piece.label || piece.environment} »`;
     const there = inventory.models.find((m) => m.key === piece.model);
     return piece.code === "model_altered" || (there && there.state !== "intact")
       ? `le modèle « ${piece.model} » (abîmé)`
       : `le modèle « ${piece.model} »`;
   });
-  return `Les séances ne peuvent pas être traitées : il manque ${parts.join(", ")}.`;
+  // An environment several stages need is said once.
+  return `Les séances ne peuvent pas être traitées : il manque ${[...new Set(parts)].join(", ")}.`;
+}
+
+/** The environments the chain lacks (not installed), once each however many stages need
+ *  them: [name, its role as the engine says it, or "" when it does not]. */
+export function missingEnvironments(
+  readiness: Readiness,
+  inventory: Inventory,
+): [string, string][] {
+  const found = new Map<string, string>();
+  for (const piece of readiness.missing) {
+    const name = piece.environment;
+    if (!name || inventory.environments.some((e) => e.name === name && e.installed)) continue;
+    found.set(name, found.get(name) || piece.label || "");
+  }
+  return [...found];
 }

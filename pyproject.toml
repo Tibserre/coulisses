@@ -20,7 +20,7 @@ dependencies = [
 coulisses-app = "coulisses_app.cli:main"
 
 [tool.uv.sources]
-coulisses = { git = "https://github.com/Tibserre/coulisses-moteur", subdirectory = "engine", tag = "v1.8.2" }
+coulisses = { git = "https://github.com/Tibserre/coulisses-moteur", subdirectory = "engine", tag = "v1.9.0" }
 
 [build-system]
 requires = ["uv_build>=0.12.18,<0.13.0"]
