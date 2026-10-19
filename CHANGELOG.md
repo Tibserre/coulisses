@@ -4,6 +4,12 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.29.0 — 2026-10-19
+
+### Nouveautés
+
+- garde les enregistrements en FLAC, sans perte, une fois finis (enregistrement)
+
 ## v0.28.1 — 2026-10-19
 
 ### Corrections
