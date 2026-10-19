@@ -4,7 +4,8 @@ Everything comes from pinned versions (`scripts/construction.toml`), kept in
 ~/Library/Caches/Coulisses/construction and downloaded only with --telecharger. The .app
 holds:
 - a standalone Python with the app, the engine at its tag and their locked dependencies,
-  precompiled so that nothing is written there at run time;
+  precompiled so that nothing is written there at run time, after what the app never
+  loads is removed ([elagage] of construction.toml, each removal listed);
 - the built interface;
 - its tools: ffmpeg and ffprobe (built here, audio only, LGPL), uv, the computer's sound
   program;
@@ -252,8 +253,85 @@ def app_version() -> str:
     ]
 
 
-def install_python(python_dir: Path, target: Path) -> None:
-    """The standalone Python, then the locked dependencies and the app, from uv's cache."""
+def size_of(path: Path) -> int:
+    if path.is_symlink() or not path.is_dir():
+        return path.lstat().st_size
+    return sum(p.lstat().st_size for p in path.rglob("*") if p.is_symlink() or not p.is_dir())
+
+
+def prune(python: Path, config: dict, report: Path) -> None:
+    """What the app never loads, out of its Python ([elagage] of construction.toml). Every
+    removal is written to `report` and summed up here, never silent (P8); a path listed
+    there that is missing stops the build."""
+    site = python / "lib" / "python3.12" / "site-packages"
+    kept = [site / name for name in config["garder_dossiers"]]
+    keep_sources = [site / name for name in config["garder_suffixes_dans"]]
+    listed = [python / name for name in config["chemins"]]
+    missing = [p for p in [*kept, *keep_sources, *listed] if not (p.exists() or p.is_symlink())]
+    removed: dict[str, list[Path]] = {}
+
+    tests: list[Path] = []
+    for root, folders, _files in os.walk(site):
+        here = Path(root)
+        if here.name.endswith(".dist-info"):
+            folders[:] = []  # licences and metadata stay whole
+            continue
+        for name in list(folders):
+            if name in config["dossiers_de_tests"] and here / name not in kept:
+                tests.append(here / name)
+                folders.remove(name)
+    removed["dossiers de tests des paquets"] = tests
+
+    packages: list[Path] = []
+    for name in config["paquets"]:
+        found = [site / name, *site.glob(f"{name}-*.dist-info")]
+        if not found[0].is_dir():
+            missing.append(site / name)
+        if len(found) != 2:
+            missing.append(site / f"{name}-*.dist-info")
+        packages += found
+    removed["paquets demandés par rien"] = packages
+    removed["outils de la bibliothèque standard, Tcl/Tk"] = listed
+    if missing:
+        fail(
+            "élagage : introuvable, à retirer de construction.toml : "
+            + ", ".join(str(p.relative_to(python)) for p in missing)
+        )
+
+    suffixes = set(config["suffixes"])
+    sources = [
+        p
+        for p in site.rglob("*")
+        if p.suffix in suffixes
+        and (p.is_file() or p.is_symlink())
+        and not any(part.endswith(".dist-info") for part in p.relative_to(site).parts)
+        and not any(p.is_relative_to(t) for t in tests)
+        and not any(p.is_relative_to(k) for k in keep_sources)
+    ]
+    removed["sources et en-têtes C, C++, Cython"] = sources
+
+    say("Élagage du Python (ce que l'app ne charge jamais)…")
+    lines: list[str] = []
+    total = 0
+    for what, paths in removed.items():
+        size = 0
+        for path in paths:
+            weight = size_of(path)
+            size += weight
+            lines.append(f"{what}\t{path.relative_to(python)}\t{weight}")
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        total += size
+        say(f"   {what} : {len(paths)} retirés, {size / 1e6:.1f} Mo")
+    report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    say(f"   en tout {total / 1e6:.1f} Mo ; la liste complète : {report}")
+
+
+def install_python(python_dir: Path, target: Path, pruning: dict, report: Path) -> None:
+    """The standalone Python, then the locked dependencies and the app, from uv's cache;
+    what the app never loads is removed before the precompilation."""
     shutil.copytree(python_dir, target, symlinks=True)
     python = target / "bin" / "python3"
     exported = run(
@@ -285,6 +363,7 @@ def install_python(python_dir: Path, target: Path) -> None:
         run([*common, "--require-hashes", "-r", requirements], cwd=ROOT)
         run([*common, engine[0][0].split(" ;")[0]], cwd=ROOT)
         run([*common, ROOT], cwd=ROOT)
+    prune(target, pruning, report)
     say("Précompilation du Python (rien ne s'écrira dans l'app)…")
     done = subprocess.run(
         [
@@ -488,7 +567,8 @@ def main() -> None:
     resources.mkdir(parents=True)
 
     say(f"Assemblage de {app['name']} {version}…")
-    install_python(python_dir, resources / "python")
+    report = args.sortie / f"{app['name']}-elagage.txt"
+    install_python(python_dir, resources / "python", settings["elagage"], report)
     shutil.copytree(interface, resources / "web")
     copy_tools(resources, ffmpeg, uv, minimum_macos)
     write_licences(resources, ffmpeg, resources / "python", uv, sparkle)
