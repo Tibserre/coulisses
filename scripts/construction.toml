@@ -47,7 +47,8 @@ url = "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz"
 # As published by Homebrew's formula for the same archive: checked before anything else.
 sha256 = "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
 # Audio only, LGPL, static, no network (ADR 0041). What the app, the engine and mlx-audio
-# ask of it: read a recording (file or pipe), write f32le, s16le or WAV, resampled.
+# ask of it: read a recording (file or pipe), write f32le, s16le, s24le or WAV, resampled;
+# and keep a finished recording as FLAC, proven by reading it back as s24le (ADR 0046).
 protocols = ["file", "pipe"]
 demuxers = ["wav", "w64", "aiff", "caf", "mov", "mp3", "flac", "ogg", "aac", "matroska"]
 decoders = [
@@ -56,9 +57,10 @@ decoders = [
   "aac", "alac", "mp3", "mp3float", "flac", "opus", "vorbis",
 ]
 parsers = ["aac", "mpegaudio", "flac", "opus", "vorbis"]
-encoders = ["pcm_s16le", "pcm_f32le"]
-# Muxers by ffmpeg's names: `-f s16le` and `-f f32le` are pcm_s16le and pcm_f32le.
-muxers = ["wav", "pcm_s16le", "pcm_f32le"]
+encoders = ["pcm_s16le", "pcm_s24le", "pcm_f32le", "flac"]
+# Muxers by ffmpeg's names: `-f s16le`, `-f s24le` and `-f f32le` are pcm_s16le, pcm_s24le
+# and pcm_f32le.
+muxers = ["wav", "pcm_s16le", "pcm_s24le", "pcm_f32le", "flac"]
 filters = ["aresample", "aformat", "anull"]
 
 [elagage]

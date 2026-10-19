@@ -157,6 +157,28 @@ for ext in ${(k)SAMPLES}; do
     $WORK/essai.$ext || fail "$ext : refusé par l'import de l'app"
 done
 print "   lus : ${(ok)SAMPLES} ; par un tube ; et par l'import de l'app"
+# ADR 0046: a finished recording is kept in FLAC, by the app's own conversion (its ffmpeg,
+# its proof: the samples read back as s24le are those of the WAV). Two different channels,
+# so that a swap or a bad decorrelation would show.
+typeset -A LAYOUTS=(1 "-ac 1" 2 "-af pan=stereo|c0=c0|c1=-0.5*c0")
+for channels in 1 2; do
+  ffmpeg -loglevel error -y -i $WORK/voix.aiff -ar 48000 ${=LAYOUTS[$channels]} \
+    -c:a pcm_s24le -f s24le $WORK/piste-$channels.raw
+  env -i HOME=$HOME COULISSES_RESSOURCES=$RES PYTHONDONTWRITEBYTECODE=1 \
+    PATH=$RES/bin:/usr/bin:/bin:/usr/sbin:/sbin $RES/python/bin/python3 -I -B -c '
+import sys
+from pathlib import Path
+from coulisses_app import lossless, wav
+raw, channels, target = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
+samples = raw.read_bytes()
+assert len(samples) > 100_000, len(samples)
+target.write_bytes(wav.header(48000, channels, len(samples)) + samples)
+made = lossless.convert_file(target, wav.pcm_sha256(target))
+assert lossless.decoded_pcm_sha256(made.flac) == made.pcm_sha256
+' $WORK/piste-$channels.raw $channels $WORK/piste-$channels.wav ||
+    fail "FLAC ($channels canaux) : la conversion de l'app n'a pas rendu les mêmes échantillons"
+done
+print "   FLAC 24 bits, mono et stéréo, par la conversion de l'app : mêmes échantillons"
 
 cat > $WORK/reseau.sb <<'PROFILE'
 (version 1)
