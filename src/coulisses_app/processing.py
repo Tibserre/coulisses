@@ -124,8 +124,11 @@ class Processor:
         engine_stage: Callable[[str, Path | None], RunStage] = execute_stage,
         model_client: ModelClient | None = None,
         keep_awake: KeepAwake | None = None,
+        after_chain: Callable[[str], None] | None = None,
     ) -> None:
         self.data = data
+        # Once a chain is over, what waited for it (the tracks kept in FLAC, ADR 0046).
+        self._after_chain = after_chain
         # The Mac does not go to sleep while a job runs (spec §7.4); none in tests.
         self.keep_awake = keep_awake
         self.model_client: ModelClient = model_client or OllamaClient()
@@ -212,6 +215,8 @@ class Processor:
                 jobs.finish(conn, job.id, error=result.error)
                 if result.error is None:
                     self._queue_generations(conn, job.session_id)
+                if self._after_chain is not None:
+                    self._after_chain(job.session_id)
         finally:
             conn.close()
         return result

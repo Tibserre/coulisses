@@ -14,7 +14,7 @@ from typing import BinaryIO
 
 from pydantic import BaseModel
 
-from coulisses_app import jobs, projects, retention, spaces
+from coulisses_app import jobs, projects, retention, spaces, wav
 from coulisses_app.media import probe
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect, now_iso
@@ -43,6 +43,9 @@ class AudioSource(BaseModel):
     capture_state: str | None = None
     """For a recording made in the application: recording, complete or recovered."""
     device: str | None = None
+    pcm_sha256: str | None = None
+    """The fingerprint of its samples, whatever its format (ADR 0046): set for a recording
+    made in the application since then; None for an import or an older recording."""
 
 
 class Session(BaseModel):
@@ -267,6 +270,7 @@ def reference_source(data: DataDir, session_id: str) -> AudioSource | None:
         file_present=path.is_file(),
         capture_state=row["capture_state"],
         device=row["device"],
+        pcm_sha256=row["pcm_sha256"],
     )
 
 
@@ -298,6 +302,7 @@ def other_sources(data: DataDir, session_id: str) -> list[AudioSource]:
             file_present=(data.sources_dir(session_id) / row["file_name"]).is_file(),
             capture_state=row["capture_state"],
             device=row["device"],
+            pcm_sha256=row["pcm_sha256"],
         )
         for row in rows
     ]
@@ -469,6 +474,13 @@ def finish_capture(
     with path.open("rb") as f:
         while chunk := f.read(_CHUNK):
             digest.update(chunk)
+    try:
+        samples: str | None = wav.pcm_sha256(path)
+    except ValueError as exc:  # said, and never converted (ADR 0046): it stays as it is
+        log.warning(
+            "recording %s/%s: no fingerprint of its samples: %s", session_id, source_id, exc
+        )
+        samples = None
     conn = connect(data)
     try:
         rate = conn.execute(
@@ -477,10 +489,12 @@ def finish_capture(
         ).fetchone()["sample_rate"]
         with conn:
             conn.execute(
-                "UPDATE audio_source SET sha256 = ?, size_bytes = ?, duration_s = ?,"
-                " capture_state = ?, capture_ended_at = ? WHERE session_id = ? AND source_id = ?",
+                "UPDATE audio_source SET sha256 = ?, pcm_sha256 = ?, size_bytes = ?,"
+                " duration_s = ?, capture_state = ?, capture_ended_at = ?"
+                " WHERE session_id = ? AND source_id = ?",
                 (
                     digest.hexdigest(),
+                    samples,
                     path.stat().st_size,
                     frames / rate,
                     state,
@@ -491,6 +505,33 @@ def finish_capture(
             )
     finally:
         conn.close()
+
+
+def mark_converted(
+    data: DataDir,
+    session_id: str,
+    source_id: str,
+    *,
+    file_name: str,
+    sha256: str,
+    size_bytes: int,
+    codec: str,
+) -> bool:
+    """A recorded track now kept in another format, its samples the same (ADR 0046): the
+    file it is in, and that file's fingerprint and size. Its `pcm_sha256` does not change.
+    False if the audio was removed meanwhile: nothing is written then."""
+    conn = connect(data)
+    try:
+        with conn:
+            changed = conn.execute(
+                "UPDATE audio_source SET file_name = ?, sha256 = ?, size_bytes = ?, codec = ?"
+                " WHERE session_id = ? AND source_id = ? AND removed_at IS NULL"
+                " AND session_id IN (SELECT id FROM session WHERE audio_removed_at IS NULL)",
+                (file_name, sha256, size_bytes, codec, session_id, source_id),
+            ).rowcount
+    finally:
+        conn.close()
+    return changed == 1
 
 
 def close_empty_capture(

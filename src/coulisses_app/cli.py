@@ -13,7 +13,7 @@ from pathlib import Path
 import uvicorn
 from coulisses.api import DEFAULT_PROFILE, ChainConfig, load_profile, profile_path
 
-from coulisses_app import system_audio
+from coulisses_app import lossless, system_audio
 from coulisses_app.api import create_app
 from coulisses_app.bundle import IncompleteAppError, Resources
 from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
@@ -106,10 +106,17 @@ def main(argv: list[str] | None = None) -> None:
 
     chain = ChainConfig.from_profile(load_profile(profile_path(DEFAULT_PROFILE)))
     awake = KeepAwake()
-    processor = Processor(data, chain, keep_awake=awake)
+    processor = Processor(
+        data,
+        chain,
+        keep_awake=awake,
+        after_chain=lambda session_id: lossless.after_processing(data, session_id),
+    )
     problems = processor.recover() + interrupted_imports(data) + recover_interrupted(data)
     for problem in problems:
         print(f"Attention : {problem}", file=sys.stderr)
+    # Tracks a conversion in FLAC left half done (ADR 0046), taken up in the background.
+    lossless.at_start(data)
     # Built now, in the background, so that the first meeting recorded does not wait for it.
     threading.Thread(target=_prepare_system_audio, name="system-audio-build", daemon=True).start()
 
@@ -120,7 +127,11 @@ def main(argv: list[str] | None = None) -> None:
         processor=processor,
         web_dir=default_web_dir(resources),
         recovery_problems=problems,
-        recorder=Recorder(data, keep_awake=awake),
+        recorder=Recorder(
+            data,
+            keep_awake=awake,
+            after_stop=lambda session_id: lossless.after_recording(data, session_id),
+        ),
         watcher=Watcher(data),
     )
     url = f"http://{HOST}:{port}/"

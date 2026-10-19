@@ -215,7 +215,9 @@ export interface PurgeAnnouncement {
 export interface DeletionLogEntry {
   id: number;
   at: string;
-  kind: "purge" | "audio_deletion" | "session_deletion";
+  /** `conversion`: WAV tracks removed once kept in FLAC, without loss (ADR 0046); `bytes`
+   *  is then the room freed. */
+  kind: "purge" | "audio_deletion" | "session_deletion" | "conversion";
   session_id: string;
   /** None for a deleted session: nothing of its text is kept. */
   session_title: string | null;

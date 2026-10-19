@@ -7,7 +7,9 @@ sum is turned down just enough never to saturate, never compressed. What it was 
 (the sources' fingerprints recorded when each closed, the gain, its own fingerprint) is
 written beside it (`mix.json`) and copied into the job that processed it, which outlives
 the purge (P7). The raw tracks stay as they are: the mix is made again from them whenever
-their recorded fingerprints differ (P5).
+the fingerprints of their samples differ (P5). Once the recording is over, tracks and mixes
+are kept in FLAC (ADR 0046): the fingerprint of their samples does not change, so neither
+does the mix; one made again from FLAC tracks reads them decoded, without loss.
 """
 
 from __future__ import annotations
@@ -16,14 +18,18 @@ import hashlib
 import logging
 import os
 import struct
+import subprocess
+import tempfile
 import threading
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ValidationError
 
-from coulisses_app import listening, sessions, wav
+from coulisses_app import disk, listening, sessions, wav
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import now_iso
 
@@ -58,13 +64,16 @@ class ListeningMixFacts(BaseModel):
     gain: float
     rule: str
     parameters: dict[str, float]
+    pcm_sha256: str | None = None
+    """The fingerprint of its samples, whatever its format (ADR 0046); None before."""
 
 
 class MixFacts(BaseModel):
     """What a mix was made of, and what it holds."""
 
     made_from: dict[str, str]
-    """Source id → its fingerprint, as recorded when it closed."""
+    """Source id → the fingerprint of its samples as recorded when it closed (of its file,
+    for a recording made before ADR 0046)."""
     gain: float
     rule: str
     sha256: str
@@ -74,11 +83,27 @@ class MixFacts(BaseModel):
     made_at: str
     listening_mix: ListeningMixFacts | None = None
     """The mix heard on the session's page; None for a mix made before it existed."""
+    file: str = MIX_FILE
+    """Its file in `sources/`: `mix.flac` once kept in FLAC (ADR 0046)."""
+    pcm_sha256: str | None = None
+    """The fingerprint of its samples, whatever its format (ADR 0046); None before."""
 
 
 def _lock(session_id: str) -> threading.Lock:
     with _locks_lock:
         return _locks.setdefault(session_id, threading.Lock())
+
+
+def session_lock(session_id: str) -> threading.Lock:
+    """Held while the session's tracks are mixed, read for processing, or converted
+    (ADR 0046): no file of `sources/` changes under the one who holds it."""
+    return _lock(session_id)
+
+
+def identity(source: sessions.AudioSource) -> str:
+    """What a mix records of a source: the fingerprint of its samples, which a lossless
+    conversion keeps; of its file for a recording made before ADR 0046."""
+    return source.pcm_sha256 or source.sha256
 
 
 def busy(session_id: str) -> bool:
@@ -177,7 +202,7 @@ def listening_path(data: DataDir, session_id: str) -> Path | None:
         heard = folder / facts.listening_mix.file
         if heard.is_file():
             return heard
-    mix = folder / MIX_FILE
+    mix = folder / (facts.file if facts is not None else MIX_FILE)
     if facts is not None and mix.is_file():
         with _asked_lock:  # once per service: the player asks for the file many times
             first = session_id not in _asked
@@ -192,93 +217,164 @@ def processing_input(data: DataDir, session_id: str) -> tuple[Path | None, MixFa
     """The track the engine hears, and what it was made of when it is a mix: the mix (made
     now if needed) when the session has the computer's sound, else the reference. Raises
     `MixError`."""
-    reference = sessions.reference_source(data, session_id)
-    if reference is None:
-        return None, None
-    ref_path = data.sources_dir(session_id) / reference.file_name
-    system = _system_track(data, session_id)
-    if system is None or not ref_path.is_file():
-        return ref_path, None
-    return ensure_mix(data, session_id, reference, system)
+    # Under the session's lock: a conversion in FLAC (ADR 0046) is over before the path is
+    # read, or starts after.
+    with _lock(session_id):
+        reference = sessions.reference_source(data, session_id)
+        if reference is None:
+            return None, None
+        ref_path = data.sources_dir(session_id) / reference.file_name
+        system = _system_track(data, session_id)
+        if system is None or not ref_path.is_file():
+            return ref_path, None
+        return _ensure_mix(data, session_id, reference, system)
 
 
 def processing_path(data: DataDir, session_id: str) -> Path | None:
     return processing_input(data, session_id)[0]
 
 
-def ensure_mix(
+def _ensure_mix(
     data: DataDir,
     session_id: str,
     reference: sessions.AudioSource,
     system: sessions.AudioSource,
 ) -> tuple[Path, MixFacts]:
+    """The mix, made if needed; the caller holds the session's lock."""
     folder = data.sources_dir(session_id)
     ref_path, system_path = folder / reference.file_name, folder / system.file_name
-    mix = folder / MIX_FILE
-    with _lock(session_id):
-        # The fingerprints taken when each recording closed (`finish_capture`).
-        made_from = {reference.source_id: reference.sha256, system.source_id: system.sha256}
-        known = read_facts(data, session_id)
-        heard = folder / LISTENING_FILE
-        if (
-            known is not None
-            and known.made_from == made_from
-            and mix.is_file()
-            and known.listening_mix is not None
-            and heard.is_file()
-        ):
-            return mix, known
-        # Never after the audio was removed (a purge, a deletion): nothing is written back.
-        session = sessions.get_session(data, session_id)
-        if session is None or session.audio.state == "removed":
-            raise MixError("L'audio de cette séance a été supprimé.")
-        # A mix made before ADR 0037, from the same sources: only its listening mix is
-        # made; the engine's input stays as it was, byte for byte.
-        keep_plain = known is not None and known.made_from == made_from and mix.is_file()
-        if known is not None:
-            log.info(
-                "mix of %s: %s",
-                session_id,
-                "listening mix added" if keep_plain else "made again, its sources changed",
-            )
-        try:
+    # The fingerprints taken when each recording closed (`finish_capture`).
+    made_from = {reference.source_id: identity(reference), system.source_id: identity(system)}
+    known = read_facts(data, session_id)
+    if (
+        known is not None
+        and known.made_from == made_from
+        and (folder / known.file).is_file()
+        and known.listening_mix is not None
+        and (folder / known.listening_mix.file).is_file()
+    ):
+        return folder / known.file, known
+    # Never after the audio was removed (a purge, a deletion): nothing is written back.
+    session = sessions.get_session(data, session_id)
+    if session is None or session.audio.state == "removed":
+        raise MixError("L'audio de cette séance a été supprimé.")
+    # A mix made before ADR 0037, from the same sources: only its listening mix is made;
+    # the engine's input stays as it was, byte for byte.
+    keep_plain = (
+        known is not None and known.made_from == made_from and (folder / known.file).is_file()
+    )
+    mix = folder / known.file if keep_plain and known is not None else folder / MIX_FILE
+    heard = folder / LISTENING_FILE
+    if known is not None:
+        log.info(
+            "mix of %s: %s",
+            session_id,
+            "listening mix added" if keep_plain else "made again, its sources changed",
+        )
+    try:
+        with _as_wav(ref_path) as ref_wav, _as_wav(system_path) as system_wav:
             gain, system_peak, heard_gain = _mix(
-                ref_path, system_path, None if keep_plain else mix, heard
+                ref_wav, system_wav, None if keep_plain else mix, heard
             )
-            listening_mix = ListeningMixFacts(
-                file=LISTENING_FILE,
-                sha256=_sha256(heard),
-                gain=heard_gain,
-                rule=listening.RULE,
-                parameters=listening.PARAMETERS,
+        listening_mix = ListeningMixFacts(
+            file=LISTENING_FILE,
+            sha256=_sha256(heard),
+            gain=heard_gain,
+            rule=listening.RULE,
+            parameters=listening.PARAMETERS,
+            pcm_sha256=wav.pcm_sha256(heard),
+        )
+        if keep_plain:
+            assert known is not None
+            facts = known.model_copy(update={"listening_mix": listening_mix})
+        else:
+            facts = MixFacts(
+                made_from=made_from,
+                gain=gain,
+                rule=RULE,
+                sha256=_sha256(mix),
+                system_silent=system_peak < SILENT_PEAK,
+                made_at=now_iso(),
+                listening_mix=listening_mix,
+                pcm_sha256=wav.pcm_sha256(mix),
             )
-            if keep_plain:
-                assert known is not None
-                facts = known.model_copy(update={"listening_mix": listening_mix})
-            else:
-                facts = MixFacts(
-                    made_from=made_from,
-                    gain=gain,
-                    rule=RULE,
-                    sha256=_sha256(mix),
-                    system_silent=system_peak < SILENT_PEAK,
-                    made_at=now_iso(),
-                    listening_mix=listening_mix,
-                )
-            partial = folder / f"{MIX_FACTS}.partiel"
-            partial.write_text(facts.model_dump_json(indent=2), encoding="utf-8")
-            os.replace(partial, folder / MIX_FACTS)
-        except MixError:
-            raise
-        except (OSError, ValueError) as exc:
-            log.exception("mixing %s", session_id)
-            raise MixError(
-                "Le micro et le son de l'ordinateur n'ont pas pu être réunis (le détail est "
-                "dans le journal du service). Le disque est-il plein ?"
-            ) from exc
-        if facts.system_silent:
-            log.warning("the computer's sound of %s held nothing at all", session_id)
-        return mix, facts
+        write_facts(data, session_id, facts)
+    except MixError:
+        raise
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        log.exception("mixing %s", session_id)
+        raise MixError(
+            "Le micro et le son de l'ordinateur n'ont pas pu être réunis (le détail est "
+            "dans le journal du service). Le disque est-il plein ?"
+        ) from exc
+    # The same mixes kept in FLAC before (ADR 0046), now replaced by the ones just made:
+    # derived files, like a WAV mix overwritten here before.
+    if known is not None:
+        stale = [known.file] if not keep_plain else []
+        stale += [known.listening_mix.file] if known.listening_mix is not None else []
+        for name in stale:
+            old = folder / name
+            if name not in (mix.name, heard.name) and old.is_file():
+                log.info("mix of %s: %s replaced by the mix made again", session_id, name)
+                old.unlink()
+    if facts.system_silent:
+        log.warning("the computer's sound of %s held nothing at all", session_id)
+    return mix, facts
+
+
+def write_facts(data: DataDir, session_id: str, facts: MixFacts) -> None:
+    """`mix.json`, replaced whole (never half written)."""
+    folder = data.sources_dir(session_id)
+    partial = folder / f"{MIX_FACTS}.partiel"
+    partial.write_text(facts.model_dump_json(indent=2), encoding="utf-8")
+    disk.sync_file(partial)  # on the disk before a file it names replaces another
+    os.replace(partial, folder / MIX_FACTS)
+    disk.sync_folder(folder)
+
+
+@contextmanager
+def _as_wav(path: Path) -> Generator[Path]:
+    """The track itself when it is a WAV of Coulisses; else (a track kept in FLAC, ADR
+    0046) a temporary WAV of the same samples, decoded without loss, removed after."""
+    if path.suffix.lower() == ".wav":
+        yield path
+        return
+    with tempfile.TemporaryDirectory(prefix="coulisses-mix-") as work:
+        decoded = Path(work) / (path.stem + ".wav")
+        decode_to_wav(path, decoded)
+        yield decoded
+
+
+def decode_to_wav(source: Path, target: Path) -> None:
+    """A lossless track (24 bits) as a WAV written like Coulisses writes them (`wav.py`):
+    the header, then the samples ffmpeg decodes, as they are."""
+    probe = subprocess.run(
+        [
+            *("ffprobe", "-v", "error", "-select_streams", "a:0"),
+            *("-show_entries", "stream=sample_rate,channels", "-of", "csv=p=0", str(source)),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    rate, channels = (int(v) for v in probe.stdout.strip().split(","))
+    with target.open("xb") as out:
+        out.write(wav.header(rate, channels, 0))
+        out.flush()  # on disk before ffmpeg writes after it, through the same descriptor
+        done = subprocess.run(
+            [
+                *("ffmpeg", "-nostdin", "-v", "error", "-i", str(source), "-map", "0:a:0"),
+                *("-c:a", "pcm_s24le", "-f", "s24le", "pipe:1"),
+            ],
+            stdout=out,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if done.returncode != 0:
+            raise subprocess.CalledProcessError(done.returncode, "ffmpeg", stderr=done.stderr)
+        data_bytes = out.seek(0, os.SEEK_END) - wav.HEADER_BYTES
+        out.seek(0)
+        out.write(wav.header(rate, channels, data_bytes))
 
 
 def _mix(

@@ -8,6 +8,7 @@ most are lost).
 
 from __future__ import annotations
 
+import hashlib
 import os
 import struct
 import time
@@ -126,3 +127,37 @@ def repair(path: Path) -> int:
         f.flush()
         os.fsync(f.fileno())
     return data_bytes // block
+
+
+def layout(path: Path) -> tuple[int, int, int]:
+    """(rate, channels, bytes of samples its header declares) of a WAV written by
+    Coulisses; ValueError if it is not one."""
+    with path.open("rb") as f:
+        head = f.read(HEADER_BYTES)
+    if len(head) < HEADER_BYTES or head[:4] != b"RIFF" or head[36:40] != b"data":
+        raise ValueError(f"{path.name} n'est pas un enregistrement de Coulisses lisible.")
+    channels, rate = struct.unpack("<HI", head[22:28])
+    (data_bytes,) = struct.unpack("<I", head[40:44])
+    return rate, channels, data_bytes
+
+
+def pcm_sha256(path: Path) -> str:
+    """The fingerprint of the samples of a WAV written by Coulisses (what its header
+    declares, interleaved little-endian 24 bits): the same as that of the samples decoded
+    from a lossless copy in another format (ADR 0046). ValueError if it is not one."""
+    _, _, data_bytes = layout(path)
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        f.seek(HEADER_BYTES)
+        left = data_bytes
+        while left > 0 and (chunk := f.read(min(left, 1 << 20))):
+            digest.update(chunk)
+            left -= len(chunk)
+    if left:
+        raise ValueError(f"{path.name} est plus court que ce que son en-tête annonce.")
+    return digest.hexdigest()
+
+
+def header(rate: int, channels: int, data_bytes: int) -> bytes:
+    """The 44-byte header Coulisses writes (PCM 24 bits), for `data_bytes` of samples."""
+    return _header(rate, channels, data_bytes)

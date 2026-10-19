@@ -365,8 +365,12 @@ class Recorder:
         refresh: Callable[[], None] | None = None,
         retry_wait_s: float = 1.0,
         system_stream_factory: SystemStreamFactory = _system_stream,
+        after_stop: Callable[[str], None] | None = None,
     ) -> None:
         self.data = data
+        # Once stopped, what follows a recording (its tracks kept in FLAC, ADR 0046); none
+        # in tests unless given.
+        self._after_stop = after_stop
         self._stream_factory = stream_factory
         self._system_stream_factory = system_stream_factory
         self._devices = devices
@@ -849,6 +853,8 @@ class Recorder:
             log.warning(
                 "recording %s stopped, microphones said: %s", recording.session_id, "; ".join(said)
             )
+        if self._after_stop is not None:
+            self._after_stop(recording.session_id)
         return StopResult(
             session_id=recording.session_id,
             duration_s=frames / SAMPLE_RATE,

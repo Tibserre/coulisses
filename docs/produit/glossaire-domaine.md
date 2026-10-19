@@ -17,8 +17,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Présents | `attendees` | Personnes présentes à une séance. Leur nombre donne le minimum de locuteurs. |
 | Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). Une seule est traitée en V1 ; chaque micro ajouté en ajoute une (`mic2`, `mic3`…, ADR 0031, 0033), le son de l'ordinateur aussi (`system`, ADR 0032). |
 | Son de l'ordinateur | `system_audio` | Tout ce que le Mac joue pendant une réunion en ligne ou hybride, enregistré avec le micro, sur son horloge (source `system`, ADR 0032). |
-| Mix | `mix` | La piste que le moteur traite quand une séance a le son de l'ordinateur : le micro plus ce son, baissés d'un seul gain (`sources/mix.wav`). Un audio dérivé, refait depuis les sources. |
-| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, ADR 0037). Le moteur ne l'entend pas. |
+| Mix | `mix` | La piste que le moteur traite quand une séance a le son de l'ordinateur : le micro plus ce son, baissés d'un seul gain (`sources/mix.wav`, puis `mix.flac` une fois l'enregistrement fini, ADR 0046). Un audio dérivé, refait depuis les sources. |
+| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, puis `listening.flac`, ADR 0037, 0046). Le moteur ne l'entend pas. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Micro principal | `reference_source` (captée) | Le micro choisi en premier à l'enregistrement : la source de référence, celle qui est traitée (ADR 0033). |
 | Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, par « Ajouter un micro » ; gardé, pas encore traité (ADR 0031, 0033). |
@@ -66,7 +66,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Conservation | `retention` | Politique de durée de vie de l'audio. |
 | Purge | `purge` | Suppression de tout l'audio d'une séance à échéance. Le texte reste. |
 | Suppression | `deletion` | Suppression manuelle et confirmée : de l'audio seul, ou de la séance entière, texte compris. Distincte de la purge. |
-| Journal des suppressions | `deletion_log` | Trace de chaque purge et de chaque suppression : quand, quoi, quelle séance. |
+| Journal des suppressions | `deletion_log` | Trace de chaque purge et de chaque suppression : quand, quoi, quelle séance. Il dit aussi chaque passage en FLAC (des WAV supprimés une fois prouvés identiques, ADR 0046). |
+| Gardé en FLAC | `lossless` | Une piste enregistrée par l'app, gardée sans perte en FLAC une fois l'enregistrement fini : les mêmes échantillons, deux fois moins de place (ADR 0046). |
 | Audio gardé | `keep_audio` | Option d'une séance : son audio n'est jamais purgé (ADR 0029). Remplace « épinglée ». |
 | Préavis | `notice` | Délai entre l'annonce d'une purge et la purge elle-même (7 jours par défaut). |
 | Annonce de purge | `purge_announcement` | Avertissement (bandeau, notification macOS) qu'une purge aura lieu ; le préavis court à partir de lui. |
