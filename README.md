@@ -21,7 +21,7 @@ uv sync
 cd web && npm install && npm run build
 ```
 
-Le moteur (étiquette dans `pyproject.toml`) a besoin de ses modèles et de l'environnement de DiariZen : `uv run coulisses-models installer-environnement diarizen`, puis `uv run coulisses-models telecharger <clé>` pour chaque modèle (`uv run coulisses-models catalogue`).
+Le moteur (étiquette dans `pyproject.toml`) a besoin de ses modèles et de ses environnements (DiariZen ; torch, pour l'alignement et le filet pyannote) : `uv run coulisses-models installer-environnement diarizen` et `… torch`, puis `uv run coulisses-models telecharger <clé>` pour chaque modèle (`uv run coulisses-models catalogue`).
 
 ```bash
 uv run coulisses-app
