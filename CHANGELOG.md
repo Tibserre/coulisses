@@ -4,6 +4,12 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.30.0 — 2026-10-19
+
+### Nouveautés
+
+- passe au moteur v1.8.0, qui sort torch de l'app dans l'environnement « torch » (moteur)
+
 ## v0.29.0 — 2026-10-19
 
 ### Nouveautés
