@@ -60,3 +60,32 @@ encoders = ["pcm_s16le", "pcm_f32le"]
 # Muxers by ffmpeg's names: `-f s16le` and `-f f32le` are pcm_s16le and pcm_f32le.
 muxers = ["wav", "pcm_s16le", "pcm_f32le"]
 filters = ["aresample", "aformat", "anull"]
+
+[elagage]
+# What the built app never loads, removed from its Python once installed, before it is
+# precompiled (plan step 12b; docs/technique/tailles/). The build lists every removal, and
+# refuses a path below that is missing: the list never goes stale in silence.
+# The packages' test folders, by name, anywhere in site-packages (never in a .dist-info).
+dossiers_de_tests = ["tests", "test"]
+# Kept: a module of its library's API that happens to be named so (none today).
+garder_dossiers = []
+# C, C++ and Cython sources and headers: nothing is compiled at run time (no extension built,
+# no JIT reading headers). cffi keeps its own (it compiles at run time). Never .pyi: some
+# libraries load their submodules from their stubs (lazy_loader.attach_stub).
+suffixes = [
+  ".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".cu", ".cuh",
+  ".pyx", ".pxd", ".pxi",
+]
+garder_suffixes_dans = ["cffi"]
+# Installed by python-build-standalone, asked for by nothing (the engine installs with uv).
+paquets = ["pip"]
+# In the Python folder: the standard library's tools, and Tcl/Tk, which only tkinter loads.
+chemins = [
+  "bin/pip", "bin/pip3", "bin/pip3.12", "bin/idle3", "bin/idle3.12", "bin/2to3",
+  "bin/2to3-3.12",
+  "lib/python3.12/ensurepip", "lib/python3.12/idlelib", "lib/python3.12/lib2to3",
+  "lib/python3.12/turtledemo", "lib/python3.12/tkinter", "lib/python3.12/turtle.py",
+  "lib/python3.12/lib-dynload/_tkinter.cpython-312-darwin.so",
+  "lib/libtcl9.0.dylib", "lib/libtcl9tk9.0.dylib", "lib/tcl9", "lib/tcl9.0", "lib/tk9.0",
+  "lib/itcl4.3.8", "lib/thread3.0.6",
+]
