@@ -8,7 +8,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { api, type EnvironmentInfo, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
-import { stepsChanged } from "../steps.ts";
+import { lastModelsView, stepsChanged } from "../steps.ts";
 import {
   environmentState,
   interpreterNote,
@@ -36,8 +36,9 @@ type Asking =
  *  step, without names, paths or Python; every other piece keeps its row and its action. */
 export function ModelsSection() {
   const dev = useDevMode();
-  const [view, setView] = useState<ModelsView | null>(null);
-  const [actions, setActions] = useState<ModelAction[]>([]);
+  // The last reading at once, read again behind: the skeleton only before the first one.
+  const [view, setView] = useState<ModelsView | null>(lastModelsView);
+  const [actions, setActions] = useState<ModelAction[]>(() => lastModelsView()?.actions ?? []);
   const [unreadable, setUnreadable] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [asking, setAsking] = useState<Asking>(null);
@@ -52,6 +53,8 @@ export function ModelsSection() {
       setUnreadable(null);
       stepsChanged(next);
     } catch (e) {
+      // Never the last reading under the error, as if it were current (P8).
+      setView(null);
       setUnreadable((e as Error).message);
     }
   }, []);

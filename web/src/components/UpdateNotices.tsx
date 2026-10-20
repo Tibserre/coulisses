@@ -67,6 +67,9 @@ export function useUpdateNotices(recordingPage: boolean) {
       });
       const recording = await api.recording().catch(() => "unknown" as const);
       if (gone) return;
+      // Kept for the Transcription tab, which then opens at once (steps.ts); after the kept
+      // steps are read, so the dot never counts one kept for good.
+      stepsChanged(models);
       setView(models);
       setActions(models.actions);
       setDismissed(kept);

@@ -336,11 +336,20 @@ export function pendingNotices(
 }
 
 const CHANGED = "coulisses:gestes";
+/** The last reading of the models, kept for this page's life. */
+let lastView: ModelsView | null = null;
 
-/** The models' view was read again (the settings, the window): whoever shows the updates
- *  (the dot on « Réglages ») reads it rather than asking the engine once more. */
+/** The models' view was read again (at launch, the settings, the window): whoever shows the
+ *  updates (the dot on « Réglages ») reads it rather than asking the engine once more. */
 export function stepsChanged(view: ModelsView): void {
+  lastView = view;
   window.dispatchEvent(new CustomEvent<ModelsView>(CHANGED, { detail: view }));
+}
+
+/** The last reading, shown at once while the engine measures the disk again (a second or
+ *  so): the Transcription tab opens without a skeleton once the app has read it. */
+export function lastModelsView(): ModelsView | null {
+  return lastView;
 }
 
 export function onStepsChanged(
