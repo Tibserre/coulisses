@@ -8,16 +8,10 @@ Une section peut être réécrite ensuite pour les utilisateurs : la publication
 
 ### Nouveautés
 
-- montre le cache de uv en mode développeur seulement (reglages)
-- ne montre plus le modèle de transcription qui ne sert plus (reglages)
-- annonce le rappel « Mettre à jour » à l'app du Dock (mises-a-jour)
-- ne garde que les trois dernières copies de la base (base)
-- regroupe en Séances, Rédaction, Transcription, Avancé (reglages)
-- range les réglages selon ce qu'on vient y faire (reglages)
-
-### Performances
-
-- ouvre l'onglet Transcription sans squelette (reglages)
+- Les Réglages se rangent en quatre onglets, selon ce qu'on vient y faire : Séances, Rédaction, Transcription, Avancé ; plus aucun chemin ni nom technique hors du mode développeur.
+- Quand une nouvelle version de Coulisses est disponible, un discret « Mettre à jour » apparaît en bas de la colonne, au lieu d'une fenêtre (à partir de la prochaine mise à jour).
+- Coulisses ne garde plus que les trois dernières copies de sa base : les plus anciennes sont supprimées, et c'est noté dans Réglages > Séances.
+- L'ancien modèle de transcription n'apparaît plus, sauf s'il est encore installé, pour le supprimer.
 
 ## v0.33.1 — 2026-10-19
 
