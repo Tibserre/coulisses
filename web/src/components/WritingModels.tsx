@@ -14,6 +14,7 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { formatBytes } from "../format.ts";
+import { ollamaLabels } from "../ollamaNames.ts";
 import {
   OLLAMA_DOWNLOAD,
   OLLAMA_LIBRARY,
@@ -45,9 +46,10 @@ const WRITINGS: { writing: Writing; label: string; picker: string; description: 
   },
 ];
 
-/** A model as the lists say it: its size in parameters and on the disk. */
-function about(m: InstalledModel): string {
-  return [m.parameter_size, formatBytes(m.size_bytes)]
+/** A model as the lists say it: its size in parameters and on the disk; its exact name in
+ *  developer mode. */
+function about(m: InstalledModel, dev: boolean): string {
+  return [dev ? m.name : null, m.parameter_size, formatBytes(m.size_bytes)]
     .filter(Boolean)
     .join(" · ");
 }
@@ -83,17 +85,28 @@ export function WritingModels() {
     }
   };
 
+  const [allInstalled, setAllInstalled] = useState(false);
   const used = (name: string) =>
     WRITINGS.filter((w) => info?.writings[w.writing] === name).map((w) => w.label);
+  // Said as « Qwen 3.8 – 27b » (ADR 0051): the installed ones and the chosen ones together, so
+  // no two read alike; the exact name in developer mode.
+  const labels = ollamaLabels([
+    ...(info?.models.map((m) => m.name) ?? []),
+    ...Object.values(info?.writings ?? {}),
+  ]);
+  // The advised model may not be installed yet: said on its own then.
+  const said = (name: string) =>
+    dev ? name : (labels.get(name) ?? ollamaLabels([name]).get(name) ?? name);
+  const installedBytes = info?.models.reduce((sum, m) => sum + m.size_bytes, 0) ?? 0;
 
   return (
     <>
       <section className="cl-settings__section">
         <Heading level={3}>Modèles de rédaction</Heading>
         <Text color="secondary">
-          Les titres, les chapitres et les résumés sont rédigés par un modèle de
-          langage qui tourne sur ce Mac, dans Ollama. Un changement vaut pour ce
-          qui est demandé ensuite ; ce qui est déjà rédigé garde son modèle.
+          Les titres, les chapitres et les résumés sont rédigés sur ce Mac par
+          un modèle de langage, dans Ollama. Un changement vaut pour la suite ;
+          ce qui est rédigé garde son modèle.
         </Text>
         {error && (
           <Banner
@@ -104,7 +117,7 @@ export function WritingModels() {
             onDismiss={() => setError(null)}
           />
         )}
-        {info && <WritingAdviceBanner info={info} dev={dev} />}
+        {info && <WritingAdviceBanner info={info} dev={dev} said={said} />}
         {info === null && !error ? (
           <WritingSkeleton />
         ) : (
@@ -119,6 +132,8 @@ export function WritingModels() {
                   <ModelPicker
                     label={picker}
                     value={info.writings[writing]}
+                    said={said}
+                    dev={dev}
                     models={info.models}
                     reachable={info.reachable}
                     onChoose={(model) => void choose(writing, model)}
@@ -130,23 +145,33 @@ export function WritingModels() {
         )}
       </section>
 
-      {info?.reachable && (
+      {/* Last on the page: unfolding it moves nothing below. */}
+      {info?.reachable && info.models.length > 0 && (
         <section className="cl-settings__section">
-          <Heading level={3}>Installés dans Ollama</Heading>
-          {info.models.length === 0 ? (
+          <div className="cl-settings__line">
             <Text color="secondary">
-              Aucun modèle n'est installé dans Ollama.
+              {info.models.length === 1
+                ? "1 modèle installé dans Ollama"
+                : `${info.models.length} modèles installés dans Ollama`}
+              , {formatBytes(installedBytes)}
             </Text>
-          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              label={allInstalled ? "Masquer la liste" : "Voir la liste"}
+              onClick={() => setAllInstalled(!allInstalled)}
+            />
+          </div>
+          {allInstalled && (
             <ul className="cl-settings__list">
               {info.models.map((m) => {
                 const uses = used(m.name);
                 return (
                   <li key={m.name}>
                     <span className="cl-settings__text">
-                      <Text>{m.name}</Text>
+                      <Text>{said(m.name)}</Text>
                       <Text type="supporting">
-                        {about(m)}
+                        {about(m, dev)}
                         {dev && m.family ? ` · ${m.family}` : ""}
                       </Text>
                     </span>
@@ -170,9 +195,11 @@ export function WritingModels() {
 function WritingAdviceBanner({
   info,
   dev,
+  said,
 }: {
   info: ModelsInfo;
   dev: boolean;
+  said: (name: string) => string;
 }) {
   const [copied, setCopied] = useState(false);
   const step = adviceStep(info);
@@ -220,7 +247,7 @@ function WritingAdviceBanner({
       {step.kind === "pull" && (
         <Banner
           status="info"
-          title={`Modèle conseillé pour ce Mac : ${step.model}`}
+          title={`Modèle conseillé pour ce Mac : ${said(step.model)}`}
           description={
             <>
               Pour l'installer, ouvrez le Terminal et lancez cette commande,
@@ -240,7 +267,7 @@ function WritingAdviceBanner({
       )}
       {step.kind === "ready" && (
         <Text type="supporting">
-          Le modèle conseillé pour ce Mac, {step.model}, est installé.
+          Le modèle conseillé pour ce Mac, {said(step.model)}, est installé.
         </Text>
       )}
       {step.kind === "choose" && (
@@ -267,12 +294,16 @@ function WritingAdviceBanner({
 function ModelPicker({
   label,
   value,
+  said,
+  dev,
   models,
   reachable,
   onChoose,
 }: {
   label: string;
   value: string;
+  said: (name: string) => string;
+  dev: boolean;
   models: InstalledModel[];
   reachable: boolean;
   onChoose: (model: string) => void;
@@ -308,10 +339,10 @@ function ModelPicker({
     <button
       type="button"
       className="cl-modelpick"
-      aria-label={`${label} : ${value}. Changer`}
+      aria-label={`${label} : ${said(value)}. Changer`}
       disabled={!reachable}
     >
-      <span className="cl-modelpick__name">{value}</span>
+      <span className="cl-modelpick__name">{said(value)}</span>
       {missing && (
         <span className="cl-modelpick__missing">absent d'Ollama</span>
       )}
@@ -348,8 +379,8 @@ function ModelPicker({
                 }}
               >
                 <span className="cl-modelpick__option">
-                  <span>{m.name}</span>
-                  <span className="cl-modelpick__about">{about(m)}</span>
+                  <span>{said(m.name)}</span>
+                  <span className="cl-modelpick__about">{about(m, dev)}</span>
                 </span>
                 {m.name === value && (
                   <Check size={16} strokeWidth={1.75} aria-hidden />

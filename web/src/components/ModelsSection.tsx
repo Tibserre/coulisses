@@ -16,6 +16,7 @@ import {
   gigabytes,
   modelRows,
   percent,
+  quietRows,
   readinessLine,
   removableEnvironment,
   uvStoreRows,
@@ -31,7 +32,8 @@ type Asking =
 /** The engine's models (spec §7.12, ADR 0036): what the processing needs, what is on the
  *  disk (outside the catalog too), and the explicit actions: download (the one use of the
  *  network, said before it starts), stop, remove (confirmed). Followed live while something
- *  downloads. */
+ *  downloads. Outside developer mode (ADR 0051), what is in use and sound is one line per
+ *  step, without names, paths or Python; every other piece keeps its row and its action. */
 export function ModelsSection() {
   const dev = useDevMode();
   const [view, setView] = useState<ModelsView | null>(null);
@@ -102,13 +104,22 @@ export function ModelsSection() {
   };
 
   const rows = view ? modelRows(view, actions) : [];
-  const lacking = view ? readinessLine(view.readiness, view.inventory) : null;
-  const environments = view?.inventory.environments ?? [];
+  const purposeOfKey = (key: string) => rows.find((r) => r.key === key)?.purpose;
+  const lacking = view
+    ? readinessLine(view.readiness, view.inventory, dev ? undefined : purposeOfKey)
+    : null;
+  const quiet = view && !dev ? quietRows(rows, view.inventory) : null;
+  const shownRows = quiet ? quiet.apart : rows;
+  const environments = quiet
+    ? quiet.apartEnvironments
+    : (view?.inventory.environments ?? []);
   const missing = view ? missingEnvironments(view.readiness, view.inventory) : [];
+  /** A model as the confirmations say it: by what it is for, its key in developer mode. */
+  const named = (row: ModelRow) => (dev ? row.key : `Le modèle « ${row.purpose} »`);
 
   return (
     <section className="cl-settings__section">
-      <Heading level={3}>Modèles de transcription</Heading>
+      <Heading level={3}>Traitement des séances</Heading>
       {unreadable && (
         <Banner
           status="error"
@@ -125,7 +136,7 @@ export function ModelsSection() {
           onDismiss={() => setRefused(null)}
         />
       )}
-      {view === null && !unreadable && <ModelsSkeleton />}
+      {view === null && !unreadable && <ModelsSkeleton dev={dev} />}
       {view && (
         <>
           {lacking ? (
@@ -136,21 +147,51 @@ export function ModelsSection() {
             />
           ) : (
             <Text color="secondary">
-              Tout ce qu'il faut pour traiter les séances est installé (
-              {gigabytes(view.inventory.total_bytes)} sur ce Mac). Les modèles
-              ne se téléchargent que quand vous le demandez : Coulisses n'utilise
-              internet que pour cela, et pour ses mises à jour si vous
-              l'acceptez.
+              Tout est prêt pour traiter les séances :{" "}
+              {gigabytes(view.inventory.total_bytes)} sur ce Mac. Rien ne se
+              télécharge sans que vous le demandiez.
             </Text>
           )}
           <ul className="cl-models">
-            {rows.map((row) => (
+            {quiet?.steps.map((step) => (
+              <li key={`etape-${step.purpose}`} className="cl-models__row">
+                <div className="cl-models__what">
+                  <Text weight="medium">{step.purpose}</Text>
+                </div>
+                <Text type="supporting">Installé · {gigabytes(step.size)}</Text>
+                <div className="cl-models__actions" />
+              </li>
+            ))}
+            {quiet && quiet.tools !== null && (
+              <li className="cl-models__row">
+                <div className="cl-models__what">
+                  <Text weight="medium">Outils de calcul</Text>
+                </div>
+                <Text type="supporting">Installés · {gigabytes(quiet.tools)}</Text>
+                <div className="cl-models__actions" />
+              </li>
+            )}
+            {/* uv's cache: outside the total, said so nothing taking space is unseen. */}
+            {quiet && quiet.cache !== null && (
+              <li className="cl-models__row">
+                <div className="cl-models__what">
+                  <Text weight="medium">Fichiers gardés pour réinstaller</Text>
+                  <Text type="supporting">Hors du total : partagés avec les outils de calcul</Text>
+                </div>
+                <Text type="supporting">{gigabytes(quiet.cache)}</Text>
+                <div className="cl-models__actions" />
+              </li>
+            )}
+            {shownRows.map((row) => (
               <li key={row.key} className="cl-models__row">
                 <div className="cl-models__what">
                   <Text weight="medium">{row.purpose}</Text>
                   <Text type="supporting">
-                    {row.key}
-                    {row.required ? " · nécessaire au traitement" : ""}
+                    {dev
+                      ? `${row.key}${row.required ? " · nécessaire au traitement" : ""}`
+                      : row.required
+                        ? "Nécessaire au traitement"
+                        : "Facultatif : le traitement ne s'en sert pas"}
                   </Text>
                   {dev && row.model && (
                     <Text type="supporting">
@@ -185,8 +226,10 @@ export function ModelsSection() {
             {environments.map((env) => (
               <li key={env.path} className="cl-models__row">
                 <div className="cl-models__what">
-                  <Text weight="medium">Environnement de calcul</Text>
-                  <Text type="supporting">{env.label || env.name}</Text>
+                  <Text weight="medium">
+                    {dev ? "Environnement de calcul" : "Outils de calcul"}
+                  </Text>
+                  {dev && <Text type="supporting">{env.label || env.name}</Text>}
                   {dev && <Text type="supporting">{env.name}</Text>}
                   {dev && <Text type="supporting">{env.path}</Text>}
                 </div>
@@ -194,7 +237,7 @@ export function ModelsSection() {
                   <Text type="supporting">
                     {environmentState(env)} · {gigabytes(env.size_bytes)}
                   </Text>
-                  {interpreterNote(env) && (
+                  {dev && interpreterNote(env) && (
                     <Text type="supporting">
                       {interpreterNote(env)}
                       {dev && env.interpreter ? ` (${env.interpreter})` : ""}
@@ -215,7 +258,7 @@ export function ModelsSection() {
                 </div>
               </li>
             ))}
-            {view && uvStoreRows(view.inventory).map(({ key, title, note, store }) => (
+            {view && dev && uvStoreRows(view.inventory).map(({ key, title, note, store }) => (
               <li key={key} className="cl-models__row">
                 <div className="cl-models__what">
                   <Text weight="medium">{title}</Text>
@@ -233,9 +276,11 @@ export function ModelsSection() {
               return (
                 <li key={`manque-${name}`} className="cl-models__row">
                   <div className="cl-models__what">
-                    <Text weight="medium">Environnement de calcul</Text>
+                    <Text weight="medium">
+                      {dev ? "Environnement de calcul" : "Outils de calcul"}
+                    </Text>
                     <Text type="supporting">
-                      {label || name} · nécessaire au traitement
+                      {dev ? `${label || name} · nécessaire au traitement` : "Nécessaire au traitement"}
                     </Text>
                     {dev && <Text type="supporting">{name}</Text>}
                   </div>
@@ -284,13 +329,6 @@ export function ModelsSection() {
           </ul>
         </>
       )}
-      <div className="cl-settings__buttons">
-        <Button
-          label="Ouvrir le dossier des modèles"
-          size="sm"
-          onClick={() => void act(() => api.openFolder("modeles"))}
-        />
-      </div>
 
       <AlertDialog
         isOpen={asking?.what === "download"}
@@ -298,7 +336,7 @@ export function ModelsSection() {
         title="Télécharger ce modèle ?"
         description={
           asking?.what === "download" && asking.row.model
-            ? `${asking.row.purpose} (${asking.row.key}) : environ ${gigabytes(asking.row.model.announced_bytes)} depuis internet${dev ? ` (${asking.row.model.repo})` : ""}. Coulisses n'utilise internet que pour cela, et pour ses mises à jour si vous l'acceptez. Vous pouvez l'arrêter : il reprendra là où il s'est arrêté.`
+            ? `${dev ? `${asking.row.purpose} (${asking.row.key})` : `Le modèle « ${asking.row.purpose} »`} : environ ${gigabytes(asking.row.model.announced_bytes)} depuis internet${dev ? ` (${asking.row.model.repo})` : ""}. Coulisses n'utilise internet que pour cela, et pour ses mises à jour si vous l'acceptez. Vous pouvez l'arrêter : il reprendra là où il s'est arrêté.`
             : ""
         }
         actionLabel="Télécharger"
@@ -312,8 +350,8 @@ export function ModelsSection() {
       <AlertDialog
         isOpen={asking?.what === "install"}
         onOpenChange={(open) => !open && setAsking(null)}
-        title="Installer cet environnement ?"
-        description="Ses bibliothèques sont téléchargées depuis internet, une fois. Coulisses n'utilise internet que pour cela, et pour ses mises à jour si vous l'acceptez."
+        title={dev ? "Installer cet environnement ?" : "Installer les outils de calcul ?"}
+        description="Ils sont téléchargés depuis internet, une fois. Coulisses n'utilise internet que pour cela, et pour ses mises à jour si vous l'acceptez."
         actionLabel="Installer"
         cancelLabel="Annuler"
         isActionLoading={working}
@@ -325,7 +363,7 @@ export function ModelsSection() {
       <AlertDialog
         isOpen={asking?.what === "removeEnvironment"}
         onOpenChange={(open) => !open && setAsking(null)}
-        title="Supprimer cet environnement ?"
+        title={dev ? "Supprimer cet environnement ?" : "Supprimer cette ancienne version des outils de calcul ?"}
         description={
           asking?.what === "removeEnvironment"
             ? `${asking.env.current ? "Son installation a été interrompue" : "C'est une ancienne version"} : le traitement ne s'en sert pas. ${gigabytes(asking.env.size_bytes)} sont libérés.`
@@ -348,7 +386,7 @@ export function ModelsSection() {
         }
         description={
           asking?.what === "remove"
-            ? `${asking.row.key} est supprimé de ce Mac${asking.row.state.kind === "partial" ? " (la partie déjà téléchargée)" : ""}.${asking.row.state.kind === "installed" && asking.row.state.replacement ? ` Il a été remplacé : le traitement ne s'en sert plus. ${gigabytes(asking.row.state.size)} sont libérés.` : ""}${asking.row.required ? " Le traitement en a besoin : les séances ne pourront plus être traitées tant qu'il n'est pas retéléchargé." : ""}`
+            ? `${named(asking.row)} est supprimé de ce Mac${asking.row.state.kind === "partial" ? " (la partie déjà téléchargée)" : ""}.${asking.row.state.kind === "installed" && asking.row.state.replacement ? ` Il a été remplacé : le traitement ne s'en sert plus. ${gigabytes(asking.row.state.size)} sont libérés.` : ""}${asking.row.required ? " Le traitement en a besoin : les séances ne pourront plus être traitées tant qu'il n'est pas retéléchargé." : ""}`
             : ""
         }
         actionLabel="Supprimer"
@@ -517,8 +555,8 @@ function ModelActions({
 }
 
 /** While the engine reads what is on the disk (sizes, a second or so): the list's shapes,
- *  the rows the catalog usually has. */
-function ModelsSkeleton() {
+ *  the rows it usually has (one per step outside developer mode, one per model in it). */
+function ModelsSkeleton({ dev }: { dev: boolean }) {
   return (
     <div className="cl-skeleton" aria-busy="true" aria-label="Lecture des modèles">
       <div className="cl-skeleton__text cl-skeleton__text--flush">
@@ -526,15 +564,15 @@ function ModelsSkeleton() {
         <Skeleton width="70%" height={12} radius={1} />
       </div>
       <ul className="cl-models">
-        {[0.5, 0.42, 0.56, 0.38, 0.47, 0.44].map((w, i) => (
+        {[0.5, 0.42, 0.56, 0.38, 0.47, 0.44].slice(0, dev ? 6 : 5).map((w, i) => (
           <li key={i} className="cl-models__row">
             <div className="cl-models__what">
               <Skeleton width={`${w * 100}%`} height={14} radius={1} index={i} />
-              <Skeleton width="35%" height={11} radius={1} index={i} />
+              {dev && <Skeleton width="35%" height={11} radius={1} index={i} />}
             </div>
             <Skeleton width="45%" height={11} radius={1} index={i} />
             <div className="cl-models__actions">
-              <Skeleton width={84} height={28} radius={2} index={i} />
+              {dev && <Skeleton width={84} height={28} radius={2} index={i} />}
             </div>
           </li>
         ))}

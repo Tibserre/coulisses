@@ -774,11 +774,14 @@ async function send<T>(
   method: string,
   path: string,
   body?: unknown,
+  /** Sent as the page goes away (closed, reloaded): the browser finishes it anyway. */
+  keepalive = false,
 ): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       method,
+      keepalive,
       headers:
         body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -894,8 +897,8 @@ export const api = {
       resume: generationId,
       remplacer: replace,
     }),
-  setRetention: (settings: RetentionSettings) =>
-    send<RetentionInfo>("PUT", "/api/conservation", settings),
+  setRetention: (settings: RetentionSettings, leaving = false) =>
+    send<RetentionInfo>("PUT", "/api/conservation", settings, leaving),
   keepAudio: (id: string, keep: boolean) =>
     send<Session>("PUT", `${sessionPath(id)}/garder-audio`, { keep }),
   extendAudio: (id: string) => send<Session>("POST", `${sessionPath(id)}/prolonger`),

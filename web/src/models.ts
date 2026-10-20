@@ -140,16 +140,31 @@ export function percent(action: ModelAction): number | null {
   return Math.min(100, Math.round((action.done_bytes / action.total_bytes) * 100));
 }
 
-/** What the chain lacks, said in a sentence; null when all is there. */
-export function readinessLine(readiness: Readiness, inventory: Inventory): string | null {
+/** What the chain lacks, said in a sentence; null when all is there. Outside developer mode
+ *  (`purposeOfKey` given, ADR 0051), a model is said by what it is for and an environment as
+ *  the calculation tools, never by their names. */
+export function readinessLine(
+  readiness: Readiness,
+  inventory: Inventory,
+  purposeOfKey?: (key: string) => string | undefined,
+): string | null {
   if (readiness.ready) return null;
   const parts = readiness.missing.map((piece) => {
     if (piece.environment)
-      return `l'environnement de calcul « ${piece.label || piece.environment} »`;
+      return purposeOfKey
+        ? "les outils de calcul"
+        : `l'environnement de calcul « ${piece.label || piece.environment} »`;
     const there = inventory.models.find((m) => m.key === piece.model);
-    return piece.code === "model_altered" || (there && there.state !== "intact")
-      ? `le modèle « ${piece.model} » (abîmé)`
+    const purpose = piece.model ? purposeOfKey?.(piece.model) : undefined;
+    // Outside developer mode, never the key: a model it cannot place is « un modèle ».
+    const said = purposeOfKey
+      ? purpose
+        ? `le modèle « ${purpose} »`
+        : "un modèle du traitement"
       : `le modèle « ${piece.model} »`;
+    return piece.code === "model_altered" || (there && there.state !== "intact")
+      ? `${said} (abîmé)`
+      : said;
   });
   // An environment several stages need is said once.
   return `Les séances ne peuvent pas être traitées : il manque ${[...new Set(parts)].join(", ")}.`;
@@ -168,4 +183,65 @@ export function missingEnvironments(
     found.set(name, found.get(name) || piece.label || "");
   }
   return [...found];
+}
+
+/** A step whose models are all there and sound: said in one line, outside developer mode. */
+export interface StepLine {
+  purpose: string;
+  size: number;
+}
+
+/** The engine's pieces as the page says them outside developer mode (ADR 0051): what the
+ *  processing uses and is sound folds into one line per step, then one for the calculation
+ *  tools (the environments and their Python); anything else keeps its own row, with its
+ *  action: missing, downloading, interrupted, damaged, replaced, optional, outside the
+ *  catalog, an older or interrupted environment; uv's cache has a quiet line of its own,
+ *  outside the total. Nothing taking space is left unseen. Where an environment's Python
+ *  lives is said in developer mode. */
+export function quietRows(
+  rows: ModelRow[],
+  inventory: Inventory,
+): {
+  steps: StepLine[];
+  tools: number | null;
+  cache: number | null;
+  apart: ModelRow[];
+  apartEnvironments: EnvironmentInfo[];
+} {
+  const steps: StepLine[] = [];
+  const apart: ModelRow[] = [];
+  const sound = (row: ModelRow) =>
+    row.required &&
+    row.state.kind === "installed" &&
+    row.state.replacement === null &&
+    row.last === null;
+  // A step folds only when every model it needs is sound: never two lines of one name.
+  const unsoundStep = new Set(rows.filter((r) => r.required && !sound(r)).map((r) => r.purpose));
+  for (const row of rows) {
+    if (!sound(row) || unsoundStep.has(row.purpose) || row.state.kind !== "installed") {
+      apart.push(row);
+      continue;
+    }
+    const step = steps.find((s) => s.purpose === row.purpose);
+    if (step) step.size += row.state.size;
+    else steps.push({ purpose: row.purpose, size: row.state.size });
+  }
+  const used = inventory.environments.filter((e) => e.current && e.installed);
+  const stored = (kind: UvStore["kind"]) =>
+    inventory.uv_stores
+      .filter((store) => store.kind === kind)
+      .reduce((sum, store) => sum + store.size_bytes, 0);
+  const python = stored("python");
+  const cache = stored("cache");
+  return {
+    steps,
+    // Their Python is said with them, even when none is installed yet.
+    tools:
+      used.length || python > 0
+        ? used.reduce((sum, e) => sum + e.size_bytes, 0) + python
+        : null,
+    cache: cache > 0 ? cache : null,
+    apart,
+    apartEnvironments: inventory.environments.filter((e) => !(e.current && e.installed)),
+  };
 }
