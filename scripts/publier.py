@@ -7,7 +7,8 @@
 Preparing, in this order, each step stopping the next:
 1. the tag exists and this repository is clean; the tag is checked out in a worktree of the
    cache: what is published is exactly the tag;
-2. every test of the tag (Python, interface, types, lint);
+2. every test of the tag (Python, the slow ones on the real models included, interface,
+   types, lint);
 3. the build, signed with the certificate (`construire.py`), then the package test with
    --publication (an ad hoc signature, or no update key, fails);
 4. the designated requirement is the previous publication's: otherwise the friends would
@@ -216,6 +217,16 @@ def test_everything(work: Path) -> None:
     say("2. Tous les tests de l'étiquette…")
     shown(["uv", "sync", "--offline", "--all-extras"], work)
     shown(["uv", "run", "--offline", "pytest", "-q"], work)
+    # And those on the real models of the retained chain (~/Coulisses/Modèles), set aside
+    # from the everyday run: a version is published only if they all ran and passed (one
+    # skipped, for want of `say` or ffmpeg, stops it too).
+    slow = ["uv", "run", "--offline", "pytest", "-q", "-m", "slow", "-rs"]
+    say(f"   $ {' '.join(slow)}")
+    done = run(slow, cwd=work)
+    print(done.stdout[-2000:], end="")
+    summary = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
+    if "skipped" in summary or "passed" not in summary:
+        fail(f"tests lents : tous doivent tourner et passer ({summary or 'aucun résultat'})")
     shown(["uv", "run", "--offline", "ruff", "check", "."], work)
     shown(["uv", "run", "--offline", "pyright"], work)
     web = work / "web"
