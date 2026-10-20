@@ -133,6 +133,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// taken back, so that ⌘Q stops it.
     var adopted: pid_t?
     var stopping = false
+    /// The app is quitting: nothing more is shown (no update window on the way out).
+    var quitting = false
     #if COULISSES_SPARKLE
         /// Sparkle (ADR 0040): only in the published app, built with its feed and its key.
         var updates: SPUStandardUpdaterController?
@@ -142,6 +144,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         /// The service's page said it shows that reminder (« rappel-mises-a-jour »), forgotten
         /// at each page change: otherwise Sparkle shows its own window, as before.
         var pageShowsReminder = false
+        /// A version waits to be shown once the recording or processing is over: one wait.
+        var withdrawalPending = false
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -384,6 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             NSApp.reply(toApplicationShouldTerminate: false)
             return
         }
+        quitting = true
         showPage(title: "\(appName) s'arrête…", detail: nil, actions: false)
         stopService { NSApp.reply(toApplicationShouldTerminate: true) }
     }
@@ -431,7 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     /// While the service starts, or when it cannot: a plain page, said in French.
     func showPage(title: String, detail: String?, actions: Bool) {
-        forgetReminder()
+        reminderWithdrawn()
         let escape = { (text: String) in
             text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
         }
@@ -462,11 +467,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// A new page (a reload, a navigation) has not said yet whether it shows the update
     /// reminder: until it does, Sparkle shows its own window.
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        forgetReminder()
+        pageChanged()
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        forgetReminder()
+        reminderWithdrawn()
     }
 
     func webView(
@@ -660,6 +665,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
         func forgetReminder() { pageShowsReminder = false }
 
+        /// Nothing shows the reminder any more (the page withdrew it, a launcher page, the
+        /// page's process gone): a version already waiting is shown in Sparkle's window, at
+        /// once or once the recording or processing is over, unless a page shows it again.
+        func reminderWithdrawn() {
+            pageShowsReminder = false
+            guard updateReady, !quitting, !withdrawalPending else { return }
+            let show = { [weak self] in
+                guard let self else { return }
+                self.withdrawalPending = false
+                guard !self.quitting, !self.pageShowsReminder, self.updateReady else { return }
+                self.updates?.checkForUpdates(nil)
+            }
+            withdrawalPending = true
+            if busyNow() == nil { show() } else { waitUntilIdle(then: show) }
+        }
+
+        /// A new page says again that it shows the reminder once mounted; one that never
+        /// does (a broken page) within 10 s counts as a withdrawal.
+        func pageChanged() {
+            forgetReminder()
+            guard updateReady else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                guard let self, !self.pageShowsReminder else { return }
+                self.reminderWithdrawn()
+            }
+        }
+
         /// What the page reads (web/src/appBridge.ts), and where it sends its two requests.
         func addUpdatesBridge(to content: WKUserContentController) {
             guard updates != nil else { return }
@@ -738,7 +770,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 checkNow()
             case "rappel-mises-a-jour":
                 // Said once when shown, and withdrawn (false) when it no longer is.
-                pageShowsReminder = body["value"] as? Bool ?? true
+                if body["value"] as? Bool ?? true { pageShowsReminder = true } else { reminderWithdrawn() }
             default:
                 return
             }
@@ -817,6 +849,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         func addUpdatesBridge(to content: WKUserContentController) {}
         func refreshUpdatesState() {}
         func forgetReminder() {}
+        func reminderWithdrawn() {}
+        func pageChanged() {}
     }
 #endif
 
