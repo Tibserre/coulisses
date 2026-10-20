@@ -4,6 +4,21 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.34.0 — 2026-10-20
+
+### Nouveautés
+
+- montre le cache de uv en mode développeur seulement (reglages)
+- ne montre plus le modèle de transcription qui ne sert plus (reglages)
+- annonce le rappel « Mettre à jour » à l'app du Dock (mises-a-jour)
+- ne garde que les trois dernières copies de la base (base)
+- regroupe en Séances, Rédaction, Transcription, Avancé (reglages)
+- range les réglages selon ce qu'on vient y faire (reglages)
+
+### Performances
+
+- ouvre l'onglet Transcription sans squelette (reglages)
+
 ## v0.33.1 — 2026-10-19
 
 ### Nouveautés depuis la 0.28.0
