@@ -193,12 +193,12 @@ export interface StepLine {
 
 /** The engine's pieces as the page says them outside developer mode (ADR 0051): what the
  *  processing uses and is sound folds into one line per step, then one for the calculation
- *  tools (the environments and their Python); uv's cache has a quiet line of its own,
- *  outside the total. A model the processing does not use is not shown while it is not on
+ *  tools (the environments and their Python); uv's cache, shared with them on the disk,
+ *  is said in developer mode (the user's choice). A model the processing does not use is not shown while it is not on
  *  the disk; installed, it is said with its step (`old`), to be removed or replaced. Anything
  *  else keeps its own row, with its action: missing, downloading, interrupted, damaged,
- *  outside the catalog, an older or interrupted environment. Nothing taking space is left
- *  unseen. Where an environment's Python lives is said in developer mode. */
+ *  outside the catalog, an older or interrupted environment. Where an environment's Python
+ *  lives is said in developer mode. */
 export function quietRows(
   rows: ModelRow[],
   inventory: Inventory,
@@ -207,7 +207,6 @@ export function quietRows(
   /** Per step, the installed models the processing no longer uses. */
   old: Map<string, ModelRow[]>;
   tools: number | null;
-  cache: number | null;
   apart: ModelRow[];
   apartEnvironments: EnvironmentInfo[];
 } {
@@ -245,7 +244,6 @@ export function quietRows(
       .filter((store) => store.kind === kind)
       .reduce((sum, store) => sum + store.size_bytes, 0);
   const python = stored("python");
-  const cache = stored("cache");
   return {
     steps,
     old,
@@ -254,7 +252,6 @@ export function quietRows(
       used.length || python > 0
         ? used.reduce((sum, e) => sum + e.size_bytes, 0) + python
         : null,
-    cache: cache > 0 ? cache : null,
     apart,
     apartEnvironments: inventory.environments.filter((e) => !(e.current && e.installed)),
   };

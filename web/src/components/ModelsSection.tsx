@@ -397,19 +397,7 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
                 <div className="cl-models__actions" />
               </li>
             )}
-            {/* uv's cache: outside the total, said so nothing taking space is unseen. */}
-            {quiet && quiet.cache !== null && (
-              <li className="cl-models__row">
-                <div className="cl-models__what">
-                  <Text weight="medium">Fichiers gardés pour réinstaller</Text>
-                  <Text type="supporting">
-                    Hors du total : partagés avec les outils de calcul
-                  </Text>
-                </div>
-                <Text type="supporting">{gigabytes(quiet.cache)}</Text>
-                <div className="cl-models__actions" />
-              </li>
-            )}
+
           </ul>
         </>
       )}

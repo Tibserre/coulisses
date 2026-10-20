@@ -310,7 +310,6 @@ test("outside developer mode, what the processing uses and is sound is one line 
   assert.deepEqual(quiet.apartEnvironments.map((e) => e.name), ["diarizen-old"]);
   // The tools: the environments in use and their Python, the cache apart from the total.
   assert.equal(quiet.tools, 1_365_000_000);
-  assert.equal(quiet.cache, 1_200_000_000);
 });
 
 test("outside developer mode, what the chain lacks is said by what it is for", () => {
