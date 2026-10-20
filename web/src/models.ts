@@ -193,16 +193,19 @@ export interface StepLine {
 
 /** The engine's pieces as the page says them outside developer mode (ADR 0051): what the
  *  processing uses and is sound folds into one line per step, then one for the calculation
- *  tools (the environments and their Python); anything else keeps its own row, with its
- *  action: missing, downloading, interrupted, damaged, replaced, optional, outside the
- *  catalog, an older or interrupted environment; uv's cache has a quiet line of its own,
- *  outside the total. Nothing taking space is left unseen. Where an environment's Python
- *  lives is said in developer mode. */
+ *  tools (the environments and their Python); uv's cache has a quiet line of its own,
+ *  outside the total. A model the processing does not use is not shown while it is not on
+ *  the disk; installed, it is said with its step (`old`), to be removed or replaced. Anything
+ *  else keeps its own row, with its action: missing, downloading, interrupted, damaged,
+ *  outside the catalog, an older or interrupted environment. Nothing taking space is left
+ *  unseen. Where an environment's Python lives is said in developer mode. */
 export function quietRows(
   rows: ModelRow[],
   inventory: Inventory,
 ): {
   steps: StepLine[];
+  /** Per step, the installed models the processing no longer uses. */
+  old: Map<string, ModelRow[]>;
   tools: number | null;
   cache: number | null;
   apart: ModelRow[];
@@ -210,14 +213,24 @@ export function quietRows(
 } {
   const steps: StepLine[] = [];
   const apart: ModelRow[] = [];
+  const old = new Map<string, ModelRow[]>();
   const sound = (row: ModelRow) =>
     row.required &&
     row.state.kind === "installed" &&
     row.state.replacement === null &&
     row.last === null;
+  const needed = new Set(rows.filter((r) => r.required).map((r) => r.purpose));
   // A step folds only when every model it needs is sound: never two lines of one name.
   const unsoundStep = new Set(rows.filter((r) => r.required && !sound(r)).map((r) => r.purpose));
   for (const row of rows) {
+    if (!row.required && row.last === null) {
+      if (row.state.kind === "missing") continue; // not on the disk: nothing to say
+      // Replaced by another (engine v1.10.0): an old one. An optional one keeps its row.
+      if (row.state.kind === "installed" && row.state.replacement !== null && needed.has(row.purpose)) {
+        old.set(row.purpose, [...(old.get(row.purpose) ?? []), row]);
+        continue;
+      }
+    }
     if (!sound(row) || unsoundStep.has(row.purpose) || row.state.kind !== "installed") {
       apart.push(row);
       continue;
@@ -235,6 +248,7 @@ export function quietRows(
   const cache = stored("cache");
   return {
     steps,
+    old,
     // Their Python is said with them, even when none is installed yet.
     tools:
       used.length || python > 0
@@ -244,4 +258,9 @@ export function quietRows(
     apart,
     apartEnvironments: inventory.environments.filter((e) => !(e.current && e.installed)),
   };
+}
+
+/** The size of models, as one number. */
+export function sizeOf(rows: ModelRow[]): number {
+  return rows.reduce((sum, r) => sum + ("size" in r.state ? r.state.size : 0), 0);
 }

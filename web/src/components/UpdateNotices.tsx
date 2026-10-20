@@ -28,6 +28,9 @@ export function useUpdateNotices(recordingPage: boolean) {
   const [actions, setActions] = useState<ModelAction[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  /** An update asked from the settings (« Remplacer… »): shown first, even if answered
+   *  « later » in this window before. */
+  const [asked, setAsked] = useState<string | null>(null);
   /** A removal that could not be done after a replacement: said in the window, which
    *  opens again for it if it was closed (P8). */
   const [failed, setFailed] = useState<string | null>(null);
@@ -119,14 +122,21 @@ export function useUpdateNotices(recordingPage: boolean) {
   // failed or was stopped, nothing is removed (the window offers the choice again).
   useEffect(() => {
     if (!view || !replacing.current.length) return;
-    const { ready, left } = settleReplacements(replacing.current, view, actions);
+    const { ready, left } = settleReplacements(
+      replacing.current,
+      view,
+      actions,
+    );
     replacing.current = left;
     if (!ready.length) return;
     void (async () => {
       try {
-        for (const key of ready.flatMap((r) => r.remove)) await api.removeModel(key);
+        for (const key of ready.flatMap((r) => r.remove))
+          await api.removeModel(key);
       } catch (e) {
-        setFailed(`Le nouveau modèle est installé, mais l'ancien n'a pas pu être supprimé : ${(e as Error).message}`);
+        setFailed(
+          `Le nouveau modèle est installé, mais l'ancien n'a pas pu être supprimé : ${(e as Error).message}`,
+        );
         // Never over a recording: then the dot on « Réglages » and the next opening say it.
         const recording = await api.recording().catch(() => "unknown" as const);
         if (recording === null && !onRecordingPage.current) setOpen(true);
@@ -135,7 +145,10 @@ export function useUpdateNotices(recordingPage: boolean) {
         await reload();
       } catch (e) {
         // The service gone: the frame says it.
-        console.warn("updates: reading the models again:", (e as Error).message);
+        console.warn(
+          "updates: reading the models again:",
+          (e as Error).message,
+        );
       }
     })();
   }, [view, actions, reload]);
@@ -161,14 +174,20 @@ export function useUpdateNotices(recordingPage: boolean) {
             remove: notice.remove,
             when: notice.download,
             // What ended before this choice says nothing about it.
-            before: actions.filter((a) => a.kind === "model" && notice.download.includes(a.name)).map((a) => a.started_at),
+            before: actions
+              .filter(
+                (a) => a.kind === "model" && notice.download.includes(a.name),
+              )
+              .map((a) => a.started_at),
           },
         ];
       let refused: unknown = null;
       try {
-        if (choice.kind === "removeOld") for (const key of notice.remove) await api.removeModel(key);
+        if (choice.kind === "removeOld")
+          for (const key of notice.remove) await api.removeModel(key);
         if (choice.kind === "removeEnvironments")
-          for (const path of notice.removeEnvironments) await api.removeEnvironment(path);
+          for (const path of notice.removeEnvironments)
+            await api.removeEnvironment(path);
         for (const key of notice.download) await api.downloadModel(key);
         for (const name of notice.install) await api.installEnvironment(name);
       } catch (e) {
@@ -180,7 +199,10 @@ export function useUpdateNotices(recordingPage: boolean) {
         await reload();
       } catch (e) {
         // The service gone: the frame says it; what was asked runs on.
-        console.warn("updates: reading the models again:", (e as Error).message);
+        console.warn(
+          "updates: reading the models again:",
+          (e as Error).message,
+        );
       }
       if (refused) throw refused;
     },
@@ -202,6 +224,13 @@ export function useUpdateNotices(recordingPage: boolean) {
     actions,
     open,
     setOpen,
+    asked,
+    /** Opens the window on this update. */
+    openOn: useCallback((id: string) => {
+      setAsked(id);
+      setOpen(true);
+    }, []),
+    clearAsked: useCallback(() => setAsked(null), []),
     choose,
     stop,
     failed,
@@ -216,6 +245,8 @@ export function useUpdateNotices(recordingPage: boolean) {
 export function UpdateNoticesDialog({
   isOpen,
   notices,
+  asked = null,
+  onAskedAnswered,
   actions,
   failed,
   onChoose,
@@ -225,6 +256,10 @@ export function UpdateNoticesDialog({
 }: {
   isOpen: boolean;
   notices: UpdateNotice[];
+  /** The one asked from the settings: shown first, even if passed before. */
+  asked?: string | null;
+  /** The asked one was answered: it follows the usual rule again. */
+  onAskedAnswered?: () => void;
   actions: ModelAction[];
   failed: string | null;
   onChoose: (notice: UpdateNotice, choice: Choice) => Promise<void>;
@@ -242,7 +277,13 @@ export function UpdateNoticesDialog({
 
   // The one being done stays the same while it changes form (a replacement whose new
   // model is installed, its old one being removed).
-  const queue = notices.filter((n) => !passed.includes(n.id) && !(working && sameUpdate(n, working)));
+  const queue = notices
+    .filter(
+      (n) =>
+        (n.id === asked || !passed.includes(n.id)) &&
+        !(working && sameUpdate(n, working)),
+    )
+    .sort((a, b) => Number(b.id === asked) - Number(a.id === asked));
   const shown = working ?? queue[0] ?? null;
   const next = queue[0] ?? null;
 
@@ -263,6 +304,7 @@ export function UpdateNoticesDialog({
     try {
       await onChoose(shown, choice);
       setPassed((ids) => [...ids, shown.id]);
+      if (shown.id === asked) onAskedAnswered?.();
       if (choice.kind !== "later" && choice.kind !== "keep") setWorking(shown);
     } catch (e) {
       setRefused((e as Error).message);
@@ -277,7 +319,9 @@ export function UpdateNoticesDialog({
     (a.kind === "model" && shown.download.includes(a.name)) ||
     (a.kind === "environment" && shown.install.includes(a.name));
   const running = actions.filter((a) => own(a) && a.state === "running");
-  const stopped = actions.filter((a) => own(a) && (a.state === "failed" || a.state === "cancelled"));
+  const stopped = actions.filter(
+    (a) => own(a) && (a.state === "failed" || a.state === "cancelled"),
+  );
   const done = working !== null && live === null && running.length === 0;
   const error = failed ?? refused;
 
@@ -292,7 +336,13 @@ export function UpdateNoticesDialog({
         <Text type="supporting" color="secondary">
           {shown.eyebrow}
         </Text>
-        <h2 className="cl-update__title">{working === null ? shown.title : done ? "C'est fait" : "C'est en cours"}</h2>
+        <h2 className="cl-update__title">
+          {working === null
+            ? shown.title
+            : done
+              ? "C'est fait"
+              : "C'est en cours"}
+        </h2>
         {error && (
           <Banner
             status="error"
@@ -320,7 +370,12 @@ export function UpdateNoticesDialog({
             {shown.note && <Text type="supporting">{shown.note}</Text>}
             {dev && (
               <Text type="supporting">
-                {[shown.evidence, [...shown.download, ...shown.install, ...shown.remove].join(", ")]
+                {[
+                  shown.evidence,
+                  [...shown.download, ...shown.install, ...shown.remove].join(
+                    ", ",
+                  ),
+                ]
                   .filter(Boolean)
                   .join(" · ")}
               </Text>
@@ -339,7 +394,9 @@ export function UpdateNoticesDialog({
                     {choice.label}
                     {choice.recommended ? " (recommandé)" : ""}
                   </span>
-                  <span className="cl-choice__description">{choice.description}</span>
+                  <span className="cl-choice__description">
+                    {choice.description}
+                  </span>
                 </button>
               ))}
             </div>
@@ -356,18 +413,30 @@ export function UpdateNoticesDialog({
             {running.map((action) => {
               const share = percent(action);
               return (
-                <div key={`${action.kind}:${action.name}`} className="cl-update__progress">
+                <div
+                  key={`${action.kind}:${action.name}`}
+                  className="cl-update__progress"
+                >
                   <ProgressBar
                     label={`${gigabytes(action.done_bytes)}${action.total_bytes ? ` sur ${gigabytes(action.total_bytes)}` : ""}`}
                     value={share ?? 0}
                     hasValueLabel={share !== null}
                   />
-                  <Button label="Arrêter" size="sm" variant="ghost" onClick={() => void onStop(action)} />
+                  <Button
+                    label="Arrêter"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void onStop(action)}
+                  />
                 </div>
               );
             })}
             {stopped.map((action) => (
-              <Text key={`${action.kind}:${action.name}`} as="p" color="secondary">
+              <Text
+                key={`${action.kind}:${action.name}`}
+                as="p"
+                color="secondary"
+              >
                 {action.error}
                 {dev && action.detail ? ` (${action.detail})` : ""}
               </Text>

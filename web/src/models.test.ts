@@ -303,8 +303,10 @@ test("outside developer mode, what the processing uses and is sound is one line 
     { purpose: "Transcription", size: 2_500_000_000 },
     { purpose: "Qui parle quand", size: 300_000_000 },
   ]);
-  // The optional one keeps its row, to be downloaded; the old environment, to be removed.
-  assert.deepEqual(quiet.apart.map((r) => r.key), ["asr-grand"]);
+  // The one the processing does not use is not shown while not on the disk; the old
+  // environment keeps its row, to be removed.
+  assert.deepEqual(quiet.apart.map((r) => r.key), []);
+  assert.equal(quiet.old.size, 0);
   assert.deepEqual(quiet.apartEnvironments.map((e) => e.name), ["diarizen-old"]);
   // The tools: the environments in use and their Python, the cache apart from the total.
   assert.equal(quiet.tools, 1_365_000_000);
@@ -360,4 +362,63 @@ test("outside developer mode, a model it cannot place is never said by its key",
     () => undefined,
   );
   assert.equal(line, "Les séances ne peuvent pas être traitées : il manque un modèle du traitement.");
+});
+
+test("an old model on the disk is said with its step; the new one missing, both together", async () => {
+  const { quietRows } = await import("./models.ts");
+  const installed = (key: string, size: number, required: boolean, replaced_by: string | null = null) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: size,
+    downloaded_at: null,
+    problem: null,
+    required,
+    replaced_by,
+  });
+  const catalog = {
+    models: [{ ...model("ancien"), required_by: [], replaced_by: "asr", replacement_note: null }, model("asr")],
+  };
+  // The new one there: one line, the old one with it.
+  const both: ModelsView = {
+    ...view({ models: [installed("ancien", 4_700_000_000, false, "asr"), installed("asr", 2_500_000_000, true)] }),
+    catalog,
+  };
+  const quiet = quietRows(modelRows(both, []), both.inventory);
+  assert.deepEqual(quiet.steps, [{ purpose: "Transcription", size: 2_500_000_000 }]);
+  assert.deepEqual(quiet.old.get("Transcription")?.map((r) => r.key), ["ancien"]);
+  assert.deepEqual(quiet.apart, []);
+  // The new one missing: its row, with the old one known to replace.
+  const lacking: ModelsView = { ...view({ models: [installed("ancien", 4_700_000_000, false, "asr")] }), catalog };
+  const q2 = quietRows(modelRows(lacking, []), lacking.inventory);
+  assert.deepEqual(q2.steps, []);
+  assert.deepEqual(q2.apart.map((r) => r.key), ["asr"]);
+  assert.deepEqual(q2.old.get("Transcription")?.map((r) => r.key), ["ancien"]);
+});
+
+test("an optional model on the disk, never replaced, keeps its row: it is not an old one", async () => {
+  const { quietRows } = await import("./models.ts");
+  const installed = (key: string, required: boolean) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: 1,
+    downloaded_at: null,
+    problem: null,
+    required,
+    replaced_by: null,
+  });
+  const v: ModelsView = {
+    ...view({ models: [installed("asr", true), installed("asr-grand", false)] }),
+    catalog: { models: [model("asr"), { ...model("asr-grand"), required_by: [] }] },
+  };
+  const quiet = quietRows(modelRows(v, []), v.inventory);
+  assert.equal(quiet.old.size, 0);
+  assert.deepEqual(quiet.apart.map((r) => r.key), ["asr-grand"]);
 });

@@ -42,12 +42,15 @@ export function SettingsPage({
   info: about,
   part: asked = null,
   stepsLeft = 0,
+  onReplace,
 }: {
   info: AppInfo | null;
   /** The tab asked in the address. */
   part?: string | null;
   /** Steps an update asks on this Mac (ADR 0049): a dot on « Transcription ». */
   stepsLeft?: number;
+  /** Opens the window that replaces an old model by the new one (ADR 0049), when it has one. */
+  onReplace?: () => void;
 }) {
   const dev = useDevMode();
   const [part, setPart] = useState<Part>(() => partOf(asked));
@@ -307,7 +310,7 @@ export function SettingsPage({
 
         {part === "transcription" && (
           <>
-            <ModelsSection />
+            <ModelsSection onReplace={onReplace} />
             <div className="cl-settings__buttons">
               <Button
                 label="Ouvrir le dossier des modèles"
