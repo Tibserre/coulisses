@@ -9,7 +9,8 @@
 // and runs the service from them (ADR 0040). Built by `scripts/installer-lanceur.sh`, it
 // runs the service from a repository: the project's folder, uv and the PATH are written
 // into Info.plist, with its variant: « Coulisses (dév) » (`--dev`) has its own name, port,
-// data, log and permissions.
+// data, log and permissions, and may run one of the repository's worktrees instead
+// (COULISSES_PROJET, `scripts/tester-branche.sh`).
 
 import AppKit
 import WebKit
@@ -22,10 +23,31 @@ let resourcesDir = Bundle.main.resourceURL ?? Bundle.main.bundleURL
 let bundledPython = resourcesDir.appendingPathComponent("python/bin/python3")
 let isStandalone = FileManager.default.isExecutableFile(atPath: bundledPython.path)
 let settings = Bundle.main.infoDictionary ?? [:]
-let projectDir = settings["CoulissesProjet"] as? String ?? ""
+let installedProject = settings["CoulissesProjet"] as? String ?? ""
 let uvPath = settings["CoulissesUV"] as? String ?? "uv"
 let servicePath = settings["CoulissesPATH"] as? String ?? "/usr/bin:/bin:/usr/sbin:/sbin"
 let isDev = settings["CoulissesVariante"] as? String == "dev"
+/// « Coulisses (dév) » may run the service of a worktree of its repository, given at launch
+/// by COULISSES_PROJET (`scripts/tester-branche.sh`): a branch is tried in the app itself,
+/// still on Données-dev and port 8766. The published app never reads it.
+let askedProject: String? = {
+    guard isDev, let asked = ProcessInfo.processInfo.environment["COULISSES_PROJET"],
+        !asked.isEmpty
+    else { return nil }
+    return URL(fileURLWithPath: NSString(string: asked).expandingTildeInPath)
+        .resolvingSymlinksInPath().standardizedFileURL.path
+}()
+/// The project whose service runs: the installed repository, or one of its own worktrees
+/// (`.claude/worktrees/<name>`); nil when the one asked is neither (said, never replaced).
+let installedRoot = URL(fileURLWithPath: installedProject).resolvingSymlinksInPath()
+    .standardizedFileURL.path
+let projectDir: String? = {
+    guard let asked = askedProject else { return installedProject }
+    let root = installedRoot
+    let worktrees = root + "/.claude/worktrees/"
+    let isWorktree = asked.hasPrefix(worktrees) && !asked.dropFirst(worktrees.count).contains("/")
+    return asked == root || isWorktree ? asked : nil
+}()
 let appName = settings["CFBundleName"] as? String ?? "Coulisses"
 // The service's ports (cli.py): 8765 for the published app, 8766 for « Coulisses (dév) ».
 let base = URL(string: isDev ? "http://127.0.0.1:8766/" : "http://127.0.0.1:8765/")!
@@ -132,6 +154,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     // -- the service --------------------------------------------------------------------
 
     func start() {
+        guard projectDir != nil else {
+            showPage(
+                title: "Ce dossier n'est pas un worktree de Coulisses.",
+                detail: "« \(askedProject ?? "") » n'est ni \(installedProject) ni l'un de ses worktrees (.claude/worktrees). Rien n'a été lancé.",
+                actions: false)
+            return
+        }
         probe { info in
             if let info {
                 self.open(info)
@@ -172,12 +201,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let log = try FileHandle(forWritingTo: logFile)
         log.seekToEndOfFile()
         log.write("\n===== Coulisses démarre le \(Date()) =====\n".data(using: .utf8)!)
+        if !isStandalone, let projectDir, projectDir != installedProject {
+            log.write("Projet : \(projectDir)\n".data(using: .utf8)!)
+        }
 
         let process = Process()
         // Nothing inherited may change what runs: no injected library (DYLD_*), no other
         // Python (PYTHON*), in either mode.
         var environment = ProcessInfo.processInfo.environment.filter {
             !$0.key.hasPrefix("DYLD_") && !$0.key.hasPrefix("PYTHON")
+                && $0.key != "COULISSES_PROJET"
         }
         if isStandalone {
             // Its own Python: -I takes nothing from the user's Python setup, -B writes
@@ -193,9 +226,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             process.executableURL = URL(fileURLWithPath: uvPath)
             // Offline: uv never fetches anything when the app starts (P1).
             process.arguments =
-                ["run", "--project", projectDir, "--offline", "coulisses-app", "--sans-navigateur"]
+                ["run", "--project", projectDir ?? "", "--offline", "coulisses-app", "--sans-navigateur"]
                 + (isDev ? ["--dev"] : [])
-            process.currentDirectoryURL = URL(fileURLWithPath: projectDir)
+            process.currentDirectoryURL = URL(fileURLWithPath: projectDir ?? "")
             environment["PATH"] = servicePath
             environment["PYTHONUNBUFFERED"] = "1"
         }
@@ -208,6 +241,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
         try process.run()
         service = process
+        // Which worktree runs, named only when this app started its service itself.
+        if !isStandalone, let projectDir, projectDir != installedRoot {
+            window.title = "\(appName) — \(URL(fileURLWithPath: projectDir).lastPathComponent)"
+        }
     }
 
     /// The interface, once the service answers: only if it serves the expected data (a
