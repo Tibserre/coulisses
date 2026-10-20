@@ -14,7 +14,7 @@ Les versions sont sur la page [Releases](https://github.com/Tibserre/coulisses/r
 ## Installer
 
 1. Télécharge le DMG de la dernière version, ouvre-le, et glisse **Coulisses** dans **Applications**.
-2. Au premier lancement, macOS bloque l'app : elle n'est pas distribuée par l'App Store. Ouvre **Réglages Système > Confidentialité et sécurité**, puis clique **Ouvrir quand même** en face de Coulisses. Ça ne se fait qu'une fois, y compris pour les mises à jour.
+2. Au premier lancement, macOS bloque l'app : elle n'est pas distribuée par l'App Store. Ouvre **Réglages Système > Confidentialité et sécurité**, puis clique **Ouvrir quand même** en face de Coulisses. Ça ne se fait qu'une fois : les mises à jour faites depuis l'app ne le redemandent pas (un DMG retéléchargé à la main, si).
 3. Dans Coulisses, va dans **Réglages > Transcription** et télécharge les modèles. Certains demandent d'accepter des conditions sur leur page : le lien est donné.
 4. Installe Ollama, puis va dans **Réglages > Rédaction**. Quand un modèle est conseillé pour ton Mac, l'onglet le dit, avec la commande pour l'installer ; sinon, prends-en un dans la [bibliothèque d'Ollama](https://ollama.com/library). Choisis-le ensuite pour les titres, les chapitres et les résumés.
 5. À ton premier enregistrement, macOS te demande l'accès au micro. Pour une réunion en ligne, il te demande aussi le son de l'ordinateur.
