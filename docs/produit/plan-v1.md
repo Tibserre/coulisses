@@ -16,6 +16,7 @@
 | 10 | App au quotidien | App Coulisses dans le Dock avec sa fenêtre (ADR 0034, à la place de la PWA ; le nom reste Coulisses, Q3), Réglages (dossiers, version, section Modèles par l'API de modèles du moteur v1.5.0, ADR 0036), test du parcours complet réseau coupé (`scripts/essai-hors-ligne.sh`) | Livrée (v0.15.0, puis Modèles) |
 | 11 | Distribution (ADR 0040) | Un ami installe Coulisses depuis un DMG, télécharge les modèles, installe Ollama guidé par l'app, et reçoit les mises à jour par Sparkle ; sur ce Mac, l'app publiée sert l'usage réel et « Coulisses (dév) » le développement | À faire |
 | 12 | Alléger Coulisses | Coulisses prend nettement moins de place : DMG, app installée, modèles, environnements, modèle de langage et enregistrements, chaque gain mesuré et sans perte de qualité ni de données | À faire |
+| 13 | Revue de l'expérience | Un parcours clair de bout en bout : des Réglages rangés selon ce qu'on vient y faire, des écrans équilibrés, chaque refonte proposée en maquettes et choisie avant d'être construite | À faire |
 
 Tranché à l'étape 7 (ADR 0028) : en V1, on relance la transcription (glossaire enrichi, moteur mis à jour) ou la séparation des voix (autre nombre de présents) ; « un autre moteur » viendra avec les profils du moteur.
 
@@ -61,3 +62,11 @@ Ordre validé par l'utilisateur le 2026-10-16 : d'abord, en parallèle, 12b, 12c
 - **12d — Modèles du moteur plus légers** (Moteur, banc d'essai, relais envoyé). Transcription quantifiée (8 ou 4 bits), alignement en demi-précision, retenus seulement si la justesse et les horodatages tiennent. Gain estimé : 2,5 à 3,5 Go.
 - **12e — Enregistrements compressés sans perte** (conversation Alléger Coulisses). FLAC au lieu de WAV pour les sources : −44 % mesuré sur `Données-dev`, identique au bit près (P5) ; mix et mix d'écoute refaits à la demande plutôt que gardés. Gain estimé par heure : répétition 518 → environ 290 Mo ; réunion avec le son de l'ordinateur 2,07 → environ 0,6 Go. ADR d'abord, avec l'accord de l'utilisateur ; migration des séances existantes seulement avec accord.
 - **12f — Modèle de langage léger** : suivi au lot 11g (Rédaction et modèles), le plus gros poste chez un ami (14 à 18 Go de gain possible).
+
+## Étape 13 : revue de l'expérience
+
+Demandée par l'utilisateur le 2026-10-20 (« l'app est pas hyper claire, notamment les paramètres, un peu fouillis »). Conduite par la conversation « Interface » (`web/`, direction artistique), écran par écran ; ce qui touche un autre territoire passe par un relais (mises à jour et liaison avec l'app : Distribution ; conseil de modèle de l'onglet Rédaction : Rédaction et modèles ; ce que le moteur dit de ses modèles et environnements : Moteur).
+
+- **13a — Audit.** Chaque écran capturé sur `Données-dev` (clair et sombre, fenêtre large et étroite) : ce qui est confus, en double, mal placé ou trop technique hors du mode développeur ; la liste montrée à l'utilisateur, qui fixe l'ordre.
+- **13b — Réglages.** Les ranger selon ce qu'on vient y faire, pas selon le code. Aujourd'hui cinq onglets (Général, Transcription, Rédaction, Données, Avancé) mêlent conservation de l'audio, export, modèles et environnements du moteur, versions du traitement, modèles de langage, mises à jour, journal des suppressions, sauvegardes et mode développeur. Plusieurs propositions en maquettes, l'une choisie, puis construite ; la spec (§7.12) suit.
+- **13c et suivants** : les autres écrans dans l'ordre fixé à l'audit (accueil, séance, nouvelle séance, espaces, actions de résumé).
