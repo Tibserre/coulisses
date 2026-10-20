@@ -8,7 +8,7 @@ Les noms suivent le glossaire (`docs/produit/glossaire-domaine.md`).
 ```
 $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev (développement)
   coulisses.db                        SQLite, mode WAL
-  sauvegardes/                        copie de la base avant chaque migration (voir « Sauvegardes »)
+  sauvegardes/                        copie de la base avant chaque migration, les trois dernières gardées (ADR 0052)
     coulisses-avant-0002-20261012T091500.db
   sessions/<session_id>/
     sources/<source_id>.<ext>         originaux : un import tel quel ; un enregistrement en .wav, puis
@@ -62,7 +62,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | `search_index` | FTS5 `unicode61 remove_diacritics 2` : `session_id`, `kind` (`title`, `turn`, `note`, `summary`), `ref`, `at_s` (temps mesuré), `text`. Cache reconstructible, jamais une source de vérité ; effacé avec la séance (migration 0008) | 8 |
 | `search_state` | `session_id*`, `key*` : de quoi le texte indexé d'une séance était fait ; s'il change, la séance est réindexée à la recherche suivante (migration 0008) | 8 |
 | `session` (conservation) | `keep_audio*` (bool : « Garder l'audio »), `retain_until` (prolongation), `purge_announced_at` (purge annoncée ; elle n'a lieu qu'une fois le préavis écoulé depuis), `audio_removed_at`, `audio_removed_reason` (`purge`, `audio_deletion`) (migration 0007, ADR 0029) | 9 |
-| `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion` ; `conversion` depuis la migration 0009 : des WAV supprimés une fois gardés en FLAC, ADR 0046), `session_id*` (sans clé étrangère : la trace survit à la séance), `session_title` (vide pour une séance supprimée : aucun texte n'en reste), `detail*` (JSON : fichiers supprimés, tailles, problèmes ; pour une conversion, `kept` liste les FLAC gardés et `bytes` est la place gagnée) (migration 0007) | 9 |
+| `deletion_log` | `id`, `at*`, `kind*` (`purge`, `audio_deletion`, `session_deletion` ; `conversion` depuis la migration 0009 : des WAV supprimés une fois gardés en FLAC, ADR 0046 ; `backup_pruning` depuis la migration 0010 : d'anciennes copies de la base supprimées, ADR 0052), `session_id` (sans clé étrangère : la trace survit à la séance ; non nul, sauf pour `backup_pruning`, qui n'en a jamais), `session_title` (vide pour une séance supprimée : aucun texte n'en reste), `detail*` (JSON : fichiers supprimés, tailles, problèmes ; pour une conversion, `kept` liste les FLAC gardés et `bytes` est la place gagnée) (migration 0007) | 9 |
 | `app_setting` | `key*`, `value*` (JSON) : modèle de génération choisi (étape 3), durée de conservation (`conservation_jours`) et préavis (`preavis_jours`) (étape 9), dossier d'export (`dossier_export`, étape 8) | 3 |
 
 ## Ce qui n'est pas en base

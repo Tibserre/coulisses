@@ -412,3 +412,202 @@ def test_a_failed_processing_is_not_offered_again_once_the_audio_is_gone(
     refused = client.post(f"/api/seances/{session_id}/reprendre")
     assert refused.status_code == 409
     assert refused.json()["detail"] == versions.AUDIO_GONE
+
+
+# -- the copies of the database (ADR 0052) ---------------------------------------------------
+
+
+def copy_of_the_base(data: DataDir, before: int, stamp: str, size: int = 10) -> Path:
+    """A copy as the migrations name it; its content is never read by the pruning."""
+    data.backups.mkdir(parents=True, exist_ok=True)
+    path = data.backups / f"coulisses-avant-{before:04d}-{stamp}.db"
+    path.write_bytes(b"x" * size)
+    return path
+
+
+def test_only_the_three_latest_copies_of_the_base_are_kept(data: DataDir) -> None:
+    older = [copy_of_the_base(data, 5 + i, f"2026100{i + 1}T090000", size=10 + i) for i in range(5)]
+    made = copy_of_the_base(data, 10, "20261020T090000")
+
+    assert retention.prune_backups(data, made) == []
+
+    assert set(data.backups.iterdir()) == {older[3], older[4], made}
+    (row,) = log_rows(data)
+    assert (row["kind"], row["session_id"], row["session_title"]) == ("backup_pruning", None, None)
+    detail = json.loads(row["detail"])
+    assert [f["path"] for f in detail["files"]] == [
+        f"sauvegardes/{p.name}" for p in (older[2], older[1], older[0])
+    ]
+    assert detail["bytes"] == 10 + 11 + 12 and detail["problems"] == []
+    (entry,) = retention.journal(data)
+    assert (entry.kind, entry.session_id, entry.files, entry.bytes) == (
+        "backup_pruning",
+        None,
+        3,
+        33,
+    )
+
+
+def test_three_copies_or_fewer_are_all_kept_and_nothing_is_logged(data: DataDir) -> None:
+    copy_of_the_base(data, 8, "20261001T090000")
+    copy_of_the_base(data, 9, "20261002T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+
+    assert retention.prune_backups(data, made) == []
+
+    assert len(list(data.backups.iterdir())) == 3
+    assert log_rows(data) == []
+
+
+def test_the_copy_just_made_is_kept_even_if_the_clock_went_back(data: DataDir) -> None:
+    later = [copy_of_the_base(data, 7 + i, f"2026101{i}T090000") for i in range(3)]
+    made = copy_of_the_base(data, 10, "20260101T090000")
+
+    assert retention.prune_backups(data, made) == []
+
+    assert set(data.backups.iterdir()) == {later[1], later[2], made}
+
+
+def test_files_the_migrations_did_not_make_are_never_touched(data: DataDir) -> None:
+    for i in range(4):
+        copy_of_the_base(data, 6 + i, f"2026100{i + 1}T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+    mine = data.backups / "coulisses-avant-0008-test.db"
+    mine.write_bytes(b"a moi")
+    notes = data.backups / "notes.txt"
+    notes.write_text("à garder")
+
+    retention.prune_backups(data, made)
+
+    assert mine.exists() and notes.exists()
+    assert len(list(data.backups.glob("coulisses-avant-*T*.db"))) == 3
+
+
+def test_a_journal_left_beside_an_old_copy_goes_with_it(data: DataDir) -> None:
+    oldest = copy_of_the_base(data, 6, "20261001T090000")
+    beside = oldest.with_name(oldest.name + "-journal")
+    beside.write_bytes(b"j" * 4)
+    for i in range(2):
+        copy_of_the_base(data, 7 + i, f"2026100{i + 2}T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+
+    assert retention.prune_backups(data, made) == []
+
+    assert not oldest.exists() and not beside.exists()
+    (entry,) = retention.journal(data)
+    assert (entry.files, entry.bytes) == (2, 14)
+
+
+def test_a_copy_that_will_not_go_is_said_and_logged_and_the_others_go(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stuck = copy_of_the_base(data, 5, "20261001T090000")
+    other = copy_of_the_base(data, 6, "20261002T090000")
+    for i in range(2):
+        copy_of_the_base(data, 7 + i, f"2026100{i + 3}T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+    unlink = Path.unlink
+
+    def refuse(self: Path, missing_ok: bool = False) -> None:
+        if self == stuck:
+            raise PermissionError(1, "Operation not permitted")
+        unlink(self, missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+
+    problems = retention.prune_backups(data, made)
+
+    assert problems == [
+        "impossible d'effacer la copie de la base du 1 octobre 2026 (Operation not permitted)"
+    ]
+    assert stuck.exists() and not other.exists()
+    (entry,) = retention.journal(data)
+    assert entry.problems == problems
+
+
+def test_no_copy_is_deleted_when_the_journal_cannot_say_it(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for i in range(4):
+        copy_of_the_base(data, 6 + i, f"2026100{i + 1}T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+
+    def broken(*_: object) -> int:
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(retention, "_log", broken)
+
+    problems = retention.prune_backups(data, made)
+
+    assert len(problems) == 1 and "gardées" in problems[0]
+    assert len(list(data.backups.iterdir())) == 5
+
+
+def test_a_migration_keeps_three_copies_and_journals_the_others(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coulisses_app.storage import db
+
+    for i in range(4):
+        copy_of_the_base(data, 6 + i, f"2026100{i + 1}T090000")
+    shipped = db.migrations()
+    extra = (len(shipped) + 1, "9999_essai.sql", "CREATE TABLE essai (id INTEGER PRIMARY KEY);")
+    monkeypatch.setattr(db, "migrations", lambda: [*shipped, extra])
+    (made,) = db.migrate(data)
+
+    assert retention.prune_backups(data, made) == []
+
+    assert made.exists() and len(list(data.backups.iterdir())) == 3
+    assert [e.kind for e in retention.journal(data)] == ["backup_pruning"]
+
+
+def test_a_copy_whose_journal_cannot_be_read_is_kept_whole(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    oldest = copy_of_the_base(data, 6, "20261001T090000")
+    beside = oldest.with_name(oldest.name + "-journal")
+    beside.write_bytes(b"j")
+    second = copy_of_the_base(data, 7, "20261002T090000")
+    for i in range(2):
+        copy_of_the_base(data, 8 + i, f"2026100{i + 3}T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+    stat = Path.stat
+
+    def refuse(self: Path, *, follow_symlinks: bool = True) -> object:
+        if self == beside:
+            raise PermissionError(1, "Operation not permitted")
+        return stat(self, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", refuse)
+
+    problems = retention.prune_backups(data, made)
+    monkeypatch.undo()
+
+    assert problems == [
+        "impossible de lire le journal de la copie de la base du 1 octobre 2026"
+        " (Operation not permitted)"
+    ]
+    assert oldest.exists() and beside.exists() and not second.exists()
+
+
+def test_the_copies_are_listed_by_their_day_not_their_name(data: DataDir) -> None:
+    brought = data.backups / "coulisses-avant-rapatriement-20261005T090000-000001.db"
+    later = copy_of_the_base(data, 9, "20261010T090000")
+    earlier = copy_of_the_base(data, 7, "20261001T090000")
+    brought.write_bytes(b"r")
+
+    assert [b.name for b in retention.backups(data)] == [earlier.name, brought.name, later.name]
+
+
+def test_the_copy_kept_by_a_repatriation_is_never_pruned(data: DataDir) -> None:
+    brought = data.backups / "coulisses-avant-rapatriement-20260101T090000-000001.db"
+    data.backups.mkdir(parents=True, exist_ok=True)
+    brought.write_bytes(b"r")
+    for i in range(3):
+        copy_of_the_base(data, 7 + i, f"2026100{i + 1}T090000")
+    made = copy_of_the_base(data, 10, "20261020T090000")
+
+    assert retention.prune_backups(data, made) == []
+
+    assert brought.exists()
+    assert len(list(data.backups.glob("coulisses-avant-0*.db"))) == 3
