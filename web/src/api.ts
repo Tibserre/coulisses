@@ -240,9 +240,11 @@ export interface DeletionLogEntry {
   id: number;
   at: string;
   /** `conversion`: WAV tracks removed once kept in FLAC, without loss (ADR 0046); `bytes`
-   *  is then the room freed. */
-  kind: "purge" | "audio_deletion" | "session_deletion" | "conversion";
-  session_id: string;
+   *  is then the room freed. `backup_pruning`: older copies of the database removed, only
+   *  the three latest kept (ADR 0052). */
+  kind: "purge" | "audio_deletion" | "session_deletion" | "conversion" | "backup_pruning";
+  /** None for `backup_pruning` only: a copy of the database is no session's. */
+  session_id: string | null;
   /** None for a deleted session: nothing of its text is kept. */
   session_title: string | null;
   files: number;

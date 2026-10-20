@@ -1,6 +1,6 @@
 # 0018 — Schéma de données : SQLite fait foi, les exécutions restent des fichiers
 
-Statut : Acceptée (2026-10-05). Tranche la question ouverte Q8. La troupe devient l'espace (ADR 0020). Reprise d'une tâche : seules les exécutions de la version du moteur en place sont réutilisées (précisé par 0040).
+Statut : Acceptée (2026-10-05). Tranche la question ouverte Q8. La troupe devient l'espace (ADR 0020). Reprise d'une tâche : seules les exécutions de la version du moteur en place sont réutilisées (précisé par 0040). Copies de la base supprimées sur demande seulement (point 3) : remplacé par 0052, qui n'en garde que les trois dernières.
 
 ## Contexte
 Le moteur (`coulisses-traiter`) range une séance dans un `session.json` et un dossier par exécution. L'application a besoin de plus : troupe, présents, corrections, phases, notes, résumés, file de traitement, conservation, recherche. Le schéma doit tenir N sources (ADR 0006), garder les corrections à part des sorties (P5), ne rien perdre en silence (P8), et rester lisible après la purge. Le 2026-10-05, l'utilisateur a validé les principes 1 à 4 ci-dessous. Il ne veut pas reprendre dans l'application les séances déjà traitées par l'atelier.

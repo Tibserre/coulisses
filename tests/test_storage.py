@@ -182,3 +182,44 @@ def test_a_second_application_on_the_same_data_is_refused(data: DataDir) -> None
     finally:
         first.close()
     hold_data_lock(data).close()  # released with its holder
+
+
+def test_migration_0010_journals_copies_of_the_base_and_keeps_the_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shipped = db.migrations()
+    older = DataDir(tmp_path / "ancienne")
+    monkeypatch.setattr(db, "migrations", lambda: [m for m in shipped if m[0] <= 9])
+    db.migrate(older)
+    conn = db.connect(older)
+    with conn:
+        conn.execute(
+            "INSERT INTO deletion_log (id, at, kind, session_id, session_title, detail)"
+            " VALUES (7, '2026-10-01T00:00:00Z', 'conversion', 's', 'Répétition', '{}')"
+        )
+    conn.close()
+    monkeypatch.setattr(db, "migrations", lambda: shipped)
+    assert len(db.migrate(older)) == 1
+
+    conn = db.connect(older)
+    try:
+        row = conn.execute("SELECT * FROM deletion_log").fetchone()
+        assert (row["id"], row["kind"], row["session_id"]) == (7, "conversion", "s")
+        assert conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'deletion_log_by_date'"
+        ).fetchone()
+        with conn:
+            conn.execute(
+                "INSERT INTO deletion_log (at, kind, session_id, detail)"
+                " VALUES ('2026-10-20T00:00:00Z', 'backup_pruning', NULL, '{}')"
+            )
+        # A session's deletion still names its session; a copy of the base names none.
+        for kind, session_id in (("purge", None), ("backup_pruning", "s")):
+            with pytest.raises(sqlite3.IntegrityError, match="CHECK"), conn:
+                conn.execute(
+                    "INSERT INTO deletion_log (at, kind, session_id, detail)"
+                    " VALUES ('2026-10-20T00:00:00Z', ?, ?, '{}')",
+                    (kind, session_id),
+                )
+    finally:
+        conn.close()

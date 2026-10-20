@@ -20,7 +20,7 @@ from coulisses_app.capture import KeepAwake, Recorder, recover_interrupted
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
 from coulisses_app.paths import DataDir, RealDataRefusedError
 from coulisses_app.processing import Processor
-from coulisses_app.retention import Watcher
+from coulisses_app.retention import Watcher, prune_backups
 from coulisses_app.sessions import interrupted_imports
 from coulisses_app.storage.db import migrate
 
@@ -101,8 +101,11 @@ def main(argv: list[str] | None = None) -> None:
     except AlreadyRunningError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
+    pruned: list[str] = []
     for backup in migrate(data):
         print(f"Base sauvegardée avant mise à jour : {backup}", file=sys.stderr)
+        # Only the latest copies are kept (ADR 0052); what could not go is said at start.
+        pruned += [f"Anciennes copies de la base : {p}" for p in prune_backups(data, backup)]
 
     chain = ChainConfig.from_profile(load_profile(profile_path(DEFAULT_PROFILE)))
     awake = KeepAwake()
@@ -112,7 +115,7 @@ def main(argv: list[str] | None = None) -> None:
         keep_awake=awake,
         after_chain=lambda session_id: lossless.after_processing(data, session_id),
     )
-    problems = processor.recover() + interrupted_imports(data) + recover_interrupted(data)
+    problems = pruned + processor.recover() + interrupted_imports(data) + recover_interrupted(data)
     for problem in problems:
         print(f"Attention : {problem}", file=sys.stderr)
     # Tracks a conversion in FLAC left half done (ADR 0046), taken up in the background.

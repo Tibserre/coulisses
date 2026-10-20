@@ -375,7 +375,9 @@ export function SettingsPage({
                 <Heading level={3}>Copies de la base</Heading>
                 <Text color="secondary">
                   Une copie est faite quand une mise à jour change le format de la
-                  base. Supprimer une séance l'efface aussi de ces copies.
+                  base ; les trois dernières sont gardées, plus celle d'un
+                  rapatriement des données. Supprimer une séance l'efface aussi de
+                  ces copies.
                 </Text>
                 {info === null && <RowsSkeleton />}
                 <ul className="cl-settings__list">
@@ -483,11 +485,11 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
   );
 }
 
-/** While a list is read: the five rows it shows first, at their height. */
+/** While the copies are read: the three rows kept (ADR 0052), at their height. */
 function RowsSkeleton() {
   return (
     <ul className="cl-settings__list cl-skeleton" aria-busy="true" aria-label="Lecture">
-      {[0.5, 0.42, 0.56, 0.38, 0.47].map((w, i) => (
+      {[0.5, 0.42, 0.56].map((w, i) => (
         <li key={i}>
           <span className="cl-settings__text">
             <Skeleton width={`${w * 100}%`} height={14} radius={1} index={i} />
