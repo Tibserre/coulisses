@@ -136,6 +136,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     #if COULISSES_SPARKLE
         /// Sparkle (ADR 0040): only in the published app, built with its feed and its key.
         var updates: SPUStandardUpdaterController?
+        /// A version found by a scheduled check, waiting for a click: the page shows a
+        /// discreet « Mettre à jour » instead of Sparkle's window (gentle reminder).
+        var updateReady = false
+        /// The service's page said it shows that reminder (« rappel-mises-a-jour »), forgotten
+        /// at each page change: otherwise Sparkle shows its own window, as before.
+        var pageShowsReminder = false
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -262,6 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             adopted = info.pid
         }
         refreshUpdatesState()
+        forgetReminder()
         web.load(URLRequest(url: base))
     }
 
@@ -424,6 +431,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     /// While the service starts, or when it cannot: a plain page, said in French.
     func showPage(title: String, detail: String?, actions: Bool) {
+        forgetReminder()
         let escape = { (text: String) in
             text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
         }
@@ -450,6 +458,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     }
 
     // -- what the page asks of the window -------------------------------------------------
+
+    /// A new page (a reload, a navigation) has not said yet whether it shows the update
+    /// reminder: until it does, Sparkle shows its own window.
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        forgetReminder()
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        forgetReminder()
+    }
 
     func webView(
         _ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
@@ -605,7 +623,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 // -- updates (ADR 0040) ---------------------------------------------------------------------
 
 #if COULISSES_SPARKLE
-    extension AppDelegate: SPUUpdaterDelegate, WKScriptMessageHandler {
+    extension AppDelegate: SPUUpdaterDelegate, SPUStandardUserDriverDelegate, WKScriptMessageHandler {
         /// Sparkle looks for updates only after the user's consent (it asks on the second
         /// launch) or on demand; nothing downloads nor installs without a click (Info.plist:
         /// no automatic updates, no system profile). The development app has no updater.
@@ -613,17 +631,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             guard isStandalone, !isDev, settings["SUFeedURL"] != nil, settings["SUPublicEDKey"] != nil
             else { return }
             updates = SPUStandardUpdaterController(
-                startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
+                startingUpdater: true, updaterDelegate: self, userDriverDelegate: self)
         }
 
         func updatesMenuItem() -> NSMenuItem? {
-            guard let updates else { return nil }
+            guard updates != nil else { return nil }
             let check = NSMenuItem(
-                title: "Rechercher les mises à jour…",
-                action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
-            check.target = updates
+                title: "Rechercher les mises à jour…", action: #selector(checkNow), keyEquivalent: "")
+            check.target = self
             return check
         }
+
+        /// The menu and the page's buttons. A version already found (the reminder) skips
+        /// `shouldProceedWithUpdate`: refused here while a recording or a processing runs,
+        /// said in French; the reminder stays.
+        @objc func checkNow() {
+            guard let updates else { return }
+            if updateReady, let busy = busyNow() {
+                let alert = NSAlert()
+                alert.messageText = "La mise à jour attendra."
+                alert.informativeText =
+                    "\(busy) : cliquez de nouveau sur « Mettre à jour » une fois qu'il sera fini."
+                alert.runModal()
+                return
+            }
+            updates.checkForUpdates(nil)
+        }
+
+        func forgetReminder() { pageShowsReminder = false }
 
         /// What the page reads (web/src/appBridge.ts), and where it sends its two requests.
         func addUpdatesBridge(to content: WKUserContentController) {
@@ -637,6 +672,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 let content = given ?? web?.configuration.userContentController
             else { return }
             let state: [String: Any] = [
+                "ready": updateReady,
                 "automatic": updater.automaticallyChecksForUpdates,
                 "lastCheck": updater.lastUpdateCheckDate.map { ISO8601DateFormatter().string(from: $0) }
                     ?? NSNull(),
@@ -645,11 +681,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 (try? JSONSerialization.data(withJSONObject: state)).flatMap {
                     String(data: $0, encoding: .utf8)
                 } ?? "{}"
+            // For the next page load, and told to the page already shown (appBridge.ts).
             content.removeAllUserScripts()
             content.addUserScript(
                 WKUserScript(
                     source: "window.coulissesApp = { updates: \(json) };",
                     injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            web?.evaluateJavaScript(
+                "window.coulissesApp = { updates: \(json) };"
+                    + " window.dispatchEvent(new Event('coulisses:mises-a-jour'));")
+        }
+
+        // A version found by a scheduled check is not shown in Sparkle's window when the
+        // service's page shows the reminder (it said so): its « Mettre à jour » is the
+        // reminder, and its click (« rechercher-mises-a-jour ») brings Sparkle's window with
+        // that version. Otherwise (a launcher page, an older page), Sparkle's window opens, so
+        // that no version found is ever hidden. Checks asked by the user show it at once.
+        var supportsGentleScheduledUpdateReminders: Bool { true }
+
+        func standardUserDriverShouldHandleShowingScheduledUpdate(
+            _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool
+        ) -> Bool { !pageShowsReminder }
+
+        func standardUserDriverWillHandleShowingUpdate(
+            _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
+        ) {
+            guard !handleShowingUpdate else { return }
+            updateReady = true
+            refreshUpdatesState()
+        }
+
+        /// Seen in Sparkle's window (installed, skipped or left for later): no more reminder.
+        func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+            updateReady = false
+            refreshUpdatesState()
+        }
+
+        func standardUserDriverWillFinishUpdateSession() {
+            updateReady = false
+            refreshUpdatesState()
         }
 
         func userContentController(
@@ -665,7 +735,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             case "mises-a-jour-automatiques":
                 if let on = body["value"] as? Bool { updates.updater.automaticallyChecksForUpdates = on }
             case "rechercher-mises-a-jour":
-                updates.checkForUpdates(nil)
+                checkNow()
+            case "rappel-mises-a-jour":
+                // Said once when shown, and withdrawn (false) when it no longer is.
+                pageShowsReminder = body["value"] as? Bool ?? true
             default:
                 return
             }
@@ -694,8 +767,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             return nil
         }
 
-        /// Never during a recording or a processing: the update is not even shown, so not
-        /// downloaded (a chain must not mix two versions of the engine, P5 and P7).
+        /// Never during a recording or a processing: a version found then is not even shown,
+        /// so not downloaded (a chain must not mix two versions of the engine, P5 and P7); one
+        /// already found waits behind `checkNow`.
         func updater(
             _ updater: SPUUpdater, shouldProceedWithUpdate updateItem: SUAppcastItem,
             updateCheck: SPUUpdateCheck
@@ -742,6 +816,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         func updatesMenuItem() -> NSMenuItem? { nil }
         func addUpdatesBridge(to content: WKUserContentController) {}
         func refreshUpdatesState() {}
+        func forgetReminder() {}
     }
 #endif
 
