@@ -15,11 +15,11 @@ export function describeStageError(stage: StageError): string | null {
   const d = stage.error_details;
   switch (stage.error_code) {
     case "model_missing":
-      return `Un modèle nécessaire n'est pas installé (${text(d, "model")}). Téléchargez-le dans Réglages, onglet Transcription, puis reprenez.`;
+      return "Un modèle nécessaire au traitement n'est pas installé. Téléchargez-le dans Réglages, onglet Transcription, puis reprenez.";
     case "model_altered":
-      return `Le modèle ${text(d, "model")} est abîmé : dans Réglages, onglet Transcription, supprimez-le puis retéléchargez-le, et reprenez.`;
+      return "Un modèle nécessaire au traitement est abîmé : dans Réglages, onglet Transcription, supprimez-le puis retéléchargez-le, et reprenez.";
     case "environment_missing":
-      return `L'environnement de calcul ${text(d, "environment")} n'est pas installé. Installez-le dans Réglages, onglet Transcription, puis reprenez.`;
+      return "Les outils de calcul du traitement ne sont pas installés. Installez-les dans Réglages, onglet Transcription, puis reprenez.";
     case "audio_unreadable":
       return "L'enregistrement n'a pas pu être lu : fichier absent, abîmé, ou sans son.";
     case "too_few_speakers":

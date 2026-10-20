@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, EnvironmentInfo, InstalledEngineModel, MissingPiece, ModelsView } from "./api.ts";
-import { pendingNotices, settleReplacements, updateNotices } from "./steps.ts";
+import { lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
 
 const model = (key: string, over: Partial<CatalogModel> = {}): CatalogModel => ({
   key,
@@ -237,4 +237,12 @@ test("a speed that rounds to the same is said so", () => {
   const same = { ...MEASURED, replacement_speedup: 1.02 };
   const [notice] = updateNotices({ ...afterUpdate, catalog: { models: [same, model("asr")] } });
   assert.deepEqual(notice.gains[0], { label: "Vitesse", value: "aussi rapide" });
+});
+
+test("the last reading is kept, for the Transcription tab to open at once", () => {
+  (globalThis as { window?: EventTarget }).window ??= new EventTarget();
+  assert.equal(lastModelsView(), null);
+  const read = { catalog: { models: [] }, actions: [] } as unknown as ModelsView;
+  stepsChanged(read);
+  assert.equal(lastModelsView(), read);
 });

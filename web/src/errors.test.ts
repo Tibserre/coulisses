@@ -50,7 +50,9 @@ test("the details of a code are woven into its message", () => {
     error_code: "model_missing",
     error_details: { model: "qwen3-asr-1.7b" },
   });
-  assert.match(missing!, /\(qwen3-asr-1\.7b\)\. Téléchargez-le dans Réglages, onglet Transcription/);
+  // Said by what is missing, never by the model's name (ADR 0051), and where to get it.
+  assert.match(missing!, /Téléchargez-le dans Réglages, onglet Transcription/);
+  assert.doesNotMatch(missing!, /qwen/);
 });
 
 test("without a code, the older text matching still applies", () => {

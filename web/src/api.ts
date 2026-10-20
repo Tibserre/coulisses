@@ -240,9 +240,11 @@ export interface DeletionLogEntry {
   id: number;
   at: string;
   /** `conversion`: WAV tracks removed once kept in FLAC, without loss (ADR 0046); `bytes`
-   *  is then the room freed. */
-  kind: "purge" | "audio_deletion" | "session_deletion" | "conversion";
-  session_id: string;
+   *  is then the room freed. `backup_pruning`: older copies of the database removed, only
+   *  the three latest kept (ADR 0052). */
+  kind: "purge" | "audio_deletion" | "session_deletion" | "conversion" | "backup_pruning";
+  /** None for `backup_pruning` only: a copy of the database is no session's. */
+  session_id: string | null;
   /** None for a deleted session: nothing of its text is kept. */
   session_title: string | null;
   files: number;
@@ -774,11 +776,14 @@ async function send<T>(
   method: string,
   path: string,
   body?: unknown,
+  /** Sent as the page goes away (closed, reloaded): the browser finishes it anyway. */
+  keepalive = false,
 ): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       method,
+      keepalive,
       headers:
         body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -894,8 +899,8 @@ export const api = {
       resume: generationId,
       remplacer: replace,
     }),
-  setRetention: (settings: RetentionSettings) =>
-    send<RetentionInfo>("PUT", "/api/conservation", settings),
+  setRetention: (settings: RetentionSettings, leaving = false) =>
+    send<RetentionInfo>("PUT", "/api/conservation", settings, leaving),
   keepAudio: (id: string, keep: boolean) =>
     send<Session>("PUT", `${sessionPath(id)}/garder-audio`, { keep }),
   extendAudio: (id: string) => send<Session>("POST", `${sessionPath(id)}/prolonger`),

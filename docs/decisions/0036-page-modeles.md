@@ -1,6 +1,6 @@
 # 0036 — La section « Modèles » des Réglages, par l'API de modèles du moteur
 
-Statut : Acceptée (2026-10-09). S'appuie sur l'ADR 0035 du moteur (v1.5.0, complétée en v1.6.0). Termine l'étape 10 du plan. Mention « seul moment où Coulisses utilise internet » : reformulée par 0040. Gestes demandés au lancement et modèle remplacé : précisés par 0049.
+Statut : Acceptée (2026-10-09). S'appuie sur l'ADR 0035 du moteur (v1.5.0, complétée en v1.6.0). Termine l'étape 10 du plan. Mention « seul moment où Coulisses utilise internet » : reformulée par 0040. Gestes demandés au lancement et modèle remplacé : précisés par 0049. Affichage hors mode développeur et place dans les Réglages (onglet « Transcription ») : précisés par 0051.
 
 ## Contexte
 La spec (§7.12) veut voir, depuis l'app, les modèles du moteur : ce qui est installé, leur taille, ce que le traitement exige ; les supprimer après confirmation ; les télécharger seulement sur demande, seule exception au hors-ligne (P1). Jusqu'à la v1.4.0, le moteur n'offrait qu'une commande pour humain ; les erreurs `model_missing` renvoyaient vers le Terminal. La v1.5.0 publie `catalog`, `installed`, `readiness`, `download`, `install_environment`, `remove`, `stop_downloads` et trois schémas (`model-catalog`, `model-inventory`, `readiness`).

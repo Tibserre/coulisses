@@ -8,13 +8,32 @@ import frFR from "@astryxdesign/core/locales/fr-FR.generated.js";
 import { Theme } from "@astryxdesign/core/theme";
 import { AudioLines, PanelLeft, Plus } from "lucide-react";
 import { MotionConfig } from "motion/react";
-import { api, type AppInfo, type Project, type RecordingState, type Session, type Space } from "./api.ts";
+import {
+  api,
+  type AppInfo,
+  type Project,
+  type RecordingState,
+  type Session,
+  type Space,
+} from "./api.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { NewSessionDialog, type Way } from "./components/NewSessionDialog.tsx";
-import { UpdateNoticesDialog, useUpdateNotices } from "./components/UpdateNotices.tsx";
+import {
+  UpdateNoticesDialog,
+  useUpdateNotices,
+} from "./components/UpdateNotices.tsx";
 import { SearchBox } from "./components/SearchBox.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { buildTree, onLibraryChanged, parseRoute, rememberedSpace, sessionHref, startSpace, type Route } from "./library.ts";
+import { useUpdateReady } from "./appBridge.ts";
+import {
+  buildTree,
+  onLibraryChanged,
+  parseRoute,
+  rememberedSpace,
+  sessionHref,
+  startSpace,
+  type Route,
+} from "./library.ts";
 import { ActionsPage } from "./pages/ActionsPage.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { RecordingPage } from "./pages/RecordingPage.tsx";
@@ -24,7 +43,9 @@ import { NewSpaceForm, SpacePage } from "./pages/SpacesPage.tsx";
 import { coulissesTheme } from "./theme/coulisses.js";
 
 export function App() {
-  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
+  const [route, setRoute] = useState<Route>(() =>
+    parseRoute(window.location.hash),
+  );
   useEffect(() => {
     const onChange = () => setRoute(parseRoute(window.location.hash));
     window.addEventListener("hashchange", onChange);
@@ -89,7 +110,8 @@ function Shell({ route }: { route: Route }) {
     };
     const onPointer = (e: PointerEvent) => {
       const target = e.target as Element | null;
-      if (target?.closest(".cl-sidebar a")) setOverlay(false); // even the page already open
+      if (target?.closest(".cl-sidebar a"))
+        setOverlay(false); // even the page already open
       else if (!target?.closest(".cl-sidebar, .cl-topbar")) setOverlay(false);
     };
     window.addEventListener("keydown", onKey);
@@ -99,11 +121,23 @@ function Shell({ route }: { route: Route }) {
       window.removeEventListener("pointerup", onPointer);
     };
   }, [narrow, overlay]);
-  const [asking, setAsking] = useState<{ spaceId: number | null; projectId: number | null; way?: Way } | null>(null);
+  const [asking, setAsking] = useState<{
+    spaceId: number | null;
+    projectId: number | null;
+    way?: Way;
+  } | null>(null);
   // What an update (or the first launch) asks on this Mac (ADR 0049): a window at launch,
   // a dot on « Réglages » while one not kept for good is left.
   const updates = useUpdateNotices(route.page === "recording");
-  const closeUpdates = useCallback(() => updates.setOpen(false), [updates.setOpen]);
+  // A new version waiting for a click (ADR 0051): « Mettre à jour » in the column, a dot on
+  // its button while it is closed; not offered during a recording, nor before the service
+  // has said whether one runs (nothing shown then hidden).
+  const updateReady =
+    useUpdateReady() && info !== null && !recording?.session_id;
+  const closeUpdates = useCallback(() => {
+    updates.setOpen(false);
+    updates.clearAsked();
+  }, [updates.setOpen, updates.clearAsked]);
   const [newSpace, setNewSpace] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -151,7 +185,10 @@ function Shell({ route }: { route: Route }) {
     });
   }, [narrow]);
 
-  const openSession = route.page === "session" ? sessions?.find((s) => s.id === route.id) : undefined;
+  const openSession =
+    route.page === "session"
+      ? sessions?.find((s) => s.id === route.id)
+      : undefined;
   // Where the open session is; elsewhere, where the home page's button would record.
   const askNew = useCallback(
     () =>
@@ -161,7 +198,9 @@ function Shell({ route }: { route: Route }) {
           : {
               spaceId: startSpace(
                 spaces,
-                [...(sessions ?? [])].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at)),
+                [...(sessions ?? [])].sort((a, b) =>
+                  b.recorded_at.localeCompare(a.recorded_at),
+                ),
                 rememberedSpace(),
               ),
               projectId: null,
@@ -188,7 +227,11 @@ function Shell({ route }: { route: Route }) {
 
   const tree = buildTree(spaces, projects, sessions ?? []);
   const mainKey =
-    route.page === "session" ? `session:${route.id}` : route.page === "space" ? `space:${route.id}` : route.page;
+    route.page === "session"
+      ? `session:${route.id}`
+      : route.page === "space"
+        ? `space:${route.id}`
+        : route.page;
 
   return (
     <div
@@ -198,13 +241,30 @@ function Shell({ route }: { route: Route }) {
     >
       <header className="cl-topbar">
         <IconButton
-          label={sidebar ? "Masquer la colonne (⌘\\)" : "Afficher la colonne (⌘\\)"}
-          icon={<PanelLeft size={18} strokeWidth={1.75} />}
+          label={
+            (sidebar
+              ? "Masquer la colonne (⌘\\)"
+              : "Afficher la colonne (⌘\\)") +
+            (!sidebar && updateReady ? " · une mise à jour attend" : "")
+          }
+          icon={
+            <span className="cl-topbar__toggle">
+              <PanelLeft size={18} strokeWidth={1.75} />
+              {!sidebar && updateReady && (
+                <span className="cl-topbar__dot" aria-hidden />
+              )}
+            </span>
+          }
           variant="ghost"
           onClick={toggleSidebar}
         />
         <a className="cl-brand" href="#/">
-          <AudioLines size={20} strokeWidth={1.75} color="var(--color-accent)" aria-hidden />
+          <AudioLines
+            size={20}
+            strokeWidth={1.75}
+            color="var(--color-accent)"
+            aria-hidden
+          />
           <span>Coulisses</span>
         </a>
         <SearchBox sessions={sessions ?? []} />
@@ -223,12 +283,20 @@ function Shell({ route }: { route: Route }) {
             archived={tree.filter((n) => n.space.archived)}
             recordingId={recording?.session_id ?? null}
             stepsLeft={updates.notices.length}
+            updateReady={updateReady}
             current={{
-              sessionId: route.page === "session" ? route.id : route.page === "recording" ? (recording?.session_id ?? null) : null,
+              sessionId:
+                route.page === "session"
+                  ? route.id
+                  : route.page === "recording"
+                    ? (recording?.session_id ?? null)
+                    : null,
               spaceId: route.page === "space" ? route.id : null,
               page: route.page,
             }}
-            onNewSession={(spaceId, projectId) => setAsking({ spaceId, projectId })}
+            onNewSession={(spaceId, projectId) =>
+              setAsking({ spaceId, projectId })
+            }
             onNewSpace={() => setNewSpace(true)}
             onChanged={refresh}
             onError={setSideError}
@@ -237,12 +305,23 @@ function Shell({ route }: { route: Route }) {
         <div className="cl-shell__main">
           {sideError && (
             <div className="cl-shell__notice">
-              <Banner status="error" title="Refusé" description={sideError} isDismissable onDismiss={() => setSideError(null)} />
+              <Banner
+                status="error"
+                title="Refusé"
+                description={sideError}
+                isDismissable
+                onDismiss={() => setSideError(null)}
+              />
             </div>
           )}
           <ErrorBoundary key={mainKey}>
             {route.page === "session" ? (
-              <SessionPage id={route.id} at={route.at} tab={route.tab} projects={projects} />
+              <SessionPage
+                id={route.id}
+                at={route.at}
+                tab={route.tab}
+                projects={projects}
+              />
             ) : route.page === "space" ? (
               <SpacePage id={route.id} onChanged={refresh} />
             ) : route.page === "recording" ? (
@@ -250,7 +329,20 @@ function Shell({ route }: { route: Route }) {
             ) : route.page === "actions" ? (
               <ActionsPage selectedRef={route.ref} />
             ) : route.page === "settings" ? (
-              <SettingsPage part={route.part} info={info} />
+              <SettingsPage
+                part={route.part}
+                info={info}
+                stepsLeft={updates.notices.length}
+                // « Remplacer… »: the window that downloads the new model, then removes the old.
+                onReplace={(() => {
+                  const replacement = updates.notices.find(
+                    (n) => n.kind === "replacement",
+                  );
+                  return replacement
+                    ? () => updates.openOn(replacement.id)
+                    : undefined;
+                })()}
+              />
             ) : (
               <HomePage
                 sessions={sessions}
@@ -259,7 +351,9 @@ function Shell({ route }: { route: Route }) {
                 info={info}
                 recording={recording}
                 error={error}
-                onNewSession={(spaceId, way) => setAsking({ spaceId, projectId: null, way })}
+                onNewSession={(spaceId, way) =>
+                  setAsking({ spaceId, projectId: null, way })
+                }
               />
             )}
           </ErrorBoundary>
@@ -268,6 +362,8 @@ function Shell({ route }: { route: Route }) {
       <UpdateNoticesDialog
         isOpen={updates.open}
         notices={updates.notices}
+        asked={updates.asked}
+        onAskedAnswered={updates.clearAsked}
         actions={updates.actions}
         failed={updates.failed}
         onChoose={updates.choose}
@@ -287,8 +383,15 @@ function Shell({ route }: { route: Route }) {
           window.location.hash = sessionHref(id);
         }}
       />
-      <Dialog isOpen={newSpace} onOpenChange={(open) => !open && setNewSpace(false)} width={480}>
-        <DialogHeader title="Nouvel espace" onOpenChange={() => setNewSpace(false)} />
+      <Dialog
+        isOpen={newSpace}
+        onOpenChange={(open) => !open && setNewSpace(false)}
+        width={480}
+      >
+        <DialogHeader
+          title="Nouvel espace"
+          onOpenChange={() => setNewSpace(false)}
+        />
         {newSpace && (
           <NewSpaceForm
             onCancel={() => setNewSpace(false)}

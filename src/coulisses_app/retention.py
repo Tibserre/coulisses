@@ -8,8 +8,9 @@ nothing older ever disappears unannounced. A purge removes the audio files only;
 the corrections and the summaries stay (P5).
 
 Deleting a session by hand removes everything: its rows, its folder, and its rows in the
-backup copies of the database too. Every purge and deletion is written in `deletion_log`,
-which keeps no text of a deleted session (P8: visible, never silent).
+backup copies of the database too. Only the latest `BACKUPS_KEPT` copies of the
+database are kept (ADR 0052). Every purge and deletion is written in `deletion_log`, which
+keeps no text of a deleted session (P8: visible, never silent).
 """
 
 from __future__ import annotations
@@ -40,6 +41,8 @@ RETENTION_KEY = "conservation_jours"
 NOTICE_KEY = "preavis_jours"
 DEFAULT_RETENTION_DAYS = 90
 DEFAULT_NOTICE_DAYS = 7
+BACKUPS_KEPT = 3
+"""Copies of the database kept, the one just made among them (ADR 0052)."""
 
 AudioState = Literal["kept", "removed", "scheduled", "announced", "never_processed"]
 
@@ -64,10 +67,11 @@ class AudioStatus(BaseModel):
 class LogEntry(BaseModel):
     id: int
     at: str
-    kind: Literal["purge", "audio_deletion", "session_deletion", "conversion"]
+    kind: Literal["purge", "audio_deletion", "session_deletion", "conversion", "backup_pruning"]
     """`conversion`: WAV tracks removed once kept in FLAC (ADR 0046); `bytes` is then the
-    room freed."""
-    session_id: str
+    room freed. `backup_pruning`: older copies of the database removed (ADR 0052)."""
+    session_id: str | None
+    """None for `backup_pruning` only: a copy of the database is no session's."""
     session_title: str | None
     files: int
     bytes: int
@@ -286,7 +290,7 @@ def _files(folder: Path) -> list[tuple[Path, int]]:
 def _log(
     conn: sqlite3.Connection,
     kind: str,
-    session_id: str,
+    session_id: str | None,
     title: str | None,
     files: list[tuple[Path, int]],
     root: Path,
@@ -480,6 +484,83 @@ def _forget_in_backups(data: DataDir, session_id: str) -> list[str]:
     return problems
 
 
+_BACKUP_NAME = re.compile(r"^coulisses-avant-\d{4}-(\d{8}T\d{6})\.db$")
+"""The copies the migrations make (`storage.db._backup`): the only ones ever pruned. The
+one `scripts/rapatrier-donnees.py` keeps of the base it replaced is never counted nor
+touched: deleting it was never decided."""
+
+
+def prune_backups(data: DataDir, made: Path) -> list[str]:
+    """Once `made` is done, keep only the `BACKUPS_KEPT` latest copies of the database, `made`
+    always among them: the older ones are deleted, written in the journal first (ADR 0052).
+    A file the migrations did not make is never touched. Returns what could not be done
+    (logged too); never raises: the migration is done, and nothing stops the service."""
+    try:
+        found = [
+            (stamp.group(1), p)
+            for p in data.backups.iterdir()
+            if p != made and (stamp := _BACKUP_NAME.match(p.name))
+        ]
+    except OSError as exc:
+        log.warning("backups not listed: %s", exc)
+        return [f"elles n'ont pas pu être listées ({exc})"]
+    found.sort(reverse=True)  # the latest first: the stamp is the moment it was made
+    older = [p for _, p in found[BACKUPS_KEPT - 1 :]]
+    if not older:
+        return []
+    files: list[tuple[Path, int]] = []
+    problems: list[str] = []
+    for copy in older:
+        # What SQLite may have left beside it (a journal) holds its pages too: it goes with
+        # it. Anything that cannot be read keeps the copy whole, with what lies beside it.
+        found_here: list[tuple[Path, int]] = []
+        for path in (copy, *(copy.with_name(copy.name + s) for s in ("-journal", "-wal", "-shm"))):
+            try:
+                found_here.append((path, path.stat().st_size))
+            except FileNotFoundError:
+                if path == copy:
+                    break  # gone meanwhile (the Finder): nothing left to delete
+            except OSError as exc:
+                problems.append(f"impossible de lire {_backup_label(path)} ({exc.strerror or exc})")
+                found_here = []
+                break
+        else:
+            files += found_here
+    try:
+        conn = connect(data)
+        try:
+            with conn:
+                log_id = _log(conn, "backup_pruning", None, None, files, data.root)
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        # Not written in the journal: nothing is deleted (never a silent deletion).
+        log.warning("older backups kept, the journal could not be written: %s", exc)
+        return [f"elles sont gardées, le journal des suppressions n'a pas pu être écrit ({exc})"]
+    for path, _ in files:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue  # gone meanwhile (the Finder): what was asked is done
+        except OSError as exc:
+            problems.append(f"impossible d'effacer {_backup_label(path)} ({exc.strerror or exc})")
+    if problems:
+        log.warning("pruning the backups: %s", problems)
+        try:
+            _log_problems(data, log_id, problems)
+        except sqlite3.Error as exc:
+            problems.append(f"le journal n'a pas pu les noter ({exc})")
+    else:
+        log.info("%d older backup(s) of the database deleted", len(older))
+    return problems
+
+
+def _backup_label(path: Path) -> str:
+    """How the user knows a copy of the database (or the journal beside it): by its day."""
+    what = "la copie" if path.suffix == ".db" else "le journal de la copie"
+    return f"{what} de la base du {_backup_day(path)}"
+
+
 # -- the purge ------------------------------------------------------------------------------
 
 
@@ -603,8 +684,23 @@ def backups(data: DataDir) -> list[Backup]:
         return []
     return [
         Backup(name=p.name, made_on=_backup_day(p), bytes=p.stat().st_size)
-        for p in sorted(data.backups.glob("*.db"))
+        for p in sorted(data.backups.glob("*.db"), key=lambda p: (_made_at(p), p.name))
     ]
+
+
+_BACKUP_STAMP = re.compile(r"\d{8}T\d{6}")
+
+
+def _made_at(path: Path) -> str:
+    """When the copy was made, from its name (`…-20261007T094553.db`, the copy brought by
+    `scripts/rapatrier-donnees.py` too), else from its file: what orders the copies, never
+    their name (`…-rapatriement-…` would come after `…-0009-…` whatever its day). That
+    copy is named in local time, the others in UTC: the order may be off by the hours
+    between, for the list only (it is never pruned)."""
+    found = _BACKUP_STAMP.search(path.name)
+    if found:
+        return found.group(0)
+    return datetime.fromtimestamp(path.stat().st_mtime, UTC).strftime("%Y%m%dT%H%M%S")
 
 
 _BACKUP_DATE = re.compile(r"(\d{4})(\d{2})(\d{2})T")

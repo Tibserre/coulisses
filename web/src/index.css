@@ -2580,6 +2580,44 @@ a.cl-iconbtn {
   flex-direction: column;
 }
 
+/* A setting on one line: what it is on the left, its value and what changes it on the right
+   (ADR 0051). */
+.cl-settings__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-3) 0;
+}
+
+.cl-settings__value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex: none;
+  max-width: 60%;
+  min-height: 32px;
+}
+
+/* A short sentence and its action, side by side. */
+.cl-settings__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+/* The dot on « Transcription » while an update asks something (ADR 0049). */
+.cl-settings__dot {
+  display: inline-block;
+}
+
+/* What went, floating under « Déjà supprimés »: long, so it scrolls in its own place. */
+.cl-deleted {
+  max-height: min(60vh, 28rem);
+  overflow-y: auto;
+}
+
 
 /* ------------------------------------------------------------- Recording --- */
 
@@ -3135,6 +3173,36 @@ a.cl-iconbtn {
 .cl-sidebar__link[aria-current="page"] {
   background: var(--color-background-muted);
   color: var(--color-text-primary);
+}
+
+/* The column's button, with a dot while it is closed and a version waits (ADR 0051). */
+.cl-topbar__toggle {
+  position: relative;
+  display: inline-flex;
+}
+
+.cl-topbar__dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+/* « Mettre à jour »: a link like the others, in the accent, only while a version waits. */
+.cl-sidebar__update {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.cl-sidebar__update:hover {
+  color: var(--color-accent);
 }
 
 .cl-sidebar__bottom {
@@ -3703,7 +3771,7 @@ button.cl-tree__more:hover {
   font-size: var(--font-size-sm);
 }
 
-/* A task's model: its name in a quiet box that opens the list. */
+/* A task's model: its name, which opens the list. */
 .cl-modelpick {
   display: inline-flex;
   align-items: center;
@@ -3711,18 +3779,19 @@ button.cl-tree__more:hover {
   max-width: 22rem;
   height: 32px;
   padding: 0 var(--spacing-2) 0 var(--spacing-3);
-  border: 1px solid var(--color-border);
+  /* No box (ADR 0051): the name and its chevron, a light ground under the pointer. */
+  border: 0;
   border-radius: var(--radius-element);
-  background: var(--color-background-surface);
+  background: transparent;
   color: var(--color-text-primary);
   font: inherit;
   cursor: pointer;
-  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cl-modelpick:hover:not(:disabled),
 .cl-modelpick[aria-expanded="true"] {
-  border-color: var(--color-border-emphasized);
+  background: var(--color-background-muted);
 }
 
 .cl-modelpick:disabled {
@@ -3797,6 +3866,8 @@ button.cl-tree__more:hover {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-2);
+  /* The same width on every row, with a button or without: the columns line up. */
+  min-width: 7.5rem;
 }
 
 .cl-models__said {

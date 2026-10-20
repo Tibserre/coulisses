@@ -1,6 +1,6 @@
 # 0039 — Un modèle de langage par rédaction : titre, chapitres, résumés
 
-Statut : Acceptée (2026-10-13, validée par l'utilisateur : un modèle par rédaction, le choix de l'onglet Résumé ne change que les résumés, l'onglet « Transcription »). Demande, mot pour mot : « Il me faudrait toute une page de gestion du modèle LLM utilisé pour Generation du titre génératoin des chapitres génération de résumé genre que je puisse choisir parmis les mod!les llm ». Précise, dans l'ADR 0022, la ligne « le modèle choisi dans l'interface devient le défaut ».
+Statut : Acceptée (2026-10-13, validée par l'utilisateur : un modèle par rédaction, le choix de l'onglet Résumé ne change que les résumés, l'onglet « Transcription »). Demande, mot pour mot : « Il me faudrait toute une page de gestion du modèle LLM utilisé pour Generation du titre génératoin des chapitres génération de résumé genre que je puisse choisir parmis les mod!les llm ». Précise, dans l'ADR 0022, la ligne « le modèle choisi dans l'interface devient le défaut ». Noms des modèles affichés : précisés par 0051.
 
 ## Contexte
 Un seul modèle par défaut servait à tout : le titre, les chapitres (après chaque traitement, ADR 0024) et les résumés. Il ne se choisissait que depuis l'onglet Résumé d'une séance, et ce choix changeait aussi le modèle du titre et des chapitres, sans que rien ne le dise. Les trois rédactions n'ont pas les mêmes besoins : un titre est une ligne, les chapitres une liste courte, un résumé un long texte où la qualité compte le plus.

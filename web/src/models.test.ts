@@ -260,3 +260,164 @@ test("a replaced model says by what, with the engine's note", () => {
     null,
   ]);
 });
+
+test("outside developer mode, what the processing uses and is sound is one line per step", async () => {
+  const { quietRows } = await import("./models.ts");
+  const installed = (key: string, size: number) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: size,
+    downloaded_at: null,
+    problem: null,
+    required: true,
+    replaced_by: null,
+  });
+  const env = { path: "", interpreter: null, interpreter_outside: false, label: "", stages: [] };
+  const v: ModelsView = {
+    ...view({
+      models: [installed("asr", 2_500_000_000), installed("voix", 30_000_000), installed("voix2", 270_000_000)],
+      environments: [
+        { ...env, name: "torch", current: true, installed: true, size_bytes: 1_300_000_000 },
+        { ...env, name: "diarizen-old", current: false, installed: true, size_bytes: 800_000_000 },
+      ],
+      uv_stores: [
+        { kind: "python", path: "/p", size_bytes: 65_000_000 },
+        { kind: "cache", path: "/c", size_bytes: 1_200_000_000 },
+      ],
+    }),
+    catalog: {
+      models: [
+        model("asr"),
+        { ...model("asr-grand"), required_by: [] },
+        model("voix", "diarize"),
+        model("voix2", "diarize"),
+      ],
+    },
+  };
+  const quiet = quietRows(modelRows(v, []), v.inventory);
+  assert.deepEqual(quiet.steps, [
+    { purpose: "Transcription", size: 2_500_000_000 },
+    { purpose: "Qui parle quand", size: 300_000_000 },
+  ]);
+  // The one the processing does not use is not shown while not on the disk; the old
+  // environment keeps its row, to be removed.
+  assert.deepEqual(quiet.apart.map((r) => r.key), []);
+  assert.equal(quiet.old.size, 0);
+  assert.deepEqual(quiet.apartEnvironments.map((e) => e.name), ["diarizen-old"]);
+  // The tools: the environments in use and their Python, the cache apart from the total.
+  assert.equal(quiet.tools, 1_365_000_000);
+});
+
+test("outside developer mode, what the chain lacks is said by what it is for", () => {
+  const line = readinessLine(
+    view({}, [
+      { stage: "transcribe", code: "model_missing", model: "qwen-xyz", environment: null, label: null, message: "" },
+      { stage: "diarize", code: "environment_missing", model: null, environment: "diarizen", label: "DiariZen", message: "" },
+    ]).readiness,
+    view().inventory,
+    (key) => (key === "qwen-xyz" ? "Transcription" : undefined),
+  );
+  assert.equal(
+    line,
+    "Les séances ne peuvent pas être traitées : il manque le modèle « Transcription », les outils de calcul.",
+  );
+});
+
+test("a step folds only when every model it needs is sound", async () => {
+  const { quietRows } = await import("./models.ts");
+  const v: ModelsView = {
+    ...view({
+      models: [
+        {
+          key: "voix",
+          state: "intact",
+          in_catalog: true,
+          repo: null,
+          revision: null,
+          outdated: false,
+          size_bytes: 30,
+          downloaded_at: null,
+          problem: null,
+          required: true,
+          replaced_by: null,
+        },
+      ],
+    }),
+    catalog: { models: [model("voix", "diarize"), model("voix2", "diarize")] },
+  };
+  const quiet = quietRows(modelRows(v, []), v.inventory);
+  assert.deepEqual(quiet.steps, []);
+  assert.deepEqual(quiet.apart.map((r) => r.key), ["voix", "voix2"]);
+});
+
+test("outside developer mode, a model it cannot place is never said by its key", () => {
+  const line = readinessLine(
+    view({}, [{ stage: "transcribe", code: "model_missing", model: "qwen-xyz", environment: null, label: null, message: "" }]).readiness,
+    view().inventory,
+    () => undefined,
+  );
+  assert.equal(line, "Les séances ne peuvent pas être traitées : il manque un modèle du traitement.");
+});
+
+test("an old model on the disk is said with its step; the new one missing, both together", async () => {
+  const { quietRows } = await import("./models.ts");
+  const installed = (key: string, size: number, required: boolean, replaced_by: string | null = null) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: size,
+    downloaded_at: null,
+    problem: null,
+    required,
+    replaced_by,
+  });
+  const catalog = {
+    models: [{ ...model("ancien"), required_by: [], replaced_by: "asr", replacement_note: null }, model("asr")],
+  };
+  // The new one there: one line, the old one with it.
+  const both: ModelsView = {
+    ...view({ models: [installed("ancien", 4_700_000_000, false, "asr"), installed("asr", 2_500_000_000, true)] }),
+    catalog,
+  };
+  const quiet = quietRows(modelRows(both, []), both.inventory);
+  assert.deepEqual(quiet.steps, [{ purpose: "Transcription", size: 2_500_000_000 }]);
+  assert.deepEqual(quiet.old.get("Transcription")?.map((r) => r.key), ["ancien"]);
+  assert.deepEqual(quiet.apart, []);
+  // The new one missing: its row, with the old one known to replace.
+  const lacking: ModelsView = { ...view({ models: [installed("ancien", 4_700_000_000, false, "asr")] }), catalog };
+  const q2 = quietRows(modelRows(lacking, []), lacking.inventory);
+  assert.deepEqual(q2.steps, []);
+  assert.deepEqual(q2.apart.map((r) => r.key), ["asr"]);
+  assert.deepEqual(q2.old.get("Transcription")?.map((r) => r.key), ["ancien"]);
+});
+
+test("an optional model on the disk, never replaced, keeps its row: it is not an old one", async () => {
+  const { quietRows } = await import("./models.ts");
+  const installed = (key: string, required: boolean) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: 1,
+    downloaded_at: null,
+    problem: null,
+    required,
+    replaced_by: null,
+  });
+  const v: ModelsView = {
+    ...view({ models: [installed("asr", true), installed("asr-grand", false)] }),
+    catalog: { models: [model("asr"), { ...model("asr-grand"), required_by: [] }] },
+  };
+  const quiet = quietRows(modelRows(v, []), v.inventory);
+  assert.equal(quiet.old.size, 0);
+  assert.deepEqual(quiet.apart.map((r) => r.key), ["asr-grand"]);
+});

@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
+import { Popover } from "@astryxdesign/core/Popover";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Switch } from "@astryxdesign/core/Switch";
+import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Text } from "@astryxdesign/core/Text";
+import { ChevronDown } from "lucide-react";
 import {
   api,
   type AppInfo,
@@ -10,37 +15,15 @@ import {
   type PurgeAnnouncement,
   type RetentionInfo,
 } from "../api.ts";
-import { Switch } from "@astryxdesign/core/Switch";
-import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { DayStepper } from "../components/DayStepper.tsx";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
 import { UpdatesSection } from "../components/UpdatesSection.tsx";
 import { WritingModels } from "../components/WritingModels.tsx";
-import { setDevMode } from "../devMode.ts";
+import { setDevMode, useDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
-import { useDevMode } from "../devMode.ts";
-
-/** Settings (spec §7.12): the audio's keeping (§7.10: how long, the notice, what is about to
- *  be purged, the log of every purge and deletion, the backups of the base), the export
- *  folder, Coulisses itself (its version, its folders shown in the Finder, its updates),
- *  developer mode. */
-type Part = "general" | "modeles" | "redaction" | "donnees" | "avance";
-const PARTS: [Part, string][] = [
-  ["general", "Général"],
-  // The engine's models (transcription, voices); the language models (titles, chapters,
-  // summaries).
-  ["modeles", "Transcription"],
-  ["redaction", "Rédaction"],
-  ["donnees", "Données"],
-  ["avance", "Avancé"],
-];
-
-/** The tab asked in the address (« #/reglages?onglet=modeles »), else the first. */
-function partOf(asked: string | null): Part {
-  return PARTS.some(([key]) => key === asked) ? (asked as Part) : "general";
-}
+import { PARTS, partOf, type Part } from "../settingsParts.ts";
 
 /** Lists that only grow (the deletion log, the backups): the latest first, the rest on
  *  demand. */
@@ -51,25 +34,33 @@ const NOTICE_STEPS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 60];
 /** The service gives the latest 200 entries of the log (retention.journal). */
 const JOURNAL_LIMIT = 200;
 
+/** Settings (spec §7.12, ADR 0051), sorted by what one comes to do: the sessions (how long
+ *  their audio is kept, what is about to go and what went, where reports are exported), the
+ *  writing (the language model of each), the transcription (what the processing needs), and
+ *  the rest (updates, folders, the technical log, developer mode). */
 export function SettingsPage({
   info: about,
   part: asked = null,
+  stepsLeft = 0,
+  onReplace,
 }: {
   info: AppInfo | null;
   /** The tab asked in the address. */
   part?: string | null;
+  /** Steps an update asks on this Mac (ADR 0049): a dot on « Transcription ». */
+  stepsLeft?: number;
+  /** Opens the window that replaces an old model by the new one (ADR 0049), when it has one. */
+  onReplace?: () => void;
 }) {
   const dev = useDevMode();
   const [part, setPart] = useState<Part>(() => partOf(asked));
   // A link to another tab while this page is open (the purge banner, an error).
   useEffect(() => setPart(partOf(asked)), [asked]);
-  const [allLog, setAllLog] = useState(false);
   const [allBackups, setAllBackups] = useState(false);
   const [info, setInfo] = useState<RetentionInfo | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [notice, setNotice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [folders, setFolders] = useState<Folders | null>(null);
   useEffect(() => {
     api.folders().then(setFolders, (e: Error) => setError(e.message));
@@ -98,10 +89,71 @@ export function SettingsPage({
 
   const shownDays = days ?? info?.settings.retention_days ?? 90;
   const shownNotice = notice ?? info?.settings.notice_days ?? 7;
-  const changed =
-    info !== null &&
-    (shownDays !== info.settings.retention_days ||
-      shownNotice !== info.settings.notice_days);
+
+  // Changed in place (ADR 0051), kept once one leaves the line, the tab or the page: one
+  // write per decision, so the coming purges are announced again once, for the delay chosen
+  // (each write announces them anew). Writes go one after the other; a refusal is said, and
+  // the values shown go back to those kept.
+  type Retention = { retention_days: number; notice_days: number };
+  const pending = useRef<Retention | null>(null);
+  const kept = useRef<RetentionInfo["settings"] | null>(null);
+  kept.current = info?.settings ?? null;
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const change = (next: { days?: number; notice?: number }) => {
+    if (next.days !== undefined) setDays(next.days);
+    if (next.notice !== undefined) setNotice(next.notice);
+    pending.current = {
+      retention_days: next.days ?? shownDays,
+      notice_days: next.notice ?? shownNotice,
+    };
+  };
+  const flush = useCallback((leaving = false) => {
+    const value = pending.current;
+    pending.current = null;
+    if (
+      value === null ||
+      (kept.current?.retention_days === value.retention_days &&
+        kept.current?.notice_days === value.notice_days)
+    ) {
+      if (value !== null) {
+        setDays(null);
+        setNotice(null);
+      }
+      return;
+    }
+    // The page goes away (closed, reloaded): sent at once, and finished by the browser. No
+    // page is left to say a refusal; the next opening shows the values kept, as they are.
+    if (leaving) {
+      void api.setRetention(value, true).catch(() => undefined);
+      return;
+    }
+    queue.current = queue.current.then(async () => {
+      try {
+        await api.setRetention(value);
+        setError(null);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+      await load();
+      // A change made meanwhile stays shown, to be kept in its turn.
+      if (pending.current === null) {
+        setDays(null);
+        setNotice(null);
+      }
+    });
+  }, [load]);
+  useEffect(() => {
+    const leave = () => flush(true);
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.removeEventListener("pagehide", leave);
+      flush();
+    };
+  }, [flush]);
+  useEffect(() => {
+    if (part !== "seances") flush();
+  }, [part, flush]);
+
   const name = (c: PurgeAnnouncement) =>
     c.title ?? `Séance du ${formatDate(c.recorded_at).toLowerCase()}`;
 
@@ -118,7 +170,21 @@ export function SettingsPage({
           hasDivider
         >
           {PARTS.map(([key, label]) => (
-            <Tab key={key} value={key} label={label} />
+            <Tab
+              key={key}
+              value={key}
+              label={label}
+              endContent={
+                key === "transcription" && stepsLeft > 0 ? (
+                  <span
+                    className="cl-tree__dot cl-settings__dot"
+                    data-dot="steps"
+                    title="Une mise à jour demande un geste sur ce Mac"
+                    aria-label="Une mise à jour demande un geste sur ce Mac"
+                  />
+                ) : undefined
+              }
+            />
           ))}
         </TabList>
         {error && (
@@ -134,16 +200,22 @@ export function SettingsPage({
           <Banner key={p} status="error" title="Conservation" description={p} />
         ))}
 
-        {part === "general" && (
+        {part === "seances" && (
           <>
             <section className="cl-settings__section">
-              <Heading level={3}>Conservation de l'audio</Heading>
+              <Heading level={3}>L'audio des séances</Heading>
               <Text color="secondary">
-                L'audio d'une séance traitée est supprimé après ce délai, avec
-                un préavis. Le texte, les noms et les résumés restent ; une
-                séance peut garder son audio depuis son menu « … ».
+                L'audio d'une séance traitée est supprimé après ce délai, avec un
+                préavis ; le texte, les noms et les résumés restent. Une séance
+                peut garder son audio depuis son menu « … ».
               </Text>
-              <div className="cl-settings__steppers">
+              <div
+                className="cl-settings__steppers"
+                onMouseLeave={() => flush()}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flush();
+                }}
+              >
                 <DayStepper
                   label="Garder l'audio"
                   description="Depuis son entrée dans Coulisses."
@@ -151,124 +223,124 @@ export function SettingsPage({
                   steps={RETENTION_STEPS}
                   min={Math.max(1, shownNotice)}
                   isDisabled={info === null}
-                  onChange={(v) => {
-                    setDays(v);
-                    setSaved(false);
-                  }}
+                  onChange={(v) => change({ days: v })}
                 />
                 <DayStepper
-                  label="Préavis"
-                  description="Avant la suppression."
+                  label="Prévenir avant"
+                  description="Un bandeau et une notification."
                   value={shownNotice}
                   steps={NOTICE_STEPS}
                   max={shownDays}
                   isDisabled={info === null}
-                  onChange={(v) => {
-                    setNotice(v);
-                    setSaved(false);
-                  }}
+                  onChange={(v) => change({ notice: v })}
                 />
-              </div>
-              {/* Said only once something changed; its place kept, so nothing moves. */}
-              <div className="cl-settings__save">
-                {changed ? (
-                  <>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      label="Enregistrer"
-                      clickAction={() =>
-                        act(async () => {
-                          await api.setRetention({
-                            retention_days: shownDays,
-                            notice_days: shownNotice,
-                          });
-                          setDays(null);
-                          setNotice(null);
-                          setSaved(true);
-                        })
-                      }
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      label="Annuler"
-                      onClick={() => {
-                        setDays(null);
-                        setNotice(null);
-                      }}
-                    />
-                  </>
-                ) : (
-                  saved && <Text type="supporting">Enregistré.</Text>
-                )}
-              </div>
-            </section>
-
-            <section className="cl-settings__section">
-              <Heading level={3}>Bientôt supprimés</Heading>
-              {info && info.coming.length === 0 && (
-                <Text color="secondary">
-                  Aucun audio n'est sur le point d'être supprimé.
-                </Text>
-              )}
-              <ul className="cl-settings__list">
-                {info?.coming.map((c) => (
-                  <li key={c.session_id}>
-                    <span className="cl-settings__text">
-                      <a href={`#/seance/${encodeURIComponent(c.session_id)}`}>
-                        {name(c)}
-                      </a>
-                      <Text type="supporting">
-                        suppression de l'audio le {formatDay(c.purge_on)}
+                {/* Always their lines, so nothing moves once read. */}
+                <div className="cl-settings__row">
+                  <span className="cl-settings__text">
+                    <Text>Bientôt supprimés</Text>
+                  </span>
+                  <span className="cl-settings__value">
+                    {info === null ? (
+                      <Skeleton width={60} height={14} radius={1} />
+                    ) : (
+                      <Text color="secondary">
+                        {info.coming.length === 0
+                          ? "Aucun"
+                          : plural(info.coming.length, "séance", "séances")}
                       </Text>
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      label="Prolonger"
-                      clickAction={() =>
-                        act(() => api.extendAudio(c.session_id))
-                      }
-                    />
-                    <Button
-                      size="sm"
-                      label="Garder l'audio"
-                      clickAction={() =>
-                        act(() => api.keepAudio(c.session_id, true))
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
+                    )}
+                  </span>
+                </div>
+                <div className="cl-settings__row">
+                  <span className="cl-settings__text">
+                    <Text>Déjà supprimés</Text>
+                    <Text type="supporting">
+                      Chaque suppression et chaque passage en FLAC, avec ses
+                      fichiers et leur taille ; jamais le texte d'une séance
+                      supprimée.
+                    </Text>
+                  </span>
+                  <span className="cl-settings__value">
+                    {info === null ? (
+                      <Skeleton width={60} height={14} radius={1} />
+                    ) : info.journal.length === 0 ? (
+                      <Text color="secondary">Aucun</Text>
+                    ) : (
+                      <DeletedPanel journal={info.journal} />
+                    )}
+                  </span>
+                </div>
+              </div>
+              {info && info.coming.length > 0 && (
+                <ul className="cl-settings__list">
+                  {info.coming.map((c) => (
+                    <li key={c.session_id}>
+                      <span className="cl-settings__text">
+                        <a href={`#/seance/${encodeURIComponent(c.session_id)}`}>
+                          {name(c)}
+                        </a>
+                        <Text type="supporting">
+                          suppression de l'audio le {formatDay(c.purge_on)}
+                        </Text>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        label="Prolonger"
+                        clickAction={() => act(() => api.extendAudio(c.session_id))}
+                      />
+                      <Button
+                        size="sm"
+                        label="Garder l'audio"
+                        clickAction={() =>
+                          act(() => api.keepAudio(c.session_id, true))
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             <ExportFolderSection />
           </>
         )}
 
-        {part === "modeles" && <ModelsSection />}
-
         {part === "redaction" && <WritingModels />}
 
-        {part === "donnees" && (
+        {part === "transcription" && (
           <>
+            <ModelsSection onReplace={onReplace} />
+            <div className="cl-settings__buttons">
+              <Button
+                label="Ouvrir le dossier des modèles"
+                size="sm"
+                variant="ghost"
+                onClick={() => void act(() => api.openFolder("modeles"))}
+              />
+            </div>
+          </>
+        )}
+
+        {part === "avance" && (
+          <>
+            <UpdatesSection version={about?.app_version ?? null} />
+
             <section className="cl-settings__section">
-              <Heading level={3}>Coulisses</Heading>
+              <Heading level={3}>Dossiers</Heading>
               <Text color="secondary">
-                {about ? `Version ${about.app_version}. ` : ""}Tout reste sur ce
-                Mac : les séances dans le dossier des données, les modèles du
-                moteur dans le leur.
+                Tout reste sur ce Mac. Le journal technique aide à comprendre une
+                erreur.
               </Text>
               <div className="cl-settings__buttons">
                 <Button
-                  label="Ouvrir les données"
+                  label="Ouvrir les séances"
                   size="sm"
                   onClick={() => void act(() => api.openFolder("donnees"))}
                 />
-                {dev && folders?.log && (
+                {folders?.log && (
                   <Button
-                    label="Afficher le journal"
+                    label="Ouvrir le journal technique"
                     size="sm"
                     onClick={() => void act(() => api.openFolder("journal"))}
                   />
@@ -276,121 +348,155 @@ export function SettingsPage({
               </div>
               {dev && folders && (
                 <Text type="supporting">
-                  Modèles : {folders.models}
+                  Données : {folders.data} · modèles : {folders.models}
                   {folders.log ? ` · journal : ${folders.log}` : ""}
                 </Text>
               )}
             </section>
 
-            <UpdatesSection />
-
             <section className="cl-settings__section">
-              <Heading level={3}>Journal des suppressions</Heading>
-              {info && info.journal.length === 0 && (
-                <Text color="secondary">Rien n'a été supprimé.</Text>
+              <Heading level={3}>Mode développeur</Heading>
+              <Switch
+                label="Afficher les détails techniques"
+                description="Noms des modèles, chemins, provenance des étapes, durées de calcul, mémoire, versions, copies de la base, erreurs brutes."
+                value={dev}
+                onChange={setDevMode}
+              />
+              {dev && about && (
+                <Text type="supporting">
+                  Coulisses {about.app_version} · moteur {about.engine_version} ·
+                  chaîne « {about.profile} »
+                </Text>
               )}
-              <ul className="cl-settings__list">
-                {info?.journal
-                  .slice(0, allLog ? undefined : SHOWN_ROWS)
-                  .map((e) => (
-                    <li key={e.id}>
-                      <span className="cl-settings__text">
-                        <Text>
-                          {LOG_KIND[e.kind]}
-                          {e.session_title ? ` : « ${e.session_title} »` : ""}
-                        </Text>
-                        <Text type="supporting">
-                          {formatDateTime(e.at)} ·{" "}
-                          {plural(e.files, "fichier", "fichiers")},{" "}
-                          {formatBytes(e.bytes)}
-                          {e.problems.length > 0 && " · incomplète"}
-                        </Text>
-                        {e.problems.map((p) => (
-                          <Text key={p} type="supporting" color="primary">
-                            {p}
+            </section>
+
+            {dev && (
+              <section className="cl-settings__section">
+                <Heading level={3}>Copies de la base</Heading>
+                <Text color="secondary">
+                  Une copie est faite quand une mise à jour change le format de la
+                  base ; les trois dernières sont gardées, plus celle d'un
+                  rapatriement des données. Supprimer une séance l'efface aussi de
+                  ces copies.
+                </Text>
+                {info === null && <RowsSkeleton />}
+                <ul className="cl-settings__list">
+                  {/* The most recent first: those one goes back to after an update. */}
+                  {[...(info?.backups ?? [])]
+                    .reverse()
+                    .slice(0, allBackups ? undefined : SHOWN_ROWS)
+                    .map((b) => (
+                      <li key={b.name}>
+                        <span className="cl-settings__text">
+                          <Text>Copie du {b.made_on}</Text>
+                          <Text type="supporting">
+                            {formatBytes(b.bytes)} · {b.name}
                           </Text>
-                        ))}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-              {info && info.journal.length > SHOWN_ROWS && (
-                <div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    label={
-                      allLog
-                        ? "N'afficher que les dernières"
-                        : info.journal.length >= JOURNAL_LIMIT
-                          ? `Voir les ${JOURNAL_LIMIT} dernières`
-                          : `Voir les ${info.journal.length - SHOWN_ROWS} autres`
-                    }
-                    onClick={() => setAllLog(!allLog)}
-                  />
-                </div>
-              )}
-            </section>
-
-            <section className="cl-settings__section">
-              <Heading level={3}>Sauvegardes de la base</Heading>
-              <Text color="secondary">
-                Une copie de la base est faite avant chaque mise à jour de
-                Coulisses. Supprimer une séance l'efface aussi de ces copies.
-              </Text>
-              <ul className="cl-settings__list">
-                {/* The most recent first: those one goes back to after an update. */}
-                {[...(info?.backups ?? [])]
-                  .reverse()
-                  .slice(0, allBackups ? undefined : SHOWN_ROWS)
-                  .map((b) => (
-                    <li key={b.name}>
-                      <span className="cl-settings__text">
-                        <Text>Copie du {b.made_on}</Text>
-                        <Text type="supporting">
-                          {formatBytes(b.bytes)}
-                          {dev && ` · ${b.name}`}
-                        </Text>
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-              {info && info.backups.length > SHOWN_ROWS && (
-                <div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    label={
-                      allBackups
-                        ? "N'afficher que les dernières"
-                        : `Voir les ${info.backups.length - SHOWN_ROWS} autres`
-                    }
-                    onClick={() => setAllBackups(!allBackups)}
-                  />
-                </div>
-              )}
-            </section>
-          </>
-        )}
-
-        {part === "avance" && (
-          <section className="cl-settings__section">
-            <Heading level={3}>Mode développeur</Heading>
-            <Switch
-              label="Afficher les détails techniques"
-              description="Provenance des étapes, durées de calcul, mémoire, versions, erreurs brutes."
-              value={dev}
-              onChange={setDevMode}
-            />
-            {dev && about && (
-              <Text type="supporting">
-                Données : {about.data_dir} · Coulisses {about.app_version} ·
-                moteur {about.engine_version} · chaîne « {about.profile} »
-              </Text>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+                {info && info.backups.length > SHOWN_ROWS && (
+                  <div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      label={
+                        allBackups
+                          ? "N'afficher que les dernières"
+                          : `Voir les ${info.backups.length - SHOWN_ROWS} autres`
+                      }
+                      onClick={() => setAllBackups(!allBackups)}
+                    />
+                  </div>
+                )}
+              </section>
             )}
-          </section>
+          </>
         )}
       </main>
     </div>
+  );
+}
+
+/** What went, opened from « Déjà supprimés »: a list floating under its trigger, the latest
+ *  first, the rest on demand; nothing below moves. */
+function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
+  const [isOpen, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
+  return (
+    <Popover
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        setOpen(open);
+        if (!open) setAll(false);
+      }}
+      label="Déjà supprimés"
+      placement="below"
+      alignment="end"
+      width={380}
+      padding={3}
+      content={
+        <div className="cl-deleted">
+          <ul className="cl-settings__list">
+            {journal.slice(0, all ? undefined : SHOWN_ROWS).map((e) => (
+              <li key={e.id}>
+                <span className="cl-settings__text">
+                  <Text>
+                    {LOG_KIND[e.kind]}
+                    {e.session_title ? ` : « ${e.session_title} »` : ""}
+                  </Text>
+                  <Text type="supporting">
+                    {formatDateTime(e.at)} · {plural(e.files, "fichier", "fichiers")},{" "}
+                    {formatBytes(e.bytes)}
+                    {e.problems.length > 0 && " · incomplète"}
+                  </Text>
+                  {e.problems.map((p) => (
+                    <Text key={p} type="supporting" color="primary">
+                      {p}
+                    </Text>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {journal.length > SHOWN_ROWS && (
+            <Button
+              size="sm"
+              variant="ghost"
+              label={
+                all
+                  ? "N'afficher que les dernières"
+                  : journal.length >= JOURNAL_LIMIT
+                    ? `Voir les ${JOURNAL_LIMIT} dernières`
+                    : `Voir les ${journal.length - SHOWN_ROWS} autres`
+              }
+              onClick={() => setAll(!all)}
+            />
+          )}
+        </div>
+      }
+    >
+      <button type="button" className="cl-modelpick" aria-label={`Déjà supprimés : ${journal.length}. Voir`}>
+        <span className="cl-modelpick__name">{journal.length >= JOURNAL_LIMIT ? `${JOURNAL_LIMIT} et plus` : journal.length}</span>
+        <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+      </button>
+    </Popover>
+  );
+}
+
+/** While the copies are read: the three rows kept (ADR 0052), at their height. */
+function RowsSkeleton() {
+  return (
+    <ul className="cl-settings__list cl-skeleton" aria-busy="true" aria-label="Lecture">
+      {[0.5, 0.42, 0.56].map((w, i) => (
+        <li key={i}>
+          <span className="cl-settings__text">
+            <Skeleton width={`${w * 100}%`} height={14} radius={1} index={i} />
+            <Skeleton width="30%" height={11} radius={1} index={i} />
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

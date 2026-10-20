@@ -56,6 +56,7 @@ export const LOG_KIND: Record<DeletionLogEntry["kind"], string> = {
   audio_deletion: "Audio supprimé à la main",
   session_deletion: "Séance supprimée",
   conversion: "Pistes gardées en FLAC, sans perte",
+  backup_pruning: "Anciennes copies de la base",
 };
 
 /** The value after `value` in `steps` (or before it), within `min` and `max`: a value
