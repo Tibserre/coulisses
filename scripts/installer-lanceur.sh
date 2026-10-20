@@ -42,7 +42,10 @@ for argument in "$@"; do
   esac
 done
 DESTINATION=${DESTINATION:-$HOME/Applications}
-BUILD=$SOURCE/build${VARIANT:+-$VARIANT}
+# Built in a temporary folder, removed at the end: a copy left in the repository would be a
+# second « Coulisses » in Spotlight and Launchpad.
+BUILD=$(mktemp -d -t coulisses-lanceur)
+trap 'rm -rf $BUILD' EXIT
 APP="$BUILD/$NAME.app"
 
 UV=$(command -v uv) || { print -u2 "uv est introuvable : installez-le, puis relancez."; exit 1 }
@@ -52,7 +55,6 @@ command -v swiftc >/dev/null || {
 }
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' $ROOT/pyproject.toml | head -1)
 
-rm -rf $BUILD
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
 
 print "Compilation…"
