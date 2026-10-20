@@ -8,7 +8,12 @@ L'utilisateur, le 2026-10-20 : « l'app est pas hyper claire, notamment les para
 ## Décision
 - **Quatre onglets** : « Séances » (conservation de l'audio, préavis, bientôt supprimés, déjà supprimés, dossier d'export), « Rédaction » (le modèle de chaque rédaction), « Transcription » (ce que le traitement utilise), « Avancé » (mises à jour, dossiers, journal technique, mode développeur). Les anciennes adresses (`general`, `modeles`, `donnees`) mènent au nouvel onglet. Un point sur « Transcription » double celui de « Réglages » quand une mise à jour attend un geste (0049).
 - **Ce qui a été supprimé** se lit à côté de ce qui va l'être : une ligne « Déjà supprimés » avec leur nombre, qui ouvre la liste en panneau flottant, les cinq dernières puis le reste sur demande. Les copies de la base ne se montrent qu'en mode développeur (dans Avancé). L'utilisateur a aussi décidé de n'en garder que les trois dernières : cette règle, et ce qu'elle change dans l'ADR 0018, sont écrits par l'ADR du service qui la met en œuvre, pas ici.
-- **« Mettre à jour »**, en bas de la colonne, n'apparaît que quand l'app du Dock dit qu'une nouvelle version attend un clic (`ready`, et l'évènement `coulisses:mises-a-jour` quand cela change) ; un clic montre la fenêtre de Sparkle, qui l'installe. Le réglage (recherche automatique, recherche immédiate, version) est dans Avancé.
+- **« Mettre à jour »**, en bas de la colonne, n'apparaît que quand l'app du Dock dit qu'une nouvelle version attend un clic ; un clic ouvre la fenêtre de Sparkle, d'où elle s'installe. Contrat avec l'app du Dock (Distribution, 44b3438) :
+  - la coquille de la page, toujours montée, annonce le rappel (`rappel-mises-a-jour`, vrai) une fois à son montage, et le retire (faux) en se démontant ; l'annonce est à refaire après chaque rechargement ;
+  - seulement alors, une version trouvée par la recherche automatique n'ouvre plus la fenêtre de Sparkle : `updates.ready` passe à vrai et l'évènement `coulisses:mises-a-jour` est envoyé ; sans annonce, Sparkle ouvre sa fenêtre comme avant ;
+  - colonne masquée, un point sur son bouton dit qu'une version attend : jamais une version annoncée et vue nulle part. Pendant un enregistrement, ni bouton ni point (0040) ; ils reviennent ensuite. Un clic pendant un traitement est refusé par l'app, en français ;
+  - `ready` repasse à faux une fois la fenêtre de Sparkle vue (installée, ignorée, « plus tard »).
+  Le réglage (recherche automatique, recherche immédiate, version) est dans Avancé.
 - **Le journal technique du service** s'ouvre depuis Avancé, aussi hors mode développeur (demande de l'utilisateur ; précise 0034).
 - **Un réglage, une ligne** : ce qu'il est à gauche, sa valeur et ce qui la change à droite. La conservation et le préavis valent dès qu'on quitte la ligne, l'onglet ou la page, sans « Enregistrer » : une écriture par décision, car chacune annonce de nouveau les purges proches (notification macOS). « Bientôt supprimés » a toujours sa ligne (« Aucun »). Le dossier d'export se dit par son nom.
 - **Hors mode développeur**, aucun chemin, nom brut de modèle ni version de composant :
@@ -23,7 +28,7 @@ L'utilisateur, le 2026-10-20 : « l'app est pas hyper claire, notamment les para
 - La provenance et les détails restent accessibles en mode développeur (P7) ; rien n'est retiré du disque ni du service.
 - Lire un nom d'Ollama est une heuristique : un nom inattendu reste lisible, au pire tel quel.
 - Le message de `prompting/ollama.py` (« Réglages > Rédaction ») reste juste. Les autres conversations qui citent l'onglet « Données » doivent dire « Avancé » ; « Transcription » ne change pas de nom.
-- « Mettre à jour » demande à l'app du Dock de donner `ready` et l'évènement : sans eux, le bouton n'apparaît jamais (relais à Distribution).
+- « Mettre à jour » se vérifie sur une pré-version : recherche automatique, bouton sans fenêtre ; clic, fenêtre de Sparkle ; « Plus tard », bouton retiré ; clic pendant un enregistrement, refus.
 - Le reste de l'étape 13 se revoit par parcours complets, plus écran par écran (demande de l'utilisateur).
 
 ## Alternatives écartées

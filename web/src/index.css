@@ -3175,6 +3175,22 @@ a.cl-iconbtn {
   color: var(--color-text-primary);
 }
 
+/* The column's button, with a dot while it is closed and a version waits (ADR 0051). */
+.cl-topbar__toggle {
+  position: relative;
+  display: inline-flex;
+}
+
+.cl-topbar__dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
 /* « Mettre à jour »: a link like the others, in the accent, only while a version waits. */
 .cl-sidebar__update {
   border: 0;

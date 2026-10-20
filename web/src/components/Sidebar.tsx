@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import {
@@ -12,7 +12,7 @@ import {
   Settings,
 } from "lucide-react";
 import { api, type Session } from "../api.ts";
-import { UPDATES_CHANGED, appUpdates } from "../appBridge.ts";
+import { appUpdates } from "../appBridge.ts";
 import {
   sessionDot,
   sessionHref,
@@ -44,6 +44,7 @@ export function Sidebar({
   archived,
   recordingId,
   stepsLeft = 0,
+  updateReady = false,
   current,
   onNewSession,
   onNewSpace,
@@ -56,6 +57,8 @@ export function Sidebar({
   recordingId: string | null;
   /** Steps an update asks on this Mac, not dismissed (ADR 0049): a dot on « Réglages ». */
   stepsLeft?: number;
+  /** A new version waits for a click (ADR 0051): « Mettre à jour » at the bottom. */
+  updateReady?: boolean;
   /** What the main pane shows: a session, or a space's settings. */
   current: { sessionId: string | null; spaceId: number | null; page: string };
   onNewSession: (spaceId: number, projectId: number | null) => void;
@@ -344,7 +347,7 @@ export function Sidebar({
             />
           )}
         </a>
-        <UpdateLink />
+        {updateReady && <UpdateLink />}
       </div>
     </nav>
   );
@@ -622,16 +625,8 @@ function InlineName({
 }
 
 /** « Mettre à jour », at the bottom of the column, only while a new version waits for a click
- *  (ADR 0051): the app's own window then shows it, with its button to install. Nothing in
- *  the development app or a browser, which look for none. */
+ *  (ADR 0051): the app's own window then shows it, with its button to install. */
 function UpdateLink() {
-  const [ready, setReady] = useState(() => appUpdates()?.state.ready ?? false);
-  useEffect(() => {
-    const read = () => setReady(appUpdates()?.state.ready ?? false);
-    window.addEventListener(UPDATES_CHANGED, read);
-    return () => window.removeEventListener(UPDATES_CHANGED, read);
-  }, []);
-  if (!ready) return null;
   return (
     <button
       type="button"

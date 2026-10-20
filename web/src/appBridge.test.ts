@@ -45,8 +45,12 @@ test("the page asks the app; it decides nothing itself", () => {
   const updates = appUpdates(app({ automatic: false, lastCheck: null }));
   updates?.setAutomatic(true);
   updates?.checkNow();
+  updates?.announceReminder(true);
+  updates?.announceReminder(false);
   assert.deepEqual(sent, [
     { action: "mises-a-jour-automatiques", value: true },
     { action: "rechercher-mises-a-jour" },
+    { action: "rappel-mises-a-jour", value: true },
+    { action: "rappel-mises-a-jour", value: false },
   ]);
 });

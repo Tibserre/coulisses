@@ -14,6 +14,7 @@ import { NewSessionDialog, type Way } from "./components/NewSessionDialog.tsx";
 import { UpdateNoticesDialog, useUpdateNotices } from "./components/UpdateNotices.tsx";
 import { SearchBox } from "./components/SearchBox.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+import { useUpdateReady } from "./appBridge.ts";
 import { buildTree, onLibraryChanged, parseRoute, rememberedSpace, sessionHref, startSpace, type Route } from "./library.ts";
 import { ActionsPage } from "./pages/ActionsPage.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
@@ -103,6 +104,10 @@ function Shell({ route }: { route: Route }) {
   // What an update (or the first launch) asks on this Mac (ADR 0049): a window at launch,
   // a dot on « Réglages » while one not kept for good is left.
   const updates = useUpdateNotices(route.page === "recording");
+  // A new version waiting for a click (ADR 0051): « Mettre à jour » in the column, a dot on
+  // its button while it is closed; not offered during a recording, nor before the service
+  // has said whether one runs (nothing shown then hidden).
+  const updateReady = useUpdateReady() && info !== null && !recording?.session_id;
   const closeUpdates = useCallback(() => updates.setOpen(false), [updates.setOpen]);
   const [newSpace, setNewSpace] = useState(false);
 
@@ -198,8 +203,16 @@ function Shell({ route }: { route: Route }) {
     >
       <header className="cl-topbar">
         <IconButton
-          label={sidebar ? "Masquer la colonne (⌘\\)" : "Afficher la colonne (⌘\\)"}
-          icon={<PanelLeft size={18} strokeWidth={1.75} />}
+          label={
+            (sidebar ? "Masquer la colonne (⌘\\)" : "Afficher la colonne (⌘\\)") +
+            (!sidebar && updateReady ? " · une mise à jour attend" : "")
+          }
+          icon={
+            <span className="cl-topbar__toggle">
+              <PanelLeft size={18} strokeWidth={1.75} />
+              {!sidebar && updateReady && <span className="cl-topbar__dot" aria-hidden />}
+            </span>
+          }
           variant="ghost"
           onClick={toggleSidebar}
         />
@@ -223,6 +236,7 @@ function Shell({ route }: { route: Route }) {
             archived={tree.filter((n) => n.space.archived)}
             recordingId={recording?.session_id ?? null}
             stepsLeft={updates.notices.length}
+            updateReady={updateReady}
             current={{
               sessionId: route.page === "session" ? route.id : route.page === "recording" ? (recording?.session_id ?? null) : null,
               spaceId: route.page === "space" ? route.id : null,
