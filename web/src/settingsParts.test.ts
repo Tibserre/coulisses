@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { folderName, partOf } from "./settingsParts.ts";
 
 test("the tab asked opens, else the first", () => {
-  assert.equal(partOf("historique"), "historique");
+  assert.equal(partOf("transcription"), "transcription");
   assert.equal(partOf(null), "seances");
   assert.equal(partOf("inconnu"), "seances");
   assert.equal(partOf("toString"), "seances");
@@ -12,9 +12,11 @@ test("the tab asked opens, else the first", () => {
 
 test("the former tabs lead to the new ones", () => {
   assert.equal(partOf("general"), "seances");
-  assert.equal(partOf("modeles"), "mac");
-  assert.equal(partOf("donnees"), "mac");
-  assert.equal(partOf("avance"), "mac");
+  assert.equal(partOf("historique"), "seances");
+  assert.equal(partOf("modeles"), "transcription");
+  assert.equal(partOf("mac"), "transcription");
+  assert.equal(partOf("donnees"), "avance");
+  assert.equal(partOf("avance"), "avance");
 });
 
 test("a folder is said by its own name", () => {

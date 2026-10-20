@@ -1,20 +1,21 @@
 /** The tabs of the Settings (ADR 0051), sorted by what one comes to do. */
-export type Part = "seances" | "redaction" | "mac" | "historique";
+export type Part = "seances" | "redaction" | "transcription" | "avance";
 export const PARTS: [Part, string][] = [
   ["seances", "Séances"],
   ["redaction", "Rédaction"],
-  ["mac", "Ce Mac"],
-  ["historique", "Historique"],
+  ["transcription", "Transcription"],
+  ["avance", "Avancé"],
 ];
-/** The tabs before ADR 0051, still in links and in older messages. */
+/** Tabs of earlier versions, still in links and in older messages. */
 const FORMER: Record<string, Part> = {
   general: "seances",
-  modeles: "mac",
-  donnees: "mac",
-  avance: "mac",
+  historique: "seances",
+  modeles: "transcription",
+  mac: "transcription",
+  donnees: "avance",
 };
 
-/** The tab asked in the address (« #/reglages?onglet=mac »), else the first. */
+/** The tab asked in the address (« #/reglages?onglet=avance »), else the first. */
 export function partOf(asked: string | null): Part {
   if (asked && Object.hasOwn(FORMER, asked)) return FORMER[asked];
   return PARTS.some(([key]) => key === asked) ? (asked as Part) : "seances";

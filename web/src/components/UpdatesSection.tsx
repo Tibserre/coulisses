@@ -6,7 +6,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { appUpdates } from "../appBridge.ts";
 import { formatDateTime } from "../format.ts";
 
-/** Settings, « Ce Mac »: the published app's updates (ADR 0040, spec §7.12). Sparkle in the
+/** Settings, « Avancé »: the published app's updates (ADR 0040, spec §7.12). Sparkle in the
  *  app looks for them, after consent or on demand; nothing installs without a click. The
  *  version is a quiet line (ADR 0051), said in the development app and the browser too, which
  *  look for none. */

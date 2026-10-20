@@ -1,6 +1,6 @@
 # 0034 — Coulisses, une app dans le Dock avec sa propre fenêtre (la PWA est abandonnée)
 
-Statut : Acceptée (2026-10-09, choix de l'utilisateur ; lancement par `uv run`, signature ad hoc, app sans réseau et empaquetage écarté : remplacés par 0040). Remplace la PWA prévue par les ADR 0002 et 0007. Tranche la question Q3 : l'app s'appelle **Coulisses**.
+Statut : Acceptée (2026-10-09, choix de l'utilisateur ; lancement par `uv run`, signature ad hoc, app sans réseau et empaquetage écarté : remplacés par 0040). Remplace la PWA prévue par les ADR 0002 et 0007. Tranche la question Q3 : l'app s'appelle **Coulisses**. Journal du service ouvert aussi hors mode développeur : précisé par 0051.
 
 ## Contexte
 La spec (§7.12) prévoit une icône dans le Dock qui démarre le service et ouvre l'interface, et que rien ne tourne quand l'app n'est pas utilisée. Les ADR 0002 et 0007 prévoyaient une PWA. Mais une PWA est une app du navigateur :

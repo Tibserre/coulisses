@@ -1,9 +1,10 @@
-import { useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import {
   ChevronDown,
   ChevronRight,
+  CircleArrowUp,
   Folder,
   House,
   ListChecks,
@@ -11,6 +12,7 @@ import {
   Settings,
 } from "lucide-react";
 import { api, type Session } from "../api.ts";
+import { UPDATES_CHANGED, appUpdates } from "../appBridge.ts";
 import {
   sessionDot,
   sessionHref,
@@ -342,6 +344,7 @@ export function Sidebar({
             />
           )}
         </a>
+        <UpdateLink />
       </div>
     </nav>
   );
@@ -615,5 +618,27 @@ function InlineName({
         else if (e.key === "Escape") finish(null);
       }}
     />
+  );
+}
+
+/** « Mettre à jour », at the bottom of the column, only while a new version waits for a click
+ *  (ADR 0051): the app's own window then shows it, with its button to install. Nothing in
+ *  the development app or a browser, which look for none. */
+function UpdateLink() {
+  const [ready, setReady] = useState(() => appUpdates()?.state.ready ?? false);
+  useEffect(() => {
+    const read = () => setReady(appUpdates()?.state.ready ?? false);
+    window.addEventListener(UPDATES_CHANGED, read);
+    return () => window.removeEventListener(UPDATES_CHANGED, read);
+  }, []);
+  if (!ready) return null;
+  return (
+    <button
+      type="button"
+      className="cl-sidebar__link cl-sidebar__update"
+      onClick={() => appUpdates()?.checkNow()}
+    >
+      <CircleArrowUp size={16} strokeWidth={1.75} aria-hidden /> Mettre à jour
+    </button>
   );
 }

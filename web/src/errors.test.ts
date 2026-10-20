@@ -51,7 +51,7 @@ test("the details of a code are woven into its message", () => {
     error_details: { model: "qwen3-asr-1.7b" },
   });
   // Said by what is missing, never by the model's name (ADR 0051), and where to get it.
-  assert.match(missing!, /Téléchargez-le dans Réglages, onglet Ce Mac/);
+  assert.match(missing!, /Téléchargez-le dans Réglages, onglet Transcription/);
   assert.doesNotMatch(missing!, /qwen/);
 });
 

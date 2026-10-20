@@ -2607,9 +2607,15 @@ a.cl-iconbtn {
   flex-wrap: wrap;
 }
 
-/* The dot on « Ce Mac » while an update asks something (ADR 0049). */
+/* The dot on « Transcription » while an update asks something (ADR 0049). */
 .cl-settings__dot {
   display: inline-block;
+}
+
+/* What went, floating under « Déjà supprimés »: long, so it scrolls in its own place. */
+.cl-deleted {
+  max-height: min(60vh, 28rem);
+  overflow-y: auto;
 }
 
 
@@ -3167,6 +3173,20 @@ a.cl-iconbtn {
 .cl-sidebar__link[aria-current="page"] {
   background: var(--color-background-muted);
   color: var(--color-text-primary);
+}
+
+/* « Mettre à jour »: a link like the others, in the accent, only while a version waits. */
+.cl-sidebar__update {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.cl-sidebar__update:hover {
+  color: var(--color-accent);
 }
 
 .cl-sidebar__bottom {
