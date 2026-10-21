@@ -65,7 +65,7 @@ def _live_edits(view: corrections.CorrectedView | None) -> tuple[str | None, lis
 
 
 def list_generations(data: DataDir, session_id: str) -> Generations:
-    view = corrections.build_view(data, session_id)
+    view = corrections.build_view(data, session_id, recognise=False)
     source, live = _live_edits(view)
     conn = connect(data)
     try:
@@ -204,7 +204,7 @@ def export_markdown(
             lines += [f"## {chosen.action_name}", "", inert_markdown(chosen.output.strip()), ""]
             written = chosen.action_name
     if transcript:
-        view = corrections.build_view(data, session_id)
+        view = corrections.build_view(data, session_id, recognise=False)
         if view is not None:
             lines += ["## Transcription", ""]
             for line in assembly.transcript_lines(view):
@@ -252,7 +252,7 @@ class PhasesStatus(BaseModel):
 
 
 def phases_status(data: DataDir, session_id: str) -> PhasesStatus:
-    view = corrections.build_view(data, session_id)
+    view = corrections.build_view(data, session_id, recognise=False)
     conn = connect(data)
     try:
         waiting = [

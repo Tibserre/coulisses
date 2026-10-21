@@ -719,6 +719,35 @@ button.cl-time {
   font-size: var(--font-size-sm);
 }
 
+.cl-toname__guess {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: 0 var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-toname__who {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.cl-toname__who:hover {
+  text-decoration: underline;
+}
+
+.cl-toname__problem {
+  margin: 0 0 var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 .cl-toname__quote {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1372,6 +1401,22 @@ button.cl-name:hover {
 
 .cl-nameedit__item[aria-selected="true"] {
   background: var(--color-background-muted);
+}
+
+/* The person whose voice it seems to be, first, set apart by a hairline (ADR 0057). */
+.cl-nameedit__item[data-recognised] {
+  position: relative;
+  margin-bottom: 7px;
+}
+
+.cl-nameedit__item[data-recognised]::after {
+  content: "";
+  position: absolute;
+  left: var(--spacing-2);
+  right: var(--spacing-2);
+  bottom: -4px;
+  height: 1px;
+  background: var(--color-border);
 }
 
 .cl-nameedit__label {

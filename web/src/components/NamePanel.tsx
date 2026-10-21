@@ -55,11 +55,17 @@ export function NameEditor({
 
   const typedQuery = view === "character" ? "" : query;
   const choices = nameChoices(view, speaker, people, voices, typedQuery);
-  // Each view starts empty and typed into; « Joué par » starts on who plays it now.
+  // Each view starts empty and typed into; « Joué par » starts on who plays it now, the
+  // first view on the person whose voice it seems to be (Enter confirms, ADR 0057).
   useEffect(() => {
     setQuery("");
     field.current?.focus();
-    const now = view === "character" ? choices.findIndex((c) => c.kind === "person" && c.person.id === speaker.person_id) : -1;
+    const now =
+      view === "character"
+        ? choices.findIndex((c) => c.kind === "person" && c.person.id === speaker.person_id)
+        : view === "who" && speaker.proposal
+          ? 0
+          : -1;
     setActive(Math.max(0, now));
     setMoved(now >= 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on each view only
@@ -113,7 +119,9 @@ export function NameEditor({
             : ""
           : p.id === speaker.person_id && !speaker.character
             ? "actuel"
-            : p.kind === "guest"
+            : view === "who" && p.id === speaker.proposal?.person_id
+              ? "voix reconnue"
+              : p.kind === "guest"
               ? "invité"
               : (p.role ?? "");
       return (
@@ -228,6 +236,9 @@ export function NameEditor({
                   role="option"
                   aria-selected={i === at}
                   className="cl-nameedit__item"
+                  data-recognised={
+                    (view === "who" && c.kind === "person" && c.person.id === speaker.proposal?.person_id) || undefined
+                  }
                   onPointerEnter={() => setActive(i)}
                   onClick={() => run(c)}
                 >

@@ -269,10 +269,12 @@ def test_naming_a_voice_after_a_person_who_has_one_merges_them(
     session_id = processed_session(client, data, recording)
     run_id = client.get(f"/api/seances/{session_id}/transcript").json()["run_id"]
 
-    def view_with_three_voices(data: DataDir, session_id: str) -> corrections.CorrectedView:
+    def view_with_three_voices(
+        data: DataDir, session_id: str, **_: object
+    ) -> corrections.CorrectedView:
         conn = connect(data)
         try:
-            journal = corrections._journal(conn, session_id)
+            journal = corrections.journal_of(conn, session_id)
             people = {p.id: p for p in corrections._people(conn, 1)}
         finally:
             conn.close()

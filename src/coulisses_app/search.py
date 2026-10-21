@@ -80,7 +80,7 @@ def _entries(
     row = conn.execute("SELECT title FROM session WHERE id = ?", (session_id,)).fetchone()
     if row and row["title"]:
         found.append(("title", "", None, row["title"]))
-    view = corrections.build_view(data, session_id)
+    view = corrections.build_view(data, session_id, recognise=False)
     if view is not None:
         found.extend(
             ("turn", str(t.index), t.start, " ".join(w.text for w in t.words))

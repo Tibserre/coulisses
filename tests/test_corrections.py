@@ -7,11 +7,11 @@ from coulisses.api import AttributedTranscript, AttributedWord, Turn, Untranscri
 from coulisses_app.corrections import (
     AssignSpeaker,
     EditText,
+    JournalEntry,
     MergeSpeakers,
     ReassignTurns,
     Word,
     _apply_text,
-    _Journal,
     _replay,
 )
 from coulisses_app.spaces import Person
@@ -58,11 +58,11 @@ PEOPLE = {1: MARIE}
 
 def journal(
     *requests: object, reverted: tuple[int, ...] = (), run: str = "attribute-a"
-) -> list[_Journal]:
-    entries: list[_Journal] = []
+) -> list[JournalEntry]:
+    entries: list[JournalEntry] = []
     for i, request in enumerate(requests, start=1):
         entries.append(
-            _Journal(
+            JournalEntry(
                 id=i,
                 run_id=run,
                 kind=request.kind,  # type: ignore[attr-defined]
@@ -73,7 +73,9 @@ def journal(
         )
     for n, target in enumerate(reverted, start=len(entries) + 1):
         entries.append(
-            _Journal(id=n, run_id=run, kind="revert", payload="{}", reverts=target, created_at="x")
+            JournalEntry(
+                id=n, run_id=run, kind="revert", payload="{}", reverts=target, created_at="x"
+            )
         )
     return entries
 
