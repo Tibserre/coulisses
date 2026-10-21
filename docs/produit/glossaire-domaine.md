@@ -23,6 +23,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Micro principal | `reference_source` (captée) | Le micro choisi en premier à l'enregistrement : la source de référence, celle qui est traitée (ADR 0033). |
 | Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, par « Ajouter un micro » ; gardé, pas encore traité (ADR 0031, 0033). |
 | Audio dérivé | `derived_audio` | Audio produit par une étape (rééchantillonné, déréverbéré, mixé). Purgé avec l'original. |
+| Alerte d'enregistrement | `recording_alert` | Ce qu'un enregistrement en cours demande à l'utilisateur : personne ne parle depuis un moment, ou il dure depuis longtemps (ADR 0054). Une question, jamais un arrêt. |
+| Rappel d'enregistrement | `reminders` | Réglage : après combien de silence, et toutes les combien de temps, un enregistrement en cours le rappelle (ADR 0054). |
 | Marqueur | `marker` | Repère horodaté posé à la main : `scene`, `discussion`, `key_moment`. |
 | Note | `note` | Texte libre de l'utilisateur, horodaté (pendant) ou non (après). La note d'après séance est lue par chaque génération. |
 | Phase | `phase` | Intervalle de la séance de type `scene`, `discussion` ou `other`. Détectée puis corrigeable. Dans l'interface : « chapitre », de type « Jeu », « Discussion » ou « Autre » (ADR 0024). |

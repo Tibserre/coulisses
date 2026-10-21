@@ -27,7 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
-from coulisses_app import marks, mixing, sessions, system_audio, wav
+from coulisses_app import marks, mixing, reminders, sessions, system_audio, wav
 from coulisses_app.paths import DataDir
 from coulisses_app.spaces import SpaceError
 from coulisses_app.storage.db import connect
@@ -42,6 +42,12 @@ LOW_AFTER_S = 10.0
 CLIP_DB = -0.1
 """A peak at or above this is a saturation, shown for `CLIP_SHOWN_S`."""
 CLIP_SHOWN_S = 2.0
+SPEECH_DB = -45.0
+"""At or above this level (RMS, dBFS) for `SPEECH_MIN_S`, someone is taken to be speaking:
+what a long silence is measured from (ADR 0054). Above a quiet room, below a voice; to be
+adjusted with use."""
+SPEECH_MIN_S = 0.5
+"""A cough, a door, a key, a notification's sound do not end a silence: a voice lasts."""
 SILENT_DB = -120.0
 SILENT_STREAM_S = 3.0
 """No block at all from the microphone for this long: it stopped delivering."""
@@ -95,6 +101,12 @@ class RecordingState(BaseModel):
     system: TrackState | None = None
     """The computer's sound, recorded with the microphone (ADR 0032). Silence is normal
     there: `too_quiet` only says it has been silent for a while."""
+    silent_for_s: float = 0.0
+    """Recorded time since a voice was last heard, at the microphone or in the computer's
+    sound (pauses left out)."""
+    alert: reminders.RecordingAlert | None = None
+    """What to ask the user now (a long silence, a long recording), shown once by the app
+    in the Dock (ADR 0054); never a stop by itself."""
 
 
 class TrackState(BaseModel):
@@ -291,6 +303,10 @@ class _Track:
     last_block_at: float = 0.0
     loudest: float = 0.0
     """The loudest sample written: a computer's sound that stayed at 0 held nothing."""
+    voice_at_s: float = 0.0
+    """Recorded time of the last voice heard (`SPEECH_DB`, `SPEECH_MIN_S`)."""
+    loud_for_s: float = 0.0
+    """How long the sound has stayed at `SPEECH_DB` or above, up to now."""
 
 
 @dataclass
@@ -385,6 +401,9 @@ class Recorder:
         self._closing = False
         """A recording being stopped: its streams are still open, the list is not re-read."""
         self._current: _Recording | None = None
+        self.reminders = reminders.Reminders()
+        """After how long a recording reminds the user; read at each start, and set again
+        when the Réglages change."""
 
     # -- the recording --------------------------------------------------------------------
 
@@ -638,6 +657,12 @@ class Recorder:
             track.loudest = max(track.loudest, peak)
             try:
                 track.writer.write(block)
+                if track.levels.rms_db >= SPEECH_DB:
+                    track.loud_for_s += len(block) / SAMPLE_RATE
+                    if track.loud_for_s >= SPEECH_MIN_S:
+                        track.voice_at_s = track.writer.frames / SAMPLE_RATE
+                else:
+                    track.loud_for_s = 0.0
             except wav.WavFullError as exc:
                 track.error = (
                     f"L'enregistrement est arrêté : {exc}."
@@ -686,10 +711,21 @@ class Recorder:
                 error=error2,
             )
 
+        elapsed = main.writer.frames / SAMPLE_RATE
+        heard = [main] + [t for t in recording.tracks if t.source_id == sessions.SYSTEM_SOURCE_ID]
+        voice_at = min(elapsed, max(t.voice_at_s for t in heard))
         return RecordingState(
             session_id=recording.session_id,
             state="paused" if paused else "recording",
-            elapsed_s=main.writer.frames / SAMPLE_RATE,
+            elapsed_s=elapsed,
+            silent_for_s=elapsed - voice_at,
+            alert=reminders.alert_of(
+                elapsed_s=elapsed,
+                silence_since_s=voice_at,
+                paused=paused,
+                reminders=self.reminders,
+                error=error,
+            ),
             device=main.device,
             channels=main.channels,
             levels=main.levels,

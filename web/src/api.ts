@@ -363,6 +363,23 @@ export interface RecordingState {
   /** The computer's sound, recorded with the microphone (a meeting online or hybrid).
    *  Silence is normal there: `too_quiet` only says it has been silent for a while. */
   system: TrackState | null;
+  /** Recorded time since a voice was last heard (pauses left out). */
+  silent_for_s: number;
+  /** What to ask now (a long silence, a long recording), shown once by the app in the
+   *  Dock (ADR 0054); never a stop by itself. */
+  alert: RecordingAlert | null;
+}
+
+export interface RecordingAlert {
+  key: string;
+  title: string;
+  text: string;
+}
+
+/** After how long a recording reminds the user (ADR 0054), in minutes. */
+export interface Reminders {
+  silence_min: number;
+  duration_min: number;
 }
 
 export interface TrackState {
@@ -856,6 +873,9 @@ export const api = {
   processSession: (id: string) => send<Session>("POST", `${sessionPath(id)}/traiter`),
   versions: (id: string) => getJson<Versions>(`${sessionPath(id)}/versions`),
   retention: () => getJson<RetentionInfo>("/api/conservation"),
+  reminders: () => getJson<Reminders>("/api/reglages/rappels"),
+  setReminders: (reminders: Reminders) =>
+    send<Reminders>("PUT", "/api/reglages/rappels", reminders),
   folders: () => getJson<Folders>("/api/dossiers"),
   engineModels: () => getJson<ModelsView>("/api/moteur/modeles"),
   modelActions: () => getJson<ModelAction[]>("/api/moteur/telechargements"),

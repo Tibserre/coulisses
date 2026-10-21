@@ -312,3 +312,15 @@ def test_dismissed_steps_are_kept_and_never_forgotten(client: TestClient) -> Non
     assert again.json() == ["supprimer:ancien", "x", "installer:torch"]
     assert client.get("/api/gestes-ecartes").json() == again.json()
     assert client.post("/api/gestes-ecartes", json={"gestes": [""]}).status_code == 422
+
+
+def test_the_recording_reminders_are_read_and_changed_through_usual_values(
+    client: TestClient,
+) -> None:
+    assert client.get("/api/reglages/rappels").json() == {"silence_min": 5, "duration_min": 90}
+    changed = client.put("/api/reglages/rappels", json={"silence_min": 10, "duration_min": 60})
+    assert changed.status_code == 200
+    assert client.get("/api/reglages/rappels").json() == {"silence_min": 10, "duration_min": 60}
+    refused = client.put("/api/reglages/rappels", json={"silence_min": 7, "duration_min": 60})
+    assert refused.status_code == 422
+    assert "silence" in refused.json()["detail"]
