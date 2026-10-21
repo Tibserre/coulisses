@@ -598,6 +598,17 @@ export interface Speaker {
   color_slot: number | null;
   seconds: number;
   turns: number;
+  /** Unnamed, in a space that recognises voices: whose voice it seems to be (ADR 0057).
+   *  Only a proposal: naming the voice confirms it. */
+  proposal?: VoiceProposal | null;
+}
+
+export interface VoiceProposal {
+  person_id: number;
+  name: string;
+  color_slot: number;
+  /** Cosine distance to the person's voice profile: developer mode only. */
+  distance: number;
 }
 
 export interface EditInfo {
@@ -636,6 +647,8 @@ export interface CorrectedView {
   timed_notes: TimedNote[];
   /** Detected cuts a marker replaced, in words (developer mode). */
   phases_by_markers: string[];
+  /** Why some voices could not be compared from one session to the next (P8). */
+  voices_problem?: string | null;
 }
 
 export type EditRequest =
@@ -650,7 +663,8 @@ export type EditRequest =
   | { kind: "reassign_turns"; turns: number[]; target?: string | null }
   | { kind: "edit_text"; turn: number; text: string }
   | { kind: "set_phase"; turn: number; phase_kind?: PhaseKind | null; title?: string | null }
-  | { kind: "remove_phase"; turn: number };
+  | { kind: "remove_phase"; turn: number }
+  | { kind: "reject_voice_match"; speaker: string; person_id: number };
 
 export type Provenance = Record<string, unknown> & {
   run_id: string;

@@ -47,6 +47,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Rattachement | `speaker_assignment` | Lien d'un locuteur vers une personne, ou vers un personnage joué par une personne. |
 | Personnage | `character` | Rôle joué pendant une scène. Un locuteur peut être « personnage joué par Marie ». |
 | Empreinte vocale | `speaker_embedding` | Vecteur caractérisant la voix d'un locuteur. Conservée après purge. |
+| Profil vocal | `voice_profile` | La voix d'une personne de l'espace, faite des empreintes des voix nommées d'après elle. Recalculé à chaque fois, jamais stocké (ADR 0057). |
+| Voix reconnue | `voice_proposal` | Proposition « C'est Marie ? » pour une voix sans nom proche du profil vocal d'une personne. Jamais appliquée sans l'utilisateur ; la refuser est une correction (`reject_voice_match`). |
 | Transcription (sortie) | `transcript` | Sortie de `transcribe` ou `align` : les mots d'une séance, horodatés si mesurés. |
 | Diarisation (sortie) | `diarization` | Sortie de `diarize` : les segments de locuteurs et la liste des locuteurs. |
 | Mot | `word` | Unité du transcript : texte, début et fin (mesurés, ou absents avant alignement), confiance de la transcription (`asr_confidence`), locuteur. |

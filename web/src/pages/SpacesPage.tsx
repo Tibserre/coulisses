@@ -170,7 +170,7 @@ function SpaceDetail({
         <Heading level={3}>Voix</Heading>
         <Switch
           label="Reconnaître les voix d'une séance à l'autre"
-          description="Désactivé, aucune signature vocale n'est créée : on nomme les voix à chaque séance. Activé, l'application pourra plus tard reconnaître les personnes de cet espace."
+          description="Activé, Coulisses reconnaît les voix déjà nommées et propose leur nom (« C'est Marie ? ») : c'est toujours vous qui confirmez. Désactivé, les voix ne sont jamais comparées d'une séance à l'autre et on les nomme à chaque séance."
           value={space.voice_recognition}
           onChange={(on) => void attempt(() => api.updateSpace(space.id, { voice_recognition: on }))}
         />

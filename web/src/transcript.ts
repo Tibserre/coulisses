@@ -315,8 +315,11 @@ export function nameChoices(
     return voices
       .filter((v) => v.label !== null && v.label !== speaker.label && (!q || v.name.toLowerCase().includes(q)))
       .map((voice) => ({ kind: "voice", voice }));
+  // The person whose voice it seems to be comes first (ADR 0057).
+  const proposed = speaker.proposal?.person_id;
   const matches: NameChoice[] = present
     .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .sort((a, b) => Number(b.id === proposed) - Number(a.id === proposed))
     .map((person) => ({ kind: "person", person }));
   if (!q || present.some((p) => p.name.toLowerCase() === q)) return matches;
   return [...matches, { kind: "guest", name }, { kind: "free", name }];

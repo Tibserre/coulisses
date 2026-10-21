@@ -33,6 +33,7 @@ from coulisses_app.corrections import (
     EditText,
     MergeSpeakers,
     ReassignTurns,
+    RejectVoiceMatch,
     RemovePhase,
     SetPhase,
 )
@@ -226,6 +227,19 @@ def plan(
                         person_id=request.person_id,
                     )
                 )
+            case RejectVoiceMatch():
+                new, why = new_voice(request.speaker)
+                if new is None:
+                    refused(why)
+                    continue
+                results.append(
+                    Carried(
+                        edit_id=edit_id,
+                        description=what,
+                        applied=True,
+                        copy_request=request.model_copy(update={"speaker": new}),
+                    )
+                )
             case MergeSpeakers():
                 (source_new, why_source), (target_new, why_target) = (
                     new_voice(request.source),
@@ -362,7 +376,7 @@ def carry(
         "SELECT 1 FROM edit_carryover WHERE target_run_id = ? LIMIT 1", (target_run,)
     ).fetchone():
         return []
-    view = corrections.build_view(data, session_id, run_id=source_run)
+    view = corrections.build_view(data, session_id, run_id=source_run, recognise=False)
     if view is None:
         return []
     in_force = {e.id for e in view.edits if not e.reverted}

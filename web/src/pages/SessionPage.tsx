@@ -670,7 +670,10 @@ export function SessionPage({
                       setFocus(label);
                       setNamingTurn(turn);
                     }}
+                    onCorrect={correct}
                     onPoint={setPointed}
+                    dev={dev}
+                    problem={view.voices_problem}
                   />
                   <Participants
                     model={model}

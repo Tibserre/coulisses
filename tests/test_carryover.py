@@ -11,6 +11,7 @@ from coulisses_app.corrections import (
     EditText,
     MergeSpeakers,
     ReassignTurns,
+    RejectVoiceMatch,
     RemovePhase,
     SetPhase,
 )
@@ -224,3 +225,10 @@ def test_lines_found_only_in_part_are_carried_and_said_to_be() -> None:
         "reportée en partie : 1 réplique sur 2 retrouvée dans la nouvelle version "
         "(manquent celles de 0:06)"
     )
+
+
+def test_no_to_a_recognised_voice_goes_to_the_new_voice_holding_its_time() -> None:
+    [result] = carry(REVOICED, RejectVoiceMatch(speaker="A", person_id=1))
+    assert result.applied
+    assert result.copy_request == RejectVoiceMatch(speaker="X", person_id=1)
+    assert result.person_id is None  # a « no » attaches nobody to the voice
