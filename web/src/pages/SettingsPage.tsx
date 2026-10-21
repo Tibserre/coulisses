@@ -13,6 +13,7 @@ import {
   type AppInfo,
   type Folders,
   type PurgeAnnouncement,
+  type Reminders,
   type RetentionInfo,
 } from "../api.ts";
 import { DayStepper } from "../components/DayStepper.tsx";
@@ -20,6 +21,7 @@ import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
 import { UpdatesSection } from "../components/UpdatesSection.tsx";
 import { WritingModels } from "../components/WritingModels.tsx";
+import { useAppNotifications } from "../appBridge.ts";
 import { setDevMode, useDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
@@ -310,6 +312,8 @@ export function SettingsPage({
               )}
             </section>
 
+            <RemindersSection />
+
             <ExportFolderSection />
           </>
         )}
@@ -503,14 +507,14 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
 }
 
 /** While the copies are read: the three rows kept (ADR 0052), at their height. */
-function RowsSkeleton() {
+function RowsSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <ul
       className="cl-settings__list cl-skeleton"
       aria-busy="true"
       aria-label="Lecture"
     >
-      {[0.5, 0.42, 0.56].map((w, i) => (
+      {[0.5, 0.42, 0.56].slice(0, rows).map((w, i) => (
         <li key={i}>
           <span className="cl-settings__text">
             <Skeleton width={`${w * 100}%`} height={14} radius={1} index={i} />
@@ -519,5 +523,95 @@ function RowsSkeleton() {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The usual values of the reminders, as the service keeps them (reminders.py). */
+const SILENCE_STEPS = [2, 3, 5, 10, 15, 20, 30];
+const DURATION_STEPS = [30, 45, 60, 90, 120, 180, 240];
+
+/** « 5 min », « 1 h », « 1 h 30 ». */
+function minutes(value: number): string {
+  const hours = Math.floor(value / 60);
+  const rest = value % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${String(rest).padStart(2, "0")}` : `${hours} h`;
+}
+
+/** What reminds the user that a recording runs (ADR 0054): a notification after a long
+ *  silence and at each duration reached, never a stop by itself; the menu bar says it
+ *  records all along. Changed in place: each step is kept at once (nothing is announced). */
+function RemindersSection() {
+  const [kept, setKept] = useState<Reminders | null>(null);
+  const [error, setError] = useState<{ title: string; text: string } | null>(
+    null,
+  );
+  const notifications = useAppNotifications();
+  useEffect(() => {
+    api
+      .reminders()
+      .then(setKept, (e: Error) =>
+        setError({ title: "Réglage non lu", text: e.message }),
+      );
+  }, []);
+  const change = async (next: Reminders) => {
+    const before = kept;
+    setKept(next);
+    try {
+      setKept(await api.setReminders(next));
+      setError(null);
+    } catch (e) {
+      setKept(before);
+      setError({ title: "Réglage non enregistré", text: (e as Error).message });
+    }
+  };
+  return (
+    <section className="cl-settings__section">
+      <Heading level={3}>Pendant un enregistrement</Heading>
+      <Text color="secondary">
+        Coulisses vous demande si la réunion est finie ; il n'arrête jamais
+        l'enregistrement de lui-même. La barre des menus montre qu'il
+        enregistre.
+      </Text>
+      {error && (
+        <Banner status="error" title={error.title} description={error.text} />
+      )}
+      {/* Nothing shown before it is read: never values the user did not keep. */}
+      {kept === null ? (
+        !error && <RowsSkeleton rows={2} />
+      ) : (
+        <div className="cl-settings__steppers">
+          <DayStepper
+            label="Prévenir après un silence de"
+            description="Personne ne parle, au micro comme dans le son de l'ordinateur."
+            value={kept.silence_min}
+            steps={SILENCE_STEPS}
+            say={minutes}
+            onChange={(v) => void change({ ...kept, silence_min: v })}
+          />
+          <DayStepper
+            label="Rappeler toutes les"
+            description="Que l'enregistrement tourne toujours."
+            value={kept.duration_min}
+            steps={DURATION_STEPS}
+            say={minutes}
+            onChange={(v) => void change({ ...kept, duration_min: v })}
+          />
+        </div>
+      )}
+      {notifications === "denied" && (
+        <Text type="supporting">
+          macOS bloque les notifications de Coulisses : autorisez-les dans
+          Réglages Système, Notifications. La barre des menus rappelle quand
+          même l'enregistrement.
+        </Text>
+      )}
+      {notifications === "unknown" && (
+        <Text type="supporting">
+          macOS demandera d'autoriser les notifications au premier
+          enregistrement.
+        </Text>
+      )}
+    </section>
   );
 }

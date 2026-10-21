@@ -517,3 +517,24 @@ def test_stopping_waits_for_every_block_the_program_wrote(tmp_path: Path) -> Non
     stream.start()
     stream.stop()
     assert sum(got) == 400 * 512
+
+
+def test_a_voice_in_the_computers_sound_ends_a_silence_and_a_pause_does_not_count(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    # Online, the user listens: the others are heard in the computer's sound (ADR 0054).
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    start_online(rec)
+    quiet = np.full((48_000, 1), 0.0005, np.float32)  # about -69 dBFS
+    tap.push(both(quiet, tone(1.0, 0.1)))  # a remote voice, about -23 dBFS
+    tap.push(both(np.repeat(quiet, 2, axis=0), np.repeat(quiet, 2, axis=0)))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 3.0)  # type: ignore[union-attr]
+    assert rec.state().silent_for_s == pytest.approx(2.0, abs=0.05)  # type: ignore[union-attr]
+    rec.pause()
+    tap.push(both(np.repeat(quiet, 2, axis=0), np.repeat(quiet, 2, axis=0)))  # not recorded
+    time.sleep(0.2)
+    assert rec.state().silent_for_s == pytest.approx(2.0, abs=0.05)  # type: ignore[union-attr]
+    assert rec.state().alert is None  # type: ignore[union-attr]  # paused: nothing asked
+    rec.resume()
+    rec.stop(profile="essai")

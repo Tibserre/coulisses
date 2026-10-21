@@ -47,6 +47,7 @@ from coulisses_app import (
     mixing,
     notes,
     projects,
+    reminders,
     retention,
     search,
     sessions,
@@ -764,6 +765,11 @@ def create_app(
 
     @app.post("/api/enregistrement", status_code=201)
     def start_recording(demande: RecordingRequest) -> capture.RecordingState:
+        conn = connect(data)
+        try:
+            recorder.reminders = reminders.for_recording(conn)
+        finally:
+            conn.close()
         return recorder.start(
             space_id=demande.espace,
             project_id=demande.projet,
@@ -1125,6 +1131,30 @@ def create_app(
             backups=retention.backups(data),
             problems=watcher.problems if watcher is not None else [],
         )
+
+    @app.get("/api/reglages/rappels")
+    def recording_reminders() -> reminders.Reminders:
+        conn = connect(data)
+        try:
+            return reminders.get(conn)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        finally:
+            conn.close()
+
+    @app.put("/api/reglages/rappels")
+    def set_recording_reminders(demande: reminders.Reminders) -> reminders.Reminders:
+        """After how long a recording reminds the user (ADR 0054); a recording that runs
+        follows the new values at once."""
+        conn = connect(data)
+        try:
+            reminders.put(conn, demande)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        finally:
+            conn.close()
+        recorder.reminders = demande
+        return demande
 
     @app.get("/api/conservation")
     def retention_info() -> RetentionInfo:

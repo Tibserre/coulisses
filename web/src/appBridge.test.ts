@@ -1,7 +1,7 @@
 // Run with `npm test` (Node's own test runner).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appUpdates } from "./appBridge.ts";
+import { appNotifications, appUpdates } from "./appBridge.ts";
 
 const sent: unknown[] = [];
 const app = (updates: object | undefined) => ({
@@ -53,4 +53,12 @@ test("the page asks the app; it decides nothing itself", () => {
     { action: "rappel-mises-a-jour", value: true },
     { action: "rappel-mises-a-jour", value: false },
   ]);
+});
+
+test("whether macOS lets the app notify is read, never guessed", () => {
+  assert.equal(appNotifications({}), null);
+  assert.equal(appNotifications({ coulissesApp: { notifications: "allowed" } }), "allowed");
+  assert.equal(appNotifications({ coulissesApp: { notifications: "denied" } }), "denied");
+  assert.equal(appNotifications({ coulissesApp: { notifications: "unknown" } }), "unknown");
+  assert.equal(appNotifications({ coulissesApp: { notifications: "peut-être" } }), null);
 });
