@@ -757,7 +757,7 @@ export function RecordingPage({
             </div>
             {stopLeft !== null ? (
               <>
-                <span className="cl-rec__disc" data-kind="stop" aria-hidden>
+                <span className="cl-rec__disc" aria-hidden>
                   <Square size={34} strokeWidth={1.75} />
                 </span>
                 <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">

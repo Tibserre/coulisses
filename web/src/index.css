@@ -4406,11 +4406,6 @@ button.cl-tree__more:hover {
   color: var(--color-text-primary);
 }
 
-.cl-rec__disc[data-kind="stop"] {
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-}
-
 .cl-rec__veiltitle {
   margin: 0;
   font-family: var(--font-family-heading);
