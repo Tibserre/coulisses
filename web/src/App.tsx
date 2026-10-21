@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
@@ -86,7 +86,7 @@ function readSidebar(): boolean {
   }
 }
 
-/** The application's frame (ADR 0030): the search and « Nouvelle séance » at the top, the
+/** The application's frame (ADR 0030): the search and « Nouvelle note » at the top, the
  *  spaces and their sessions in the side column, what is open in the main pane. */
 function Shell({ route }: { route: Route }) {
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -189,24 +189,75 @@ function Shell({ route }: { route: Route }) {
     route.page === "session"
       ? sessions?.find((s) => s.id === route.id)
       : undefined;
-  // Where the open session is; elsewhere, where the home page's button would record.
+  /** A recording started in one gesture (« Nouvelle note », ⌘N, « + » on a space; spec
+   *  §7.11): online or hybrid by default (the microphone and the computer's sound), the
+   *  default microphone, nobody checked yet. Where it goes, who was there, the computer's
+   *  sound: changed on the recording screen. During a recording, back to it. */
+  const [startError, setStartError] = useState<{
+    message: string;
+    where: { spaceId: number | null; projectId: number | null };
+    system: boolean;
+  } | null>(null);
+  const starting = useRef(false);
+  const startNow = useCallback(
+    async (
+      where: { spaceId: number | null; projectId: number | null },
+      system = true,
+    ) => {
+      if (recording) {
+        window.location.hash = "#/enregistrement";
+        return;
+      }
+      if (starting.current) return;
+      starting.current = true;
+      try {
+        await api.startRecording({
+          espace: where.spaceId,
+          projet: where.projectId,
+          presents: [],
+          non_nommes: null,
+          micro: null,
+          micros_en_plus: [],
+          son_ordinateur: system,
+        });
+        setStartError(null);
+        window.location.hash = "#/enregistrement";
+        void refresh();
+      } catch (e) {
+        // One started elsewhere meanwhile: that is where to go, nothing to retry.
+        const running = await api.recording().catch(() => null);
+        if (running) {
+          window.location.hash = "#/enregistrement";
+          return;
+        }
+        setStartError({ message: (e as Error).message, where, system });
+      } finally {
+        starting.current = false;
+      }
+    },
+    [recording, refresh],
+  );
+  // The space selected: the open session's (and its project), the space whose page is
+  // open, else where the home page's button would record.
   const askNew = useCallback(
     () =>
-      setAsking(
+      void startNow(
         openSession
           ? { spaceId: openSession.space_id, projectId: openSession.project_id }
-          : {
-              spaceId: startSpace(
-                spaces,
-                [...(sessions ?? [])].sort((a, b) =>
-                  b.recorded_at.localeCompare(a.recorded_at),
+          : route.page === "space"
+            ? { spaceId: route.id, projectId: null }
+            : {
+                spaceId: startSpace(
+                  spaces,
+                  [...(sessions ?? [])].sort((a, b) =>
+                    b.recorded_at.localeCompare(a.recorded_at),
+                  ),
+                  rememberedSpace(),
                 ),
-                rememberedSpace(),
-              ),
-              projectId: null,
-            },
+                projectId: null,
+              },
       ),
-    [openSession, spaces, sessions],
+    [openSession, route, spaces, sessions, startNow],
   );
 
   // ⌘N: a new session (where the open one is); ⌘\ : the side column.
@@ -271,7 +322,7 @@ function Shell({ route }: { route: Route }) {
         <Button
           variant="primary"
           size="sm"
-          label="Nouvelle séance"
+          label="Nouvelle note"
           icon={<Plus size={16} strokeWidth={1.75} />}
           onClick={askNew}
         />
@@ -295,7 +346,7 @@ function Shell({ route }: { route: Route }) {
               page: route.page,
             }}
             onNewSession={(spaceId, projectId) =>
-              setAsking({ spaceId, projectId })
+              void startNow({ spaceId, projectId })
             }
             onNewSpace={() => setNewSpace(true)}
             onChanged={refresh}
@@ -303,6 +354,26 @@ function Shell({ route }: { route: Route }) {
           />
         )}
         <div className="cl-shell__main">
+          {startError && (
+            <div className="cl-shell__notice">
+              <Banner
+                status="error"
+                title="L'enregistrement n'a pas démarré"
+                description={startError.message}
+                isDismissable
+                onDismiss={() => setStartError(null)}
+                endContent={
+                  startError.system ? (
+                    <Button
+                      size="sm"
+                      label="Le micro seul"
+                      onClick={() => void startNow(startError.where, false)}
+                    />
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
           {sideError && (
             <div className="cl-shell__notice">
               <Banner
@@ -325,7 +396,11 @@ function Shell({ route }: { route: Route }) {
             ) : route.page === "space" ? (
               <SpacePage id={route.id} onChanged={refresh} />
             ) : route.page === "recording" ? (
-              <RecordingPage />
+              <RecordingPage
+                spaces={spaces}
+                projects={projects}
+                onMoved={() => void refresh()}
+              />
             ) : route.page === "actions" ? (
               <ActionsPage selectedRef={route.ref} />
             ) : route.page === "settings" ? (
@@ -352,7 +427,9 @@ function Shell({ route }: { route: Route }) {
                 recording={recording}
                 error={error}
                 onNewSession={(spaceId, way) =>
-                  setAsking({ spaceId, projectId: null, way })
+                  way === "importer"
+                    ? setAsking({ spaceId, projectId: null, way })
+                    : void startNow({ spaceId, projectId: null })
                 }
               />
             )}

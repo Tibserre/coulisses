@@ -3556,7 +3556,7 @@ button.cl-tree__more:hover {
 
 /* -- new session, new space -- */
 
-/* « Nouvelle séance »: the choices scroll, the actions stay in view at the bottom. */
+/* « Nouvelle note » (the window): the choices scroll, the actions stay in view at the bottom. */
 .cl-newsession {
   display: flex;
   flex-direction: column;
@@ -3905,4 +3905,256 @@ button.cl-tree__more:hover {
   .cl-transcript > div {
     max-width: calc(70ch + 4.5rem + var(--spacing-3) + var(--spacing-4));
   }
+}
+
+/* ------------------------------------------------- Recording, the text at its centre --- */
+/* ADR 0056: a thin bar, where it goes and who is there, then what is marked at its time,
+   laid out like the transcript it will become. */
+
+.cl-rec {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.cl-rec__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-6);
+  background: var(--color-background-body);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-rec__now {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__now[data-paused] .cl-recording__dot {
+  background: var(--color-text-secondary);
+}
+
+.cl-rec__time {
+  font-family: var(--font-family-heading);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-rec__paused {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__meter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 7rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__system {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__spacer {
+  flex: 1;
+}
+
+.cl-rec__alerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: 0 var(--spacing-6);
+}
+
+.cl-rec__alerts:not(:empty) {
+  padding-top: var(--spacing-3);
+}
+
+.cl-rec__top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  width: 100%;
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: var(--spacing-4) var(--spacing-6) 0;
+}
+
+.cl-rec__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__said {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+/* A quiet label that opens its list: no box, a light ground under the pointer. */
+.cl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  height: 28px;
+  padding: 0 var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-chip:hover,
+.cl-chip[aria-expanded="true"] {
+  background: var(--color-border);
+}
+
+.cl-chip svg {
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  width: 100%;
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: var(--spacing-5) var(--spacing-6) var(--spacing-10);
+}
+
+.cl-rec__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__line,
+.cl-rec__annotate {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--spacing-3);
+}
+
+.cl-rec__at {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-rec__what {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  font-size: var(--text-large-size);
+  line-height: 1.6;
+}
+
+.cl-rec__line[data-kind="note"] .cl-rec__what {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.cl-rec__line[data-kind="key_moment"] .cl-rec__what,
+.cl-rec__line[data-kind="scene"] .cl-rec__what,
+.cl-rec__line[data-kind="discussion"] .cl-rec__what {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.cl-rec__line:hover .cl-marks__remove,
+.cl-rec__line .cl-marks__remove:focus-visible {
+  opacity: 1;
+}
+
+/* The line to annotate: no box (direct editing), only the caret shows where one writes. */
+.cl-rec__annotate {
+  grid-template-columns: 4.5rem 1fr;
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-rec__annotate input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-base);
+  caret-color: var(--color-accent);
+}
+
+.cl-rec__annotate input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__none {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  max-width: 36rem;
+  margin: var(--spacing-10) auto;
+  padding: 0 var(--spacing-6);
+}
+
+@media (max-width: 700px) {
+  .cl-rec__bar,
+  .cl-rec__alerts,
+  .cl-rec__top,
+  .cl-rec__flow {
+    padding-inline: var(--spacing-4);
+  }
+
+  .cl-rec__line,
+  .cl-rec__annotate {
+    grid-template-columns: 3.5rem 1fr auto;
+  }
+}
+
+/* In the thin bar: the same switches, compact, square cornered (no pill, ADR 0017). */
+.cl-rec__bar .cl-mode {
+  gap: var(--spacing-2);
+}
+
+.cl-rec__bar .cl-mode__switch,
+.cl-rec__bar .cl-moment {
+  height: 28px;
+  padding: 0 var(--spacing-2);
+  border-radius: var(--radius-element);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__bar .cl-mode__now {
+  font-size: var(--font-size-sm);
 }

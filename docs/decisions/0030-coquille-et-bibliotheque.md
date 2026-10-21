@@ -1,6 +1,6 @@
 # 0030 — Une coquille d'application : colonne des espaces et des séances, recherche, export vers un dossier
 
-Statut : Acceptée (2026-10-07, choix de l'utilisateur). Tranche la question Q7.
+Statut : Acceptée (2026-10-07, choix de l'utilisateur). Tranche la question Q7. « Nouvelle séance » en dialogue : remplacé par un geste (« Nouvelle note »), précisé par 0056.
 
 ## Contexte
 La page d'accueil était un formulaire « Nouvelle séance » suivi d'une liste plate ; ouvrir une séance faisait quitter la bibliothèque, et les espaces vivaient sur une page à part. L'utilisateur veut l'organisation d'écran d'OpenWhispr : passer d'une séance à l'autre d'un clic, avoir les espaces sous la main, en ajouter facilement, et trouver leurs paramètres dans un menu « … ». La spec demande aussi les projets, la recherche plein texte et l'état de chaque séance (§7.11). La question Q7 portait sur le rangement des comptes rendus dans Google Drive.

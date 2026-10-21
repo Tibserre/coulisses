@@ -219,6 +219,21 @@ class ModelsInfo(BaseModel):
     advice: WritingAdvice
 
 
+class SpaceMoveRequest(BaseModel):
+    espace: int
+
+
+class SpaceMoved(BaseModel):
+    session: sessions.Session
+    unchecked: list[str]
+    """The people of the old space who were checked, unchecked by the move: said."""
+
+
+class SystemSoundRequest(BaseModel):
+    coupe: bool
+    """True: the computer's sound is cut for now (silence written); false: it is back."""
+
+
 class RecordingRequest(BaseModel):
     espace: int | None = None
     projet: int | None = None
@@ -664,6 +679,13 @@ def create_app(
     ) -> corrections.CorrectedView:
         return corrections.reset_text(data, session_id, turn, version=version)
 
+    @app.put("/api/seances/{session_id}/espace")
+    def move_session(session_id: str, demande: SpaceMoveRequest) -> SpaceMoved:
+        unchecked = spaces.move_session(data, session_id, demande.espace)
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return SpaceMoved(session=session, unchecked=unchecked)
+
     @app.put("/api/seances/{session_id}/presents")
     def set_attendees(session_id: str, demande: AttendeesRequest) -> sessions.Session:
         spaces.set_attendees(data, session_id, demande.person_ids, demande.unnamed)
@@ -779,6 +801,10 @@ def create_app(
             extra_device_indexes=demande.micros_en_plus,
             system=demande.son_ordinateur,
         )
+
+    @app.post("/api/enregistrement/son-ordinateur")
+    def mute_system_sound(demande: SystemSoundRequest) -> capture.RecordingState:
+        return recorder.mute_system(demande.coupe)
 
     @app.post("/api/enregistrement/pause")
     def pause_recording() -> capture.RecordingState:

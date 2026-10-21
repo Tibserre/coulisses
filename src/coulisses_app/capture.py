@@ -121,6 +121,8 @@ class TrackState(BaseModel):
     error: str | None = None
     """It stopped (unplugged, the iPhone gone away, the disk…): the main recording goes on;
     what it recorded is kept."""
+    muted: bool = False
+    """The computer's sound, cut by the user for now: silence is written in its place."""
 
 
 class InputStream(Protocol):
@@ -277,6 +279,12 @@ class KeepAwake:
 @dataclass
 class _Flags:
     paused: bool = False
+    system_muted: bool = False
+    """The computer's sound cut by the user: silence written in its place, on the same
+    clock (its file keeps its length; times stay measured)."""
+    system_heard_unmuted: bool = False
+    """Some of the computer's sound was written without being cut: a file all silent then
+    says the permission is missing (`SYSTEM_SILENT`)."""
 
 
 Block = tuple[NDArray[np.float32], bool, bool]
@@ -494,7 +502,12 @@ class Recorder:
                         # One block, cut in two: the same instant on both files.
                         paused = flags.paused
                         blocks.put((block[:, :channels], lost, paused))
-                        heard_system.put((block[:, channels:], lost, paused))
+                        system_part = block[:, channels:]
+                        if flags.system_muted:
+                            system_part = np.zeros_like(system_part)
+                        elif not paused:
+                            flags.system_heard_unmuted = True
+                        heard_system.put((system_part, lost, paused))
 
                     stream = self._open(
                         chosen,
@@ -702,13 +715,15 @@ class Recorder:
 
         def state_of(other: _Track) -> TrackState:
             quiet2, clip2, error2 = self._alerts(other, paused)
+            muted = other.source_id == sessions.SYSTEM_SOURCE_ID and recording.flags.system_muted
             return TrackState(
                 device=other.device,
                 levels=other.levels,
-                too_quiet=quiet2,
+                too_quiet=quiet2 and not muted,
                 clipping=clip2,
                 dropouts=other.dropouts,
                 error=error2,
+                muted=muted,
             )
 
         elapsed = main.writer.frames / SAMPLE_RATE
@@ -747,6 +762,21 @@ class Recorder:
     def state(self) -> RecordingState | None:
         with self._lock:
             return self._state(self._current) if self._current else None
+
+    def mute_system(self, muted: bool) -> RecordingState:
+        """Cut the computer's sound, or bring it back, at any time (spec §7.2): silence is
+        written in its place, the microphone goes on."""
+        with self._lock:
+            recording = self._require()
+            if not any(t.source_id == sessions.SYSTEM_SOURCE_ID for t in recording.tracks):
+                raise RecordingError("Cet enregistrement ne prend pas le son de l'ordinateur.")
+            recording.flags.system_muted = muted
+            if not muted:
+                # Back: its silence is measured again from now, not from the cut.
+                for track in recording.tracks:
+                    if track.source_id == sessions.SYSTEM_SOURCE_ID:
+                        track.quiet_since = None
+            return self._state(recording)
 
     def pause(self) -> RecordingState:
         return self._set_paused(True)
@@ -871,7 +901,13 @@ class Recorder:
             (t for t in recording.tracks if t.source_id == sessions.SYSTEM_SOURCE_ID), None
         )
         if system is not None:
-            if system.writer.frames and system.loudest < mixing.SILENT_PEAK:
+            # Cut by the user all along: a silent file says nothing about the permission.
+            # Heard uncut, even a moment, and silent: the permission is likely missing.
+            if (
+                system.writer.frames
+                and system.loudest < mixing.SILENT_PEAK
+                and recording.flags.system_heard_unmuted
+            ):
                 problems.append(SYSTEM_SILENT)
             # To be heard on the session's page at once, before the processing gets to it.
             mixing.prepare_in_background(self.data, recording.session_id)

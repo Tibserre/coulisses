@@ -38,7 +38,8 @@ function remember(where: Where): void {
 const ACCEPT =
   "audio/*,video/*,.wav,.m4a,.mp3,.flac,.ogg,.opus,.aac,.aif,.aiff,.caf,.mp4,.mov,.mkv,.webm";
 
-/** « Nouvelle séance » (⌘N, or « + » on a space). First how: record now, or import a file
+/** « Nouvelle note », opened by « ou importer un fichier » (ADR 0056): import a file, or record
+ *  with everything chosen first. First how: record now, or import a file
  *  recorded elsewhere. Then where it goes (space, project) and who is there. To record:
  *  where the session is held (in the room, or online: the computer's sound too) and the
  *  microphones, as many as wanted (« Ajouter un micro »). The sound is kept as it is; the
@@ -151,7 +152,7 @@ export function NewSessionDialog({
       width={640}
       maxHeight="min(88vh, 820px)"
     >
-      <DialogHeader title="Nouvelle séance" onOpenChange={() => !busy && onClose()} />
+      <DialogHeader title="Nouvelle note" onOpenChange={() => !busy && onClose()} />
       <div
         className="cl-newsession"
         data-dragging={dragging || undefined}

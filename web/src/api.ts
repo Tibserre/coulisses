@@ -389,6 +389,8 @@ export interface TrackState {
   clipping: boolean;
   dropouts: number;
   error: string | null;
+  /** The computer's sound, cut by the user for now: silence is written in its place. */
+  muted: boolean;
 }
 
 export interface StopResult {
@@ -860,6 +862,14 @@ export const api = {
   startRecording: (request: RecordingRequest) =>
     send<RecordingState>("POST", "/api/enregistrement", request),
   pauseRecording: () => send<RecordingState>("POST", "/api/enregistrement/pause"),
+  /** Cut the computer's sound for now (true), or bring it back (false). */
+  muteSystem: (cut: boolean) =>
+    send<RecordingState>("POST", "/api/enregistrement/son-ordinateur", { coupe: cut }),
+  /** Into another space, while nothing is processed yet; its people there are unchecked. */
+  moveSession: (id: string, spaceId: number) =>
+    send<{ session: Session; unchecked: string[] }>("PUT", `${sessionPath(id)}/espace`, {
+      espace: spaceId,
+    }),
   resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
   stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
   levelsUrl: "/api/enregistrement/niveaux",

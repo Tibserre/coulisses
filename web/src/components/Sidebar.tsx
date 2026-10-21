@@ -141,7 +141,7 @@ export function Sidebar({
                 actions={
                   <>
                     <IconButton
-                      label={`Nouvelle séance dans ${node.space.name}`}
+                      label={`Nouvelle note dans ${node.space.name}`}
                       icon={<Plus size={14} strokeWidth={1.75} />}
                       variant="ghost"
                       size="sm"
@@ -208,7 +208,7 @@ export function Sidebar({
                       }}
                       menu={[
                         {
-                          label: "Nouvelle séance dans ce projet",
+                          label: "Nouvelle note dans ce projet",
                           onClick: () =>
                             onNewSession(node.space.id, p.project.id),
                         },

@@ -425,6 +425,46 @@ def set_attendees(
         conn.close()
 
 
+def move_session(data: DataDir, session_id: str, space_id: int) -> list[str]:
+    """Into another space, while nothing has been processed yet (a recording started in the
+    space selected, then corrected, spec §7.2). Its project and its people belong to the
+    old space: the project is left, the people checked are unchecked (the page says it);
+    the number not named stays. Once processed, a session stays in its space: its voices
+    are attached to that space's people (ADR 0020). Returns the names unchecked, to be
+    said."""
+    conn = connect(data)
+    try:
+        row = conn.execute("SELECT space_id FROM session WHERE id = ?", (session_id,)).fetchone()
+        if row is None:
+            raise NotFoundError("Séance introuvable.")
+        if row["space_id"] == space_id:
+            return []
+        space = get_space(conn, space_id)
+        if space.archived:
+            raise SpaceError("Cet espace est archivé : on n'y range plus de séance.")
+        with conn:
+            # Checked and done together: a processing asked meanwhile cannot slip between.
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute("SELECT 1 FROM job WHERE session_id = ?", (session_id,)).fetchone():
+                raise SpaceError("Une séance dont le traitement est demandé reste dans son espace.")
+            unchecked = [
+                r["name"]
+                for r in conn.execute(
+                    "SELECT p.name FROM attendee a JOIN person p ON p.id = a.person_id"
+                    " WHERE a.session_id = ? ORDER BY p.name",
+                    (session_id,),
+                )
+            ]
+            conn.execute("DELETE FROM attendee WHERE session_id = ?", (session_id,))
+            conn.execute(
+                "UPDATE session SET space_id = ?, project_id = NULL WHERE id = ?",
+                (space_id, session_id),
+            )
+        return unchecked
+    finally:
+        conn.close()
+
+
 def attendee_ids(conn: sqlite3.Connection, session_id: str) -> list[int]:
     return [
         r[0]

@@ -26,7 +26,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Alerte d'enregistrement | `recording_alert` | Ce qu'un enregistrement en cours demande à l'utilisateur : personne ne parle depuis un moment, ou il dure depuis longtemps (ADR 0054). Une question, jamais un arrêt. |
 | Rappel d'enregistrement | `reminders` | Réglage : après combien de silence, et toutes les combien de temps, un enregistrement en cours le rappelle (ADR 0054). |
 | Marqueur | `marker` | Repère horodaté posé à la main : `scene`, `discussion`, `key_moment`. |
-| Note | `note` | Texte libre de l'utilisateur, horodaté (pendant) ou non (après). La note d'après séance est lue par chaque génération. |
+| Annotation | `timed_note` | Texte libre de l'utilisateur, horodaté, pris pendant l'enregistrement (touche N), à l'heure de sa première lettre (ADR 0056). |
+| Note | `note` | Texte libre de l'utilisateur, écrit après la séance et rattaché à elle ; lue par chaque génération. Le bouton « Nouvelle note » commence, lui, une séance (choix de l'utilisateur, ADR 0056). |
 | Phase | `phase` | Intervalle de la séance de type `scene`, `discussion` ou `other`. Détectée puis corrigeable. Dans l'interface : « chapitre », de type « Jeu », « Discussion » ou « Autre » (ADR 0024). |
 | Étape | `stage` | Un maillon du traitement : `prepare`, `dereverb`, `transcribe`, `align`, `diarize`, `attribute`, `segment_phases`, `title`, `summarize`. |
 | Exécution | `run` | Une exécution d'une étape sur une séance, avec ses entrées, sa sortie, sa provenance, son statut. Immuable une fois terminée. |
