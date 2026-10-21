@@ -4,6 +4,13 @@ Versions de l'application Coulisses, publiées automatiquement à chaque fusion 
 à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
 Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
 
+## v0.35.0 — 2026-10-21
+
+### Nouveautés
+
+- rappelle qu'un enregistrement tourne (enregistrement)
+- montre l'enregistrement en cours dans la barre des menus, avec ses rappels (lanceur)
+
 ## v0.34.0 — 2026-10-20
 
 ### Nouveautés
