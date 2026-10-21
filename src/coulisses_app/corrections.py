@@ -41,6 +41,7 @@ class EditKind(StrEnum):
     EDIT_TEXT = "edit_text"
     SET_PHASE = "set_phase"
     REMOVE_PHASE = "remove_phase"
+    REJECT_VOICE_MATCH = "reject_voice_match"
     REVERT = "revert"
 
 
@@ -101,7 +102,24 @@ class RemovePhase(BaseModel):
     turn: int
 
 
-AnyRequest = AssignSpeaker | MergeSpeakers | ReassignTurns | EditText | SetPhase | RemovePhase
+class RejectVoiceMatch(BaseModel):
+    """« Ce n'est pas Marie » : the voice recognised as this person's is not hers. That
+    person is no longer proposed for this voice (ADR 0057)."""
+
+    kind: Literal["reject_voice_match"] = "reject_voice_match"
+    speaker: str
+    person_id: int
+
+
+AnyRequest = (
+    AssignSpeaker
+    | MergeSpeakers
+    | ReassignTurns
+    | EditText
+    | SetPhase
+    | RemovePhase
+    | RejectVoiceMatch
+)
 Request = Annotated[AnyRequest, Field(discriminator="kind")]
 _REQUEST: TypeAdapter[AnyRequest] = TypeAdapter(Request)
 
@@ -141,6 +159,18 @@ class Turn(BaseModel):
     edited: bool = False
 
 
+class VoiceProposal(BaseModel):
+    """« C'est Marie ? » : an unnamed voice close to the voice profile of a person of the
+    space (ADR 0057). Only ever proposed: the user confirms it by naming the voice (P3)."""
+
+    person_id: int
+    name: str
+    color_slot: int
+    distance: float
+    """Cosine distance to the profile (engine `match_voice`, under its threshold): shown in
+    developer mode only, never as a percentage (not a calibrated probability)."""
+
+
 class Speaker(BaseModel):
     label: str | None
     number: int | None
@@ -154,6 +184,8 @@ class Speaker(BaseModel):
     """Palette slot (the person's own, kept from one session to the next); None: unnamed."""
     seconds: float = 0.0
     turns: int = 0
+    proposal: VoiceProposal | None = None
+    """Unnamed only, in a space that recognises voices: the person whose voice it seems to be."""
 
 
 class EditInfo(BaseModel):
@@ -242,6 +274,8 @@ class CorrectedView(BaseModel):
     """Notes taken while recording, at the time their first letter was typed."""
     phases_by_markers: list[str] = []
     """Detected cuts a marker replaced, in words (shown in developer mode, ADR 0024)."""
+    voices_problem: str | None = None
+    """Why some voices could not be compared from one session to the next (P8)."""
 
 
 class CorrectionError(SpaceError):
@@ -332,7 +366,7 @@ def _numbering(transcript: AttributedTranscript) -> dict[str, int]:
     return numbers
 
 
-class _Journal(BaseModel):
+class JournalEntry(BaseModel):
     id: int
     run_id: str
     kind: str
@@ -341,9 +375,9 @@ class _Journal(BaseModel):
     created_at: str
 
 
-def _journal(conn: sqlite3.Connection, session_id: str) -> list[_Journal]:
+def journal_of(conn: sqlite3.Connection, session_id: str) -> list[JournalEntry]:
     return [
-        _Journal(
+        JournalEntry(
             id=r["id"],
             run_id=r["run_id"],
             kind=r["kind"],
@@ -356,10 +390,11 @@ def _journal(conn: sqlite3.Connection, session_id: str) -> list[_Journal]:
 
 
 def build_view(
-    data: DataDir, session_id: str, *, run_id: str | None = None
+    data: DataDir, session_id: str, *, run_id: str | None = None, recognise: bool = True
 ) -> CorrectedView | None:
     """The corrected view of the session's active « who said what » run (or of another of
-    its runs, with that run's own corrections); None before it exists."""
+    its runs, with that run's own corrections); None before it exists. `recognise`: in a
+    space that recognises voices, propose a person for each unnamed voice (ADR 0057)."""
     conn = connect(data)
     try:
         if run_id is None:
@@ -371,8 +406,9 @@ def build_view(
             "SELECT space_id FROM session WHERE id = ?", (session_id,)
         ).fetchone()
         people = {p.id: p for p in _people(conn, space_row["space_id"])}
+        recognition = recognise and spaces.get_space(conn, space_row["space_id"]).voice_recognition
         variants = _variants(conn, space_row["space_id"])
-        journal = _journal(conn, session_id)
+        journal = journal_of(conn, session_id)
         detection_run = _active_detection(conn, session_id, run_id)
         marked = marks.markers(conn, session_id)
         notes_taken = marks.timed_notes(conn, session_id)
@@ -403,6 +439,14 @@ def build_view(
         timed_notes=notes_taken,
     )
     view.carryover = carried
+    if recognition:
+        from coulisses_app import voices  # it reads the journal through this module
+
+        conn = connect(data)
+        try:
+            voices.propose(data, conn, session_id, space_row["space_id"], view, people)
+        finally:
+            conn.close()
     return view
 
 
@@ -469,7 +513,7 @@ def _variants(conn: sqlite3.Connection, space_id: int) -> dict[str, str]:
 def _replay(
     transcript: AttributedTranscript,
     run_id: str,
-    journal: list[_Journal],
+    journal: list[JournalEntry],
     people: dict[int, Person],
     variants: dict[str, str],
     *,
@@ -528,6 +572,8 @@ def _replay(
                     edited[request.turn] = True
                 case SetPhase() | RemovePhase():
                     phase_edits.append(request)
+                case RejectVoiceMatch():
+                    pass  # read by `voices`: it only changes what is proposed
         elif (
             isinstance(request, ReassignTurns)
             and request.target
@@ -838,6 +884,9 @@ def _describe(
             if not changes:
                 return f"Nouveau chapitre{at}"
             return f"Chapitre{at} : {', '.join(changes)}"
+        case RejectVoiceMatch():
+            person = people.get(request.person_id)
+            return f"{voice(request.speaker)} : pas {person.name if person else 'cette personne'}"
 
 
 # -- recording a correction --------------------------------------------------------------
@@ -856,7 +905,7 @@ def add(
     """Check a correction against the current corrected view, then record it. `version`:
     the « who said what » run the page showed when the user made it."""
     request = _REQUEST.validate_python(raw)
-    view = build_view(data, session_id)
+    view = build_view(data, session_id, recognise=False)
     conn = connect(data)
     try:
         space_id = _session_space(conn, session_id)
@@ -897,6 +946,14 @@ def add(
                     if same is not None and same.label is not None:
                         request = MergeSpeakers(source=request.speaker, target=same.label)
                         person_id = None
+            case RejectVoiceMatch():
+                if request.speaker not in labels:
+                    raise CorrectionError("Cette voix n'existe pas dans le transcript.")
+                person = spaces.get_person(conn, request.person_id)
+                if person.space_id != space_id:
+                    raise CorrectionError(
+                        f"{person.name} n'appartient pas à l'espace de cette séance."
+                    )
             case MergeSpeakers():
                 if request.source not in labels or request.target not in labels:
                     raise CorrectionError("Ces voix n'existent pas dans le transcript.")
@@ -1045,7 +1102,7 @@ def reset_text(
 ) -> CorrectedView:
     """Back to the engine's text for one line: every text correction of it still in force
     is undone (each one by an entry of its own, so it can be redone)."""
-    view = build_view(data, session_id)
+    view = build_view(data, session_id, recognise=False)
     if view is None:
         raise CorrectionError("Le transcript n'est pas encore prêt.")
     live = [e.id for e in view.edits if e.turn == turn and not e.reverted]

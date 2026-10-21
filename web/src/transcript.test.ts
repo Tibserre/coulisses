@@ -330,6 +330,23 @@ test("naming a voice offers the people matching what is typed, then a guest or a
   assert.deepEqual(nameChoices("who", voice(null, "?"), people, voices, "Lucie"), []);
 });
 
+test("the person whose voice it seems to be comes first, typed or not", async () => {
+  const { nameChoices } = await import("./transcript.ts");
+  const person = (id: number, name: string) =>
+    ({ id, space_id: 1, kind: "member", name, role: null, color_slot: id, archived: false }) as const;
+  const people = [person(1, "Elise"), person(2, "Elodie"), person(3, "Marie")];
+  const me = {
+    label: "S1",
+    name: "Locuteur 1",
+    proposal: { person_id: 2, name: "Elodie", color_slot: 2, distance: 0.1 },
+  } as unknown as Speaker;
+  const ids = (c: { kind: string; person?: { id: number } }[]) => c.map((x) => x.person?.id);
+  assert.deepEqual(ids(nameChoices("who", me, people, [me], "")), [2, 1, 3]);
+  assert.deepEqual(ids(nameChoices("who", me, people, [me], "el")), [2, 1, undefined, undefined]);
+  // Who plays a character: no proposal there.
+  assert.deepEqual(ids(nameChoices("character", me, people, [me], "")), [1, 2, 3]);
+});
+
 test("one voice shown: its lines, its chapters, the others folded into a count", async () => {
   const { focusModel, speakerMarks, speakerExcerpt } = await import("./transcript.ts");
   const model = buildModel(CHAPTERED);
