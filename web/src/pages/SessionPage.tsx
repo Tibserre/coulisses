@@ -1,8 +1,18 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
-import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import {
+  MetadataList,
+  MetadataListItem,
+} from "@astryxdesign/core/MetadataList";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Spinner } from "@astryxdesign/core/Spinner";
@@ -22,11 +32,24 @@ import {
 import { PhaseStrip } from "../components/PhaseStrip.tsx";
 import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ReviewSkeleton } from "../components/ReviewSkeleton.tsx";
-import { SpeakerFocusBar, SpeakersToName } from "../components/SpeakerFocus.tsx";
+import {
+  SpeakerFocusBar,
+  SpeakersToName,
+} from "../components/SpeakerFocus.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
-import { CorrectionsHistory, KeyFigures, Participants, Attendees } from "../components/ReviewSide.tsx";
+import {
+  CorrectionsHistory,
+  KeyFigures,
+  Participants,
+  Attendees,
+} from "../components/ReviewSide.tsx";
 import { StageList } from "../components/StageList.tsx";
-import { GiveToPanel, TranscriptView, inkOf, type Editing } from "../components/TranscriptView.tsx";
+import {
+  GiveToPanel,
+  TranscriptView,
+  inkOf,
+  type Editing,
+} from "../components/TranscriptView.tsx";
 import { SummaryPanel } from "../components/SummaryPanel.tsx";
 import { NotesSection } from "../components/NotesSection.tsx";
 import { VersionsSection } from "../components/VersionsSection.tsx";
@@ -39,7 +62,16 @@ import { takeStopProblem } from "../stopNotice.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
-import { buildModel, focusModel, liveEditsKey, phaseOf, toggleSelection, turnAt, speakerMarks, wordAt } from "../transcript.ts";
+import {
+  buildModel,
+  focusModel,
+  liveEditsKey,
+  phaseOf,
+  toggleSelection,
+  turnAt,
+  speakerMarks,
+  wordAt,
+} from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
@@ -48,8 +80,14 @@ import { describeStageError } from "../errors.ts";
  *  still work. */
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return true;
-  if (target instanceof HTMLInputElement) return !["checkbox", "radio", "range", "button"].includes(target.type);
+  if (
+    target.isContentEditable ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
+  )
+    return true;
+  if (target instanceof HTMLInputElement)
+    return !["checkbox", "radio", "range", "button"].includes(target.type);
   return false;
 }
 
@@ -158,14 +196,17 @@ export function SessionPage({
   useEffect(() => {
     if (attributeRun) void loadPhases();
   }, [attributeRun, loadPhases]);
-  const phasesWaiting = phasesStatus?.state === "queued" || phasesStatus?.state === "running";
+  const phasesWaiting =
+    phasesStatus?.state === "queued" || phasesStatus?.state === "running";
   useEffect(() => {
     if (!phasesWaiting) return;
     const timer = window.setInterval(() => void loadPhases(), 3000);
     return () => {
       window.clearInterval(timer);
       // Over: the transcript gets its chapters.
-      api.transcript(id).then(setView, (e: Error) => setTranscriptError(e.message));
+      api
+        .transcript(id)
+        .then(setView, (e: Error) => setTranscriptError(e.message));
     };
   }, [phasesWaiting, loadPhases, id]);
 
@@ -176,7 +217,9 @@ export function SessionPage({
   const askTitle = () => {
     titleBefore.current = detail?.session.title ?? null;
     setTitleState("waiting");
-    api.requestGeneration(id, "titre", null).catch((e: Error) => setTitleState(e.message));
+    api
+      .requestGeneration(id, "titre", null)
+      .catch((e: Error) => setTitleState(e.message));
   };
   useEffect(() => {
     if (titleState !== "waiting") return;
@@ -184,7 +227,10 @@ export function SessionPage({
       api.generations(id).then(
         (g) => {
           const job = g.pending.find((p) => p.action_ref === "titre");
-          if (job?.state === "failed") setTitleState(`Pas de titre proposé : ${job.error ?? "erreur inconnue"}`);
+          if (job?.state === "failed")
+            setTitleState(
+              `Pas de titre proposé : ${job.error ?? "erreur inconnue"}`,
+            );
           else if (!job) {
             api.session(id).then(
               (d) => {
@@ -216,7 +262,10 @@ export function SessionPage({
   // During playback, the chapter being heard stays open, even folded (art direction).
   const unfolded = useMemo(() => (view ? buildModel(view) : null), [view]);
   const heard = unfolded && pb.playing ? turnAt(unfolded, pb.time) : null;
-  const heardChapter = view && heard ? phaseOf(view.phases, heard.turn.index)?.turn ?? null : null;
+  const heardChapter =
+    view && heard
+      ? (phaseOf(view.phases, heard.turn.index)?.turn ?? null)
+      : null;
   const model = useMemo(() => {
     if (!view) return null;
     const shut = new Set([...folded].filter((t) => t !== heardChapter));
@@ -230,14 +279,21 @@ export function SessionPage({
     () => (focus && unfolded ? focusModel(unfolded, focus) : model),
     [focus, unfolded, model],
   );
-  const focused = focus ? (unfolded?.speakers.find((s) => s.label === focus) ?? null) : null;
+  const focused = focus
+    ? (unfolded?.speakers.find((s) => s.label === focus) ?? null)
+    : null;
   // The voice merged into another one: back to all of them.
   useEffect(() => {
     if (focus && unfolded && !focused) setFocus(null);
   }, [focus, unfolded, focused]);
   const marked = pointed ?? focus;
-  const marks = useMemo(() => (marked && unfolded ? speakerMarks(unfolded, marked) : []), [marked, unfolded]);
-  const markInk = marked ? unfolded?.speakers.find((s) => s.label === marked) : undefined;
+  const marks = useMemo(
+    () => (marked && unfolded ? speakerMarks(unfolded, marked) : []),
+    [marked, unfolded],
+  );
+  const markInk = marked
+    ? unfolded?.speakers.find((s) => s.label === marked)
+    : undefined;
   const currentRow = shown ? turnAt(shown, pb.time) : null;
 
   // Opened at a passage (a search hit): the player goes there, without playing, and the
@@ -257,7 +313,9 @@ export function SessionPage({
     audio.addEventListener("loadedmetadata", go, { once: true });
     return () => audio.removeEventListener("loadedmetadata", go);
   }, [at, model, pb]);
-  const current = currentRow ? { row: currentRow, word: wordAt(currentRow, pb.time) } : null;
+  const current = currentRow
+    ? { row: currentRow, word: wordAt(currentRow, pb.time) }
+    : null;
 
   /** A correction refused. Meant for a version no longer shown (409): nothing was
    *  written; the page reads the version now shown, and a typed text is given back. */
@@ -267,7 +325,9 @@ export function SessionPage({
       if (error instanceof ServiceError && error.status === 409) {
         setEditingTurn(null);
         setTyping(false);
-        setEditError(`${error.message}${typed ? ` Votre texte, à reprendre : « ${typed} »` : ""}`);
+        setEditError(
+          `${error.message}${typed ? ` Votre texte, à reprendre : « ${typed} »` : ""}`,
+        );
         void refresh();
         return;
       }
@@ -285,7 +345,10 @@ export function SessionPage({
         setEditError(null);
         // Naming a voice after a person who already has one merges them: said on screen.
         const last = next.edits.at(-1);
-        if (correction.kind === "assign_speaker" && last?.kind === "merge_speakers")
+        if (
+          correction.kind === "assign_speaker" &&
+          last?.kind === "merge_speakers"
+        )
           setNotice(`${last.description}. Cmd-Z pour annuler.`);
       } catch (e) {
         refused(
@@ -327,8 +390,12 @@ export function SessionPage({
       setNamingTurn,
       selected,
       toggleSelected: (turn: number, extend: boolean) => {
-        const order = shown ? shown.rows.flatMap((r) => (r.kind === "turn" ? [r.turn.index] : [])) : [];
-        setSelected((before) => toggleSelection(before, order, turn, extend ? lastSelected : null));
+        const order = shown
+          ? shown.rows.flatMap((r) => (r.kind === "turn" ? [r.turn.index] : []))
+          : [];
+        setSelected((before) =>
+          toggleSelection(before, order, turn, extend ? lastSelected : null),
+        );
         setLastSelected(turn);
       },
       setTyping,
@@ -343,7 +410,20 @@ export function SessionPage({
           return next;
         }),
     }),
-    [people, correct, spaceId, loadPeople, id, editingTurn, namingTurn, selected, lastSelected, shown, viewRun, refused],
+    [
+      people,
+      correct,
+      spaceId,
+      loadPeople,
+      id,
+      editingTurn,
+      namingTurn,
+      selected,
+      lastSelected,
+      shown,
+      viewRun,
+      refused,
+    ],
   );
 
   /** Cmd-Z undoes the last correction still in force; Cmd-Shift-Z redoes the last one
@@ -361,7 +441,9 @@ export function SessionPage({
           setView(await api.redo(id, target.id, viewRun));
           setNotice(`Rétabli : ${target.description}`);
         } else {
-          const target = edits.filter((e) => !e.reverted).sort((a, b) => b.id - a.id)[0];
+          const target = edits
+            .filter((e) => !e.reverted)
+            .sort((a, b) => b.id - a.id)[0];
           if (!target) return setNotice("Rien à annuler.");
           setView(await api.undo(id, target.id, viewRun));
           setNotice(`Annulé : ${target.description}`);
@@ -407,7 +489,9 @@ export function SessionPage({
         setEditingTurn(currentRow.turn.index);
       } else if (e.key === "c" || e.key === "C") {
         e.preventDefault();
-        void correct({ kind: "set_phase", turn: currentRow.turn.index }).catch(() => undefined);
+        void correct({ kind: "set_phase", turn: currentRow.turn.index }).catch(
+          () => undefined,
+        );
       }
     };
     window.addEventListener("keydown", onKey);
@@ -415,22 +499,33 @@ export function SessionPage({
   }, [currentRow, history, correct, focus]);
 
   const session = detail?.session;
-  const title = session ? (session.title ?? `Séance du ${formatDate(session.recorded_at).toLowerCase()}`) : "";
-  const present = session ? session.attendee_ids.length + (session.unnamed_attendees ?? 0) : 0;
+  const title = session
+    ? (session.title ??
+      `Séance du ${formatDate(session.recorded_at).toLowerCase()}`)
+    : "";
+  const present = session
+    ? session.attendee_ids.length + (session.unnamed_attendees ?? 0)
+    : 0;
 
   const audioGone = session?.audio.state === "removed";
   const audioText = session ? audioLine(session.audio) : null;
   const extra = detail ? extraTracks(detail.other_sources, detail.mix) : null;
-  const sessionChanged = (next: Session) => setDetail((d) => (d ? { ...d, session: next } : d));
+  const sessionChanged = (next: Session) =>
+    setDetail((d) => (d ? { ...d, session: next } : d));
   const audioAction = (action: () => Promise<Session>) => () =>
     action().then(sessionChanged, (e: Error) => setMenuError(e.message));
 
-  const reading = !error && (!detail || (attributeRun !== null && !view && !transcriptError));
+  const reading =
+    !error && (!detail || (attributeRun !== null && !view && !transcriptError));
 
   return (
     <div className="cl-review" data-audio-gone={audioGone || undefined}>
       {/* Once the audio is deleted there is nothing to load (spec §7.10). */}
-      <audio ref={pb.audioRef} src={audioGone ? undefined : api.audioUrl(id)} preload="metadata" />
+      <audio
+        ref={pb.audioRef}
+        src={audioGone ? undefined : api.audioUrl(id)}
+        preload="metadata"
+      />
       {/* Read, not yet shown: the session, or the version it has. Its shapes meanwhile, then
           the page at once: nothing comes in pieces (the steps, then the transcript). */}
       {reading ? (
@@ -473,23 +568,39 @@ export function SessionPage({
                   }}
                 />
                 <Text color="secondary">
-                  {formatDate(session.recorded_at)} · {formatDuration(session.duration_s)}
-                  {present ? ` · ${plural(present, "présent", "présents")}` : ""}
+                  {formatDate(session.recorded_at)} ·{" "}
+                  {formatDuration(session.duration_s)}
+                  {present
+                    ? ` · ${plural(present, "présent", "présents")}`
+                    : ""}
                   {extra && <span title={extra.title}>{extra.text}</span>}
                   {audioText && (
                     <>
                       {" · "}
-                      <span data-announced={session.audio.state === "announced" || undefined} className="cl-audio-note">
+                      <span
+                        data-announced={
+                          session.audio.state === "announced" || undefined
+                        }
+                        className="cl-audio-note"
+                      >
                         {audioText}
                       </span>
                       {session.audio.state === "announced" && (
                         <>
                           {" · "}
-                          <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.keepAudio(id, true))}>
+                          <button
+                            type="button"
+                            className="cl-linkbtn"
+                            onClick={audioAction(() => api.keepAudio(id, true))}
+                          >
                             Garder l'audio
                           </button>
                           {" · "}
-                          <button type="button" className="cl-linkbtn" onClick={audioAction(() => api.extendAudio(id))}>
+                          <button
+                            type="button"
+                            className="cl-linkbtn"
+                            onClick={audioAction(() => api.extendAudio(id))}
+                          >
                             Prolonger
                           </button>
                         </>
@@ -502,14 +613,22 @@ export function SessionPage({
                       {titleState === "waiting" ? (
                         <span>titre en préparation…</span>
                       ) : (
-                        <button type="button" className="cl-linkbtn" onClick={askTitle}>
-                          {session.title ? "Proposer un autre titre" : "Proposer un titre"}
+                        <button
+                          type="button"
+                          className="cl-linkbtn"
+                          onClick={askTitle}
+                        >
+                          {session.title
+                            ? "Proposer un autre titre"
+                            : "Proposer un titre"}
                         </button>
                       )}
                     </>
                   )}
                 </Text>
-                {titleState && titleState !== "waiting" && <p className="cl-title__error">{titleState}</p>}
+                {titleState && titleState !== "waiting" && (
+                  <p className="cl-title__error">{titleState}</p>
+                )}
               </div>
             )}
             {session && view && (
@@ -521,7 +640,9 @@ export function SessionPage({
                 dev={dev}
                 onSeek={pb.seek}
                 onDetect={() => {
-                  api.detectPhases(id).then(setPhasesStatus, (e: Error) => setError(e.message));
+                  api
+                    .detectPhases(id)
+                    .then(setPhasesStatus, (e: Error) => setError(e.message));
                 }}
               />
             )}
@@ -529,12 +650,22 @@ export function SessionPage({
 
           {error && (
             <div className="cl-review__notice">
-              <Banner status="error" title="Séance illisible" description={error} />
+              <Banner
+                status="error"
+                title="Séance illisible"
+                description={error}
+              />
             </div>
           )}
           {incomplete && (
             <div className="cl-review__notice">
-              <Banner status="warning" title="Suppression incomplète" description={incomplete} isDismissable onDismiss={() => setIncomplete(null)} />
+              <Banner
+                status="warning"
+                title="Suppression incomplète"
+                description={incomplete}
+                isDismissable
+                onDismiss={() => setIncomplete(null)}
+              />
             </div>
           )}
           {stopProblem && (
@@ -550,7 +681,13 @@ export function SessionPage({
           )}
           {menuError && (
             <div className="cl-review__notice">
-              <Banner status="error" title="Refusé" description={menuError} isDismissable onDismiss={() => setMenuError(null)} />
+              <Banner
+                status="error"
+                title="Refusé"
+                description={menuError}
+                isDismissable
+                onDismiss={() => setMenuError(null)}
+              />
             </div>
           )}
           {detail && !model && (
@@ -594,7 +731,13 @@ export function SessionPage({
                       setTab("overview");
                       // Once the tab is drawn: the list, in view.
                       window.setTimeout(
-                        () => document.getElementById("non-reportees")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                        () =>
+                          document
+                            .getElementById("non-reportees")
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            }),
                         50,
                       );
                     }}
@@ -607,20 +750,36 @@ export function SessionPage({
                       current={currentRow}
                       onName={() => {
                         const first = shown.rows.find((r) => r.kind === "turn");
-                        if (first?.kind === "turn") setNamingTurn(first.turn.index);
+                        if (first?.kind === "turn")
+                          setNamingTurn(first.turn.index);
                       }}
                       onClose={() => setFocus(null)}
                     />
                   )}
-                  <TranscriptView model={shown!} pb={pb} current={current} editing={editing} />
+                  <TranscriptView
+                    model={shown!}
+                    pb={pb}
+                    current={current}
+                    editing={editing}
+                  />
                   {notice && (
                     <div className="cl-notice" role="status">
                       {notice}
                     </div>
                   )}
                   {selected.size > 0 && (
-                    <div className="cl-selection" role="toolbar" aria-label="Répliques sélectionnées">
-                      <Text>{plural(selected.size, "réplique sélectionnée", "répliques sélectionnées")}</Text>
+                    <div
+                      className="cl-selection"
+                      role="toolbar"
+                      aria-label="Répliques sélectionnées"
+                    >
+                      <Text>
+                        {plural(
+                          selected.size,
+                          "réplique sélectionnée",
+                          "répliques sélectionnées",
+                        )}
+                      </Text>
                       <Popover
                         isOpen={giving}
                         onOpenChange={setGiving}
@@ -632,7 +791,11 @@ export function SessionPage({
                             except={null}
                             onGive={(target) => {
                               setGiving(false);
-                              void correct({ kind: "reassign_turns", turns: [...selected], target }).then(
+                              void correct({
+                                kind: "reassign_turns",
+                                turns: [...selected],
+                                target,
+                              }).then(
                                 () => setSelected(new Set()),
                                 () => undefined,
                               );
@@ -642,12 +805,21 @@ export function SessionPage({
                       >
                         <Button size="sm" variant="primary" label="Donner à…" />
                       </Popover>
-                      <Button size="sm" variant="ghost" label="Désélectionner" onClick={() => setSelected(new Set())} />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        label="Désélectionner"
+                        onClick={() => setSelected(new Set())}
+                      />
                     </div>
                   )}
                 </div>
                 <aside className="cl-side">
-                  <TabList value={tab} onChange={(v) => setTab(v as "overview" | "summary")} hasDivider>
+                  <TabList
+                    value={tab}
+                    onChange={(v) => setTab(v as "overview" | "summary")}
+                    hasDivider
+                  >
                     <Tab value="overview" label="Vue d'ensemble" />
                     <Tab value="summary" label="Résumé" />
                   </TabList>
@@ -659,75 +831,84 @@ export function SessionPage({
                     />
                   ) : (
                     <>
-                  <KeyFigures view={view} model={model} dev={dev} />
-                  <SpeakersToName
-                    model={unfolded!}
-                    pb={pb}
-                    audioGone={audioGone}
-                    onShow={setFocus}
-                    onName={(label, turn) => {
-                      // Its lines only (never in a folded chapter), named on the first one.
-                      setFocus(label);
-                      setNamingTurn(turn);
-                    }}
-                    onCorrect={correct}
-                    onPoint={setPointed}
-                    dev={dev}
-                    problem={view.voices_problem}
-                  />
-                  <Participants
-                    model={model}
-                    onShow={setFocus}
-                    onPoint={setPointed}
-                    onMerge={(source, target) => correct({ kind: "merge_speakers", source, target })}
-                  />
-                  <NotesSection sessionId={id} />
-                  <Attendees
-                    session={session}
-                    people={people}
-                    onSave={async (ids, unnamed) => {
-                      await api.setAttendees(id, ids, unnamed);
-                      await refresh();
-                    }}
-                  />
-                  <CorrectionsHistory
-                    edits={view.edits}
-                    onUndo={async (editId) => {
-                      try {
-                        setView(await api.undo(id, editId, view.run_id));
-                      } catch (e) {
-                        refused(e);
-                      }
-                    }}
-                    onRedo={async (editId) => {
-                      try {
-                        setView(await api.redo(id, editId, view.run_id));
-                      } catch (e) {
-                        refused(e);
-                      }
-                    }}
-                  />
-                  <VersionsSection
-                    sessionId={id}
-                    version={attributeRun}
-                    busy={busy}
-                    carryover={view.carryover}
-                    duration={session.duration_s}
-                    dev={dev}
-                    onChanged={refresh}
-                    onSeek={pb.seek}
-                  />
-                  {(dev ||
-                    busy ||
-                    detail.stages.some(
-                      (s) => s.state === "failed" || s.state === "stalled" || s.folder_missing || s.stale,
-                    )) && (
-                    <section>
-                      <Heading level={3}>Traitement</Heading>
-                      <StageList stages={detail.stages} onShowProvenance={setProvenanceOf} />
-                    </section>
-                  )}
-                  {dev && <SourceInfo detail={detail} />}
+                      <KeyFigures view={view} model={model} dev={dev} />
+                      <SpeakersToName
+                        model={unfolded!}
+                        pb={pb}
+                        audioGone={audioGone}
+                        onShow={setFocus}
+                        onName={(label, turn) => {
+                          // Its lines only (never in a folded chapter), named on the first one.
+                          setFocus(label);
+                          setNamingTurn(turn);
+                        }}
+                        onCorrect={correct}
+                        onPoint={setPointed}
+                        dev={dev}
+                        problem={view.voices_problem}
+                      />
+                      <Participants
+                        model={model}
+                        onShow={setFocus}
+                        onPoint={setPointed}
+                        onMerge={(source, target) =>
+                          correct({ kind: "merge_speakers", source, target })
+                        }
+                      />
+                      <NotesSection sessionId={id} />
+                      <Attendees
+                        session={session}
+                        people={people}
+                        onSave={async (ids, unnamed) => {
+                          await api.setAttendees(id, ids, unnamed);
+                          await refresh();
+                        }}
+                      />
+                      <CorrectionsHistory
+                        edits={view.edits}
+                        onUndo={async (editId) => {
+                          try {
+                            setView(await api.undo(id, editId, view.run_id));
+                          } catch (e) {
+                            refused(e);
+                          }
+                        }}
+                        onRedo={async (editId) => {
+                          try {
+                            setView(await api.redo(id, editId, view.run_id));
+                          } catch (e) {
+                            refused(e);
+                          }
+                        }}
+                      />
+                      <VersionsSection
+                        sessionId={id}
+                        version={attributeRun}
+                        busy={busy}
+                        carryover={view.carryover}
+                        duration={session.duration_s}
+                        dev={dev}
+                        onChanged={refresh}
+                        onSeek={pb.seek}
+                      />
+                      {(dev ||
+                        busy ||
+                        detail.stages.some(
+                          (s) =>
+                            s.state === "failed" ||
+                            s.state === "stalled" ||
+                            s.folder_missing ||
+                            s.stale,
+                        )) && (
+                        <section>
+                          <Heading level={3}>Traitement</Heading>
+                          <StageList
+                            stages={detail.stages}
+                            onShowProvenance={setProvenanceOf}
+                          />
+                        </section>
+                      )}
+                      {dev && <SourceInfo detail={detail} />}
                     </>
                   )}
                 </aside>
@@ -735,7 +916,11 @@ export function SessionPage({
               {audioGone ? (
                 <div className="cl-player-gone" role="status">
                   <Text color="secondary">
-                    L'audio de cette séance a été supprimé{audioText ? ` (${audioText.replace("audio supprimé ", "")})` : ""} : la lecture n'est plus possible. Le texte reste modifiable.
+                    L'audio de cette séance a été supprimé
+                    {audioText
+                      ? ` (${audioText.replace("audio supprimé ", "")})`
+                      : ""}{" "}
+                    : la lecture n'est plus possible. Le texte reste modifiable.
                   </Text>
                 </div>
               ) : (
@@ -751,7 +936,11 @@ export function SessionPage({
           )}
         </>
       )}
-      <ProvenanceDialog sessionId={id} stage={provenanceOf} onClose={() => setProvenanceOf(null)} />
+      <ProvenanceDialog
+        sessionId={id}
+        stage={provenanceOf}
+        onClose={() => setProvenanceOf(null)}
+      />
     </div>
   );
 }
@@ -787,7 +976,10 @@ function RerunNotices({
   const { session, rerun } = detail;
   const notices: ReactNode[] = [];
 
-  if (rerun && (session.job_state === "queued" || session.job_state === "running")) {
+  if (
+    rerun &&
+    (session.job_state === "queued" || session.job_state === "running")
+  ) {
     const running = detail.stages.find((s) => s.state === "running");
     const progress =
       running?.progress && running.progress.total > 0
@@ -800,18 +992,26 @@ function RerunNotices({
         <div>
           <Text weight="medium">
             Relance de {RERUN_NAME[rerun]} en cours
-            {session.job_state === "queued" ? " : en file d'attente" : running ? ` : « ${running.label} »${progress}` : ""}
+            {session.job_state === "queued"
+              ? " : en file d'attente"
+              : running
+                ? ` : « ${running.label} »${progress}`
+                : ""}
           </Text>
           <Text as="p" type="supporting">
-            La version affichée reste en place ; à la fin, vos corrections sont reportées sur la
-            nouvelle.
+            La version affichée reste en place ; à la fin, vos corrections sont
+            reportées sur la nouvelle.
           </Text>
         </div>
       </div>,
     );
   }
   // The audio deleted since: the rerun cannot be resumed, nothing is offered (spec §7.10).
-  if (rerun && session.job_state === "failed" && session.audio.state !== "removed") {
+  if (
+    rerun &&
+    session.job_state === "failed" &&
+    session.audio.state !== "removed"
+  ) {
     const failed = detail.stages.find((s) => s.state === "failed");
     const why = dev
       ? (session.job_error ?? "Erreur inconnue")
@@ -819,7 +1019,10 @@ function RerunNotices({
         ? `« ${failed.label} » : ${describeStageError(failed) ?? "échec"}`
         : (session.job_error ?? "Erreur inconnue");
     const found = Number(failed?.error_details?.found);
-    const fewer = failed?.error_code === "too_few_speakers" && Number.isFinite(found) && found >= 1;
+    const fewer =
+      failed?.error_code === "too_few_speakers" &&
+      Number.isFinite(found) &&
+      found >= 1;
     const resume = async () => {
       try {
         await onResume(fewer ? found : undefined);
@@ -838,7 +1041,11 @@ function RerunNotices({
           <Button
             size="sm"
             variant="primary"
-            label={fewer ? `Reprendre avec ${plural(found, "présent", "présents")}` : "Reprendre"}
+            label={
+              fewer
+                ? `Reprendre avec ${plural(found, "présent", "présents")}`
+                : "Reprendre"
+            }
             clickAction={resume}
           />
         }
@@ -848,7 +1055,11 @@ function RerunNotices({
   const carried = view.carryover;
   if (carried && !seen) {
     const missing = carried.not_carried.length;
-    const done = plural(carried.carried, "correction reportée", "corrections reportées");
+    const done = plural(
+      carried.carried,
+      "correction reportée",
+      "corrections reportées",
+    );
     const dismiss = () => {
       try {
         window.localStorage.setItem(SEEN_KEY + view.run_id, "1");
@@ -870,7 +1081,9 @@ function RerunNotices({
         isDismissable
         onDismiss={dismiss}
         endContent={
-          missing ? <Button size="sm" label="Voir la liste" onClick={onShowList} /> : undefined
+          missing ? (
+            <Button size="sm" label="Voir la liste" onClick={onShowList} />
+          ) : undefined
         }
       />,
     );
@@ -901,12 +1114,16 @@ function ProcessingPanel({
     : failedStage
       ? `« ${failedStage.label} » : ${describeStageError(failedStage) ?? "échec"}`
       : (session.job_error ?? "Erreur inconnue");
-  const running = session.job_state === "queued" || session.job_state === "running";
-  const attributed = detail.stages.some((s) => s.stage === "attribute" && s.state === "succeeded");
+  const running =
+    session.job_state === "queued" || session.job_state === "running";
+  const attributed = detail.stages.some(
+    (s) => s.stage === "attribute" && s.state === "succeeded",
+  );
   const tooFew = failedStage?.error_code === "too_few_speakers";
   const found = Number(failedStage?.error_details?.found);
   const [attendees, setAttendees] = useState<number | null>(null);
-  const proposed = attendees ?? (Number.isFinite(found) && found >= 1 ? found : 1);
+  const proposed =
+    attendees ?? (Number.isFinite(found) && found >= 1 ? found : 1);
   const [resumeError, setResumeError] = useState<string | null>(null);
   // The audio deleted (by hand, or never processed and deleted): nothing can be resumed.
   const gone = session.audio.state === "removed";
@@ -936,7 +1153,9 @@ function ProcessingPanel({
           description="L'audio de cette séance a été supprimé avant la fin de son traitement : il n'y a plus rien à traiter. La séance peut être supprimée depuis le menu « … »."
         />
       ) : (
-        session.job_state === null && <NotProcessed detail={detail} onProcess={onProcess} />
+        session.job_state === null && (
+          <NotProcessed detail={detail} onProcess={onProcess} />
+        )
       )}
       {running && (
         <Text color="secondary">
@@ -975,7 +1194,11 @@ function ProcessingPanel({
               label="Nombre de présents"
               description="Au moins autant de voix seront cherchées."
               value={proposed}
-              onChange={(v) => setAttendees(Number.isFinite(v) && v >= 1 ? Math.round(v) : null)}
+              onChange={(v) =>
+                setAttendees(
+                  Number.isFinite(v) && v >= 1 ? Math.round(v) : null,
+                )
+              }
             />
           </div>
           <Button
@@ -986,7 +1209,11 @@ function ProcessingPanel({
         </div>
       )}
       {resumeError && (
-        <Banner status="error" title="La reprise a échoué" description={resumeError} />
+        <Banner
+          status="error"
+          title="La reprise a échoué"
+          description={resumeError}
+        />
       )}
       {detail.source && !detail.source.file_present && !gone && (
         <Banner
@@ -1051,14 +1278,21 @@ function SourceInfo({ detail }: { detail: SessionDetail }) {
 
 /** A recording not processed yet: still being recorded, stopped on battery (spec §7.4:
  *  the user decides), or repaired after a crash. Never an import, processed at once. */
-function NotProcessed({ detail, onProcess }: { detail: SessionDetail; onProcess: () => Promise<void> }) {
+function NotProcessed({
+  detail,
+  onProcess,
+}: {
+  detail: SessionDetail;
+  onProcess: () => Promise<void>;
+}) {
   const source = detail.source;
   const [battery, setBattery] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     api.power().then(
       (p) => setBattery(p.on_battery),
-      (e: Error) => setError(`Impossible de savoir si le Mac est branché : ${e.message}`),
+      (e: Error) =>
+        setError(`Impossible de savoir si le Mac est branché : ${e.message}`),
     );
   }, []);
   if (source?.capture_state === "recording") {
@@ -1067,7 +1301,13 @@ function NotProcessed({ detail, onProcess }: { detail: SessionDetail; onProcess:
         status="info"
         title="Enregistrement en cours"
         description="Cette séance est en train d'être enregistrée."
-        endContent={<Button size="sm" label="Y aller" onClick={() => (window.location.hash = "#/enregistrement")} />}
+        endContent={
+          <Button
+            size="sm"
+            label="Y aller"
+            onClick={() => (window.location.hash = "#/enregistrement")}
+          />
+        }
       />
     );
   }
@@ -1110,7 +1350,9 @@ function NotProcessed({ detail, onProcess }: { detail: SessionDetail; onProcess:
       )}
       <Text>
         Cette séance n'est pas encore traitée : environ {minutes} min de calcul.
-        {battery ? " Le Mac est sur batterie : mieux vaut le brancher avant de lancer le traitement." : ""}
+        {battery
+          ? " Le Mac est sur batterie : mieux vaut le brancher avant de lancer le traitement."
+          : ""}
       </Text>
       <div>
         <Button
@@ -1131,7 +1373,6 @@ function NotProcessed({ detail, onProcess }: { detail: SessionDetail; onProcess:
   );
 }
 
-
 /** Where the session is: its space, then its project, chosen here to move it (spec
  *  §7.11). The source (captured, imported) is said in passing. */
 function ProjectCrumb({
@@ -1145,7 +1386,11 @@ function ProjectCrumb({
   onMoved: (session: Session) => void;
   onError: (message: string) => void;
 }) {
-  const own = projects.filter((p) => p.space_id === session.space_id && (!p.archived || p.id === session.project_id));
+  const own = projects.filter(
+    (p) =>
+      p.space_id === session.space_id &&
+      (!p.archived || p.id === session.project_id),
+  );
   return (
     <div className="cl-crumb">
       <a href={`#/espaces/${session.space_id}`}>{session.space_name}</a>
@@ -1156,7 +1401,9 @@ function ProjectCrumb({
         value={session.project_id ?? ""}
         onChange={(e) => {
           const next = e.target.value ? Number(e.target.value) : null;
-          api.setSessionProject(session.id, next).then(onMoved, (err: Error) => onError(err.message));
+          api
+            .setSessionProject(session.id, next)
+            .then(onMoved, (err: Error) => onError(err.message));
         }}
       >
         <option value="">Aucun projet</option>
