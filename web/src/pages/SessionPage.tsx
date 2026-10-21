@@ -43,6 +43,8 @@ import {
   Participants,
   Attendees,
 } from "../components/ReviewSide.tsx";
+import { BatteryMedium, Hourglass } from "lucide-react";
+import { ProcessingOutline } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
 import {
   GiveToPanel,
@@ -146,6 +148,21 @@ export function SessionPage({
   // The version shown: it changes when a rerun completes, or when another one is shown.
   const attributeRun = detail?.version ?? null;
   const busy = jobState === "queued" || jobState === "running";
+  // Processed while the page was open (ADR 0058): the names settle on the text, once.
+  const [arrived, setArrived] = useState(false);
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (busy) {
+      wasBusy.current = true;
+      setArrived(false);
+      return;
+    }
+    if (!wasBusy.current || jobState !== "done") return;
+    wasBusy.current = false;
+    setArrived(true);
+    const timer = window.setTimeout(() => setArrived(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [busy, jobState]);
 
   useEffect(() => {
     void refresh();
@@ -707,7 +724,10 @@ export function SessionPage({
           )}
           {detail && model && view && session && (
             <>
-              <div className="cl-review__columns">
+              <div
+                className="cl-review__columns"
+                data-arrived={arrived || undefined}
+              >
                 <div className="cl-review__main">
                   {editError && (
                     <div className="cl-review__notice">
@@ -1135,78 +1155,99 @@ function ProcessingPanel({
       setResumeError((e as Error).message);
     }
   };
+  const expected = Number(failedStage?.error_details?.expected);
+  const [choosing, setChoosing] = useState(false);
+  // An error of the application, not of the recording: said in French, its detail in
+  // developer mode (P8: shown, never hidden).
+  const plain = failedStage
+    ? describeStageError(failedStage)
+    : "Une erreur de Coulisses a arrêté le traitement : ce n'est pas votre enregistrement. Reprenez ; si elle revient, son détail est en mode développeur.";
   return (
     <main className="cl-processing">
-      <Heading level={2}>
-        {failed
-          ? "Le traitement s'est arrêté"
-          : session.job_state === "done"
-            ? "Traitement terminé"
-            : running
-              ? "Traitement en cours"
-              : "Jamais traitée"}
-      </Heading>
-      {gone ? (
+      {gone && (
         <Banner
           status="info"
           title="Audio supprimé"
           description="L'audio de cette séance a été supprimé avant la fin de son traitement : il n'y a plus rien à traiter. La séance peut être supprimée depuis le menu « … »."
         />
-      ) : (
-        session.job_state === null && (
-          <NotProcessed detail={detail} onProcess={onProcess} />
-        )
       )}
-      {running && (
-        <Text color="secondary">
-          Environ 10 minutes de calcul par heure d'audio. Vous pouvez fermer
-          cette page : le traitement continue tant que Coulisses tourne, et
-          reprend où il en était s'il est interrompu.
-        </Text>
+      {!gone && session.job_state === null && (
+        <NotProcessed detail={detail} onProcess={onProcess} />
       )}
-      {session.job_state === "queued" && (
-        <Text color="secondary">
-          En file : un autre enregistrement est peut-être en cours de
-          traitement.
-        </Text>
-      )}
-      {failed && !gone && (
-        <Banner
-          status="error"
-          title="Une étape a échoué"
-          description={`${failure} Les étapes réussies sont gardées ; reprendre ne relance que le reste.`}
-          endContent={
-            tooFew ? undefined : (
+      {running && <ProcessingOutline detail={detail} />}
+
+      {failed && !gone && tooFew && (
+        // Fewer voices than people checked: a question, not a failure (ADR 0058). Voices
+        // are never merged to reach the count (P3): going on looks for fewer.
+        <section className="cl-ask">
+          <Heading level={3}>
+            {found >= 1
+              ? Number.isFinite(expected) && expected > found
+                ? `${plural(found, "voix entendue", "voix entendues")}, ${plural(expected, "présent coché", "présents cochés")}`
+                : `${plural(found, "voix entendue", "voix entendues")} : moins que de présents cochés`
+              : "Aucune voix entendue"}
+          </Heading>
+          <Text color="secondary">
+            {found >= 1
+              ? "Quelqu'un n'a peut-être pas parlé. Les voix ne sont jamais fusionnées pour atteindre le compte."
+              : "Personne ne semble parler dans cet enregistrement : il n'y a pas de voix à séparer."}
+          </Text>
+          <div className="cl-ask__actions">
+            {found >= 1 && (
               <Button
-                label="Reprendre le traitement"
+                label={`Continuer avec ${plural(found, "voix", "voix")}`}
                 variant="primary"
-                size="sm"
-                clickAction={() => resume()}
+                clickAction={() => resume(found)}
               />
-            )
-          }
-        />
-      )}
-      {failed && tooFew && !gone && (
-        <div className="cl-retry">
-          <div style={{ width: 200 }}>
-            <NumberInput
-              label="Nombre de présents"
-              description="Au moins autant de voix seront cherchées."
-              value={proposed}
-              onChange={(v) =>
-                setAttendees(
-                  Number.isFinite(v) && v >= 1 ? Math.round(v) : null,
-                )
-              }
+            )}
+            <Button
+              label="Revoir les présents"
+              variant={found >= 1 ? "secondary" : "primary"}
+              onClick={() => setChoosing(!choosing)}
             />
           </div>
-          <Button
-            label={`Reprendre avec ${proposed} présent${proposed > 1 ? "s" : ""}`}
-            variant="primary"
-            clickAction={() => resume(proposed)}
-          />
-        </div>
+          {choosing && (
+            <div className="cl-retry">
+              <div style={{ width: 200 }}>
+                <NumberInput
+                  label="Nombre de présents"
+                  description="Au moins autant de voix seront cherchées."
+                  value={proposed}
+                  onChange={(v) =>
+                    setAttendees(
+                      Number.isFinite(v) && v >= 1 ? Math.round(v) : null,
+                    )
+                  }
+                />
+              </div>
+              <Button
+                label={`Reprendre avec ${plural(proposed, "présent", "présents")}`}
+                clickAction={() => resume(proposed)}
+              />
+            </div>
+          )}
+        </section>
+      )}
+      {failed && !gone && !tooFew && (
+        <section className="cl-ask">
+          <Heading level={3}>Le traitement s'est arrêté</Heading>
+          <Text color="secondary">
+            {dev
+              ? failure
+              : `${failedStage ? `« ${failedStage.label} » : ` : ""}${plain}`}
+          </Text>
+          <Text type="supporting">
+            Les étapes réussies sont gardées ; reprendre ne relance que le
+            reste.
+          </Text>
+          <div className="cl-ask__actions">
+            <Button
+              label="Reprendre"
+              variant="primary"
+              clickAction={() => resume()}
+            />
+          </div>
+        </section>
       )}
       {resumeError && (
         <Banner
@@ -1229,7 +1270,13 @@ function ProcessingPanel({
           description={transcriptError}
         />
       )}
-      <StageList stages={detail.stages} onShowProvenance={onShowProvenance} />
+      {/* The stages one by one, with their provenance (P7): in developer mode, and when
+          something stopped, to see where. */}
+      {(dev ||
+        failed ||
+        detail.stages.some((s) => s.state === "stalled" || s.stale)) && (
+        <StageList stages={detail.stages} onShowProvenance={onShowProvenance} />
+      )}
       {session.job_state === "done" && attributed && !transcriptError && (
         <Spinner label="Chargement du transcript" />
       )}
@@ -1348,13 +1395,24 @@ function NotProcessed({
           description={`Coulisses s'est arrêté pendant l'enregistrement. Les ${formatDuration(source.duration_s)} écrites sur le disque sont gardées ; au plus quelques secondes manquent à la fin.`}
         />
       )}
-      <Text>
-        Cette séance n'est pas encore traitée : environ {minutes} min de calcul.
-        {battery
-          ? " Le Mac est sur batterie : mieux vaut le brancher avant de lancer le traitement."
-          : ""}
-      </Text>
-      <div>
+      {/* On battery, the processing waits for a click (ADR 0027): said calmly, at a glance. */}
+      <div className="cl-wait">
+        {battery ? (
+          <BatteryMedium size={22} strokeWidth={1.75} aria-hidden />
+        ) : (
+          <Hourglass size={22} strokeWidth={1.75} aria-hidden />
+        )}
+        <div className="cl-wait__text">
+          <Text>
+            {battery
+              ? "Le Mac est sur batterie : le traitement attend votre accord."
+              : "Cette séance n'est pas encore traitée."}
+          </Text>
+          <Text type="supporting">
+            Environ {minutes} min de calcul
+            {battery ? " ; mieux vaut brancher le Mac d'abord." : "."}
+          </Text>
+        </div>
         <Button
           label="Traiter maintenant"
           variant="primary"

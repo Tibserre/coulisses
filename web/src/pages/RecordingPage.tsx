@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -56,7 +55,21 @@ export function RecordingPage({
     undefined,
   );
   const [error, setError] = useState<string | null>(null);
-  const [confirmStop, setConfirmStop] = useState(false);
+  /** « Arrêter » pressed: paused, stopped in `STOP_DELAY_S` by the service unless taken
+   *  back (ADR 0058); when it was pressed, to count down. */
+  const [stoppingSince, setStoppingSince] = useState<number | null>(null);
+  /** The service's delay before it stops, and whether it was paused before « Arrêter »
+   *  (then « Reprendre » leaves it paused). */
+  const [stopDelayMs, setStopDelayMs] = useState(3000);
+  const pausedBeforeStop = useRef(false);
+  const stoppingRef = useRef(false);
+  stoppingRef.current = stoppingSince !== null;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (stoppingSince === null) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(timer);
+  }, [stoppingSince]);
   /** The service no longer answers: the last state shown is not live any more. */
   const [lost, setLost] = useState(false);
   const [note, setNote] = useState("");
@@ -109,7 +122,47 @@ export function RecordingPage({
     source.onerror = () => setLost(true);
     source.addEventListener("fin", () => {
       source.close();
-      setState(null);
+      void (async () => {
+        // Stopped (here, from the menu bar, after the delay): to its session, with what
+        // the stop said. Waited for as long as it is under way; never left unsaid (P8).
+        const mine = latest.current?.session_id ?? null;
+        const until = Date.now() + 60_000;
+        while (Date.now() < until) {
+          try {
+            const outcome = await api.lastStop();
+            if (!outcome.pending) {
+              if (outcome.error) {
+                // Said on the session's page, where the user is taken all the same.
+                if (mine) {
+                  keepStopProblem(mine, `L'arrêt a signalé un problème : ${outcome.error}`);
+                  window.location.hash = `#/seance/${encodeURIComponent(mine)}`;
+                  return;
+                }
+                setError(outcome.error);
+                break;
+              }
+              const stopped = outcome.stopped;
+              if (stopped?.session_id === mine && stopped.second_problem)
+                keepStopProblem(stopped.session_id, stopped.second_problem);
+              if (mine) {
+                window.location.hash = `#/seance/${encodeURIComponent(mine)}`;
+                return;
+              }
+              break;
+            }
+          } catch (e) {
+            setError((e as Error).message);
+            break;
+          }
+          await new Promise((r) => window.setTimeout(r, 200));
+        }
+        if (Date.now() >= until)
+          setError(
+            "L'arrêt n'a pas répondu à temps. La séance est dans la colonne ; si elle n'y paraît pas arrêtée, quittez puis rouvrez Coulisses.",
+          );
+        setStoppingSince(null);
+        setState(null);
+      })();
     });
     return () => source.close();
   }, []);
@@ -132,10 +185,17 @@ export function RecordingPage({
   const toggle = useCallback(
     () =>
       act(() =>
-        latest.current?.state === "paused"
-          ? api.resumeRecording()
-          : api.pauseRecording(),
-      ),
+        // While it stops, « Reprendre » takes the stop back, leaving it as it was: paused
+        // if it was paused before « Arrêter » (ADR 0058).
+        stoppingRef.current && pausedBeforeStop.current
+          ? api.cancelStop()
+          : latest.current?.state === "paused"
+            ? api.resumeRecording()
+            : api.pauseRecording(),
+      ).then((done) => {
+        if (done) setStoppingSince(null); // taken back: the stop asked is dropped
+        return done;
+      }),
     [act],
   );
   const mark = useCallback(
@@ -162,9 +222,17 @@ export function RecordingPage({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (confirmStop || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (target?.closest("input, select, textarea, [contenteditable]")) return;
       const key = e.key.toLowerCase();
+      // While it stops: Space or Escape take it back, nothing else is marked.
+      if (stoppingRef.current) {
+        if (key === " " || key === "escape") {
+          e.preventDefault();
+          void toggle();
+        }
+        return;
+      }
       if (key === " ") void toggle();
       else if (key === "j" && mode?.mode !== "scene") void mark("scene");
       else if (key === "d" && mode?.mode !== "discussion")
@@ -176,7 +244,7 @@ export function RecordingPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggle, mark, mode, confirmStop]);
+  }, [toggle, mark, mode]);
 
   const saveNote = async () => {
     const text = note.trim();
@@ -191,23 +259,30 @@ export function RecordingPage({
     }
   };
 
+  /** No confirmation (ADR 0058): paused at once, stopped by the service after a moment
+   *  unless taken back; the session's page opens then. */
   const stop = async () => {
     try {
-      // A note being typed is sent first: it is never lost to the stop (P8).
+      // An annotation being typed is sent first: it is never lost to the stop (P8).
       if (note.trim() && noteAt !== null) {
         setState(await api.addTimedNote(note.trim(), noteAt));
         setNote("");
         setNoteAt(null);
       }
-      const stopped = await api.stopRecording();
-      if (stopped.second_problem)
-        keepStopProblem(stopped.session_id, stopped.second_problem);
-      window.location.hash = `#/seance/${encodeURIComponent(stopped.session_id)}`;
+      pausedBeforeStop.current = latest.current?.state === "paused";
+      const soon = await api.stopRecordingSoon();
+      setState(soon.state);
+      setStopDelayMs(soon.delay_s * 1000);
+      setStoppingSince(Date.now());
+      setError(null);
     } catch (e) {
       setError((e as Error).message);
-      setConfirmStop(false);
     }
   };
+  const stopLeft =
+    stoppingSince === null
+      ? null
+      : Math.max(1, Math.ceil((stopDelayMs - (now - stoppingSince)) / 1000));
 
   const paused = state?.state === "paused";
   const level = state ? meterValue(state.levels.rms_db) : 0;
@@ -358,25 +433,41 @@ export function RecordingPage({
               Moment
               <kbd>M</kbd>
             </button>
-            <Button
-              label={paused ? "Reprendre" : "Pause"}
-              size="sm"
-              icon={
-                paused ? (
-                  <Play size={14} strokeWidth={1.75} />
-                ) : (
-                  <Pause size={14} strokeWidth={1.75} />
-                )
-              }
-              clickAction={async () => void (await toggle())}
-            />
-            <Button
-              label="Arrêter"
-              variant="primary"
-              size="sm"
-              icon={<Square size={12} strokeWidth={1.75} />}
-              onClick={() => setConfirmStop(true)}
-            />
+            {stopLeft !== null ? (
+              // Stopping: a moment to take it back, then the session's page.
+              <span className="cl-rec__stopping" role="status">
+                <span>Arrêt dans {stopLeft} s</span>
+                <Button
+                  label="Reprendre"
+                  variant="primary"
+                  size="sm"
+                  icon={<Play size={14} strokeWidth={1.75} />}
+                  clickAction={async () => void (await toggle())}
+                />
+              </span>
+            ) : (
+              <>
+                <Button
+                  label={paused ? "Reprendre" : "Pause"}
+                  size="sm"
+                  icon={
+                    paused ? (
+                      <Play size={14} strokeWidth={1.75} />
+                    ) : (
+                      <Pause size={14} strokeWidth={1.75} />
+                    )
+                  }
+                  clickAction={async () => void (await toggle())}
+                />
+                <Button
+                  label="Arrêter"
+                  variant="primary"
+                  size="sm"
+                  icon={<Square size={12} strokeWidth={1.75} />}
+                  clickAction={stop}
+                />
+              </>
+            )}
           </header>
 
           <div className="cl-rec__alerts" aria-live="polite">
@@ -604,15 +695,6 @@ export function RecordingPage({
       {!state && error && (
         <Banner status="error" title="Refusé" description={error} />
       )}
-      <AlertDialog
-        isOpen={confirmStop}
-        onOpenChange={(open) => !open && setConfirmStop(false)}
-        title="Arrêter l'enregistrement ?"
-        description="La séance est enregistrée telle quelle. Son traitement démarre tout de suite si le Mac est branché ; sur batterie, vous le lancerez quand vous voudrez."
-        actionLabel="Arrêter"
-        cancelLabel="Continuer"
-        onAction={stop}
-      />
     </div>
   );
 }

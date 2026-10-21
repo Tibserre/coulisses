@@ -455,6 +455,15 @@ export interface StageView {
   stale: boolean;
 }
 
+/** While a session is processed (ADR 0058): the text once transcribed, before anyone is
+ *  told apart, with what was marked during the recording. */
+export interface Preview {
+  lines: { start: number | null; text: string }[];
+  aligned: boolean;
+  markers: Marker[];
+  notes: TimedNote[];
+}
+
 export interface SessionDetail {
   session: Session;
   source: AudioSource | null;
@@ -839,6 +848,7 @@ export const api = {
   info: () => getJson<AppInfo>("/api/etat"),
   sessions: () => getJson<Session[]>("/api/seances"),
   session: (id: string) => getJson<SessionDetail>(sessionPath(id)),
+  preview: (id: string) => getJson<Preview>(`${sessionPath(id)}/apercu`),
   transcript: (id: string) =>
     getJson<CorrectedView>(`${sessionPath(id)}/transcript`),
   // `version`: the « who said what » run the page shows. A correction meant for another
@@ -886,6 +896,16 @@ export const api = {
     }),
   resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
   stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
+  /** Paused at once, stopped a moment later unless resumed (ADR 0058). */
+  stopRecordingSoon: () =>
+    send<{ state: RecordingState; delay_s: number }>("POST", "/api/enregistrement/arret-differe"),
+  /** The stop taken back, the recording left paused (it was paused before « Arrêter »). */
+  cancelStop: () => send<RecordingState>("POST", "/api/enregistrement/arret-annule"),
+  /** How the last stop went: still under way, done (where to go), or failed. */
+  lastStop: () =>
+    getJson<{ pending: boolean; stopped: StopResult | null; error: string | null }>(
+      "/api/enregistrement/arret",
+    ),
   levelsUrl: "/api/enregistrement/niveaux",
   mark: (kind: MarkerKind, atS?: number) =>
     send<RecordingState>("POST", "/api/enregistrement/marqueurs", { kind, at_s: atS ?? null }),

@@ -64,6 +64,10 @@ class RecordingError(SpaceError):
     """A recording that cannot start, go on or stop; the message is shown to the user."""
 
 
+class NotRecordingError(RecordingError):
+    """Nothing is being recorded: a stop asked twice, a pause after the stop."""
+
+
 class InputDevice(BaseModel):
     index: int
     name: str
@@ -787,7 +791,7 @@ class Recorder:
     def _set_paused(self, paused: bool) -> RecordingState:
         with self._lock:
             if self._current is None:
-                raise RecordingError("Aucun enregistrement en cours.")
+                raise NotRecordingError("Aucun enregistrement en cours.")
             self._current.flags.paused = paused
             return self._state(self._current)
 
@@ -843,7 +847,7 @@ class Recorder:
 
     def _require(self) -> _Recording:
         if self._current is None:
-            raise RecordingError("Aucun enregistrement en cours.")
+            raise NotRecordingError("Aucun enregistrement en cours.")
         return self._current
 
     def stop(self, *, profile: str) -> StopResult:
@@ -854,7 +858,7 @@ class Recorder:
         with self._lock:
             recording = self._current
             if recording is None:
-                raise RecordingError("Aucun enregistrement en cours.")
+                raise NotRecordingError("Aucun enregistrement en cours.")
             self._current = None
             self._closing = True
         said: list[str] = []

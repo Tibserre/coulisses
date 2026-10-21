@@ -46,6 +46,7 @@ from coulisses_app import (
     marks,
     mixing,
     notes,
+    preview,
     projects,
     reminders,
     retention,
@@ -53,6 +54,7 @@ from coulisses_app import (
     sessions,
     settings,
     spaces,
+    stopping,
     summaries,
     versions,
 )
@@ -217,6 +219,16 @@ class ModelsInfo(BaseModel):
     """The model of each writing: title, chapters, summaries (ADR 0039)."""
     models: list[InstalledModel]
     advice: WritingAdvice
+
+
+STOP_DELAY_S = 3.0
+"""Between « Arrêter » and the stop: time to take it back (ADR 0058)."""
+
+
+class StopSoon(BaseModel):
+    state: capture.RecordingState
+    delay_s: float
+    """When the service stops it, from now: the page counts down to it."""
 
 
 class SpaceMoveRequest(BaseModel):
@@ -388,6 +400,9 @@ def create_app(
                 engine_store.shutdown()
             finally:
                 try:
+                    # A stop under way is waited for; one still waiting is dropped, and the
+                    # recording is closed properly below, never lost (spec §7.2, ADR 0058).
+                    app.state.delayed_stop.shutdown()
                     # A recording in progress is closed properly, never lost (spec §7.2).
                     recorder.shutdown(profile=profile)
                 finally:
@@ -648,6 +663,17 @@ def create_app(
             raise HTTPException(status_code=409, detail="Cette étape n'est pas terminée.")
         return prov.model_dump(mode="json")
 
+    @app.get("/api/seances/{session_id}/apercu")
+    def session_preview(session_id: str) -> preview.Preview:
+        """While it is processed: the text once transcribed, before anyone is told apart
+        (ADR 0058), with what was marked during the recording."""
+        if sessions.get_session(data, session_id) is None:
+            raise _not_found("Séance introuvable.")
+        try:
+            return preview.preview(data, session_id)
+        except preview.PreviewError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @app.get("/api/seances/{session_id}/transcript")
     def transcript(session_id: str) -> corrections.CorrectedView:
         """The corrected view: the active run with the user's corrections applied."""
@@ -810,16 +836,49 @@ def create_app(
     def pause_recording() -> capture.RecordingState:
         return recorder.pause()
 
-    @app.post("/api/enregistrement/reprise")
-    def resume_recording() -> capture.RecordingState:
-        return recorder.resume()
-
-    @app.post("/api/enregistrement/arret")
-    def stop_recording() -> capture.StopResult:
+    # « Arrêter » on the recording screen (ADR 0058): paused at once, stopped a moment later
+    # unless taken back, by the service, so that it stops even if the page is closed.
+    def _stop_and_wake() -> capture.StopResult:
         stopped = recorder.stop(profile=profile)
         if processor is not None and stopped.processing:
             processor.wake()
         return stopped
+
+    delayed = stopping.DelayedStop(_stop_and_wake, STOP_DELAY_S)
+    app.state.delayed_stop = delayed
+
+    @app.post("/api/enregistrement/reprise")
+    def resume_recording() -> capture.RecordingState:
+        if not delayed.cancel():
+            raise HTTPException(status_code=409, detail="L'arrêt est déjà en cours.")
+        return recorder.resume()
+
+    @app.post("/api/enregistrement/arret")
+    def stop_recording() -> capture.StopResult:
+        return delayed.stop_now()
+
+    @app.post("/api/enregistrement/arret-differe")
+    def stop_recording_soon() -> StopSoon:
+        """Paused now, stopped in `STOP_DELAY_S` unless taken back: « Reprendre » for a
+        slip. Says when, so that the page counts down to the service's time."""
+        state = recorder.pause()
+        delayed.schedule()
+        return StopSoon(state=state, delay_s=delayed.delay_s)
+
+    @app.post("/api/enregistrement/arret-annule")
+    def cancel_stop() -> capture.RecordingState:
+        """The stop taken back, the recording left paused (it was paused before)."""
+        if not delayed.cancel():
+            raise HTTPException(status_code=409, detail="L'arrêt est déjà en cours.")
+        state = recorder.state()
+        if state is None:
+            raise HTTPException(status_code=409, detail="L'enregistrement est déjà arrêté.")
+        return state
+
+    @app.get("/api/enregistrement/arret")
+    def last_stop() -> stopping.StopOutcome:
+        """How the last stop went: under way, done (where to go, what to say), or failed."""
+        return delayed.outcome()
 
     @app.post("/api/enregistrement/marqueurs", status_code=201)
     def mark(demande: MarkerRequest) -> capture.RecordingState:

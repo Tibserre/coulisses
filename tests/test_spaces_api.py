@@ -341,3 +341,16 @@ def test_a_session_not_processed_yet_moves_to_another_space(
     processed = processed_session(client, data, recording)
     refused = client.put(f"/api/seances/{processed}/espace", json={"espace": other["id"]})
     assert refused.status_code == 422 and "reste dans son espace" in refused.json()["detail"]
+
+
+def test_while_processed_the_text_shows_before_anyone_is_told_apart(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = processed_session(client, data, recording)
+    outline = client.get(f"/api/seances/{session_id}/apercu").json()
+    assert outline["lines"], "the transcription's text, in lines"
+    assert all(line["text"] for line in outline["lines"])
+    # Times are the engine's measured ones, or none: never spread over the text (P2).
+    starts = [line["start"] for line in outline["lines"] if line["start"] is not None]
+    assert starts == sorted(starts)
+    assert client.get("/api/seances/inconnue/apercu").status_code == 404

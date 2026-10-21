@@ -896,3 +896,30 @@ def test_the_service_records_the_microphones_added(
     assert started.status_code == 201, started.text
     assert [t["device"] for t in started.json()["extra"]] == [PHONE.name, usb.name]
     assert client.post("/api/enregistrement/arret").status_code == 200
+
+
+def test_stop_is_paused_at_once_and_done_after_its_delay_unless_taken_back(
+    data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coulisses_app import api
+
+    monkeypatch.setattr(api, "STOP_DELAY_S", 0.2)
+    rec = recorder(data, mic, awake, clock)
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
+    )
+    client.post("/api/enregistrement", json={"non_nommes": 2})
+    mic.push(tone(0.5, 0.3))
+    wait_for(lambda: client.get("/api/enregistrement").json()["elapsed_s"] >= 0.5)
+    # Taken back within the delay: it records again, nothing stopped.
+    assert client.post("/api/enregistrement/arret-differe").json()["state"]["state"] == "paused"
+    assert client.post("/api/enregistrement/reprise").json()["state"] == "recording"
+    time.sleep(0.4)
+    assert client.get("/api/enregistrement").json() is not None
+    # Left alone: stopped after the delay, its outcome kept for the page.
+    session_id = client.get("/api/enregistrement").json()["session_id"]
+    client.post("/api/enregistrement/arret-differe")
+    wait_for(lambda: not client.get("/api/enregistrement/arret").json()["pending"])
+    assert client.get("/api/enregistrement").json() is None
+    outcome = client.get("/api/enregistrement/arret").json()
+    assert outcome["error"] is None and outcome["stopped"]["session_id"] == session_id

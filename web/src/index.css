@@ -4218,3 +4218,159 @@ button.cl-tree__more:hover {
 .cl-rec__bar .cl-mode__now {
   font-size: var(--font-size-sm);
 }
+
+/* « Arrêt dans 3 s · Reprendre »: in place of Pause and Arrêter, the same height. */
+.cl-rec__stopping {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------- After the stop: the review builds itself --- */
+/* ADR 0058. A thin line says where the processing is; the text comes grey, the names settle
+   on it once « who said what » is done. */
+
+.cl-outline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.cl-outline__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-outline__track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-background-muted);
+  overflow: hidden;
+}
+
+.cl-outline__track i {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-outline__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.cl-outline__steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cl-outline__steps li[data-state="succeeded"],
+.cl-outline__steps li[data-state="running"] {
+  color: var(--color-text-primary);
+}
+
+.cl-outline__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-outline__line {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: var(--spacing-3);
+  align-items: baseline;
+}
+
+.cl-outline__text {
+  color: var(--color-text-secondary);
+  font-size: var(--text-large-size);
+  line-height: var(--text-large-leading);
+}
+
+.cl-outline__line[data-kind="note"] .cl-outline__text {
+  font-style: italic;
+  font-size: var(--font-size-base);
+}
+
+.cl-outline__line[data-kind="key_moment"] .cl-outline__text,
+.cl-outline__line[data-kind="scene"] .cl-outline__text,
+.cl-outline__line[data-kind="discussion"] .cl-outline__text {
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* A question or a stop, said calmly: a light ground, no bar on a side, no red. */
+.cl-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-muted);
+}
+
+.cl-ask__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+}
+
+/* On battery, the processing waits for a click (ADR 0027): one line, at a glance. */
+.cl-wait {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+}
+
+.cl-wait__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-primary);
+}
+
+/* Processed while the page was open: the names settle on the text. */
+.cl-review__columns[data-arrived] .cl-turn__head {
+  animation: cl-names-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cl-names-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-review__columns[data-arrived] .cl-turn__head {
+    animation: none;
+  }
+
+  .cl-outline__track i {
+    transition: none;
+  }
+}
