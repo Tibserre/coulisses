@@ -3940,11 +3940,12 @@ button.cl-tree__more:hover {
   background: var(--color-text-secondary);
 }
 
+/* The text's font: its digits all have the same width (the headings' do not). */
 .cl-rec__time {
-  font-family: var(--font-family-heading);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-lg);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .cl-rec__paused {
@@ -3965,8 +3966,22 @@ button.cl-tree__more:hover {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
+  height: 28px;
+  padding: 0 var(--spacing-2) 0 var(--spacing-1);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-rec__system:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-rec__system[data-muted] .cl-rec__meter {
+  opacity: 0.5;
 }
 
 .cl-rec__spacer {

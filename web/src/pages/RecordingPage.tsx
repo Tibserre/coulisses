@@ -6,6 +6,8 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import {
   ArrowRight,
+  Monitor,
+  MonitorOff,
   Pause,
   PenLine,
   Play,
@@ -252,7 +254,12 @@ export function RecordingPage({
           <header className="cl-rec__bar">
             <span className="cl-rec__now" data-paused={paused || undefined}>
               <span className="cl-recording__dot" aria-hidden />
-              <span className="cl-rec__time" aria-live="off">
+              {/* A width kept for its digits: nothing moves while the time goes by. */}
+              <span
+                className="cl-rec__time"
+                aria-live="off"
+                style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
+              >
                 {formatClock(elapsed)}
               </span>
               {paused && <span className="cl-rec__paused">en pause</span>}
@@ -261,35 +268,40 @@ export function RecordingPage({
               <LevelMeter level={level} peak={peak} clipping={state.clipping} />
             </span>
             {system && (
-              <span
+              // The computer's sound: its icon and its level are one button (ADR 0056);
+              // cut, the icon is crossed and the level greyed and flat.
+              <button
+                type="button"
                 className="cl-rec__system"
                 data-muted={system.muted || undefined}
+                title={
+                  system.muted
+                    ? "Rétablir le son de l'ordinateur"
+                    : "Couper le son de l'ordinateur"
+                }
+                aria-label={
+                  system.muted
+                    ? "Son de l'ordinateur coupé. Le rétablir"
+                    : "Son de l'ordinateur. Le couper"
+                }
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  void act(() => api.muteSystem(!system.muted));
+                }}
               >
                 {system.muted ? (
-                  <span>Son de l'ordinateur coupé</span>
+                  <MonitorOff size={18} strokeWidth={1.75} aria-hidden />
                 ) : (
-                  <>
-                    <span>Son de l'ordinateur</span>
-                    <span className="cl-rec__meter">
-                      <LevelMeter
-                        level={meterValue(system.levels.rms_db)}
-                        peak={meterValue(system.levels.peak_db)}
-                        clipping={system.clipping}
-                      />
-                    </span>
-                  </>
+                  <Monitor size={18} strokeWidth={1.75} aria-hidden />
                 )}
-                <button
-                  type="button"
-                  className="cl-linkbtn"
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    void act(() => api.muteSystem(!system.muted));
-                  }}
-                >
-                  {system.muted ? "Rétablir" : "Couper"}
-                </button>
-              </span>
+                <span className="cl-rec__meter">
+                  <LevelMeter
+                    level={system.muted ? 0 : meterValue(system.levels.rms_db)}
+                    peak={system.muted ? 0 : meterValue(system.levels.peak_db)}
+                    clipping={!system.muted && system.clipping}
+                  />
+                </span>
+              </button>
             )}
             <span className="cl-rec__spacer" />
             {mode ? (
