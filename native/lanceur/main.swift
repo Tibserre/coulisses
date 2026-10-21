@@ -13,6 +13,7 @@
 // (COULISSES_PROJET, `scripts/tester-branche.sh`).
 
 import AppKit
+import UserNotifications
 import WebKit
 
 #if COULISSES_SPARKLE
@@ -135,6 +136,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     var stopping = false
     /// The app is quitting: nothing more is shown (no update window on the way out).
     var quitting = false
+    /// While a recording runs: its red dot and time in the menu bar, with its menu.
+    var statusItem: NSStatusItem?
+    /// What the menu was last built for (paused, the alert shown): rebuilt when it changes.
+    var statusMenuFor: String?
+    var recordingTimer: Timer?
+    /// The recording shown, and when the service last answered about it.
+    var shownSession: String?
+    var lastAnswer = Date()
+    var undecodedLogged = false
+    /// The service's alerts already notified, by session and key: each one once.
+    var notified: Set<String> = []
+    var askedNotifications = false
+    /// What the page reads (`notifications`): "allowed", "denied" or "unknown".
+    var notificationStatus = "unknown"
     #if COULISSES_SPARKLE
         /// Sparkle (ADR 0040): only in the published app, built with its feed and its key.
         var updates: SPUStandardUpdaterController?
@@ -149,6 +164,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        setUpNotifications()
+        watchRecording()
         startUpdates()
         buildMenu()
         makeWindow()
@@ -406,7 +423,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         configuration.websiteDataStore = .default()
         // Its lists would be fetched from the network (P1): the window only shows 127.0.0.1.
         configuration.preferences.isFraudulentWebsiteWarningEnabled = false
-        addUpdatesBridge(to: configuration.userContentController)
+        addBridge(to: configuration.userContentController)
         web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
         web.uiDelegate = self
@@ -625,10 +642,307 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     }
 }
 
+// -- what the page reads from the app, and asks of it -----------------------------------------
+
+extension AppDelegate: WKScriptMessageHandler {
+    /// `window.coulissesApp` (web/src/appBridge.ts): the notifications' permission, and in the
+    /// published app its updates (ADR 0040, 0051).
+    func addBridge(to content: WKUserContentController) {
+        content.add(self, name: "coulisses")
+        refreshBridge(content)
+    }
+
+    func refreshBridge(_ given: WKUserContentController? = nil) {
+        guard let content = given ?? web?.configuration.userContentController else { return }
+        var state: [String: Any] = ["notifications": notificationStatus]
+        if let updates = updatesBridgeState() { state["updates"] = updates }
+        let json =
+            (try? JSONSerialization.data(withJSONObject: state)).flatMap {
+                String(data: $0, encoding: .utf8)
+            } ?? "{}"
+        // For the next page load, and told to the page already shown (appBridge.ts).
+        content.removeAllUserScripts()
+        content.addUserScript(
+            WKUserScript(
+                source: "window.coulissesApp = \(json);",
+                injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        web?.evaluateJavaScript(
+            "window.coulissesApp = \(json);"
+                + " window.dispatchEvent(new Event('coulisses:mises-a-jour'));")
+    }
+
+    func userContentController(
+        _ controller: WKUserContentController, didReceive message: WKScriptMessage
+    ) {
+        // Only from the service's page, never from another origin.
+        let origin = message.frameInfo.securityOrigin
+        guard message.frameInfo.isMainFrame, origin.host == base.host, origin.port == base.port ?? 0,
+            let body = message.body as? [String: Any], let action = body["action"] as? String,
+            handleUpdateMessage(action, body)
+        else { return }
+        refreshBridge()
+    }
+}
+
+// -- the recording, seen from outside the window -------------------------------------------
+//
+// While a recording runs, a red dot and its time stay in the menu bar, with Pause/Reprendre,
+// Arrêter and Ouvrir Coulisses; the service's alerts (a long silence, a set duration) become
+// notifications with Arrêter and Continuer. The service decides the alerts and words them
+// (its settings, its tests); the app shows each one once. Nothing ever stops by itself.
+
+struct RecordingAlert: Decodable {
+    let key: String
+    let title: String
+    let text: String
+}
+
+/// GET /api/enregistrement: what the menu bar needs (an older service has no `alert`).
+struct RecordingNow: Decodable {
+    let session_id: String
+    let state: String
+    let elapsed_s: Double
+    let alert: RecordingAlert?
+}
+
+func clock(_ seconds: Double) -> String {
+    let total = Int(seconds)
+    let (h, m, s) = (total / 3600, total / 60 % 60, total % 60)
+    return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func setUpNotifications() {
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        let stop = UNNotificationAction(identifier: "arreter", title: "Arrêter", options: [])
+        let keep = UNNotificationAction(identifier: "continuer", title: "Continuer", options: [])
+        center.setNotificationCategories([
+            UNNotificationCategory(
+                identifier: "enregistrement", actions: [stop, keep], intentIdentifiers: [], options: [])
+        ])
+        readNotificationStatus()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        readNotificationStatus()  // changed in Réglages Système meanwhile
+    }
+
+    func readNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let status: String
+            switch settings.authorizationStatus {
+            case .authorized, .provisional: status = "allowed"
+            case .denied: status = "denied"
+            default: status = "unknown"
+            }
+            DispatchQueue.main.async {
+                self.notificationStatus = status
+                self.refreshBridge()
+            }
+        }
+    }
+
+    /// Asked at the first recording, not at launch.
+    func askNotificationsOnce() {
+        guard !askedNotifications else { return }
+        askedNotifications = true
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
+            if let error { appendToLog("notifications : \(error.localizedDescription)") }
+            self.readNotificationStatus()
+        }
+    }
+
+    func watchRecording() { scheduleWatch(after: 2) }
+
+    /// Every second while recording, every two otherwise: 127.0.0.1 only.
+    func scheduleWatch(after seconds: TimeInterval) {
+        recordingTimer?.invalidate()
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) {
+            [weak self] _ in self?.pollRecording()
+        }
+    }
+
+    func pollRecording() {
+        var request = URLRequest(url: base.appendingPathComponent("api/enregistrement"))
+        request.timeoutInterval = 2
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            let answered = (response as? HTTPURLResponse)?.statusCode == 200
+            let body = data.map { String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .whitespaces) }
+            let now = answered ? data.flatMap { try? JSONDecoder().decode(RecordingNow.self, from: $0) } : nil
+            DispatchQueue.main.async {
+                if answered && body == "null" {
+                    self.lastAnswer = Date()
+                    self.showRecording(nil)  // nothing records
+                } else if let now {
+                    self.lastAnswer = Date()
+                    self.showRecording(now)
+                } else if answered {
+                    // Something this app cannot read: never taken for « nothing records ».
+                    if !self.undecodedLogged {
+                        self.undecodedLogged = true
+                        appendToLog("barre des menus : réponse illisible de /api/enregistrement : \(body ?? "")")
+                    }
+                } else if self.statusItem != nil, Date().timeIntervalSince(self.lastAnswer) > 8 {
+                    // A busy service is not a stopped recording: said, nothing stopped.
+                    self.statusItem?.button?.attributedTitle = NSAttributedString(
+                        string: "◯ \(appName) ne répond pas")
+                }
+                self.scheduleWatch(after: self.statusItem == nil ? 2 : 1)
+            }
+        }.resume()
+    }
+
+    func showRecording(_ now: RecordingNow?) {
+        guard let now, !quitting else {
+            if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
+            statusItem = nil
+            statusMenuFor = nil
+            if let ended = shownSession {
+                // Its reminders are of no use any more: « Arrêter » must not act on another.
+                let ids = notified.filter { $0.hasPrefix(ended + "|") }
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: Array(ids))
+            }
+            shownSession = nil
+            return
+        }
+        shownSession = now.session_id
+        if statusItem == nil {
+            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            askNotificationsOnce()
+        }
+        let paused = now.state == "paused"
+        let title = NSMutableAttributedString(
+            string: paused ? "◯ " : "● ",
+            attributes: [.foregroundColor: paused ? NSColor.secondaryLabelColor : NSColor.systemRed])
+        title.append(
+            NSAttributedString(
+                string: (isDev ? "dév " : "") + clock(now.elapsed_s) + (paused ? " en pause" : ""),
+                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 0, weight: .regular)]))
+        statusItem?.button?.attributedTitle = title
+        let menuFor = "\(paused)|\(now.alert?.key ?? "")"
+        if statusMenuFor != menuFor {
+            statusMenuFor = menuFor
+            let menu = NSMenu()
+            if let alert = now.alert {
+                // Seen here too, notifications allowed or not.
+                let line = NSMenuItem(title: alert.title, action: nil, keyEquivalent: "")
+                line.isEnabled = false
+                menu.addItem(line)
+                menu.addItem(.separator())
+            }
+            menu.addItem(
+                NSMenuItem(
+                    title: paused ? "Reprendre" : "Pause",
+                    action: paused ? #selector(resumeRecording) : #selector(pauseRecording), keyEquivalent: ""))
+            menu.addItem(
+                NSMenuItem(title: "Arrêter l'enregistrement", action: #selector(stopRecording), keyEquivalent: ""))
+            menu.addItem(.separator())
+            menu.addItem(NSMenuItem(title: "Ouvrir \(appName)", action: #selector(openWindow), keyEquivalent: ""))
+            menu.items.forEach { $0.target = self }
+            statusItem?.menu = menu
+        }
+        if let alert = now.alert { notify(alert, session: now.session_id) }
+    }
+
+    func notify(_ alert: RecordingAlert, session: String) {
+        let id = "\(session)|\(alert.key)"
+        guard notified.insert(id).inserted else { return }
+        if notificationStatus == "denied" {
+            appendToLog("rappel non montré, notifications refusées : \(alert.title)")
+            return
+        }
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.body = alert.text
+        content.sound = .default
+        content.categoryIdentifier = "enregistrement"
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: id, content: content, trigger: nil)
+        ) { error in
+            if let error { appendToLog("rappel non montré : \(error.localizedDescription)") }
+        }
+    }
+
+    /// Shown even when Coulisses is in front: the reminder is the point.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let session = String(response.notification.request.identifier.split(separator: "|").first ?? "")
+        switch response.actionIdentifier {
+        case "arreter": stopIfStill(session)
+        case "continuer": break  // the service does not raise the same alert again
+        default: openWindow()
+        }
+        completionHandler()
+    }
+
+    /// « Arrêter » from a reminder: only the recording it was about, never another one.
+    func stopIfStill(_ session: String) {
+        var request = URLRequest(url: base.appendingPathComponent("api/enregistrement"))
+        request.timeoutInterval = 5
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            let now = data.flatMap { try? JSONDecoder().decode(RecordingNow.self, from: $0) }
+            DispatchQueue.main.async {
+                if now?.session_id == session {
+                    self.stopRecording()
+                } else {
+                    let alert = NSAlert()
+                    alert.messageText = "Cet enregistrement est déjà terminé."
+                    alert.informativeText = "Rien n'a été arrêté."
+                    NSApp.activate(ignoringOtherApps: true)
+                    alert.runModal()
+                }
+            }
+        }.resume()
+    }
+
+    @objc func pauseRecording() { send("api/enregistrement/pause", failing: "La pause n'a pas pu être faite.") }
+    @objc func resumeRecording() { send("api/enregistrement/reprise", failing: "L'enregistrement n'a pas pu reprendre.") }
+    @objc func stopRecording() { send("api/enregistrement/arret", failing: "L'enregistrement n'a pas pu être arrêté.") }
+
+    @objc func openWindow() {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// The service's own routes, as the page uses them; a failure is said, never silent.
+    func send(_ path: String, failing: String) {
+        var request = URLRequest(url: base.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let detail =
+                data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["detail"]
+                as? String
+            DispatchQueue.main.async {
+                if (200..<300).contains(code) {
+                    self.pollRecording()
+                    return
+                }
+                let alert = NSAlert()
+                alert.messageText = failing
+                alert.informativeText = detail ?? error?.localizedDescription ?? "Coulisses ne répond pas (code \(code))."
+                NSApp.activate(ignoringOtherApps: true)
+                alert.runModal()
+            }
+        }.resume()
+    }
+}
+
 // -- updates (ADR 0040) ---------------------------------------------------------------------
 
 #if COULISSES_SPARKLE
-    extension AppDelegate: SPUUpdaterDelegate, SPUStandardUserDriverDelegate, WKScriptMessageHandler {
+    extension AppDelegate: SPUUpdaterDelegate, SPUStandardUserDriverDelegate {
         /// Sparkle looks for updates only after the user's consent (it asks on the second
         /// launch) or on demand; nothing downloads nor installs without a click (Info.plist:
         /// no automatic updates, no system profile). The development app has no updater.
@@ -692,37 +1006,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             }
         }
 
-        /// What the page reads (web/src/appBridge.ts), and where it sends its two requests.
-        func addUpdatesBridge(to content: WKUserContentController) {
-            guard updates != nil else { return }
-            content.add(self, name: "coulisses")
-            refreshUpdatesState(content)
-        }
-
-        func refreshUpdatesState(_ given: WKUserContentController? = nil) {
-            guard let updater = updates?.updater,
-                let content = given ?? web?.configuration.userContentController
-            else { return }
-            let state: [String: Any] = [
+        /// The updates' part of what the page reads (web/src/appBridge.ts).
+        func updatesBridgeState() -> [String: Any]? {
+            guard let updater = updates?.updater else { return nil }
+            return [
                 "ready": updateReady,
                 "automatic": updater.automaticallyChecksForUpdates,
                 "lastCheck": updater.lastUpdateCheckDate.map { ISO8601DateFormatter().string(from: $0) }
                     ?? NSNull(),
             ]
-            let json =
-                (try? JSONSerialization.data(withJSONObject: state)).flatMap {
-                    String(data: $0, encoding: .utf8)
-                } ?? "{}"
-            // For the next page load, and told to the page already shown (appBridge.ts).
-            content.removeAllUserScripts()
-            content.addUserScript(
-                WKUserScript(
-                    source: "window.coulissesApp = { updates: \(json) };",
-                    injectionTime: .atDocumentStart, forMainFrameOnly: true))
-            web?.evaluateJavaScript(
-                "window.coulissesApp = { updates: \(json) };"
-                    + " window.dispatchEvent(new Event('coulisses:mises-a-jour'));")
         }
+
+        func refreshUpdatesState() { refreshBridge() }
 
         // A version found by a scheduled check is not shown in Sparkle's window when the
         // service's page shows the reminder (it said so): its « Mettre à jour » is the
@@ -754,15 +1049,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             refreshUpdatesState()
         }
 
-        func userContentController(
-            _ controller: WKUserContentController, didReceive message: WKScriptMessage
-        ) {
-            // Only from the service's page, never from another origin.
-            let origin = message.frameInfo.securityOrigin
-            guard message.frameInfo.isMainFrame, origin.host == base.host, origin.port == base.port ?? 0,
-                let body = message.body as? [String: Any], let action = body["action"] as? String,
-                let updates
-            else { return }
+        /// The page's requests about updates; false for any other.
+        func handleUpdateMessage(_ action: String, _ body: [String: Any]) -> Bool {
+            guard let updates else { return false }
             switch action {
             case "mises-a-jour-automatiques":
                 if let on = body["value"] as? Bool { updates.updater.automaticallyChecksForUpdates = on }
@@ -772,9 +1061,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 // Said once when shown, and withdrawn (false) when it no longer is.
                 if body["value"] as? Bool ?? true { pageShowsReminder = true } else { reminderWithdrawn() }
             default:
-                return
+                return false
             }
-            refreshUpdatesState()
+            return true
         }
 
         /// What the service is doing (GET /api/activite): said if it records or processes.
@@ -846,8 +1135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     extension AppDelegate {
         func startUpdates() {}
         func updatesMenuItem() -> NSMenuItem? { nil }
-        func addUpdatesBridge(to content: WKUserContentController) {}
-        func refreshUpdatesState() {}
+        func updatesBridgeState() -> [String: Any]? { nil }
+        func handleUpdateMessage(_ action: String, _ body: [String: Any]) -> Bool { false }
+        func refreshUpdatesState() { refreshBridge() }
         func forgetReminder() {}
         func reminderWithdrawn() {}
         func pageChanged() {}
