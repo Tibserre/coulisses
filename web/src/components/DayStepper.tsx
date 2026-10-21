@@ -2,8 +2,8 @@ import { Minus, Plus } from "lucide-react";
 import { plural } from "../format.ts";
 import { nextStep } from "../retention.ts";
 
-/** A number of days, changed by − and + through usual values (a week, a month…): no field
- *  to type into. */
+/** A number of days (or minutes, `say`), changed by − and + through usual values (a week,
+ *  a month…): no field to type into. */
 export function DayStepper({
   label,
   description,
@@ -12,6 +12,7 @@ export function DayStepper({
   min = 1,
   max = Number.POSITIVE_INFINITY,
   isDisabled = false,
+  say = (n: number) => plural(n, "jour", "jours"),
   onChange,
 }: {
   label: string;
@@ -22,6 +23,8 @@ export function DayStepper({
   max?: number;
   /** Not read yet: shown, not changed. */
   isDisabled?: boolean;
+  /** The value as said: days unless told otherwise. */
+  say?: (value: number) => string;
   onChange: (value: number) => void;
 }) {
   const down = nextStep(steps, value, false, min, max);
@@ -43,7 +46,7 @@ export function DayStepper({
         >
           <Minus size={14} strokeWidth={1.75} aria-hidden />
         </button>
-        <output aria-live="polite">{plural(value, "jour", "jours")}</output>
+        <output aria-live="polite">{say(value)}</output>
         <button
           type="button"
           aria-label={`${label} : plus`}

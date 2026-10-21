@@ -221,6 +221,41 @@ def test_too_quiet_and_saturation_are_said(
     rec.stop(profile="essai")
 
 
+def test_the_silence_is_measured_from_the_last_voice(
+    data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
+) -> None:
+    rec = recorder(data, mic, awake, clock)
+    start(rec)
+    mic.push(tone(1.0, 0.3))  # a voice, about -13 dBFS
+    mic.push(tone(1.5, 0.0005))  # a quiet room, about -69 dBFS
+    wait_for(lambda: rec.state().elapsed_s >= 2.5)  # type: ignore[union-attr]
+    state = rec.state()
+    assert state is not None
+    assert state.silent_for_s == pytest.approx(1.5, abs=0.05)
+    assert state.alert is None  # far from the 5 minutes
+    rec.stop(profile="essai")
+
+
+def test_a_short_noise_is_not_a_voice_and_the_alert_comes_once_the_silence_is_long(
+    data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
+) -> None:
+    from coulisses_app import reminders
+
+    rec = recorder(data, mic, awake, clock)
+    start(rec)
+    rec.reminders = reminders.Reminders(silence_min=2, duration_min=90)
+    mic.push(tone(1.0, 0.3))  # a voice, about -13 dBFS
+    quiet = tone(121.0, 0.0005)  # a quiet room, about -69 dBFS
+    quiet[48_000:52_800] = 0.3  # a knock, 0.1 s, a second in: not a voice
+    mic.push(quiet)
+    wait_for(lambda: rec.state().elapsed_s >= 122.0)  # type: ignore[union-attr]
+    state = rec.state()
+    assert state is not None and state.alert is not None
+    assert state.alert.key.startswith("silence-")
+    assert state.alert.title == "Personne ne parle depuis 2 min"
+    rec.stop(profile="essai")
+
+
 def test_a_microphone_that_stops_delivering_is_said(
     data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
 ) -> None:

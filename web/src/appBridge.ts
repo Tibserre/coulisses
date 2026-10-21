@@ -25,7 +25,7 @@ interface AppMessages {
 }
 
 interface AppWindow {
-  coulissesApp?: { updates?: Partial<UpdatesState> };
+  coulissesApp?: { updates?: Partial<UpdatesState>; notifications?: string };
   webkit?: { messageHandlers?: { coulisses?: AppMessages } };
 }
 
@@ -74,4 +74,25 @@ export function useUpdateReady(): boolean {
     };
   }, []);
   return ready;
+}
+
+/** Whether macOS lets the app in the Dock show its notifications (the recording's alerts,
+ *  ADR 0054): `unknown` until macOS has asked. Null where there is no app (a browser), or
+ *  for a value the page does not know: nothing is guessed. */
+export type NotificationsState = "allowed" | "denied" | "unknown";
+
+export function appNotifications(win: unknown = globalThis): NotificationsState | null {
+  const given = (win as AppWindow).coulissesApp?.notifications;
+  return given === "allowed" || given === "denied" || given === "unknown" ? given : null;
+}
+
+/** The same, followed while the page is open (the app sends its event on each change). */
+export function useAppNotifications(): NotificationsState | null {
+  const [state, setState] = useState(() => appNotifications());
+  useEffect(() => {
+    const read = () => setState(appNotifications());
+    window.addEventListener(UPDATES_CHANGED, read);
+    return () => window.removeEventListener(UPDATES_CHANGED, read);
+  }, []);
+  return state;
 }

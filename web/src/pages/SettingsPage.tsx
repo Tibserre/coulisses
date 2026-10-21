@@ -13,6 +13,7 @@ import {
   type AppInfo,
   type Folders,
   type PurgeAnnouncement,
+  type Reminders,
   type RetentionInfo,
 } from "../api.ts";
 import { DayStepper } from "../components/DayStepper.tsx";
@@ -20,6 +21,7 @@ import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
 import { UpdatesSection } from "../components/UpdatesSection.tsx";
 import { WritingModels } from "../components/WritingModels.tsx";
+import { useAppNotifications } from "../appBridge.ts";
 import { setDevMode, useDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
@@ -107,41 +109,44 @@ export function SettingsPage({
       notice_days: next.notice ?? shownNotice,
     };
   };
-  const flush = useCallback((leaving = false) => {
-    const value = pending.current;
-    pending.current = null;
-    if (
-      value === null ||
-      (kept.current?.retention_days === value.retention_days &&
-        kept.current?.notice_days === value.notice_days)
-    ) {
-      if (value !== null) {
-        setDays(null);
-        setNotice(null);
+  const flush = useCallback(
+    (leaving = false) => {
+      const value = pending.current;
+      pending.current = null;
+      if (
+        value === null ||
+        (kept.current?.retention_days === value.retention_days &&
+          kept.current?.notice_days === value.notice_days)
+      ) {
+        if (value !== null) {
+          setDays(null);
+          setNotice(null);
+        }
+        return;
       }
-      return;
-    }
-    // The page goes away (closed, reloaded): sent at once, and finished by the browser. No
-    // page is left to say a refusal; the next opening shows the values kept, as they are.
-    if (leaving) {
-      void api.setRetention(value, true).catch(() => undefined);
-      return;
-    }
-    queue.current = queue.current.then(async () => {
-      try {
-        await api.setRetention(value);
-        setError(null);
-      } catch (e) {
-        setError((e as Error).message);
+      // The page goes away (closed, reloaded): sent at once, and finished by the browser. No
+      // page is left to say a refusal; the next opening shows the values kept, as they are.
+      if (leaving) {
+        void api.setRetention(value, true).catch(() => undefined);
+        return;
       }
-      await load();
-      // A change made meanwhile stays shown, to be kept in its turn.
-      if (pending.current === null) {
-        setDays(null);
-        setNotice(null);
-      }
-    });
-  }, [load]);
+      queue.current = queue.current.then(async () => {
+        try {
+          await api.setRetention(value);
+          setError(null);
+        } catch (e) {
+          setError((e as Error).message);
+        }
+        await load();
+        // A change made meanwhile stays shown, to be kept in its turn.
+        if (pending.current === null) {
+          setDays(null);
+          setNotice(null);
+        }
+      });
+    },
+    [load],
+  );
   useEffect(() => {
     const leave = () => flush(true);
     window.addEventListener("pagehide", leave);
@@ -205,15 +210,16 @@ export function SettingsPage({
             <section className="cl-settings__section">
               <Heading level={3}>L'audio des séances</Heading>
               <Text color="secondary">
-                L'audio d'une séance traitée est supprimé après ce délai, avec un
-                préavis ; le texte, les noms et les résumés restent. Une séance
-                peut garder son audio depuis son menu « … ».
+                L'audio d'une séance traitée est supprimé après ce délai, avec
+                un préavis ; le texte, les noms et les résumés restent. Une
+                séance peut garder son audio depuis son menu « … ».
               </Text>
               <div
                 className="cl-settings__steppers"
                 onMouseLeave={() => flush()}
                 onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flush();
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                    flush();
                 }}
               >
                 <DayStepper
@@ -276,7 +282,9 @@ export function SettingsPage({
                   {info.coming.map((c) => (
                     <li key={c.session_id}>
                       <span className="cl-settings__text">
-                        <a href={`#/seance/${encodeURIComponent(c.session_id)}`}>
+                        <a
+                          href={`#/seance/${encodeURIComponent(c.session_id)}`}
+                        >
                           {name(c)}
                         </a>
                         <Text type="supporting">
@@ -287,7 +295,9 @@ export function SettingsPage({
                         size="sm"
                         variant="ghost"
                         label="Prolonger"
-                        clickAction={() => act(() => api.extendAudio(c.session_id))}
+                        clickAction={() =>
+                          act(() => api.extendAudio(c.session_id))
+                        }
                       />
                       <Button
                         size="sm"
@@ -301,6 +311,8 @@ export function SettingsPage({
                 </ul>
               )}
             </section>
+
+            <RemindersSection />
 
             <ExportFolderSection />
           </>
@@ -329,8 +341,8 @@ export function SettingsPage({
             <section className="cl-settings__section">
               <Heading level={3}>Dossiers</Heading>
               <Text color="secondary">
-                Tout reste sur ce Mac. Le journal technique aide à comprendre une
-                erreur.
+                Tout reste sur ce Mac. Le journal technique aide à comprendre
+                une erreur.
               </Text>
               <div className="cl-settings__buttons">
                 <Button
@@ -364,8 +376,8 @@ export function SettingsPage({
               />
               {dev && about && (
                 <Text type="supporting">
-                  Coulisses {about.app_version} · moteur {about.engine_version} ·
-                  chaîne « {about.profile} »
+                  Coulisses {about.app_version} · moteur {about.engine_version}{" "}
+                  · chaîne « {about.profile} »
                 </Text>
               )}
             </section>
@@ -374,10 +386,10 @@ export function SettingsPage({
               <section className="cl-settings__section">
                 <Heading level={3}>Copies de la base</Heading>
                 <Text color="secondary">
-                  Une copie est faite quand une mise à jour change le format de la
-                  base ; les trois dernières sont gardées, plus celle d'un
-                  rapatriement des données. Supprimer une séance l'efface aussi de
-                  ces copies.
+                  Une copie est faite quand une mise à jour change le format de
+                  la base ; les trois dernières sont gardées, plus celle d'un
+                  rapatriement des données. Supprimer une séance l'efface aussi
+                  de ces copies.
                 </Text>
                 {info === null && <RowsSkeleton />}
                 <ul className="cl-settings__list">
@@ -447,7 +459,8 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
                     {e.session_title ? ` : « ${e.session_title} »` : ""}
                   </Text>
                   <Text type="supporting">
-                    {formatDateTime(e.at)} · {plural(e.files, "fichier", "fichiers")},{" "}
+                    {formatDateTime(e.at)} ·{" "}
+                    {plural(e.files, "fichier", "fichiers")},{" "}
                     {formatBytes(e.bytes)}
                     {e.problems.length > 0 && " · incomplète"}
                   </Text>
@@ -477,8 +490,16 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
         </div>
       }
     >
-      <button type="button" className="cl-modelpick" aria-label={`Déjà supprimés : ${journal.length}. Voir`}>
-        <span className="cl-modelpick__name">{journal.length >= JOURNAL_LIMIT ? `${JOURNAL_LIMIT} et plus` : journal.length}</span>
+      <button
+        type="button"
+        className="cl-modelpick"
+        aria-label={`Déjà supprimés : ${journal.length}. Voir`}
+      >
+        <span className="cl-modelpick__name">
+          {journal.length >= JOURNAL_LIMIT
+            ? `${JOURNAL_LIMIT} et plus`
+            : journal.length}
+        </span>
         <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
       </button>
     </Popover>
@@ -486,10 +507,14 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
 }
 
 /** While the copies are read: the three rows kept (ADR 0052), at their height. */
-function RowsSkeleton() {
+function RowsSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <ul className="cl-settings__list cl-skeleton" aria-busy="true" aria-label="Lecture">
-      {[0.5, 0.42, 0.56].map((w, i) => (
+    <ul
+      className="cl-settings__list cl-skeleton"
+      aria-busy="true"
+      aria-label="Lecture"
+    >
+      {[0.5, 0.42, 0.56].slice(0, rows).map((w, i) => (
         <li key={i}>
           <span className="cl-settings__text">
             <Skeleton width={`${w * 100}%`} height={14} radius={1} index={i} />
@@ -498,5 +523,95 @@ function RowsSkeleton() {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The usual values of the reminders, as the service keeps them (reminders.py). */
+const SILENCE_STEPS = [2, 3, 5, 10, 15, 20, 30];
+const DURATION_STEPS = [30, 45, 60, 90, 120, 180, 240];
+
+/** « 5 min », « 1 h », « 1 h 30 ». */
+function minutes(value: number): string {
+  const hours = Math.floor(value / 60);
+  const rest = value % 60;
+  if (!hours) return `${rest} min`;
+  return rest ? `${hours} h ${String(rest).padStart(2, "0")}` : `${hours} h`;
+}
+
+/** What reminds the user that a recording runs (ADR 0054): a notification after a long
+ *  silence and at each duration reached, never a stop by itself; the menu bar says it
+ *  records all along. Changed in place: each step is kept at once (nothing is announced). */
+function RemindersSection() {
+  const [kept, setKept] = useState<Reminders | null>(null);
+  const [error, setError] = useState<{ title: string; text: string } | null>(
+    null,
+  );
+  const notifications = useAppNotifications();
+  useEffect(() => {
+    api
+      .reminders()
+      .then(setKept, (e: Error) =>
+        setError({ title: "Réglage non lu", text: e.message }),
+      );
+  }, []);
+  const change = async (next: Reminders) => {
+    const before = kept;
+    setKept(next);
+    try {
+      setKept(await api.setReminders(next));
+      setError(null);
+    } catch (e) {
+      setKept(before);
+      setError({ title: "Réglage non enregistré", text: (e as Error).message });
+    }
+  };
+  return (
+    <section className="cl-settings__section">
+      <Heading level={3}>Pendant un enregistrement</Heading>
+      <Text color="secondary">
+        Coulisses vous demande si la réunion est finie ; il n'arrête jamais
+        l'enregistrement de lui-même. La barre des menus montre qu'il
+        enregistre.
+      </Text>
+      {error && (
+        <Banner status="error" title={error.title} description={error.text} />
+      )}
+      {/* Nothing shown before it is read: never values the user did not keep. */}
+      {kept === null ? (
+        !error && <RowsSkeleton rows={2} />
+      ) : (
+        <div className="cl-settings__steppers">
+          <DayStepper
+            label="Prévenir après un silence de"
+            description="Personne ne parle, au micro comme dans le son de l'ordinateur."
+            value={kept.silence_min}
+            steps={SILENCE_STEPS}
+            say={minutes}
+            onChange={(v) => void change({ ...kept, silence_min: v })}
+          />
+          <DayStepper
+            label="Rappeler toutes les"
+            description="Que l'enregistrement tourne toujours."
+            value={kept.duration_min}
+            steps={DURATION_STEPS}
+            say={minutes}
+            onChange={(v) => void change({ ...kept, duration_min: v })}
+          />
+        </div>
+      )}
+      {notifications === "denied" && (
+        <Text type="supporting">
+          macOS bloque les notifications de Coulisses : autorisez-les dans
+          Réglages Système, Notifications. La barre des menus rappelle quand
+          même l'enregistrement.
+        </Text>
+      )}
+      {notifications === "unknown" && (
+        <Text type="supporting">
+          macOS demandera d'autoriser les notifications au premier
+          enregistrement.
+        </Text>
+      )}
+    </section>
   );
 }
