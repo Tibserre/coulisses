@@ -71,11 +71,12 @@ export function RecordingPage({
   const veilBody = useRef<HTMLDivElement>(null);
   const veilShown =
     Boolean(state) && (state?.state === "paused" || stoppingSince !== null);
-  // Shown: the focus on « Reprendre », for the keyboard and the screen readers.
+  // Shown: the focus on the veil itself, not on « Reprendre » (which would show a ring
+  // after a click): the screen readers read it, Space resumes, Tab reaches « Reprendre ».
   useEffect(() => {
     if (!veilShown) return;
     const timer = window.setTimeout(() =>
-      veilBody.current?.querySelector("button")?.focus(),
+      veilBody.current?.focus({ preventScroll: true }),
     );
     return () => window.clearTimeout(timer);
   }, [veilShown, stoppingSince]);
@@ -723,8 +724,10 @@ export function RecordingPage({
           aria-modal="true"
           aria-labelledby="cl-rec-veil-title"
           aria-describedby={stopLeft !== null ? "cl-rec-veil-desc" : undefined}
+          ref={veilBody}
+          tabIndex={-1}
         >
-          <div className="cl-rec__veilbody" ref={veilBody}>
+          <div className="cl-rec__veilbody">
             {/* What goes wrong comes to the front too: never hidden under the veil (P8). */}
             <div className="cl-rec__veilalerts" aria-live="polite">
               {lost && (

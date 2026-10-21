@@ -4381,6 +4381,10 @@ button.cl-tree__more:hover {
   animation: cl-veil-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.cl-rec__veil:focus {
+  outline: none;
+}
+
 .cl-rec__veilbody {
   position: sticky;
   top: 18vh;
