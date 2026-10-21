@@ -311,6 +311,10 @@ export function RecordingPage({
       : Math.max(1, Math.ceil((stopDelayMs - (now - stoppingSince)) / 1000));
 
   const paused = state?.state === "paused";
+  const micsCut =
+    state && state.extra.length > 0
+      ? `${state.extra.length + 1} micros coupés`
+      : "Micro coupé";
   const level = state ? meterValue(state.levels.rms_db) : 0;
   const peak = state ? meterValue(state.levels.peak_db) : 0;
   const elapsed = state?.elapsed_s ?? 0;
@@ -718,6 +722,7 @@ export function RecordingPage({
           role="dialog"
           aria-modal="true"
           aria-labelledby="cl-rec-veil-title"
+          aria-describedby={stopLeft !== null ? "cl-rec-veil-desc" : undefined}
         >
           <div className="cl-rec__veilbody" ref={veilBody}>
             {/* What goes wrong comes to the front too: never hidden under the veil (P8). */}
@@ -752,13 +757,15 @@ export function RecordingPage({
             </div>
             {stopLeft !== null ? (
               <>
+                <span className="cl-rec__disc" data-kind="stop" aria-hidden>
+                  <Square size={34} strokeWidth={1.75} />
+                </span>
                 <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">
-                  Arrêt de l'enregistrement
+                  Arrêt
                 </h2>
-                <Text color="secondary">
-                  {formatClock(elapsed)}
-                  {session ? ` · ${session.space_name}` : ""}
-                </Text>
+                <p className="cl-sr" id="cl-rec-veil-desc">
+                  La séance s'ouvre dans un instant.
+                </p>
                 <div className="cl-rec__veiltrack" aria-hidden>
                   <i style={{ animationDuration: `${stopDelayMs}ms` }} />
                 </div>
@@ -767,29 +774,27 @@ export function RecordingPage({
                   icon={<Play size={16} strokeWidth={1.75} />}
                   clickAction={async () => void (await toggle())}
                 />
-                <Text type="supporting">
-                  La séance s'ouvre dans un instant.
-                </Text>
               </>
             ) : (
               <>
-                <p className="cl-rec__veilkicker">
-                  En pause · {formatClock(elapsed)}
-                </p>
+                <span className="cl-rec__disc" aria-hidden>
+                  <Pause size={40} strokeWidth={1.75} />
+                </span>
                 <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">
-                  Rien n'est enregistré
+                  En pause
                 </h2>
+                {/* What is cut, said by its icons; read out by their labels. */}
                 <p className="cl-rec__veilcut">
-                  <span>
-                    <MicOff size={18} strokeWidth={1.75} aria-hidden />
-                    {state.extra.length > 0
-                      ? `${state.extra.length + 1} micros coupés`
-                      : "Micro coupé"}
+                  <span role="img" aria-label={micsCut} title={micsCut}>
+                    <MicOff size={20} strokeWidth={1.75} aria-hidden />
                   </span>
                   {system && (
-                    <span>
-                      <MonitorOff size={18} strokeWidth={1.75} aria-hidden />
-                      Son de l'ordinateur coupé
+                    <span
+                      role="img"
+                      aria-label="Son de l'ordinateur coupé"
+                      title="Son de l'ordinateur coupé"
+                    >
+                      <MonitorOff size={20} strokeWidth={1.75} aria-hidden />
                     </span>
                   )}
                 </p>
@@ -800,16 +805,13 @@ export function RecordingPage({
                   icon={<Play size={18} strokeWidth={1.75} />}
                   clickAction={async () => void (await toggle())}
                 />
-                <Text type="supporting">
-                  Espace pour reprendre ·{" "}
-                  <button
-                    type="button"
-                    className="cl-linkbtn"
-                    onClick={() => void stop()}
-                  >
-                    Arrêter
-                  </button>
-                </Text>
+                <button
+                  type="button"
+                  className="cl-linkbtn"
+                  onClick={() => void stop()}
+                >
+                  Arrêter
+                </button>
               </>
             )}
           </div>
