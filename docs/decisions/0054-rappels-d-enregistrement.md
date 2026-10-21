@@ -17,7 +17,11 @@ L'utilisateur oublie souvent d'arrêter l'enregistrement après une réunion. Ri
   - elle interroge `GET /api/enregistrement` (2 s au repos, 1 s pendant un enregistrement) ;
   - la barre des menus montre « ● 12:34 », ou « ◯ 12:34 en pause », avec Pause/Reprendre, Arrêter et Ouvrir Coulisses ;
   - chaque alerte devient une notification de macOS, une fois par (séance, `key`), avec les actions Arrêter et Continuer ;
-  - l'autorisation est demandée au premier enregistrement. Si elle est refusée, la barre des menus reste, et la page le dit. L'app donne `window.coulissesApp.notifications` : `allowed`, `denied`, ou `unknown` tant que macOS n'a rien demandé ; elle envoie l'évènement `coulisses:mises-a-jour` à chaque changement. Une autre valeur n'affiche rien.
+  - l'alerte en cours est aussi en tête du menu de la barre des menus, grisée : on la voit même si les notifications sont refusées ;
+  - « Arrêter » d'une notification n'agit que si la séance de l'alerte enregistre encore (sinon « Cet enregistrement est déjà terminé. », rien n'est arrêté) ; les notifications d'une séance finie sont retirées ;
+  - une réponse illisible du service n'efface jamais la barre des menus (le journal le dit) ; sans réponse depuis plus de 8 s pendant un enregistrement, elle dit « Coulisses ne répond pas », sans rien arrêter ; l'échec d'une action se dit en français ;
+  - dans « Coulisses (dév) », la barre des menus commence par « dév » ;
+  - l'autorisation est demandée au premier enregistrement. Si elle est refusée, la barre des menus reste, et la page le dit. L'autorisation est relue à chaque retour dans l'app. L'app donne `window.coulissesApp.notifications` : `allowed`, `denied`, ou `unknown` tant que macOS n'a rien demandé ; elle envoie l'évènement `coulisses:mises-a-jour` à chaque changement. Une autre valeur n'affiche rien.
 
 ## Conséquences
 - Un silence dans une salle bruyante (au-dessus de −45 dBFS) n'est pas vu comme un silence : seul le rappel de durée alerte alors. À ajuster après usage, sans changer le contrat.
