@@ -55,7 +55,7 @@ Valeurs données en clair puis en sombre. Les deux modes sont conçus ensemble.
 - **Angles nets** : 4 px pour les petits éléments, 8 px pour les contrôles, 10 px pour les conteneurs. Les boutons ne sont pas en pilule.
 - **Filets plutôt que boîtes.** On sépare par un filet ou par de l'espace. La carte est réservée à un bloc isolé.
 - **Ombres** rares, amples et neutres. En sombre, un liseré clair remplace l'ombre.
-- **Aucun effet de matière** : ni grain, ni verre dépoli, ni halo, ni dégradé de fond.
+- **Aucun effet de matière** : ni grain, ni verre dépoli, ni halo, ni dégradé de fond. Une seule exception (ADR 0059) : le **flou du contenu derrière une information mise au premier plan** (la pause, l'arrêt en cours), modéré (8 px au plus), sous un voile neutre d'environ 70 %, opaque si macOS réduit la transparence.
 - **Icônes** : Lucide, trait de 1,75. Une seule famille. Pas d'emoji dans l'interface.
 
 ## Mouvement
@@ -132,7 +132,7 @@ Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à dro
 
 - Une barre ou un bord de couleur sur un seul côté d'un élément (réplique, élément sélectionné, carte) : jugé « signature IA ». On signale par la couleur du texte, un fond léger ou la graisse.
 - Fonds crème, beige, jaunâtres ou « papier ». Grain sur un fond plat.
-- Dégradés de fond, dégradés maillés, verre dépoli, halos.
+- Dégradés de fond, dégradés maillés, verre dépoli décoratif, halos. (Le flou n'est permis que pour mettre une information au premier plan, ADR 0059.)
 - Violet ou bleu électrique en accent. Plus d'un accent.
 - Icône d'étincelles, baguette magique, ou tout code visuel « IA ».
 - Inter, Roboto ou la police système comme choix par défaut.

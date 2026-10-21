@@ -1194,14 +1194,15 @@ function ProcessingPanel({
           </Text>
           <div className="cl-ask__actions">
             {found >= 1 && (
+              // What the engine heard, recommended: the people checked were one too many.
               <Button
-                label={`Continuer avec ${plural(found, "voix", "voix")}`}
+                label={`Relancer avec ${plural(found, "présent", "présents")} (recommandé)`}
                 variant="primary"
                 clickAction={() => resume(found)}
               />
             )}
             <Button
-              label="Revoir les présents"
+              label="Choisir un autre nombre"
               variant={found >= 1 ? "secondary" : "primary"}
               onClick={() => setChoosing(!choosing)}
             />

@@ -5,6 +5,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import {
   ArrowRight,
+  MicOff,
   Monitor,
   MonitorOff,
   Pause,
@@ -64,6 +65,20 @@ export function RecordingPage({
   const pausedBeforeStop = useRef(false);
   const stoppingRef = useRef(false);
   stoppingRef.current = stoppingSince !== null;
+  /** The veil is in front (paused, or stopping): what is under it is out of reach. */
+  const veilRef = useRef(false);
+  veilRef.current = state?.state === "paused" || stoppingSince !== null;
+  const veilBody = useRef<HTMLDivElement>(null);
+  const veilShown =
+    Boolean(state) && (state?.state === "paused" || stoppingSince !== null);
+  // Shown: the focus on « Reprendre », for the keyboard and the screen readers.
+  useEffect(() => {
+    if (!veilShown) return;
+    const timer = window.setTimeout(() =>
+      veilBody.current?.querySelector("button")?.focus(),
+    );
+    return () => window.clearTimeout(timer);
+  }, [veilShown, stoppingSince]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (stoppingSince === null) return;
@@ -134,7 +149,10 @@ export function RecordingPage({
               if (outcome.error) {
                 // Said on the session's page, where the user is taken all the same.
                 if (mine) {
-                  keepStopProblem(mine, `L'arrêt a signalé un problème : ${outcome.error}`);
+                  keepStopProblem(
+                    mine,
+                    `L'arrêt a signalé un problème : ${outcome.error}`,
+                  );
                   window.location.hash = `#/seance/${encodeURIComponent(mine)}`;
                   return;
                 }
@@ -223,9 +241,17 @@ export function RecordingPage({
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (target?.closest("input, select, textarea, [contenteditable]")) return;
       const key = e.key.toLowerCase();
-      // While it stops: Space or Escape take it back, nothing else is marked.
+      // Paused or stopping, the veil in front (ADR 0059): Space (or Escape while it
+      // stops) takes it back; nothing else is marked or typed under it.
+      if (veilRef.current) {
+        if (key === " " || (key === "escape" && stoppingRef.current)) {
+          e.preventDefault();
+          void toggle();
+        }
+        return;
+      }
+      if (target?.closest("input, select, textarea, [contenteditable]")) return;
       if (stoppingRef.current) {
         if (key === " " || key === "escape") {
           e.preventDefault();
@@ -326,7 +352,7 @@ export function RecordingPage({
       )}
       {state && (
         <>
-          <header className="cl-rec__bar">
+          <header inert={veilShown || undefined} className="cl-rec__bar">
             <span className="cl-rec__now" data-paused={paused || undefined}>
               <span className="cl-recording__dot" aria-hidden />
               {/* A width kept for its digits: nothing moves while the time goes by. */}
@@ -337,7 +363,6 @@ export function RecordingPage({
               >
                 {formatClock(elapsed)}
               </span>
-              {paused && <span className="cl-rec__paused">en pause</span>}
             </span>
             <span className="cl-rec__meter" title={state.device}>
               <LevelMeter level={level} peak={peak} clipping={state.clipping} />
@@ -433,44 +458,32 @@ export function RecordingPage({
               Moment
               <kbd>M</kbd>
             </button>
-            {stopLeft !== null ? (
-              // Stopping: a moment to take it back, then the session's page.
-              <span className="cl-rec__stopping" role="status">
-                <span>Arrêt dans {stopLeft} s</span>
-                <Button
-                  label="Reprendre"
-                  variant="primary"
-                  size="sm"
-                  icon={<Play size={14} strokeWidth={1.75} />}
-                  clickAction={async () => void (await toggle())}
-                />
-              </span>
-            ) : (
-              <>
-                <Button
-                  label={paused ? "Reprendre" : "Pause"}
-                  size="sm"
-                  icon={
-                    paused ? (
-                      <Play size={14} strokeWidth={1.75} />
-                    ) : (
-                      <Pause size={14} strokeWidth={1.75} />
-                    )
-                  }
-                  clickAction={async () => void (await toggle())}
-                />
-                <Button
-                  label="Arrêter"
-                  variant="primary"
-                  size="sm"
-                  icon={<Square size={12} strokeWidth={1.75} />}
-                  clickAction={stop}
-                />
-              </>
-            )}
+            <Button
+              label={paused ? "Reprendre" : "Pause"}
+              size="sm"
+              icon={
+                paused ? (
+                  <Play size={14} strokeWidth={1.75} />
+                ) : (
+                  <Pause size={14} strokeWidth={1.75} />
+                )
+              }
+              clickAction={async () => void (await toggle())}
+            />
+            <Button
+              label="Arrêter"
+              variant="primary"
+              size="sm"
+              icon={<Square size={12} strokeWidth={1.75} />}
+              clickAction={stop}
+            />
           </header>
 
-          <div className="cl-rec__alerts" aria-live="polite">
+          <div
+            inert={veilShown || undefined}
+            className="cl-rec__alerts"
+            aria-live="polite"
+          >
             {lost && (
               <Banner
                 status="error"
@@ -530,7 +543,7 @@ export function RecordingPage({
             )}
           </div>
 
-          <div className="cl-rec__top">
+          <div inert={veilShown || undefined} className="cl-rec__top">
             {session && (
               <RecordingContext
                 session={session}
@@ -568,7 +581,11 @@ export function RecordingPage({
             />
           </div>
 
-          <main className="cl-rec__flow" aria-label="Déroulé de la séance">
+          <main
+            inert={veilShown || undefined}
+            className="cl-rec__flow"
+            aria-label="Déroulé de la séance"
+          >
             {marks.length === 0 && (
               <Text color="secondary" as="p">
                 Les annotations et les moments s'affichent ici, à leur heure.
@@ -691,6 +708,112 @@ export function RecordingPage({
             </Text>
           </main>
         </>
+      )}
+      {state && (paused || stopLeft !== null) && (
+        // Paused, or stopping: said to the whole room, the session blurred behind (ADR
+        // 0059). Every microphone and the computer's sound are cut while it is shown.
+        <div
+          className="cl-rec__veil"
+          data-kind={stopLeft !== null ? "stop" : "pause"}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cl-rec-veil-title"
+        >
+          <div className="cl-rec__veilbody" ref={veilBody}>
+            {/* What goes wrong comes to the front too: never hidden under the veil (P8). */}
+            <div className="cl-rec__veilalerts" aria-live="polite">
+              {lost && (
+                <Banner
+                  status="error"
+                  title="Connexion au service perdue"
+                  description="Coulisses ne répond plus : ce qui est affiché n'est peut-être plus à jour."
+                />
+              )}
+              {state.error && (
+                <Banner
+                  status="error"
+                  title="Le micro"
+                  description={state.error}
+                />
+              )}
+              {system?.error && (
+                <Banner
+                  status="warning"
+                  title="Le son de l'ordinateur"
+                  description={system.error}
+                />
+              )}
+              {state.extra.map((track) => (
+                <ExtraAlerts key={track.device} track={track} />
+              ))}
+              {error && (
+                <Banner status="error" title="Refusé" description={error} />
+              )}
+            </div>
+            {stopLeft !== null ? (
+              <>
+                <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">
+                  Arrêt de l'enregistrement
+                </h2>
+                <Text color="secondary">
+                  {formatClock(elapsed)}
+                  {session ? ` · ${session.space_name}` : ""}
+                </Text>
+                <div className="cl-rec__veiltrack" aria-hidden>
+                  <i style={{ animationDuration: `${stopDelayMs}ms` }} />
+                </div>
+                <Button
+                  label="Reprendre"
+                  icon={<Play size={16} strokeWidth={1.75} />}
+                  clickAction={async () => void (await toggle())}
+                />
+                <Text type="supporting">
+                  La séance s'ouvre dans un instant.
+                </Text>
+              </>
+            ) : (
+              <>
+                <p className="cl-rec__veilkicker">
+                  En pause · {formatClock(elapsed)}
+                </p>
+                <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">
+                  Rien n'est enregistré
+                </h2>
+                <p className="cl-rec__veilcut">
+                  <span>
+                    <MicOff size={18} strokeWidth={1.75} aria-hidden />
+                    {state.extra.length > 0
+                      ? `${state.extra.length + 1} micros coupés`
+                      : "Micro coupé"}
+                  </span>
+                  {system && (
+                    <span>
+                      <MonitorOff size={18} strokeWidth={1.75} aria-hidden />
+                      Son de l'ordinateur coupé
+                    </span>
+                  )}
+                </p>
+                <Button
+                  label="Reprendre"
+                  variant="primary"
+                  size="lg"
+                  icon={<Play size={18} strokeWidth={1.75} />}
+                  clickAction={async () => void (await toggle())}
+                />
+                <Text type="supporting">
+                  Espace pour reprendre ·{" "}
+                  <button
+                    type="button"
+                    className="cl-linkbtn"
+                    onClick={() => void stop()}
+                  >
+                    Arrêter
+                  </button>
+                </Text>
+              </>
+            )}
+          </div>
+        </div>
       )}
       {!state && error && (
         <Banner status="error" title="Refusé" description={error} />
