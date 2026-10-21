@@ -107,41 +107,44 @@ export function SettingsPage({
       notice_days: next.notice ?? shownNotice,
     };
   };
-  const flush = useCallback((leaving = false) => {
-    const value = pending.current;
-    pending.current = null;
-    if (
-      value === null ||
-      (kept.current?.retention_days === value.retention_days &&
-        kept.current?.notice_days === value.notice_days)
-    ) {
-      if (value !== null) {
-        setDays(null);
-        setNotice(null);
+  const flush = useCallback(
+    (leaving = false) => {
+      const value = pending.current;
+      pending.current = null;
+      if (
+        value === null ||
+        (kept.current?.retention_days === value.retention_days &&
+          kept.current?.notice_days === value.notice_days)
+      ) {
+        if (value !== null) {
+          setDays(null);
+          setNotice(null);
+        }
+        return;
       }
-      return;
-    }
-    // The page goes away (closed, reloaded): sent at once, and finished by the browser. No
-    // page is left to say a refusal; the next opening shows the values kept, as they are.
-    if (leaving) {
-      void api.setRetention(value, true).catch(() => undefined);
-      return;
-    }
-    queue.current = queue.current.then(async () => {
-      try {
-        await api.setRetention(value);
-        setError(null);
-      } catch (e) {
-        setError((e as Error).message);
+      // The page goes away (closed, reloaded): sent at once, and finished by the browser. No
+      // page is left to say a refusal; the next opening shows the values kept, as they are.
+      if (leaving) {
+        void api.setRetention(value, true).catch(() => undefined);
+        return;
       }
-      await load();
-      // A change made meanwhile stays shown, to be kept in its turn.
-      if (pending.current === null) {
-        setDays(null);
-        setNotice(null);
-      }
-    });
-  }, [load]);
+      queue.current = queue.current.then(async () => {
+        try {
+          await api.setRetention(value);
+          setError(null);
+        } catch (e) {
+          setError((e as Error).message);
+        }
+        await load();
+        // A change made meanwhile stays shown, to be kept in its turn.
+        if (pending.current === null) {
+          setDays(null);
+          setNotice(null);
+        }
+      });
+    },
+    [load],
+  );
   useEffect(() => {
     const leave = () => flush(true);
     window.addEventListener("pagehide", leave);
@@ -205,15 +208,16 @@ export function SettingsPage({
             <section className="cl-settings__section">
               <Heading level={3}>L'audio des séances</Heading>
               <Text color="secondary">
-                L'audio d'une séance traitée est supprimé après ce délai, avec un
-                préavis ; le texte, les noms et les résumés restent. Une séance
-                peut garder son audio depuis son menu « … ».
+                L'audio d'une séance traitée est supprimé après ce délai, avec
+                un préavis ; le texte, les noms et les résumés restent. Une
+                séance peut garder son audio depuis son menu « … ».
               </Text>
               <div
                 className="cl-settings__steppers"
                 onMouseLeave={() => flush()}
                 onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flush();
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                    flush();
                 }}
               >
                 <DayStepper
@@ -276,7 +280,9 @@ export function SettingsPage({
                   {info.coming.map((c) => (
                     <li key={c.session_id}>
                       <span className="cl-settings__text">
-                        <a href={`#/seance/${encodeURIComponent(c.session_id)}`}>
+                        <a
+                          href={`#/seance/${encodeURIComponent(c.session_id)}`}
+                        >
                           {name(c)}
                         </a>
                         <Text type="supporting">
@@ -287,7 +293,9 @@ export function SettingsPage({
                         size="sm"
                         variant="ghost"
                         label="Prolonger"
-                        clickAction={() => act(() => api.extendAudio(c.session_id))}
+                        clickAction={() =>
+                          act(() => api.extendAudio(c.session_id))
+                        }
                       />
                       <Button
                         size="sm"
@@ -329,8 +337,8 @@ export function SettingsPage({
             <section className="cl-settings__section">
               <Heading level={3}>Dossiers</Heading>
               <Text color="secondary">
-                Tout reste sur ce Mac. Le journal technique aide à comprendre une
-                erreur.
+                Tout reste sur ce Mac. Le journal technique aide à comprendre
+                une erreur.
               </Text>
               <div className="cl-settings__buttons">
                 <Button
@@ -364,8 +372,8 @@ export function SettingsPage({
               />
               {dev && about && (
                 <Text type="supporting">
-                  Coulisses {about.app_version} · moteur {about.engine_version} ·
-                  chaîne « {about.profile} »
+                  Coulisses {about.app_version} · moteur {about.engine_version}{" "}
+                  · chaîne « {about.profile} »
                 </Text>
               )}
             </section>
@@ -374,10 +382,10 @@ export function SettingsPage({
               <section className="cl-settings__section">
                 <Heading level={3}>Copies de la base</Heading>
                 <Text color="secondary">
-                  Une copie est faite quand une mise à jour change le format de la
-                  base ; les trois dernières sont gardées, plus celle d'un
-                  rapatriement des données. Supprimer une séance l'efface aussi de
-                  ces copies.
+                  Une copie est faite quand une mise à jour change le format de
+                  la base ; les trois dernières sont gardées, plus celle d'un
+                  rapatriement des données. Supprimer une séance l'efface aussi
+                  de ces copies.
                 </Text>
                 {info === null && <RowsSkeleton />}
                 <ul className="cl-settings__list">
@@ -447,7 +455,8 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
                     {e.session_title ? ` : « ${e.session_title} »` : ""}
                   </Text>
                   <Text type="supporting">
-                    {formatDateTime(e.at)} · {plural(e.files, "fichier", "fichiers")},{" "}
+                    {formatDateTime(e.at)} ·{" "}
+                    {plural(e.files, "fichier", "fichiers")},{" "}
                     {formatBytes(e.bytes)}
                     {e.problems.length > 0 && " · incomplète"}
                   </Text>
@@ -477,8 +486,16 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
         </div>
       }
     >
-      <button type="button" className="cl-modelpick" aria-label={`Déjà supprimés : ${journal.length}. Voir`}>
-        <span className="cl-modelpick__name">{journal.length >= JOURNAL_LIMIT ? `${JOURNAL_LIMIT} et plus` : journal.length}</span>
+      <button
+        type="button"
+        className="cl-modelpick"
+        aria-label={`Déjà supprimés : ${journal.length}. Voir`}
+      >
+        <span className="cl-modelpick__name">
+          {journal.length >= JOURNAL_LIMIT
+            ? `${JOURNAL_LIMIT} et plus`
+            : journal.length}
+        </span>
         <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
       </button>
     </Popover>
@@ -488,7 +505,11 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
 /** While the copies are read: the three rows kept (ADR 0052), at their height. */
 function RowsSkeleton() {
   return (
-    <ul className="cl-settings__list cl-skeleton" aria-busy="true" aria-label="Lecture">
+    <ul
+      className="cl-settings__list cl-skeleton"
+      aria-busy="true"
+      aria-label="Lecture"
+    >
       {[0.5, 0.42, 0.56].map((w, i) => (
         <li key={i}>
           <span className="cl-settings__text">
