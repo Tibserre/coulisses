@@ -15,3 +15,4 @@ paths:
 - Chaque état d'une séance ou d'une étape est visible : en file, en cours (avec progression), réussie, échouée (erreur lisible), périmée, audio purgé.
 - Toute action destructrice (suppression, purge anticipée) demande une confirmation explicite.
 - Accessibilité : navigation au clavier sur la relecture (lecture/pause, ligne suivante, renommer).
+- Les skills d'animation tiers (`dylantarre/animation-principles`, voir `skills-lock.json`) sont des références générales. La direction artistique (durées 160, 400 et 850 ms, courbe sans rebond, rien ne bouge en boucle, mouvement réduit instantané) et les principes P1 à P8 priment toujours : en cas de désaccord, on suit la DA. Aucune bibliothèque d'animation hors `motion`.
