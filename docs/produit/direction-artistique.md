@@ -75,6 +75,7 @@ Valeurs données en clair puis en sombre. Les deux modes sont conçus ensemble.
 Deux outils, chacun pour ce qu'il fait le mieux.
 
 - **En code** : tout ce qui dépend des données ou du pointeur. Les micro-interactions de la relecture, et l'écran « Traitement en cours » : chaque voix est une corde, le fil gris emmêlé se sépare en une corde colorée par personne, avec ses mots et son nom. Les cordes se pincent au survol, se tirent et se relâchent ; un son facultatif donne une note par voix.
+- **Le traitement, de l'arrêt aux chapitres** : la proposition retenue (deux disques, les voix qui arrivent, les chapitres progressifs) est décrite dans [animation-du-traitement.md](animation-du-traitement.md). Elle remplace l'idée des cordes, pas encore construite.
 - **Dans Rive** : ce qui est dessiné. Une illustration d'état, un moment de réussite. Les fichiers seront produits plus tard. En attendant, chaque emplacement affiche un visuel d'attente fait en code, pensé pour avoir l'air fini.
 
 Emplacements prévus :
