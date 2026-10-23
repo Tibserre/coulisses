@@ -34,7 +34,10 @@ export function NotesSection({ sessionId }: { sessionId: string }) {
         saved.current = note?.text ?? "";
         // A draft left unsaved (window closed, save refused) comes back, said so.
         const draft = readDraft<string>(draftKey);
-        const shown = draft != null && draft.trim() !== saved.current ? draft : saved.current;
+        const shown =
+          draft != null && draft.trim() !== saved.current
+            ? draft
+            : saved.current;
         typed.current = shown === saved.current ? null : shown;
         if (draft != null && shown === saved.current) clearDraft(draftKey);
         if (ref.current) ref.current.innerText = shown;
@@ -113,8 +116,8 @@ export function NotesSection({ sessionId }: { sessionId: string }) {
       />
       {recovered && !state.error && (
         <p className="cl-notes__error">
-          Brouillon retrouvé, pas encore enregistré : cliquez dans la note puis ailleurs pour
-          l'enregistrer.
+          Brouillon retrouvé, pas encore enregistré : cliquez dans la note puis
+          ailleurs pour l'enregistrer.
         </p>
       )}
       {state.error ? (

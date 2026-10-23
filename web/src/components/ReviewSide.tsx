@@ -101,7 +101,11 @@ export function Participants({
                   {speakerTitle(s)}
                 </button>
               ) : (
-                <span className="cl-name" data-unnamed style={{ color: inkOf(s) }}>
+                <span
+                  className="cl-name"
+                  data-unnamed
+                  style={{ color: inkOf(s) }}
+                >
                   {speakerTitle(s)}
                 </span>
               )}
@@ -173,13 +177,20 @@ export function Attendees({
     : null;
   const listed = known ? [...names, ...(unnamedText ? [unnamedText] : [])] : [];
   const sentence =
-    listed.length > 1 ? `${listed.slice(0, -1).join(", ")} et ${listed[listed.length - 1]}` : listed[0];
+    listed.length > 1
+      ? `${listed.slice(0, -1).join(", ")} et ${listed[listed.length - 1]}`
+      : listed[0];
   if (!open && !changed) {
     return (
       <section>
         <div className="cl-side__line">
           <Heading level={3}>Présents</Heading>
-          <Button size="sm" variant="ghost" label="Modifier" onClick={() => setOpen(true)} />
+          <Button
+            size="sm"
+            variant="ghost"
+            label="Modifier"
+            onClick={() => setOpen(true)}
+          />
         </div>
         <Text type="supporting">
           {count === 0
@@ -195,7 +206,14 @@ export function Attendees({
     <section>
       <div className="cl-side__line">
         <Heading level={3}>Présents</Heading>
-        {!changed && <Button size="sm" variant="ghost" label="Fermer" onClick={() => setOpen(false)} />}
+        {!changed && (
+          <Button
+            size="sm"
+            variant="ghost"
+            label="Fermer"
+            onClick={() => setOpen(false)}
+          />
+        )}
       </div>
       {shown.length === 0 ? (
         <Text type="supporting">
@@ -323,7 +341,11 @@ export function CorrectionsHistory({
           <Button
             size="sm"
             variant="ghost"
-            label={all ? "N'afficher que les dernières" : `Voir les ${latest.length - SHOWN_EDITS} autres`}
+            label={
+              all
+                ? "N'afficher que les dernières"
+                : `Voir les ${latest.length - SHOWN_EDITS} autres`
+            }
             onClick={() => setAll(!all)}
           />
         </div>

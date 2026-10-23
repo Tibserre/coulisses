@@ -129,7 +129,11 @@ export function SpeakersToName({
         .filter((s) => !s.named && s.label !== null)
         .map((s) => {
           const line = speakerExcerpt(model, s.label!);
-          return { s, line, quote: line?.turn.words.map((w) => w.text).join(" ") };
+          return {
+            s,
+            line,
+            quote: line?.turn.words.map((w) => w.text).join(" "),
+          };
         }),
     [model],
   );
@@ -144,7 +148,8 @@ export function SpeakersToName({
       {problem && <p className="cl-toname__problem">{problem}</p>}
       <ul className="cl-toname">
         {unnamed.map(({ s, line, quote }) => {
-          const heard = line != null && pb.excerpt === line.turn.start && pb.playing;
+          const heard =
+            line != null && pb.excerpt === line.turn.start && pb.playing;
           return (
             <li
               key={s.label}
@@ -215,12 +220,13 @@ export function SpeakersToName({
                     className="cl-iconbtn"
                     aria-label={`Oui, c'est ${s.proposal.name}`}
                     title={`Oui, c'est ${s.proposal.name}`}
-                    onClick={() =>
-                      void onCorrect({
-                        kind: "assign_speaker",
-                        speaker: s.label!,
-                        person_id: s.proposal!.person_id,
-                      }).catch(() => {}) // the page already says why it was refused
+                    onClick={
+                      () =>
+                        void onCorrect({
+                          kind: "assign_speaker",
+                          speaker: s.label!,
+                          person_id: s.proposal!.person_id,
+                        }).catch(() => {}) // the page already says why it was refused
                     }
                   >
                     <Check size={14} strokeWidth={2} />
@@ -230,12 +236,13 @@ export function SpeakersToName({
                     className="cl-iconbtn"
                     aria-label={`Non, ce n'est pas ${s.proposal.name}`}
                     title={`Non, ce n'est pas ${s.proposal.name}`}
-                    onClick={() =>
-                      void onCorrect({
-                        kind: "reject_voice_match",
-                        speaker: s.label!,
-                        person_id: s.proposal!.person_id,
-                      }).catch(() => {}) // the page already says why it was refused
+                    onClick={
+                      () =>
+                        void onCorrect({
+                          kind: "reject_voice_match",
+                          speaker: s.label!,
+                          person_id: s.proposal!.person_id,
+                        }).catch(() => {}) // the page already says why it was refused
                     }
                   >
                     <X size={14} strokeWidth={2} />
