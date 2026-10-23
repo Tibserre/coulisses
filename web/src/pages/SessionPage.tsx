@@ -172,8 +172,6 @@ export function SessionPage({
     total: number;
     named: number;
   } | null>(null);
-  /** The order of the voice's lines in its card: the longest first, or as they come. */
-  const [namingOrder, setNamingOrder] = useState<"long" | "time">("long");
   /** « Écouter … à la suite »: the lines being heard one after the other, and which one. */
   const [queue, setQueue] = useState<{ rows: TurnRow[]; step: number } | null>(
     null,
@@ -657,11 +655,12 @@ export function SessionPage({
     // Not to be heard: what was being heard stops, nothing goes on unasked.
     else if (pb.excerpt != null) pb.listen(pb.excerpt, pb.excerpt);
   };
-  /** ← → from the field: the line before or after, in the card's order, heard. */
+  /** ← → from the field: the voice's line before or after in time (as on its strip),
+   *  heard. */
   const moveGuide = (by: number) => {
-    if (!guideTurn || !guideOrder.length) return;
-    const at = guideOrder.indexOf(guideTurn);
-    hearLine(guideOrder[(at + by + guideOrder.length) % guideOrder.length]);
+    if (!guideTurn || !guideTurns.length) return;
+    const at = guideTurns.indexOf(guideTurn);
+    hearLine(guideTurns[(at + by + guideTurns.length) % guideTurns.length]);
   };
   // The queue: each excerpt over, the next one (stopping by hand clears it first).
   const excerptBefore = useRef<number | null>(null);
@@ -702,11 +701,10 @@ export function SessionPage({
     });
   };
   const guideTurns = guide && unfolded ? voiceTurns(unfolded, guide.label) : [];
-  // The line looked at: the one picked, else the first of the card.
-  const guideOrder = namingLines(guideTurns, namingOrder);
+  // The line looked at: the one picked, else where the voice is heard best.
   const guideTurn =
     guideTurns.find((r) => r.turn.index === guide?.turn) ??
-    guideOrder[0] ??
+    namingLines(guideTurns, "long")[0] ??
     null;
 
   const audioGone = session?.audio.state === "removed";
@@ -1276,19 +1274,16 @@ export function SessionPage({
           <NamingCard
             speaker={guided}
             lines={guideTurns}
-            sorted={guideOrder}
-            order={namingOrder}
-            onOrder={setNamingOrder}
-            current={guideTurn.turn.index}
+            current={guideTurn}
             duration={session.duration_s ?? pb.duration ?? 0}
             pb={pb}
             done={guide.named}
             total={guide.total}
             audioGone={audioGone}
             queueing={queue !== null}
-            onPick={(turn) => {
+            onPick={(row) => {
               stopHearing();
-              setGuide({ ...guide, turn });
+              setGuide({ ...guide, turn: row.turn.index });
             }}
             onHear={hearLine}
             onQueue={(rows) => {

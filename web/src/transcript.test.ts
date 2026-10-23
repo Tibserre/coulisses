@@ -4,6 +4,8 @@ import { test } from "node:test";
 import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
+  nearestLine,
+  tickWidth,
   turnSeconds,
   namingLines,
   choiceNote,
@@ -634,8 +636,36 @@ test("a voice's lines for naming: the longest first, an unmeasured one last", ()
       turn: { index, speaker: "1", start, end, edited: false, words: [] },
       speaker: speaker("1", "Voix 1"),
     }) as TurnRow;
-  const lines = [row(0, 0, 2), row(1, 10, 18), row(2, null, 30), row(3, 40, 43)];
-  assert.deepEqual(namingLines(lines, "long").map((r) => r.turn.index), [1, 3, 0, 2]);
-  assert.deepEqual(namingLines(lines, "time").map((r) => r.turn.index), [0, 1, 2, 3]);
+  const lines = [
+    row(0, 0, 2),
+    row(1, 10, 18),
+    row(2, null, 30),
+    row(3, 40, 43),
+  ];
+  assert.deepEqual(
+    namingLines(lines, "long").map((r) => r.turn.index),
+    [1, 3, 0, 2],
+  );
+  assert.deepEqual(
+    namingLines(lines, "time").map((r) => r.turn.index),
+    [0, 1, 2, 3],
+  );
   assert.equal(turnSeconds(lines[2].turn), null);
+});
+
+test("on the strip: the nearest measured line, and marks as long as the lines", () => {
+  const row = (index: number, start: number | null, end: number | null) =>
+    ({
+      kind: "turn",
+      key: `t${index}`,
+      turn: { index, speaker: "1", start, end, edited: false, words: [] },
+      speaker: speaker("1", "Voix 1"),
+    }) as TurnRow;
+  const lines = [row(0, 10, 12), row(1, null, null), row(2, 100, 130)];
+  assert.equal(nearestLine(lines, 70)?.turn.index, 2);
+  assert.equal(nearestLine(lines, 0)?.turn.index, 0);
+  assert.equal(nearestLine([row(1, null, null)], 5), null);
+  assert.equal(tickWidth(lines[0].turn), 3);
+  assert.equal(tickWidth(lines[2].turn), 14);
+  assert.equal(tickWidth(lines[1].turn), 3);
 });

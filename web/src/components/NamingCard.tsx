@@ -1,27 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import type { Speaker } from "../api.ts";
 import { formatClock, formatDuration, plural } from "../format.ts";
-import { turnSeconds, type TurnRow } from "../transcript.ts";
+import {
+  namingLines,
+  nearestLine,
+  tickWidth,
+  turnSeconds,
+  type TurnRow,
+} from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
 
-/** How many of a voice's lines are listed first; the others on demand (none hidden). */
+/** How many of the longest lines « à la suite » hears. */
 export const FIRST_LINES = 5;
 /** An excerpt is heard for this long at most (usePlayback.listen). */
 export const EXCERPT_S = 8;
 
-/** The guided naming's card (ADR 0062), over the veiled page: the lines of the voice being
- *  named, and only them. Where it speaks in the session, a mark per line; its longest
- *  lines first (where it is heard best), or in their order; each heard on a click, or the
- *  ones listed one after the other. Lengths and places are the measured ones (P2); what
- *  cannot be heard says why, in the card (P8). The order and the listening are the page's:
- *  the field's keys (← → Space) drive them too. */
+/** The guided naming's card (ADR 0062), over the veiled page: the voice being named, and
+ *  only its lines. The line looked at keeps its own place, large, with ▶ (nothing is added
+ *  to a list, nothing jumps). Under it, where the voice speaks in the session: a strip
+ *  that is run over rather than aimed at, the line nearest the pointer lit and shown, a
+ *  click anywhere taking it. Its lines in a list only on demand. Times and lengths are the
+ *  measured ones (P2); what cannot be heard says why (P8). The listening is the page's: the
+ *  field's keys (← → Space) drive it too. */
 export function NamingCard({
   speaker,
   lines,
-  sorted,
-  order,
-  onOrder,
   current,
   duration,
   pb,
@@ -35,15 +39,11 @@ export function NamingCard({
   onStop,
 }: {
   speaker: Speaker;
-  /** Its lines, in their order (for the strip). */
+  /** Its lines, in their order. */
   lines: TurnRow[];
-  /** Its lines in the order chosen. */
-  sorted: TurnRow[];
-  order: "long" | "time";
-  onOrder: (order: "long" | "time") => void;
-  /** The line looked at, by its index in the run. */
-  current: number | null;
-  /** The session's length, for the strip; 0 when unknown (then no strip). */
+  /** The line looked at. */
+  current: TurnRow;
+  /** The session's length, for the strip; 0 when unknown (then the list instead). */
   duration: number;
   pb: Playback;
   /** Voices named in this round, out of all those there were to name. */
@@ -51,26 +51,41 @@ export function NamingCard({
   total: number;
   audioGone: boolean;
   queueing: boolean;
-  onPick: (turn: number) => void;
+  /** A line looked at (and heard, if it can be). */
   onHear: (row: TurnRow) => void;
+  onPick: (row: TurnRow) => void;
   onQueue: (rows: TurnRow[]) => void;
   onStop: () => void;
 }) {
-  const [all, setAll] = useState(false);
-  // Another voice: its list starts short again.
-  useEffect(() => setAll(false), [speaker.label]);
-  const shown = all ? sorted : sorted.slice(0, FIRST_LINES);
-  // The line looked at is always listed (picked on the strip, for instance).
-  const listed =
-    current != null && !shown.some((r) => r.turn.index === current)
-      ? [...shown, ...sorted.filter((r) => r.turn.index === current)]
-      : shown;
-  const playable = audioGone ? [] : listed.filter((r) => r.turn.start != null);
-  const queueSeconds = playable.reduce(
+  const [listing, setListing] = useState(false);
+  // Another voice: back to the strip.
+  useEffect(() => setListing(false), [speaker.label]);
+  const strip = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState<TurnRow | null>(null);
+  const timed = lines.filter((r) => r.turn.start != null);
+  const showStrip = duration > 0 && timed.length > 1;
+  const keep = (e: React.MouseEvent) => e.preventDefault();
+
+  /** The line whose start is nearest the pointer, on the strip. */
+  const nearest = (clientX: number): TurnRow | null => {
+    const box = strip.current?.getBoundingClientRect();
+    if (!box) return null;
+    return nearestLine(timed, ((clientX - box.left) / box.width) * duration);
+  };
+  const place = (t: number) =>
+    `${Math.min(100, Math.max(0, (t / duration) * 100))}%`;
+
+  const longest = namingLines(lines, "long")
+    .filter((r) => r.turn.start != null)
+    .slice(0, FIRST_LINES);
+  const queueSeconds = longest.reduce(
     (sum, r) => sum + Math.min(turnSeconds(r.turn) ?? EXCERPT_S, EXCERPT_S),
     0,
   );
-  const keep = (e: React.MouseEvent) => e.preventDefault();
+  const seconds = turnSeconds(current.turn);
+  const hearing = pb.excerpt != null && pb.excerpt === current.turn.start;
+  const silent = audioGone || current.turn.start == null;
+  const position = lines.indexOf(current) + 1;
 
   return (
     <div
@@ -116,150 +131,174 @@ export function NamingCard({
         </p>
       )}
 
-      {lines.length > 1 && duration > 0 && (
-        <>
-          <span className="cl-namingcard__label">
-            Où elle parle dans la séance
+      {/* The line looked at: its own place, large; nothing around it moves. */}
+      <div className="cl-namingcard__focus">
+        <button
+          type="button"
+          className="cl-namingcard__hear"
+          onMouseDown={keep}
+          onClick={() => (hearing ? onStop() : onHear(current))}
+          disabled={silent}
+          aria-label={
+            audioGone
+              ? "L'audio de cette séance a été supprimé"
+              : current.turn.start == null
+                ? "Le début de cette réplique n'est pas mesuré : elle ne s'écoute pas seule"
+                : hearing
+                  ? "Arrêter l'écoute (Espace)"
+                  : "Écouter cette réplique (Espace)"
+          }
+          title={
+            current.turn.start == null && !audioGone
+              ? "Le début de cette réplique n'est pas mesuré : elle ne s'écoute pas seule"
+              : undefined
+          }
+        >
+          {hearing ? (
+            <Pause size={14} strokeWidth={1.75} />
+          ) : (
+            <Play size={14} strokeWidth={1.75} />
+          )}
+        </button>
+        <div className="cl-namingcard__said-line" key={current.turn.index}>
+          <span className="cl-namingcard__meta" aria-live="polite">
+            {current.turn.start == null
+              ? "heure non mesurée"
+              : formatClock(current.turn.start)}
+            {seconds == null ? "" : ` · ${Math.max(1, Math.round(seconds))} s`}
+            {lines.length > 1
+              ? ` · réplique ${position} sur ${lines.length}`
+              : ""}
           </span>
-          <div className="cl-namingcard__strip">
+          <span className="cl-namingcard__text">
+            {current.turn.words.map((w) => w.text).join(" ")}
+          </span>
+        </div>
+      </div>
+
+      {showStrip && !listing && (
+        <>
+          <div
+            ref={strip}
+            className="cl-namingcard__strip"
+            // Run over with the pointer; its equivalent for the keyboard and the screen
+            // readers: the field's ← → and the list (« Voir ses … répliques »).
+            aria-hidden
+            onMouseDown={keep}
+            onPointerMove={(e) => setNear(nearest(e.clientX))}
+            onPointerLeave={() => setNear(null)}
+            onClick={(e) => {
+              const row = nearest(e.clientX);
+              if (!row) return;
+              setNear(null);
+              if (audioGone) onPick(row);
+              else onHear(row);
+            }}
+          >
             <span className="cl-namingcard__track" aria-hidden />
-            {lines.map((r) =>
-              r.turn.start == null ? null : (
-                <button
-                  key={r.turn.index}
-                  type="button"
-                  className="cl-namingcard__tick"
-                  data-current={r.turn.index === current || undefined}
-                  style={{
-                    left: `${Math.min(100, (r.turn.start / duration) * 100)}%`,
-                  }}
-                  aria-label={`Réplique à ${formatClock(r.turn.start)}`}
-                  title={formatClock(r.turn.start)}
-                  onMouseDown={keep}
-                  onClick={() => onPick(r.turn.index)}
-                />
-              ),
+            {timed.map((r) => (
+              <i
+                key={r.turn.index}
+                className="cl-namingcard__tick"
+                data-state={
+                  r === current ? "current" : r === near ? "near" : undefined
+                }
+                style={{
+                  left: place(r.turn.start!),
+                  width: `${tickWidth(r.turn)}px`,
+                }}
+                aria-hidden
+              />
+            ))}
+            {near && near !== current && (
+              <span
+                className="cl-namingcard__peek"
+                // Held inside the card near its edges.
+                style={{
+                  left: `clamp(7.5rem, ${place(near.turn.start!)}, calc(100% - 7.5rem))`,
+                }}
+                aria-hidden
+              >
+                <span className="cl-namingcard__meta">
+                  {formatClock(near.turn.start!)}
+                  {turnSeconds(near.turn) != null
+                    ? ` · ${Math.max(1, Math.round(turnSeconds(near.turn)!))} s`
+                    : ""}
+                </span>
+                {near.turn.words.map((w) => w.text).join(" ")}
+              </span>
             )}
+          </div>
+          <div className="cl-namingcard__ends" aria-hidden>
+            <span>0:00</span>
+            <span>
+              Où elle parle dans la séance
+              {timed.length < lines.length
+                ? ` · dont ${lines.length - timed.length} sans heure mesurée, dans la liste`
+                : ""}
+            </span>
+            <span>{formatClock(duration)}</span>
           </div>
         </>
       )}
 
-      {lines.length > FIRST_LINES && (
-        <div className="cl-namingcard__order">
-          <div
-            className="cl-seg"
-            role="tablist"
-            aria-label="Ordre des répliques"
-          >
-            {(
-              [
-                ["long", "Les plus longues"],
-                ["time", "Dans l'ordre"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={order === value}
-                onMouseDown={keep}
-                onClick={() => onOrder(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <span className="cl-namingcard__meta">
-            {order === "long"
-              ? "celles où l'on entend le mieux la voix"
-              : "de la première à la dernière"}
-          </span>
-        </div>
+      {(listing || !showStrip) && lines.length > 1 && (
+        <ol className="cl-namingcard__lines">
+          {lines.map((r) => {
+            const s = turnSeconds(r.turn);
+            return (
+              <li key={r.turn.index}>
+                <button
+                  type="button"
+                  className="cl-namingcard__line"
+                  data-current={r === current || undefined}
+                  onMouseDown={keep}
+                  onClick={() =>
+                    audioGone || r.turn.start == null ? onPick(r) : onHear(r)
+                  }
+                >
+                  <span className="cl-namingcard__time">
+                    {r.turn.start == null ? "" : formatClock(r.turn.start)}
+                  </span>
+                  <span className="cl-namingcard__text">
+                    {r.turn.words.map((w) => w.text).join(" ")}
+                  </span>
+                  <span className="cl-namingcard__time">
+                    {s == null ? "" : `${Math.max(1, Math.round(s))} s`}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
       )}
 
-      <ol className="cl-namingcard__lines">
-        {listed.map((r) => {
-          const seconds = turnSeconds(r.turn);
-          const hearing = pb.excerpt != null && pb.excerpt === r.turn.start;
-          const silent = audioGone || r.turn.start == null;
-          return (
-            <li key={r.turn.index}>
-              <button
-                type="button"
-                className="cl-namingcard__line"
-                data-current={r.turn.index === current || undefined}
-                onMouseDown={keep}
-                onClick={() => (silent ? onPick(r.turn.index) : onHear(r))}
-                title={
-                  audioGone
-                    ? undefined
-                    : r.turn.start == null
-                      ? "Le début de cette réplique n'est pas mesuré : elle ne s'écoute pas seule"
-                      : hearing
-                        ? "Arrêter l'écoute"
-                        : "Écouter cette réplique"
-                }
-              >
-                <span className="cl-namingcard__play" aria-hidden>
-                  {silent ? null : hearing ? (
-                    <Pause size={13} strokeWidth={1.75} />
-                  ) : (
-                    <Play size={13} strokeWidth={1.75} />
-                  )}
-                </span>
-                <span className="cl-namingcard__time">
-                  {r.turn.start == null ? "" : formatClock(r.turn.start)}
-                </span>
-                <span className="cl-namingcard__text">
-                  {r.turn.words.map((w) => w.text).join(" ")}
-                </span>
-                <span className="cl-namingcard__len">
-                  {seconds == null
-                    ? ""
-                    : `${Math.max(1, Math.round(seconds))} s`}
-                </span>
-              </button>
-              {!audioGone &&
-                r.turn.index === current &&
-                r.turn.start == null && (
-                  <p className="cl-namingcard__said">
-                    Son début n'est pas mesuré : elle ne s'écoute pas seule.
-                  </p>
-                )}
-            </li>
-          );
-        })}
-      </ol>
-      {sorted.length > FIRST_LINES && (
-        <button
-          type="button"
-          className="cl-linkbtn cl-linkbtn--quiet cl-namingcard__more"
-          onMouseDown={keep}
-          onClick={() => setAll(!all)}
-        >
-          {all
-            ? `Ne garder que les ${FIRST_LINES} premières`
-            : `Voir les ${sorted.length - FIRST_LINES} autres`}
-        </button>
-      )}
-
-      {playable.length > 1 && (
+      {lines.length > 1 && (
         <div className="cl-namingcard__tools">
-          <button
-            type="button"
-            className="cl-linkbtn cl-linkbtn--quiet"
-            onMouseDown={keep}
-            onClick={() => (queueing ? onStop() : onQueue(playable))}
-          >
-            {queueing
-              ? "Arrêter"
-              : playable.length === lines.length
-                ? "Écouter ses répliques à la suite"
-                : `Écouter ces ${playable.length} à la suite`}
-          </button>
-          <span className="cl-namingcard__meta">
-            environ {formatDuration(Math.round(queueSeconds))}
-          </span>
+          {showStrip && (
+            <button
+              type="button"
+              className="cl-linkbtn cl-linkbtn--quiet"
+              onMouseDown={keep}
+              onClick={() => setListing(!listing)}
+            >
+              {listing
+                ? "Revenir à la frise"
+                : `Voir ses ${lines.length} répliques en liste`}
+            </button>
+          )}
+          {!audioGone && longest.length > 1 && (
+            <button
+              type="button"
+              className="cl-linkbtn cl-linkbtn--quiet"
+              onMouseDown={keep}
+              onClick={() => (queueing ? onStop() : onQueue(longest))}
+            >
+              {queueing
+                ? "Arrêter"
+                : `Écouter ${longest.length === lines.length ? "ses répliques" : `les ${longest.length} plus longues`} à la suite · environ ${formatDuration(Math.round(queueSeconds))}`}
+            </button>
+          )}
         </div>
       )}
     </div>

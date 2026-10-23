@@ -620,3 +620,21 @@ export function namingLines(
     (a, b) => (turnSeconds(b.turn) ?? -1) - (turnSeconds(a.turn) ?? -1),
   );
 }
+
+/** On a voice's strip, the line whose measured start is nearest a time, among lines with
+ *  a measured start. */
+export function nearestLine(lines: TurnRow[], at: number): TurnRow | null {
+  let best: TurnRow | null = null;
+  for (const r of lines) {
+    if (r.turn.start == null) continue;
+    if (!best || Math.abs(r.turn.start - at) < Math.abs(best.turn.start! - at))
+      best = r;
+  }
+  return best;
+}
+
+/** A line's mark on the strip, in pixels: as long as it lasts (half a pixel a second),
+ *  3 at least, 14 at most; 3 when its length is not measured. */
+export function tickWidth(turn: Turn): number {
+  return Math.max(3, Math.min(14, (turnSeconds(turn) ?? 0) / 2));
+}
