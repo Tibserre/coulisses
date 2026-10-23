@@ -3,7 +3,17 @@
  * untranscribed stretches in between, a heading at each chapter, each line with its voice.
  * Times are the engine's, measured or absent: nothing here estimates one (P2).
  */
-import type { CorrectedView, Marker, Person, Phase, PhaseKind, Speaker, TimedNote, Turn, Word } from "./api.ts";
+import type {
+  CorrectedView,
+  Marker,
+  Person,
+  Phase,
+  PhaseKind,
+  Speaker,
+  TimedNote,
+  Turn,
+  Word,
+} from "./api.ts";
 
 export interface TurnRow {
   kind: "turn";
@@ -95,7 +105,10 @@ export function phaseOf(phases: readonly Phase[], turn: number): Phase | null {
 }
 
 /** `folded`: first lines of the chapters shown folded (their lines are left out). */
-export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = new Set()): ReviewModel {
+export function buildModel(
+  view: CorrectedView,
+  folded: ReadonlySet<number> = new Set(),
+): ReviewModel {
   const speakerOf = new Map<string | null, Speaker>(
     view.speakers.map((s) => [s.label, s]),
   );
@@ -115,13 +128,23 @@ export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = ne
     })),
     ...(view.markers ?? [])
       .filter((m) => m.kind === "key_moment")
-      .map((m): MomentRow => ({ kind: "moment", key: `m${m.id}`, start: m.at_s, marker: m })),
-    ...(view.timed_notes ?? []).map(
-      (n): NoteRow => ({ kind: "note", key: `n${n.id}`, start: n.at_s, note: n }),
-    ),
+      .map((m): MomentRow => ({
+        kind: "moment",
+        key: `m${m.id}`,
+        start: m.at_s,
+        marker: m,
+      })),
+    ...(view.timed_notes ?? []).map((n): NoteRow => ({
+      kind: "note",
+      key: `n${n.id}`,
+      start: n.at_s,
+      note: n,
+    })),
   ].sort((a, b) => a.start - b.start);
   const phases = view.phases ?? [];
-  const startOf = new Map(phases.map((p, i) => [p.turn, { phase: p, number: i + 1 }]));
+  const startOf = new Map(
+    phases.map((p, i) => [p.turn, { phase: p, number: i + 1 }]),
+  );
   // Gaps go before the first line that starts after them; lines without a time keep
   // their place in the engine's order. A folded chapter shows its heading only.
   const rows: Row[] = [];
@@ -151,7 +174,9 @@ export function buildModel(view: CorrectedView, folded: ReadonlySet<number> = ne
     if (!hidden) {
       const above = rows[rows.length - 1];
       const continued =
-        above?.kind === "turn" && above.turn.speaker === row.turn.speaker && row.speaker.label !== null;
+        above?.kind === "turn" &&
+        above.turn.speaker === row.turn.speaker &&
+        row.speaker.label !== null;
       rows.push(continued ? { ...row, continued } : row);
     }
   }
@@ -212,20 +237,26 @@ export function toggleSelection(
   extendFrom: number | null,
 ): Set<number> {
   const next = new Set(selected);
-  if (extendFrom != null && order.includes(extendFrom) && order.includes(turn)) {
-    const [a, b] = [order.indexOf(extendFrom), order.indexOf(turn)].sort((x, y) => x - y);
+  if (
+    extendFrom != null &&
+    order.includes(extendFrom) &&
+    order.includes(turn)
+  ) {
+    const [a, b] = [order.indexOf(extendFrom), order.indexOf(turn)].sort(
+      (x, y) => x - y,
+    );
     for (const index of order.slice(a, b + 1)) next.add(index);
   } else if (next.has(turn)) next.delete(turn);
   else next.add(turn);
   return next;
 }
 
-
 /** What a summary's staleness depends on, built as the service compares it: the run, the
  *  corrections in force and the chapter detection. It changes on a correction, an undo, a
  *  redo and a new detection. */
 export function liveEditsKey(
-  view: Pick<CorrectedView, "run_id" | "edits"> & Partial<Pick<CorrectedView, "phases_run_id">>,
+  view: Pick<CorrectedView, "run_id" | "edits"> &
+    Partial<Pick<CorrectedView, "phases_run_id">>,
 ): string {
   const live = view.edits
     .filter((e) => !e.reverted)
@@ -252,13 +283,28 @@ export interface WordTip {
 
 /** One tip per word, the most useful first: what to write, then how it was written, then
  *  that the model doubted (never « sure » for the rest: the score misses some mistakes). */
-export function wordTip(word: Pick<Word, "asr_confidence" | "added" | "suggestion">): WordTip | null {
+export function wordTip(
+  word: Pick<Word, "asr_confidence" | "added" | "suggestion">,
+): WordTip | null {
   if (word.suggestion)
-    return { kind: "suggestion", text: `→ ${word.suggestion}`, label: `Peut-être « ${word.suggestion} »` };
-  if (word.added) return { kind: "added", text: "ajouté", label: "Ajouté à la main, sans horodatage mesuré" };
+    return {
+      kind: "suggestion",
+      text: `→ ${word.suggestion}`,
+      label: `Peut-être « ${word.suggestion} »`,
+    };
+  if (word.added)
+    return {
+      kind: "added",
+      text: "ajouté",
+      label: "Ajouté à la main, sans horodatage mesuré",
+    };
   if (isDoubtful(word)) {
     const percent = Math.round((word.asr_confidence ?? 0) * 100);
-    return { kind: "confidence", percent, label: `Le modèle doutait de ce mot (sûr à ${percent} %)` };
+    return {
+      kind: "confidence",
+      percent,
+      label: `Le modèle doutait de ce mot (sûr à ${percent} %)`,
+    };
   }
   return null;
 }
@@ -273,10 +319,15 @@ export interface PhaseSpan {
 /** Each chapter's stretch of the recording, for the strip: from its first measured line
  *  to the next chapter's (the last one to the end). A chapter none of whose lines has a
  *  time has no place on it. */
-export function phaseSpans(view: Pick<CorrectedView, "phases" | "turns">, duration: number): PhaseSpan[] {
+export function phaseSpans(
+  view: Pick<CorrectedView, "phases" | "turns">,
+  duration: number,
+): PhaseSpan[] {
   const firsts = view.phases.map((p) => {
     if (p.start != null) return p.start;
-    const timed = view.turns.slice(p.turn, p.end_turn).find((t) => t.start != null);
+    const timed = view.turns
+      .slice(p.turn, p.end_turn)
+      .find((t) => t.start != null);
     return timed?.start ?? null;
   });
   const spans: PhaseSpan[] = [];
@@ -284,7 +335,12 @@ export function phaseSpans(view: Pick<CorrectedView, "phases" | "turns">, durati
     const start = firsts[i];
     if (start == null) return;
     const next = firsts.slice(i + 1).find((s): s is number => s != null);
-    spans.push({ phase, number: i + 1, start, end: Math.max(start, next ?? duration) });
+    spans.push({
+      phase,
+      number: i + 1,
+      start,
+      end: Math.max(start, next ?? duration),
+    });
   });
   return spans;
 }
@@ -310,10 +366,16 @@ export function nameChoices(
   const present = people.filter((p) => !p.archived);
   const name = typed.replace(/\s+/g, " ").trim();
   const q = name.toLowerCase();
-  if (view === "character") return present.map((person) => ({ kind: "person", person }));
+  if (view === "character")
+    return present.map((person) => ({ kind: "person", person }));
   if (view === "same")
     return voices
-      .filter((v) => v.label !== null && v.label !== speaker.label && (!q || v.name.toLowerCase().includes(q)))
+      .filter(
+        (v) =>
+          v.label !== null &&
+          v.label !== speaker.label &&
+          (!q || v.name.toLowerCase().includes(q)),
+      )
       .map((voice) => ({ kind: "voice", voice }));
   // The person whose voice it seems to be comes first (ADR 0057).
   const proposed = speaker.proposal?.person_id;
@@ -332,7 +394,8 @@ export function focusModel(model: ReviewModel, label: string): ReviewModel {
   const rows: Row[] = [];
   let skipped = 0;
   const fold = () => {
-    if (skipped) rows.push({ kind: "others", key: `o${rows.length}`, count: skipped });
+    if (skipped)
+      rows.push({ kind: "others", key: `o${rows.length}`, count: skipped });
     skipped = 0;
   };
   for (const row of model.rows) {
@@ -365,23 +428,34 @@ export function focusModel(model: ReviewModel, label: string): ReviewModel {
     else kept.push(r);
   }
   kept.reverse();
-  return { ...model, rows: kept, timed: model.timed.filter((r) => r.speaker.label === label) };
+  return {
+    ...model,
+    rows: kept,
+    timed: model.timed.filter((r) => r.speaker.label === label),
+  };
 }
 
 /** Where a voice speaks, as stretches of the recording: measured times only (a line
  *  without a measured end is a point, drawn as a thin stroke; P2). */
-export function speakerMarks(model: ReviewModel, label: string): { start: number; end: number }[] {
+export function speakerMarks(
+  model: ReviewModel,
+  label: string,
+): { start: number; end: number }[] {
   return model.timed
     .filter((r) => r.speaker.label === label && r.turn.start != null)
     .map((r) => ({ start: r.turn.start!, end: r.turn.end ?? r.turn.start! }));
 }
 
 /** The line to hear to recognise a voice: its longest measured one. */
-export function speakerExcerpt(model: ReviewModel, label: string): TurnRow | null {
+export function speakerExcerpt(
+  model: ReviewModel,
+  label: string,
+): TurnRow | null {
   let best: TurnRow | null = null;
   let length = -1;
   for (const r of model.timed) {
-    if (r.speaker.label !== label || r.turn.start == null || r.turn.end == null) continue;
+    if (r.speaker.label !== label || r.turn.start == null || r.turn.end == null)
+      continue;
     const l = r.turn.end - r.turn.start;
     if (l > length) {
       best = r;
