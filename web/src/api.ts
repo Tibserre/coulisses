@@ -711,6 +711,10 @@ export interface Generation {
   stale: boolean;
   /** Why it cannot be read as usual (missing or unreadable files). */
   problem: string | null;
+  /** A version brought back (« Revenir à la version d'avant »). */
+  restored: boolean;
+  /** The latest of its summary, made again: the version before can come back, once. */
+  restorable: boolean;
 }
 
 export interface PendingGeneration {
@@ -1013,6 +1017,9 @@ export const api = {
   generations: (id: string) => getJson<Generations>(`${sessionPath(id)}/resumes`),
   phases: (id: string) => getJson<PhasesStatus>(`${sessionPath(id)}/chapitres`),
   detectPhases: (id: string) => send<PhasesStatus>("POST", `${sessionPath(id)}/chapitres`),
+  /** « Revenir à la version d'avant »: the summary before the latest one, shown again. */
+  restoreGeneration: (id: string, generationId: number) =>
+    send<Generations>("POST", `${sessionPath(id)}/resumes/${generationId}/revenir`),
   requestGeneration: (id: string, actionRef: string, model: string | null) =>
     send<Generations>("POST", `${sessionPath(id)}/resumes`, { action_ref: actionRef, model }),
   async generationPrompts(id: string, generationId: number): Promise<string> {

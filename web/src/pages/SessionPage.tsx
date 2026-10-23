@@ -27,6 +27,7 @@ import {
   type Project,
   type Session,
   type SessionDetail,
+  type Speaker,
   type StageView,
 } from "../api.ts";
 import { PhaseStrip } from "../components/PhaseStrip.tsx";
@@ -43,7 +44,7 @@ import {
   Participants,
   Attendees,
 } from "../components/ReviewSide.tsx";
-import { BatteryMedium, Hourglass } from "lucide-react";
+import { BatteryMedium, Hourglass, PanelRight, X } from "lucide-react";
 import { ProcessingOutline } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
 import {
@@ -52,7 +53,7 @@ import {
   inkOf,
   type Editing,
 } from "../components/TranscriptView.tsx";
-import { SummaryPanel } from "../components/SummaryPanel.tsx";
+import { SummaryView } from "../components/SummaryView.tsx";
 import { NotesSection } from "../components/NotesSection.tsx";
 import { VersionsSection } from "../components/VersionsSection.tsx";
 import { SessionMenu } from "../components/SessionMenu.tsx";
@@ -62,7 +63,6 @@ import { RERUN_NAME } from "../versions.ts";
 import { extraTracks } from "../tracks.ts";
 import { takeStopProblem } from "../stopNotice.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
-import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
 import {
   buildModel,
@@ -123,11 +123,33 @@ export function SessionPage({
   // Said by the stop of the recording that just opened this page (P8).
   useEffect(() => setStopProblem(takeStopProblem(id)), [id]);
   const [incomplete, setIncomplete] = useState<string | null>(null);
-  const [tab, setTab] = useState<"overview" | "summary">("summary");
-  // Opened from a search hit in a summary: the summary tab.
+  // One reading at a time (ADR 0060): the transcript, or the summaries. The page opens on
+  // the transcript; a search hit in a summary opens the summaries.
+  const [reading, setReading] = useState<"transcript" | "summary">(
+    initialTab === "summary" ? "summary" : "transcript",
+  );
   useEffect(() => {
-    if (initialTab === "summary") setTab("summary");
+    if (initialTab === "summary") setReading("summary");
   }, [initialTab]);
+  /** Read once: kept drawn after, so that coming back finds it as it was left. */
+  const [summaryDrawn, setSummaryDrawn] = useState(initialTab === "summary");
+  useEffect(() => {
+    if (reading === "summary") setSummaryDrawn(true);
+  }, [reading]);
+  /** The details of the session (voices, attendees, notes, corrections, versions), in a
+   *  panel over the page, opened at one of its parts. */
+  const [panel, setPanel] = useState<string | null>(null);
+  const openPanel = (part: string) => {
+    setPanel(part);
+    // Once it is drawn: that part, in view.
+    window.setTimeout(
+      () =>
+        document
+          .getElementById(part)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      50,
+    );
+  };
   /** Chapters folded by the user, by their first line. */
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
@@ -160,7 +182,8 @@ export function SessionPage({
     if (!wasBusy.current || jobState !== "done") return;
     wasBusy.current = false;
     setArrived(true);
-    const timer = window.setTimeout(() => setArrived(false), 2500);
+    // As long as the moment of the voices lasts (index.css, .cl-arrival).
+    const timer = window.setTimeout(() => setArrived(false), 3400);
     return () => window.clearTimeout(timer);
   }, [busy, jobState]);
 
@@ -491,6 +514,11 @@ export function SessionPage({
         void history(e.shiftKey);
         return;
       }
+      if (e.key === "Escape" && panel) {
+        e.preventDefault();
+        setPanel(null);
+        return;
+      }
       // Escape: back to all the voices (a name being typed handles its own Escape).
       if (e.key === "Escape" && focus) {
         e.preventDefault();
@@ -498,6 +526,7 @@ export function SessionPage({
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey || !currentRow) return;
+      if (reading !== "transcript") return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setNamingTurn(currentRow.turn.index);
@@ -513,7 +542,7 @@ export function SessionPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentRow, history, correct, focus]);
+  }, [currentRow, history, correct, focus, panel, reading]);
 
   const session = detail?.session;
   const title = session
@@ -524,6 +553,10 @@ export function SessionPage({
     ? session.attendee_ids.length + (session.unnamed_attendees ?? 0)
     : 0;
 
+  const voices = unfolded?.speakers.filter((s) => s.label !== null) ?? [];
+  const toName = voices.filter((s) => !s.named).length;
+  const liveEdits = view?.edits.filter((e) => !e.reverted).length ?? 0;
+
   const audioGone = session?.audio.state === "removed";
   const audioText = session ? audioLine(session.audio) : null;
   const extra = detail ? extraTracks(detail.other_sources, detail.mix) : null;
@@ -532,7 +565,7 @@ export function SessionPage({
   const audioAction = (action: () => Promise<Session>) => () =>
     action().then(sessionChanged, (e: Error) => setMenuError(e.message));
 
-  const reading =
+  const loading =
     !error && (!detail || (attributeRun !== null && !view && !transcriptError));
 
   return (
@@ -545,7 +578,7 @@ export function SessionPage({
       />
       {/* Read, not yet shown: the session, or the version it has. Its shapes meanwhile, then
           the page at once: nothing comes in pieces (the steps, then the transcript). */}
-      {reading ? (
+      {loading ? (
         <ReviewSkeleton />
       ) : (
         <>
@@ -590,6 +623,19 @@ export function SessionPage({
                   {present
                     ? ` · ${plural(present, "présent", "présents")}`
                     : ""}
+                  {voices.length > 0 && (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        className="cl-linkbtn cl-linkbtn--quiet"
+                        onClick={() => openPanel("voix")}
+                      >
+                        {plural(voices.length, "voix", "voix")}
+                        {toName ? `, ${toName} à nommer` : ""}
+                      </button>
+                    </>
+                  )}
                   {extra && <span title={extra.title}>{extra.text}</span>}
                   {audioText && (
                     <>
@@ -663,6 +709,49 @@ export function SessionPage({
                 }}
               />
             )}
+            {session && model && view && (
+              <div className="cl-review__views">
+                <div className="cl-seg" role="tablist" aria-label="Lire">
+                  {(
+                    [
+                      ["transcript", "Transcription"],
+                      ["summary", "Résumé"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="tab"
+                      aria-selected={reading === value}
+                      onClick={() => setReading(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span className="cl-review__viewtools">
+                  {reading === "transcript" && liveEdits > 0 && (
+                    <button
+                      type="button"
+                      className="cl-linkbtn cl-linkbtn--quiet"
+                      onClick={() => openPanel("corrections")}
+                    >
+                      {plural(liveEdits, "correction", "corrections")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="cl-iconbtn"
+                    aria-label="Détails de la séance"
+                    title="Détails de la séance : voix, présents, notes, corrections, versions"
+                    aria-expanded={panel !== null}
+                    onClick={() => (panel ? setPanel(null) : openPanel("voix"))}
+                  >
+                    <PanelRight size={16} strokeWidth={1.75} />
+                  </button>
+                </span>
+              </div>
+            )}
           </header>
 
           {error && (
@@ -728,7 +817,9 @@ export function SessionPage({
                 className="cl-review__columns"
                 data-arrived={arrived || undefined}
               >
-                <div className="cl-review__main">
+                {/* Said in both readings: what was refused or not carried over, and what an
+                    undo did, never hidden in the one not shown (P8). */}
+                <div className="cl-review__shared">
                   {editError && (
                     <div className="cl-review__notice">
                       <Banner
@@ -747,21 +838,14 @@ export function SessionPage({
                       await api.resume(id, attendees);
                       await refresh();
                     }}
-                    onShowList={() => {
-                      setTab("overview");
-                      // Once the tab is drawn: the list, in view.
-                      window.setTimeout(
-                        () =>
-                          document
-                            .getElementById("non-reportees")
-                            ?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "start",
-                            }),
-                        50,
-                      );
-                    }}
+                    onShowList={() => openPanel("non-reportees")}
                   />
+                </div>
+                <div
+                  className="cl-review__main"
+                  hidden={reading !== "transcript"}
+                >
+                  {arrived && <VoicesArrival speakers={model.speakers} />}
                   {focused && shown && (
                     <SpeakerFocusBar
                       speaker={focused}
@@ -782,11 +866,6 @@ export function SessionPage({
                     current={current}
                     editing={editing}
                   />
-                  {notice && (
-                    <div className="cl-notice" role="status">
-                      {notice}
-                    </div>
-                  )}
                   {selected.size > 0 && (
                     <div
                       className="cl-selection"
@@ -834,31 +913,52 @@ export function SessionPage({
                     </div>
                   )}
                 </div>
-                <aside className="cl-side">
-                  <TabList
-                    value={tab}
-                    onChange={(v) => setTab(v as "overview" | "summary")}
-                    hasDivider
+                {summaryDrawn && (
+                  <div
+                    className="cl-review__summary"
+                    hidden={reading !== "summary"}
                   >
-                    <Tab value="overview" label="Vue d'ensemble" />
-                    <Tab value="summary" label="Résumé" />
-                  </TabList>
-                  {tab === "summary" ? (
-                    <SummaryPanel
-                      sessionId={id}
-                      spaceId={session.space_id}
-                      transcriptKey={liveEditsKey(view)}
-                    />
-                  ) : (
-                    <>
-                      <KeyFigures view={view} model={model} dev={dev} />
+                    <div className="cl-measure">
+                      <SummaryView
+                        sessionId={id}
+                        spaceId={session.space_id}
+                        transcriptKey={liveEditsKey(view)}
+                      />
+                    </div>
+                  </div>
+                )}
+                {notice && (
+                  <div className="cl-notice" role="status">
+                    {notice}
+                  </div>
+                )}
+                {panel && (
+                  <aside className="cl-panel" aria-label="Détails de la séance">
+                    <header className="cl-panel__head">
+                      <Text weight="medium">Détails de la séance</Text>
+                      <button
+                        type="button"
+                        className="cl-iconbtn"
+                        aria-label="Fermer les détails"
+                        title="Fermer (Échap)"
+                        onClick={() => setPanel(null)}
+                      >
+                        <X size={16} strokeWidth={1.75} />
+                      </button>
+                    </header>
+                    <KeyFigures view={view} model={model} dev={dev} />
+                    <div id="voix" className="cl-panel__part">
                       <SpeakersToName
                         model={unfolded!}
                         pb={pb}
                         audioGone={audioGone}
-                        onShow={setFocus}
+                        onShow={(label) => {
+                          setReading("transcript");
+                          setFocus(label);
+                        }}
                         onName={(label, turn) => {
                           // Its lines only (never in a folded chapter), named on the first one.
+                          setReading("transcript");
                           setFocus(label);
                           setNamingTurn(turn);
                         }}
@@ -869,21 +969,26 @@ export function SessionPage({
                       />
                       <Participants
                         model={model}
-                        onShow={setFocus}
+                        onShow={(label) => {
+                          setReading("transcript");
+                          setFocus(label);
+                        }}
                         onPoint={setPointed}
                         onMerge={(source, target) =>
                           correct({ kind: "merge_speakers", source, target })
                         }
                       />
-                      <NotesSection sessionId={id} />
-                      <Attendees
-                        session={session}
-                        people={people}
-                        onSave={async (ids, unnamed) => {
-                          await api.setAttendees(id, ids, unnamed);
-                          await refresh();
-                        }}
-                      />
+                    </div>
+                    <Attendees
+                      session={session}
+                      people={people}
+                      onSave={async (ids, unnamed) => {
+                        await api.setAttendees(id, ids, unnamed);
+                        await refresh();
+                      }}
+                    />
+                    <NotesSection sessionId={id} />
+                    <div id="corrections" className="cl-panel__part">
                       <CorrectionsHistory
                         edits={view.edits}
                         onUndo={async (editId) => {
@@ -901,6 +1006,8 @@ export function SessionPage({
                           }
                         }}
                       />
+                    </div>
+                    <div id="versions" className="cl-panel__part">
                       <VersionsSection
                         sessionId={id}
                         version={attributeRun}
@@ -911,27 +1018,27 @@ export function SessionPage({
                         onChanged={refresh}
                         onSeek={pb.seek}
                       />
-                      {(dev ||
-                        busy ||
-                        detail.stages.some(
-                          (s) =>
-                            s.state === "failed" ||
-                            s.state === "stalled" ||
-                            s.folder_missing ||
-                            s.stale,
-                        )) && (
-                        <section>
-                          <Heading level={3}>Traitement</Heading>
-                          <StageList
-                            stages={detail.stages}
-                            onShowProvenance={setProvenanceOf}
-                          />
-                        </section>
-                      )}
-                      {dev && <SourceInfo detail={detail} />}
-                    </>
-                  )}
-                </aside>
+                    </div>
+                    {(dev ||
+                      busy ||
+                      detail.stages.some(
+                        (s) =>
+                          s.state === "failed" ||
+                          s.state === "stalled" ||
+                          s.folder_missing ||
+                          s.stale,
+                      )) && (
+                      <section>
+                        <Heading level={3}>Traitement</Heading>
+                        <StageList
+                          stages={detail.stages}
+                          onShowProvenance={setProvenanceOf}
+                        />
+                      </section>
+                    )}
+                    {dev && <SourceInfo detail={detail} />}
+                  </aside>
+                )}
               </div>
               {audioGone ? (
                 <div className="cl-player-gone" role="status">
@@ -961,6 +1068,67 @@ export function SessionPage({
         stage={provenanceOf}
         onClose={() => setProvenanceOf(null)}
       />
+    </div>
+  );
+}
+
+/** The voices have come (ADR 0058): where the two discs were, one disc whose ring is each
+ *  voice's share of the speech the engine measured (an unnamed voice in grey), with their
+ *  names; then it fades and its room closes. Shown once, when the processing ends while the
+ *  page is open. */
+function VoicesArrival({ speakers }: { speakers: Speaker[] }) {
+  const heard = speakers.filter((s) => s.seconds > 0);
+  const total = heard.reduce((sum, s) => sum + s.seconds, 0);
+  if (!total) return null;
+  const r = 33;
+  const length = 2 * Math.PI * r;
+  let before = 0;
+  return (
+    <div className="cl-arrival" aria-hidden>
+      <div>
+        <div className="cl-arrival__inner">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r={r} className="cl-disc__ground" />
+            {heard.map((s) => {
+              const part = (length * s.seconds) / total;
+              const arc = (
+                <circle
+                  key={s.label ?? "inconnu"}
+                  cx="36"
+                  cy="36"
+                  r={r}
+                  fill="none"
+                  stroke={inkOf(s)}
+                  strokeWidth={5}
+                  strokeDasharray={`${Math.max(part - 3, 0.5)} ${length}`}
+                  strokeDashoffset={-before}
+                  transform="rotate(-90 36 36)"
+                />
+              );
+              before += part;
+              return arc;
+            })}
+          </svg>
+          <div className="cl-arrival__legend">
+            {heard.map((s) => (
+              <span key={s.label ?? "inconnu"}>
+                <span
+                  className="cl-name"
+                  data-unnamed={!s.named || undefined}
+                  style={{ color: inkOf(s) }}
+                >
+                  {s.name}
+                </span>{" "}
+                <Text type="supporting">
+                  {(100 * s.seconds) / total < 1
+                    ? "< 1 %"
+                    : `${Math.round((100 * s.seconds) / total)} %`}
+                </Text>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

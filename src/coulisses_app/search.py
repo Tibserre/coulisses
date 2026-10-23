@@ -91,8 +91,13 @@ def _entries(
     after = notes.after_session(conn, session_id)
     if after is not None and after.text.strip():
         found.append(("note", "apres", None, after.text))
+    # The version shown of each summary, its latest (ADR 0060): a hit opens what it found.
+    # The older ones stay on the disk, out of the search.
     for gen in conn.execute(
-        "SELECT id, run_id FROM generation WHERE session_id = ? ORDER BY id", (session_id,)
+        "SELECT g.id, g.run_id FROM generation g WHERE g.session_id = ? AND g.id = ("
+        " SELECT MAX(id) FROM generation WHERE session_id = g.session_id"
+        " AND action_ref = g.action_ref) ORDER BY g.id",
+        (session_id,),
     ):
         output = data.run_dir(session_id, gen["run_id"]) / "output.md"
         if output.is_file():

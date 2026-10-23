@@ -1,15 +1,51 @@
 import { useEffect, useState } from "react";
 import { Text } from "@astryxdesign/core/Text";
-import { Check, PenLine, Star } from "lucide-react";
+import { FileText, PenLine, Star, Users } from "lucide-react";
 import { api, type Preview, type SessionDetail } from "../api.ts";
 import { formatClock } from "../format.ts";
 import { outlineRows } from "../outline.ts";
+import { processingDiscs } from "../processing.ts";
 import { KIND_LABEL } from "../transcript.ts";
 
-/** While the session is processed (ADR 0058): the review building itself. A thin line says
- *  where it is; below, the text once transcribed, grey, with what was marked during the
- *  recording at its time; the names come with « who said what », then the review opens.
- *  Read again every few seconds; nothing is kept: the review reads the engine's runs. */
+/** A big disc whose ring fills as the engine says (400 ms to each new share): the disc
+ *  never moves, only its ring (animation of the processing, art direction). */
+function Disc({
+  share,
+  icon,
+  label,
+}: {
+  share: number;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const r = 34;
+  const length = 2 * Math.PI * r;
+  return (
+    <div className="cl-disc">
+      <span className="cl-disc__face">
+        <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden>
+          <circle cx="36" cy="36" r={r} className="cl-disc__ground" />
+          <circle
+            cx="36"
+            cy="36"
+            r={r}
+            className="cl-disc__ring"
+            strokeDasharray={length}
+            strokeDashoffset={length * (1 - share)}
+          />
+        </svg>
+        {icon}
+      </span>
+      <Text type="supporting">{label}</Text>
+    </div>
+  );
+}
+
+/** While the session is processed (ADR 0058): two discs, « Le texte » and « Les voix »,
+ *  which the engine makes at the same time, then « Qui a dit quoi »; below, the text once
+ *  transcribed, grey, with what was marked during the recording at its time. The names
+ *  come with « who said what », then the review opens. Read again every few seconds;
+ *  nothing is kept: the review reads the engine's runs. */
 export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
   const [outline, setOutline] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,17 +71,10 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
     };
   }, [id, done]);
 
-  const stages = detail.stages;
-  const current = stages.find(
-    (s) => s.state === "running" || s.state === "stalled",
+  const discs = processingDiscs(
+    detail.stages,
+    detail.source?.duration_s ?? null,
   );
-  const share = current?.progress?.total
-    ? current.progress.done / current.progress.total
-    : 0;
-  const fraction = stages.length ? (done + share) / stages.length : 0;
-  // About ten minutes of computing per hour of audio (spec §7.4): said as « environ ».
-  const hours = (detail.source?.duration_s ?? 0) / 3600;
-  const left = Math.max(1, Math.round(hours * 10 * (1 - fraction)));
   const queued = detail.session.job_state === "queued";
 
   const lines = outline?.lines ?? [];
@@ -72,41 +101,38 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
     })),
     marks,
   );
-  const stalled = stages.some((s) => s.state === "stalled");
 
   return (
     <section
       className="cl-outline"
       aria-label="La séance en cours de traitement"
     >
-      <div className="cl-outline__progress" role="status">
-        <div className="cl-outline__track" aria-hidden>
-          <i style={{ width: `${Math.round(fraction * 100)}%` }} />
+      <div className="cl-outline__discs" role="status">
+        <div className="cl-outline__pair">
+          <Disc
+            share={discs.text}
+            label="Le texte"
+            icon={<FileText size={30} strokeWidth={1.5} aria-hidden />}
+          />
+          <Disc
+            share={discs.voices}
+            label={
+              discs.voices >= 1 && !discs.joining
+                ? "Les voix · prêtes"
+                : "Les voix"
+            }
+            icon={<Users size={30} strokeWidth={1.5} aria-hidden />}
+          />
         </div>
         <Text type="supporting">
           {queued
             ? "En file : un autre traitement passe d'abord."
-            : stalled
+            : discs.stalled
               ? "Une étape ne donne plus de nouvelles depuis un moment : elle s'est peut-être arrêtée. Le détail des étapes est ci-dessous."
-              : current
-                ? `${current.label}${hours > 0 ? ` · environ ${left} min` : ""}`
-                : "Traitement en cours"}
+              : discs.joining
+                ? "Qui a dit quoi · quelques secondes"
+                : `${discs.minutesLeft !== null ? `environ ${discs.minutesLeft} min · ` : ""}vous pouvez fermer Coulisses`}
         </Text>
-        <ol className="cl-outline__steps">
-          {stages.map((s) => (
-            <li
-              key={s.stage}
-              data-state={s.state}
-              data-stale={s.stale || undefined}
-            >
-              {s.state === "succeeded" && (
-                <Check size={12} strokeWidth={2} aria-hidden />
-              )}
-              {s.label}
-              {s.stale && " (à refaire)"}
-            </li>
-          ))}
-        </ol>
       </div>
       {error && (
         <Text type="supporting">L'aperçu n'a pas pu être lu : {error}</Text>
@@ -134,10 +160,6 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
           </li>
         ))}
       </ol>
-      <Text type="supporting">
-        Vous pouvez fermer Coulisses : le traitement reprendra où il en était à
-        la prochaine ouverture.
-      </Text>
     </section>
   );
 }

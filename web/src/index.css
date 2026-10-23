@@ -399,7 +399,6 @@ body {
   padding-inline-start: var(--spacing-4);
 }
 
-.cl-side .cl-skeleton__text,
 .cl-skeleton__text--flush {
   padding-inline-start: 0;
 }
@@ -433,12 +432,142 @@ body {
   color: var(--color-text-primary);
 }
 
+/* One reading at a time (ADR 0060): the transcript or the summaries, in one column of
+   reading width, the header over it at the same width. */
+.cl-review {
+  --cl-measure: calc(70ch + 6rem + var(--spacing-5) + var(--spacing-4));
+  position: relative;
+}
+
+.cl-review__header > *,
+.cl-measure {
+  width: 100%;
+  max-width: var(--cl-measure);
+  margin-inline: auto;
+}
+
 .cl-review__columns {
+  position: relative;
   display: grid;
-  /* The side column gives way first on a narrow window: the transcript keeps a reading
-     width. */
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 30vw, 420px);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
+}
+
+.cl-review__shared:empty {
+  display: none;
+}
+
+.cl-review__main,
+.cl-review__summary {
+  grid-row: 2;
+}
+
+.cl-review__main[hidden],
+.cl-review__summary[hidden] {
+  display: none;
+}
+
+.cl-review__summary {
+  overflow-y: auto;
+  padding: var(--spacing-6) var(--spacing-8) var(--spacing-10);
+}
+
+.cl-review__views {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-1);
+}
+
+.cl-review__viewtools {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+/* Transcription | Résumé: two options side by side, the one read raised. */
+.cl-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+}
+
+.cl-seg button {
+  border: 0;
+  background: none;
+  padding: 4px var(--spacing-4);
+  border-radius: var(--radius-inner);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-seg button:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-seg button[aria-selected="true"] {
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+/* The details of the session, over the page on its right: opened on demand, closed by ✕ or
+   Escape. It slides in, to show where it comes from (art direction). */
+.cl-panel {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 4;
+  width: clamp(320px, 32vw, 420px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  padding: 0 var(--spacing-6) var(--spacing-8);
+  background: var(--color-background-surface);
+  border-inline-start: 1px solid var(--color-border);
+  box-shadow: -12px 0 32px -24px rgb(0 0 0 / 0.35);
+  animation: cl-panel-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cl-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.cl-panel__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-4) 0 var(--spacing-2);
+  background: var(--color-background-surface);
+}
+
+.cl-panel__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  scroll-margin-top: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-panel {
+    animation: none;
+  }
 }
 
 .cl-transcript {
@@ -447,7 +576,8 @@ body {
 }
 
 .cl-transcript > div {
-  max-width: calc(70ch + 6rem + var(--spacing-5) + var(--spacing-4));
+  max-width: var(--cl-measure);
+  margin-inline: auto;
   margin: 0 auto;
 }
 
@@ -567,16 +697,7 @@ button.cl-time {
   font-size: var(--font-size-sm);
 }
 
-.cl-side {
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-8);
-  padding: var(--spacing-6);
-  border-inline-start: 1px solid var(--color-border);
-}
-
-.cl-side section {
+.cl-panel section {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
@@ -1740,10 +1861,6 @@ button.cl-name {
 
 /* -------------------------------------------------------------- Summaries --- */
 
-.cl-side .astryx-tab-list,
-.cl-side [role="tablist"] {
-  margin-bottom: calc(-1 * var(--spacing-4));
-}
 
 .cl-title {
   margin: 0;
@@ -1816,6 +1933,94 @@ a.cl-iconbtn {
 .cl-summary__body {
   font-size: var(--font-size-base);
   line-height: 1.6;
+}
+
+/* One tab per summary written; « + Rédiger… » for another (ADR 0060). */
+.cl-sumtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+}
+
+.cl-sumtabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  border: 1px solid transparent;
+  background: none;
+  padding: 4px var(--spacing-3);
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-sumtabs__tab:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-sumtabs__tab[aria-selected="true"] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-sumtabs__tab[data-add] {
+  border-style: dashed;
+  border-color: var(--color-border);
+}
+
+.cl-sumtabs__tab:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.cl-summary__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-10) 0;
+  text-align: center;
+}
+
+.cl-summary__empty p {
+  margin: 0;
+}
+
+/* Being written: said, and its shapes, still (nothing moves in a loop). */
+.cl-summary__writing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-summary__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cl-summary__lines i {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--color-background-muted);
+}
+
+.cl-summary__lines i:nth-child(1) {
+  width: 92%;
+}
+
+.cl-summary__lines i:nth-child(2) {
+  width: 74%;
+}
+
+.cl-summary__lines i:nth-child(3) {
+  width: 84%;
 }
 
 .cl-summary__new {
@@ -2219,6 +2424,10 @@ a.cl-iconbtn {
 .cl-linkbtn:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.cl-linkbtn--quiet {
+  color: inherit;
 }
 
 /* -------------------------------------------------------------- Versions --- */
@@ -4225,46 +4434,57 @@ button.cl-tree__more:hover {
   gap: var(--spacing-4);
 }
 
-.cl-outline__progress {
+/* The two discs, still: only their rings move, 400 ms to each share the engine gives. */
+.cl-outline__discs {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-6) 0 var(--spacing-4);
+}
+
+.cl-outline__pair {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-10);
+}
+
+.cl-disc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--spacing-2);
 }
 
-.cl-outline__track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--color-background-muted);
-  overflow: hidden;
-}
-
-.cl-outline__track i {
-  display: block;
-  height: 100%;
-  background: var(--color-accent);
-  transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cl-outline__steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-3);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.cl-outline__steps li {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.cl-outline__steps li[data-state="succeeded"],
-.cl-outline__steps li[data-state="running"] {
+.cl-disc__face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
   color: var(--color-text-primary);
+}
+
+.cl-disc__face svg {
+  position: absolute;
+  inset: 0;
+}
+
+.cl-disc__face > :not(svg) {
+  position: relative;
+}
+
+.cl-disc__ground {
+  fill: var(--color-background-muted);
+}
+
+.cl-disc__ring {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 400ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cl-outline__lines {
@@ -4277,6 +4497,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-outline__line {
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
   display: grid;
   grid-template-columns: 4.5rem 1fr;
   gap: var(--spacing-3);
@@ -4351,13 +4572,89 @@ button.cl-tree__more:hover {
   }
 }
 
+@keyframes cl-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The voices have come (ADR 0058): the share of each one's speech, for a moment, where the
+   discs were; then it fades (400 ms) and its room closes in 850 ms, the rare moment of the
+   art direction. The shares stay in the details of the session. */
+.cl-arrival {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: cl-arrival 3400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-arrival > div {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.cl-arrival__inner {
+  padding: var(--spacing-6) 0 var(--spacing-4);
+}
+
+.cl-arrival__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-1) var(--spacing-5);
+  font-size: var(--font-size-sm);
+}
+
+@keyframes cl-arrival {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  63% {
+    opacity: 1;
+    grid-template-rows: 1fr;
+  }
+  75% {
+    opacity: 0;
+    grid-template-rows: 1fr;
+  }
+  100% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+}
+
+.cl-strip__writing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-strip__bars {
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .cl-review__columns[data-arrived] .cl-turn__head {
+  .cl-review__columns[data-arrived] .cl-turn__head,
+  .cl-outline__line,
+  .cl-strip__bars {
     animation: none;
   }
 
-  .cl-outline__track i {
+  .cl-disc__ring {
     transition: none;
+  }
+
+  /* No moment: the review at once. */
+  .cl-arrival {
+    display: none;
   }
 }
 

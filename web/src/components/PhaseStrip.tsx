@@ -1,7 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
-import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
-import { RefreshCw } from "lucide-react";
+import { ListTree, RefreshCw } from "lucide-react";
 import type { CorrectedView, PhasesStatus } from "../api.ts";
 import { formatClock, plural } from "../format.ts";
 import { KIND_LABEL, phaseSpans } from "../transcript.ts";
@@ -48,7 +47,13 @@ export function PhaseStrip({
             <Text type="supporting">Pas encore de chapitres.</Text>
           )
         )}
-        {waiting && <Spinner size="sm" label="Détection des chapitres…" />}
+        {waiting && (
+          // Said, not spun: nothing moves in a loop (art direction).
+          <span className="cl-strip__writing" role="status">
+            <ListTree size={13} strokeWidth={1.75} aria-hidden />
+            Les chapitres s'écrivent · vous pouvez déjà relire
+          </span>
+        )}
         {status?.state === "failed" && (
           <span className="cl-strip__error">
             Les chapitres n'ont pas pu être détectés :{" "}
@@ -56,17 +61,26 @@ export function PhaseStrip({
           </span>
         )}
         {view.phases_problem && (
-          <span className="cl-strip__error">
-            {view.phases_problem}
-          </span>
+          <span className="cl-strip__error">{view.phases_problem}</span>
         )}
         {dev && view.phases_by_markers.length > 0 && (
-          <span className="cl-strip__note" title={view.phases_by_markers.join("\n")}>
-            {plural(view.phases_by_markers.length, "coupure remplacée", "coupures remplacées")} par un marqueur
+          <span
+            className="cl-strip__note"
+            title={view.phases_by_markers.join("\n")}
+          >
+            {plural(
+              view.phases_by_markers.length,
+              "coupure remplacée",
+              "coupures remplacées",
+            )}{" "}
+            par un marqueur
           </span>
         )}
         {dev && status?.state === "done" && status.adjustments.length > 0 && (
-          <span className="cl-strip__note" title={status.adjustments.join("\n")}>
+          <span
+            className="cl-strip__note"
+            title={status.adjustments.join("\n")}
+          >
             {plural(status.adjustments.length, "ajustement", "ajustements")} de
             la réponse du modèle
           </span>
@@ -77,7 +91,11 @@ export function PhaseStrip({
               <Button
                 size="sm"
                 variant="ghost"
-                label={status?.state === "failed" ? "Relancer" : "Détecter les chapitres"}
+                label={
+                  status?.state === "failed"
+                    ? "Relancer"
+                    : "Détecter les chapitres"
+                }
                 clickAction={onDetect}
               />
             ) : (
@@ -112,7 +130,9 @@ export function PhaseStrip({
             />
           ))}
           {view.markers
-            .filter((m) => m.kind === "key_moment" && m.at_s >= from && m.at_s <= to)
+            .filter(
+              (m) => m.kind === "key_moment" && m.at_s >= from && m.at_s <= to,
+            )
             .map((m) => (
               <button
                 key={m.id}
@@ -129,7 +149,9 @@ export function PhaseStrip({
             ))}
           <span
             className="cl-strip__head-mark"
-            style={{ left: `${Math.min(100, Math.max(0, ((time - from) / (to - from)) * 100))}%` }}
+            style={{
+              left: `${Math.min(100, Math.max(0, ((time - from) / (to - from)) * 100))}%`,
+            }}
             aria-hidden
           />
         </div>

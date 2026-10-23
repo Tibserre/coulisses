@@ -318,3 +318,36 @@ def test_the_export_says_which_summary_it_wrote(
     assert written is not None
     text = (tmp_path / name).read_text(encoding="utf-8")
     assert f"## {written}" in text and "La fin à deux voix" in text
+
+
+def test_the_search_reads_the_version_shown_of_each_summary(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    conn = connect(data)
+    try:
+        with conn:
+            for run_id, text in (
+                ("summarize-1", "ancienne formule"),
+                ("summarize-2", "nouvelle formule"),
+            ):
+                conn.execute(
+                    "INSERT INTO run (id, session_id, stage, status, producer, created_at)"
+                    " VALUES (?, ?, 'summarize', 'succeeded', 'app', ?)",
+                    (run_id, session_id, now_iso()),
+                )
+                conn.execute(
+                    "INSERT INTO generation (session_id, run_id, action_ref, created_at)"
+                    " VALUES (?, ?, 'resume-impro', ?)",
+                    (session_id, run_id, now_iso()),
+                )
+                folder = data.run_dir(session_id, run_id)
+                folder.mkdir(parents=True)
+                (folder / "output.md").write_text(text, encoding="utf-8")
+    finally:
+        conn.close()
+    assert [k for _, k, _ in hits(data, "nouvelle")] == ["summary"]
+    assert hits(data, "ancienne") == []
+    # The version before brought back (« Revenir à la version d'avant »): it is the one found.
+    latest = summaries.list_generations(data, session_id).generations[0]
+    summaries.restore_previous(data, session_id, latest.id)
+    assert [k for _, k, _ in hits(data, "ancienne")] == ["summary"]
+    assert hits(data, "nouvelle") == []

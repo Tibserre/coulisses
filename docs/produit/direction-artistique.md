@@ -4,7 +4,7 @@ Statut : retenue (2026-10-02, ADR 0017). Ce document décrit une seule direction
 
 ## En une phrase
 
-Une interface sobre et éditoriale : des fonds neutres, une typographie soignée, et la couleur réservée à ce qui porte du sens. L'écran de relecture montre toute la transcription à gauche, la vue d'ensemble et le résumé à droite.
+Une interface sobre et éditoriale : des fonds neutres, une typographie soignée, et la couleur réservée à ce qui porte du sens. L'écran de relecture se lit en une colonne : la transcription, ou les résumés (ADR 0060) ; les détails de la séance s'ouvrent à droite, à la demande.
 
 ## Principes
 
@@ -97,13 +97,13 @@ Règles :
 
 La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/web/src/illustrations/rive/README.md`.
 
-## L'écran de relecture : deux colonnes
+## L'écran de relecture : une lecture à la fois
 
-Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à droite de la colonne des espaces et des séances, qui se masque pour relire au large. Elle reste sobre : texte secondaire, la séance ouverte sur un fond atténué, jamais un trait de couleur sur un côté ; un point seulement pour ce qui se passe (enregistrement, traitement, échec).
+Une seule colonne de lecture, à la largeur du texte, l'en-tête au-dessus à la même largeur (ADR 0060) : on lit la transcription **ou** les résumés. Dans la coquille de l'application (ADR 0030), elle s'ouvre à droite de la colonne des espaces et des séances, qui se masque pour relire au large. Elle reste sobre : texte secondaire, la séance ouverte sur un fond atténué, jamais un trait de couleur sur un côté ; un point seulement pour ce qui se passe (enregistrement, traitement, échec).
 
-**En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture.
+**En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture. Sous la frise, la bascule « Transcription | Résumé » ; à droite, le nombre de corrections et l'icône des détails. Dans la ligne de contexte, « N voix, M à nommer » ouvre les détails.
 
-**Colonne de gauche : la transcription entière.** Elle se lit comme un texte édité :
+**Vue « Transcription » : la transcription entière.** Elle se lit comme un texte édité :
 - l'horodatage dans la marge, cliquable pour lire à partir de là ;
 - le nom en petites capitales dans l'encre du participant, puis la réplique ; quand la même voix continue, sans rien entre, son nom n'est pas répété : la ligne garde son horodatage, et au survol une petite barre au-dessus de sa fin rend le nom (pour nommer la voix) et ses actions ;
 - pas de pastille ni d'avatar dans le texte ;
@@ -114,12 +114,9 @@ Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à dro
 - un mot peu sûr est souligné en pointillé ; au survol, « le modèle doutait » et sa certitude, qui compte depuis 0 ;
 - un mot ajouté à la main, sans temps mesuré, porte un petit « + » en exposant (ADR 0011 du moteur).
 
-**Colonne de droite : vue d'ensemble et résumé.** Environ 420 px, jusqu'à 300 px sur une fenêtre étroite : la transcription garde sa largeur de lecture.
-- En haut, les chiffres clés sur une ligne : voix, répliques (la durée est sous le titre), puis décisions, actions, questions quand elles existent.
-- Ce qui sert rarement tient en une ligne jusqu'à ce qu'on le demande : les présents (« Modifier »), les corrections (les trois dernières, puis « Voir les N autres »).
-- Onglet « Vue d'ensemble » : les participants (pastille aux initiales, rôle, part du temps de parole), puis les décisions, les actions (responsable, échéance) et les questions ouvertes.
-- Onglet « Résumé » : le compte rendu par sections, puis le message court prêt à copier.
-- Chaque point renvoie aux répliques qui le justifient par une **citation** : une petite étiquette à l'heure de la réplique, dans la couleur de la personne. Cliquer y amène la lecture ; survoler surligne la réplique à gauche.
+**Vue « Résumé ».** Un onglet par résumé rédigé, en pastilles discrètes, « + Rédiger… » en pointillé pour un autre. Sous l'onglet : la date, Copier, Exporter, Refaire ; « Revenir à la version d'avant » sous un résumé refait. Le texte à la largeur de lecture. Chaque point renvoie aux répliques qui le justifient par une **citation** : une petite étiquette à l'heure de la réplique, dans la couleur de la personne ; un clic ouvre la transcription à cet endroit.
+
+**Les détails de la séance.** Un panneau à droite, par-dessus la page, qui s'ouvre en glissant (400 ms) et se referme par ✕ ou Échap : les chiffres (voix, répliques), « À nommer », les participants (part du temps de parole ; un clic n'affiche que leurs répliques), les présents, la note d'après séance, les corrections (les trois dernières, puis « Voir les N autres »), les versions du traitement, et le traitement quand une étape s'est arrêtée.
 
 **Pied de page : le lecteur.** Réplique précédente, lecture, réplique suivante, position, vitesse. Espace pour lire ou mettre en pause, flèches pour changer de réplique.
 

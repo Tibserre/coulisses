@@ -7,7 +7,7 @@ Statut : Acceptée (2026-10-21). Choix de l'utilisateur pour la fin du parcours 
 - l'erreur dite en français ;
 - l'attente sur batterie, « à peu près esthétique ».
 
-Choix de mise en œuvre : l'arrêt différé est fait par le service, la pause tient pendant le délai, le temps restant est estimé à environ 10 min par heure d'audio, l'aperçu est relu toutes les 4 s. Précise 0005 (l'arrêt) ; respecte 0027 (sur batterie, le traitement attend un clic).
+Choix de mise en œuvre : l'arrêt différé est fait par le service, la pause tient pendant le délai, le temps restant est estimé à environ 10 min par heure d'audio, l'aperçu est relu toutes les 4 s. Précise 0005 (l'arrêt) ; respecte 0027 (sur batterie, le traitement attend un clic). L'écran de traitement (deux disques, l'arrivée des voix) : précisé par 0060.
 
 ## Contexte
 Avant, « Arrêter » ouvrait une fenêtre de confirmation. La page de la séance montrait ensuite un titre, une phrase et la liste des étapes, sans rien de la séance elle-même. L'échec « 4 voix trouvées pour 5 présents » arrivait en rouge, avec son message en double. Une erreur de l'application, une validation par exemple, s'affichait brute et en anglais. Avec le lancement en un geste (0056), les présents se cochent pendant la réunion, et un présent qui n'a pas parlé devient courant. Principes : P2 (temps mesurés), P3 (les présents ne sont qu'un minimum), P8 (rien de perdu, une erreur se voit).

@@ -986,6 +986,16 @@ def create_app(
             processor.wake()
         return summaries.list_generations(data, session_id)
 
+    @app.post("/api/seances/{session_id}/resumes/{generation_id}/revenir")
+    def restore_generation(session_id: str, generation_id: int) -> summaries.Generations:
+        """« Revenir à la version d'avant », once (ADR 0060)."""
+        try:
+            return summaries.restore_previous(data, session_id, generation_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Résumé introuvable.") from None
+        except summaries.RestoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+
     @app.get("/api/seances/{session_id}/chapitres")
     def phases(session_id: str) -> summaries.PhasesStatus:
         return summaries.phases_status(data, session_id)

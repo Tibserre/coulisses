@@ -33,6 +33,10 @@ class Generation(BaseModel):
     """Corrections, chapters, the note after the session or the transcript changed since."""
     problem: str | None = None
     """Why it cannot be read as usual (missing or unreadable files), said as it is."""
+    restored: bool = False
+    """A version brought back (« Revenir à la version d'avant »): an older run shown again."""
+    restorable: bool = False
+    """The latest of its summary, made again: the version before it can come back, once."""
 
 
 class PendingGeneration(BaseModel):
@@ -140,7 +144,66 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
                 or prov.notes_digest != notes_now,
             )
         )
+    _mark_versions(found)
     return Generations(generations=found, pending=pending)
+
+
+def _mark_versions(found: list[Generation]) -> None:
+    """`found`, latest first: which ones are brought back, and which latest one can give way
+    to the version before it. One step only: a version brought back cannot go further."""
+    by_action: dict[str, list[Generation]] = {}
+    for gen in found:
+        by_action.setdefault(gen.action_ref, []).append(gen)
+    for versions in by_action.values():
+        for i, gen in enumerate(versions):
+            gen.restored = any(o.run_id == gen.run_id for o in versions[i + 1 :])
+        latest = versions[0]
+        latest.restorable = not latest.restored and any(
+            o.run_id != latest.run_id for o in versions[1:]
+        )
+
+
+class RestoreError(ValueError):
+    """The version before cannot come back: said in French."""
+
+
+def restore_previous(data: DataDir, session_id: str, generation_id: int) -> Generations:
+    """« Revenir à la version d'avant »: the summary written before the latest one of its kind
+    is shown again. Nothing is erased or rewritten (P5): a new row points at that older run,
+    with the date it was written."""
+    conn = connect(data)
+    try:
+        with conn:
+            # Checked and written together: a summary made meanwhile cannot slip between.
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM generation WHERE id = ? AND session_id = ?",
+                (generation_id, session_id),
+            ).fetchone()
+            if row is None:
+                raise KeyError(generation_id)
+            versions = conn.execute(
+                "SELECT * FROM generation WHERE session_id = ? AND action_ref = ? ORDER BY id DESC",
+                (session_id, row["action_ref"]),
+            ).fetchall()
+            if versions[0]["id"] != row["id"]:
+                raise RestoreError(
+                    "Seule la dernière version d'un résumé laisse revenir celle d'avant."
+                )
+            older = versions[1:]
+            if any(o["run_id"] == row["run_id"] for o in older):
+                raise RestoreError("C'est déjà la version d'avant : on ne revient que d'un cran.")
+            previous = next((o for o in older if o["run_id"] != row["run_id"]), None)
+            if previous is None:
+                raise RestoreError("Ce résumé n'a pas de version d'avant.")
+            conn.execute(
+                "INSERT INTO generation (session_id, run_id, action_ref, created_at)"
+                " VALUES (?, ?, ?, ?)",
+                (session_id, previous["run_id"], row["action_ref"], previous["created_at"]),
+            )
+    finally:
+        conn.close()
+    return list_generations(data, session_id)
 
 
 def prompts_of(data: DataDir, session_id: str, generation_id: int) -> str:
