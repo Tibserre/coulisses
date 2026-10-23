@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import secrets
 import sqlite3
 import time
@@ -33,6 +34,8 @@ from coulisses_app.phases import (
     REVIEW_SCHEMA,
     TITLE_MAX,
     PhaseAnswerError,
+    PhaseDetection,
+    PhasesProgress,
     drop_before,
     join_parts,
     last_chapter,
@@ -198,6 +201,15 @@ def _minutes(starts: Sequence[float | None]) -> float:
     """From the first time to the last, in minutes."""
     timed = [s for s in starts if s is not None]
     return (timed[-1] - timed[0]) / 60 if timed else 0.0
+
+
+def _write_progress(folder: Path, progress: PhasesProgress) -> None:
+    """How far a running detection is (ADR 0061), replaced at each step: written aside, then
+    put in place in one move, so that it is never read half written."""
+    target = folder / "phases-progress.json"
+    aside = folder / ".phases-progress.json.tmp"
+    aside.write_text(progress.model_dump_json(indent=2), encoding="utf-8")
+    os.replace(aside, target)
 
 
 def _between(
@@ -480,9 +492,33 @@ def generate(
             part_firsts: list[str] = []
             recalled_out = 0
             unrecalled: list[int] = []
+            turns_at = [(t.index, t.start) for t in view.turns]
+
+            def outline(raw: list[str]) -> tuple[PhaseDetection | None, str | None]:
+                """The chapters of the parts read so far, as the end will put them (P2)."""
+                try:
+                    return snap(join_parts(raw)[0], turns_at), None
+                except PhaseAnswerError as exc:  # said in the progress; the end fails on it
+                    return None, str(exc)
+
             if size <= budget and len(by_time) == 1:
+                if is_phases:
+                    _write_progress(folder, PhasesProgress(step="reading", parts=1))
                 output = call("unique", prompt, None)
                 answers.append(output)
+                if is_phases:
+                    so_far, problem = outline(answers)
+                    _write_progress(
+                        folder,
+                        PhasesProgress(
+                            step="reading",
+                            part=1,
+                            parts=1,
+                            read_until=starts_all[-1] if starts_all else None,
+                            detection=so_far,
+                            problem=problem,
+                        ),
+                    )
             else:
                 strategy = "sections"
                 longest_previous = ("discussion", "x" * TITLE_MAX)
@@ -512,6 +548,8 @@ def generate(
                     for piece in by_time
                     for chunk in _sections(piece, budget - fixed, cfg.chars_per_token)
                 ]
+                if is_phases:
+                    _write_progress(folder, PhasesProgress(step="reading", parts=len(chunks)))
                 for k, chunk in enumerate(chunks, start=1):
                     starts = [line.start for line in chunk if line.start is not None]
                     first = clock(starts[0]) if starts else "?"
@@ -571,6 +609,19 @@ def generate(
                         recalled_out += dropped
                     parts.append(answer)
                     part_firsts.append(first)
+                    if is_phases:
+                        so_far, problem = outline(parts)
+                        _write_progress(
+                            folder,
+                            PhasesProgress(
+                                step="reading",
+                                part=k,
+                                parts=len(chunks),
+                                read_until=starts[-1] if starts else None,
+                                detection=so_far,
+                                problem=problem,
+                            ),
+                        )
                 answers = parts
             if is_phases:
                 # Each part's chapters, put on the lines they name: no merging call needed. A
@@ -598,9 +649,26 @@ def generate(
                         "précédente : la fenêtre du modèle est trop petite pour les deux."
                     )
                 start_of = {t.index: t.start for t in view.turns}
+                read = len(part_firsts) or 1
+
+                def checking(done: int) -> None:
+                    _write_progress(
+                        folder,
+                        PhasesProgress(
+                            step="checking",
+                            part=read,
+                            parts=read,
+                            read_until=starts_all[-1] if starts_all else None,
+                            checked=done,
+                            to_check=len(detection.phases),
+                            detection=detection,
+                        ),
+                    )
+
                 if cfg.phases_review_kinds:
                     # Each chapter read again alone: played or not (ADR 0045).
                     bounds = [start_of.get(p.turn) for p in detection.phases]
+                    checking(0)
                     for k, phase in enumerate(detection.phases):
                         begin = bounds[k]
                         until = next((b for b in bounds[k + 1 :] if b is not None), None)
@@ -622,6 +690,7 @@ def generate(
                                 f"« {phase.title} » : trop long pour vérifier son type seul, "
                                 "type gardé."
                             )
+                            checking(k + 1)
                             continue
                         said = call(
                             "review",
@@ -640,6 +709,19 @@ def generate(
                                 f"{KIND_WORD[kind]} à la vérification : {KIND_WORD[kind]} retenu."
                             )
                             detection.phases[k] = phase.model_copy(update={"kind": kind})
+                        checking(k + 1)
+                _write_progress(
+                    folder,
+                    PhasesProgress(
+                        step="done",
+                        part=read,
+                        parts=read,
+                        read_until=starts_all[-1] if starts_all else None,
+                        checked=len(detection.phases) if cfg.phases_review_kinds else 0,
+                        to_check=len(detection.phases) if cfg.phases_review_kinds else 0,
+                        detection=detection,
+                    ),
+                )
                 output = detection.model_dump_json(indent=2)
             elif strategy == "sections":
                 merged = "\n\n".join(
