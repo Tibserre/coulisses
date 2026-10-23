@@ -9,6 +9,7 @@ import type {
   Person,
   Phase,
   PhaseKind,
+  PhasesSteps,
   Speaker,
   TimedNote,
   Turn,
@@ -463,4 +464,68 @@ export function speakerExcerpt(
     }
   }
   return best;
+}
+
+/** The strip of chapters laid out (ADR 0061). Set chapters run from the first one's start
+ *  to the last one's end. Chapters being written run over the whole session: before the
+ *  first one, room is kept (`lead`), and after `readUntil` (the last line the detection
+ *  read, measured), nothing is known yet: the last chapter is cut there and the rest kept
+ *  empty (`unread`). Nothing is made up (P2). */
+export interface StripLayout {
+  spans: PhaseSpan[];
+  from: number;
+  to: number;
+  lead: number;
+  unread: number;
+}
+
+export function stripLayout(
+  spans: PhaseSpan[],
+  duration: number,
+  provisional: boolean,
+  readUntil: number | null,
+): StripLayout {
+  if (!provisional) {
+    const from = spans[0]?.start ?? 0;
+    return {
+      spans,
+      from,
+      to: Math.max(from + 1, ...spans.map((s) => s.end)),
+      lead: 0,
+      unread: 0,
+    };
+  }
+  const cut =
+    readUntil === null
+      ? spans
+      : spans.map((s) =>
+          s.end > readUntil ? { ...s, end: Math.max(s.start, readUntil) } : s,
+        );
+  const to = Math.max(1, duration, ...cut.map((s) => s.end));
+  const known = Math.max(0, ...cut.map((s) => s.end));
+  return {
+    spans: cut,
+    from: 0,
+    to,
+    lead: cut[0]?.start ?? 0,
+    unread: Math.max(0, to - known),
+  };
+}
+
+/** What the strip says while the chapters are being written. */
+export function chaptersWriting(
+  progress: PhasesSteps | null | undefined,
+): string {
+  if (progress?.step === "checking")
+    return progress.to_check > 0
+      ? `Les chapitres se vérifient · ${Math.min(progress.checked + 1, progress.to_check)} sur ${progress.to_check}`
+      : "Les chapitres se vérifient";
+  if (progress && progress.parts > 1)
+    return `Les chapitres s'écrivent · partie ${Math.min(progress.part + 1, progress.parts)} sur ${progress.parts} · vous pouvez déjà relire`;
+  return "Les chapitres s'écrivent · vous pouvez déjà relire";
+}
+
+/** A correction that changes the chapters: refused while they are being written. */
+export function changesChapters(correction: { kind: string }): boolean {
+  return correction.kind === "set_phase" || correction.kind === "remove_phase";
 }

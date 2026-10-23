@@ -65,6 +65,8 @@ export interface Editing {
   setTyping: (on: boolean) => void;
   /** Shows this voice's lines only. */
   showSpeaker: (label: string) => void;
+  /** The chapters are being written (ADR 0061): shown, not changed until they are set. */
+  chaptersProvisional: boolean;
 }
 
 /** Refused because the version shown changed meanwhile: nothing was written, and the page
@@ -446,7 +448,7 @@ const TurnLine = memo(function TurnLine({
                 <SpellCheck size={14} strokeWidth={1.75} />
               </button>
             )}
-            {!startsChapter && (
+            {!startsChapter && !editing.chaptersProvisional && (
               <button
                 type="button"
                 className="cl-iconbtn"
@@ -612,6 +614,24 @@ const PhaseHeading = memo(function PhaseHeading({
     setMenu(false);
     void editing.correct(request).catch(() => undefined);
   };
+  if (editing.chaptersProvisional)
+    // Being written (ADR 0061): read, never changed until the chapters are set.
+    return (
+      <div className="cl-chapter" data-kind={phase.kind} data-provisional>
+        <div className="cl-turn__margin">
+          <TimeLink t={phase.start} isCurrent={false} onSeek={onSeek} />
+        </div>
+        <div className="cl-chapter__body">
+          <span className="cl-chapter__rule" aria-hidden />
+          <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>
+          <span className="cl-chapter__title">
+            {phase.title || "Chapitre sans titre"}
+          </span>
+          <span className="cl-chapter__count">provisoire</span>
+          <span className="cl-chapter__rule" aria-hidden />
+        </div>
+      </div>
+    );
   return (
     <div
       className="cl-chapter"

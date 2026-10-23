@@ -3,12 +3,18 @@ import { Text } from "@astryxdesign/core/Text";
 import { ListTree, RefreshCw } from "lucide-react";
 import type { CorrectedView, PhasesStatus } from "../api.ts";
 import { formatClock, plural } from "../format.ts";
-import { KIND_LABEL, phaseSpans } from "../transcript.ts";
+import {
+  KIND_LABEL,
+  chaptersWriting,
+  phaseSpans,
+  stripLayout,
+} from "../transcript.ts";
 
 /** Under the title: one bar per chapter, as long as it lasts, the chapter being heard
  *  named above, and the play head. A click on a bar plays from that chapter. */
 export function PhaseStrip({
   view,
+  provisional = false,
   duration,
   time,
   status,
@@ -17,6 +23,8 @@ export function PhaseStrip({
   onDetect,
 }: {
   view: CorrectedView;
+  /** The chapters shown are being written (ADR 0061): pale, the read part marked. */
+  provisional?: boolean;
   duration: number;
   time: number;
   status: PhasesStatus | null;
@@ -24,10 +32,15 @@ export function PhaseStrip({
   onSeek: (t: number) => void;
   onDetect: () => void;
 }) {
-  const spans = phaseSpans(view, duration);
-  // The bars run from the first chapter's start to the last one's end: so does the head.
-  const from = spans[0]?.start ?? 0;
-  const to = Math.max(from + 1, ...spans.map((s) => s.end));
+  const progress = status?.state === "running" ? status.progress : null;
+  // Being written: what is known ends where the detection has read (`read_until`).
+  const readUntil = provisional ? (progress?.read_until ?? null) : null;
+  const { spans, from, to, lead, unread } = stripLayout(
+    phaseSpans(view, duration),
+    duration,
+    provisional,
+    readUntil,
+  );
   const current = [...spans].reverse().find((s) => s.start <= time) ?? spans[0];
   const waiting = status?.state === "queued" || status?.state === "running";
 
@@ -51,7 +64,13 @@ export function PhaseStrip({
           // Said, not spun: nothing moves in a loop (art direction).
           <span className="cl-strip__writing" role="status">
             <ListTree size={13} strokeWidth={1.75} aria-hidden />
-            Les chapitres s'écrivent · vous pouvez déjà relire
+            {chaptersWriting(progress)}
+          </span>
+        )}
+        {waiting && (progress?.problem || status?.progress_problem) && (
+          // Why nothing new shows at this step: said (P8); the detection goes on.
+          <span className="cl-strip__note">
+            {progress?.problem ?? status?.progress_problem}
           </span>
         )}
         {status?.state === "failed" && (
@@ -112,7 +131,26 @@ export function PhaseStrip({
         </span>
       </div>
       {spans.length > 0 && (
-        <div className="cl-strip__bars">
+        <div
+          className="cl-strip__bars"
+          data-provisional={provisional || undefined}
+        >
+          {readUntil !== null && progress?.step === "reading" && (
+            <span
+              className="cl-strip__read"
+              style={{
+                width: `${Math.min(100, ((readUntil - from) / (to - from)) * 100)}%`,
+              }}
+              aria-hidden
+            />
+          )}
+          {lead > 0 && (
+            <span
+              className="cl-strip__unread"
+              style={{ flexGrow: lead }}
+              aria-hidden
+            />
+          )}
           {spans.map((s) => (
             <button
               key={s.phase.turn}
@@ -129,6 +167,14 @@ export function PhaseStrip({
               }}
             />
           ))}
+          {unread > 0 && (
+            // Not read yet: room kept, so that each bar stays as long as it lasts.
+            <span
+              className="cl-strip__unread"
+              style={{ flexGrow: unread }}
+              aria-hidden
+            />
+          )}
           {view.markers
             .filter(
               (m) => m.kind === "key_moment" && m.at_s >= from && m.at_s <= to,

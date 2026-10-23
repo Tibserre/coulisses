@@ -596,6 +596,26 @@ export interface PhasesStatus {
   finished_at: string | null;
   /** What the model's answer said that had to be put right (developer mode). */
   adjustments: string[];
+  /** While running: how far the detection is (ADR 0061); null before its first step. */
+  progress?: PhasesSteps | null;
+  /** While running: why its progress cannot be read (not a failure: it goes on). */
+  progress_problem?: string | null;
+  /** While running: the chapters so far, placed like the final ones. They may still change
+   *  (the last one may go on until `read_until`, a kind when checked): never edited. */
+  provisional?: Phase[];
+}
+
+export interface PhasesSteps {
+  step: "reading" | "checking" | "done";
+  /** Parts read so far, out of `parts`. */
+  part: number;
+  parts: number;
+  /** Measured time of the last line read: beyond it, nothing is known yet. */
+  read_until: number | null;
+  checked: number;
+  to_check: number;
+  /** Why the chapters so far cannot be shown at this step. */
+  problem: string | null;
 }
 
 export interface Speaker {

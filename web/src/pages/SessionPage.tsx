@@ -66,6 +66,7 @@ import { EditableTitle } from "../components/EditableTitle.tsx";
 import { formatBytes, formatDate, formatDuration, plural } from "../format.ts";
 import {
   buildModel,
+  changesChapters,
   focusModel,
   liveEditsKey,
   phaseOf,
@@ -299,18 +300,33 @@ export function SessionPage({
     void loadPeople().catch((e: Error) => setError(e.message));
   }, [loadPeople]);
 
+  // The chapters being written (ADR 0061): shown in place of the ones in force, as the
+  // detection finds them; never changed until they are set.
+  const provisional =
+    phasesStatus?.state === "running" &&
+    (phasesStatus.provisional?.length ?? 0) > 0;
+  const read = useMemo(
+    () =>
+      view && provisional
+        ? { ...view, phases: phasesStatus!.provisional! }
+        : view,
+    [view, provisional, phasesStatus],
+  );
   // During playback, the chapter being heard stays open, even folded (art direction).
-  const unfolded = useMemo(() => (view ? buildModel(view) : null), [view]);
+  const unfolded = useMemo(() => (read ? buildModel(read) : null), [read]);
   const heard = unfolded && pb.playing ? turnAt(unfolded, pb.time) : null;
   const heardChapter =
-    view && heard
-      ? (phaseOf(view.phases, heard.turn.index)?.turn ?? null)
+    read && heard
+      ? (phaseOf(read.phases, heard.turn.index)?.turn ?? null)
       : null;
   const model = useMemo(() => {
-    if (!view) return null;
-    const shut = new Set([...folded].filter((t) => t !== heardChapter));
-    return shut.size ? buildModel(view, shut) : unfolded;
-  }, [view, folded, heardChapter, unfolded]);
+    if (!read) return null;
+    // Chapters being written cannot be unfolded (their heading is read only): all open.
+    const shut = provisional
+      ? new Set<number>()
+      : new Set([...folded].filter((t) => t !== heardChapter));
+    return shut.size ? buildModel(read, shut) : unfolded;
+  }, [read, folded, heardChapter, unfolded, provisional]);
   // One voice shown only (its lines, the others folded), and the voice pointed at in the
   // side column: where it speaks is marked on the player bar.
   const [focus, setFocus] = useState<string | null>(null);
@@ -379,6 +395,12 @@ export function SessionPage({
   const correct = useCallback(
     async (correction: EditRequest) => {
       if (!viewRun) return;
+      if (provisional && changesChapters(correction)) {
+        setEditError(
+          "Les chapitres s'écrivent encore : ils se modifient une fois fixés.",
+        );
+        return;
+      }
       try {
         const next = await api.addEdit(id, correction, viewRun);
         setView(next);
@@ -402,7 +424,7 @@ export function SessionPage({
         throw e;
       }
     },
-    [id, viewRun, refused],
+    [id, viewRun, refused, provisional],
   );
 
   const editing: Editing = useMemo(
@@ -439,6 +461,7 @@ export function SessionPage({
         setLastSelected(turn);
       },
       setTyping,
+      chaptersProvisional: provisional,
       showSpeaker: (label: string) => {
         setNamingTurn(null);
         setFocus(label);
@@ -463,6 +486,7 @@ export function SessionPage({
       shown,
       viewRun,
       refused,
+      provisional,
     ],
   );
 
@@ -696,7 +720,8 @@ export function SessionPage({
             )}
             {session && view && (
               <PhaseStrip
-                view={view}
+                view={read ?? view}
+                provisional={provisional}
                 duration={session.duration_s ?? 0}
                 time={pb.time}
                 status={phasesStatus}

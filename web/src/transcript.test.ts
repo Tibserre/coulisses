@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CorrectedView, Speaker, Word } from "./api.ts";
 import {
+  changesChapters,
+  chaptersWriting,
+  stripLayout,
   buildModel,
   phaseSpans,
   phaseOf,
@@ -479,4 +482,58 @@ test("one voice shown: its lines, its chapters, the others folded into a count",
   ]);
   assert.equal(speakerExcerpt(model, "7")?.turn.index, 0); // its longest line
   assert.equal(speakerExcerpt(model, "absent"), null);
+});
+
+test("chapters being written run over the session, the last one cut where reading stopped", () => {
+  const phase = {
+    turn: 0,
+    end_turn: 1,
+    start: 0,
+    end: null,
+    kind: "scene",
+    title: "",
+    edited: false,
+    marked: false,
+  } as const;
+  const spans = [
+    { phase, number: 1, start: 30, end: 600 },
+    { phase, number: 2, start: 600, end: 3600 },
+  ];
+  const laid = stripLayout(spans, 3600, true, 900);
+  assert.equal(laid.spans[1].end, 900);
+  assert.equal(laid.lead, 30);
+  assert.equal(laid.unread, 2700);
+  assert.deepEqual([laid.from, laid.to], [0, 3600]);
+  const set = stripLayout(spans, 3600, false, 900);
+  assert.deepEqual([set.from, set.to, set.lead, set.unread], [30, 3600, 0, 0]);
+});
+
+test("what the strip says while the chapters are written", () => {
+  const p = {
+    step: "reading",
+    part: 2,
+    parts: 7,
+    read_until: 1,
+    checked: 0,
+    to_check: 0,
+    problem: null,
+  } as const;
+  assert.equal(
+    chaptersWriting(p),
+    "Les chapitres s'écrivent · partie 3 sur 7 · vous pouvez déjà relire",
+  );
+  assert.equal(
+    chaptersWriting({ ...p, step: "checking", checked: 4, to_check: 5 }),
+    "Les chapitres se vérifient · 5 sur 5",
+  );
+  assert.equal(
+    chaptersWriting({ ...p, step: "checking", to_check: 0 }),
+    "Les chapitres se vérifient",
+  );
+  assert.equal(
+    chaptersWriting(null),
+    "Les chapitres s'écrivent · vous pouvez déjà relire",
+  );
+  assert.equal(changesChapters({ kind: "set_phase" }), true);
+  assert.equal(changesChapters({ kind: "edit_text" }), false);
 });
