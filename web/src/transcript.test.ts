@@ -4,6 +4,8 @@ import { test } from "node:test";
 import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
+  turnSeconds,
+  namingLines,
   choiceNote,
   namingChoices,
   voiceTurns,
@@ -622,4 +624,18 @@ test("voices to name come in the order first heard, with their own lines", () =>
     voiceTurns(model, "2").map((r) => r.turn.index),
     [0, 2],
   );
+});
+
+test("a voice's lines for naming: the longest first, an unmeasured one last", () => {
+  const row = (index: number, start: number | null, end: number | null) =>
+    ({
+      kind: "turn",
+      key: `t${index}`,
+      turn: { index, speaker: "1", start, end, edited: false, words: [] },
+      speaker: speaker("1", "Voix 1"),
+    }) as TurnRow;
+  const lines = [row(0, 0, 2), row(1, 10, 18), row(2, null, 30), row(3, 40, 43)];
+  assert.deepEqual(namingLines(lines, "long").map((r) => r.turn.index), [1, 3, 0, 2]);
+  assert.deepEqual(namingLines(lines, "time").map((r) => r.turn.index), [0, 1, 2, 3]);
+  assert.equal(turnSeconds(lines[2].turn), null);
 });

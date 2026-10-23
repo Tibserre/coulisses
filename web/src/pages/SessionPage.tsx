@@ -30,11 +30,13 @@ import {
   type Speaker,
   type StageView,
 } from "../api.ts";
+import type { TurnRow } from "../transcript.ts";
 import { PhaseStrip } from "../components/PhaseStrip.tsx";
 import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ReviewSkeleton } from "../components/ReviewSkeleton.tsx";
 import { SpeakerFocusBar } from "../components/SpeakerFocus.tsx";
 import { NamingBar } from "../components/NamingBar.tsx";
+import { EXCERPT_S, NamingCard } from "../components/NamingCard.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import {
   CorrectionsHistory,
@@ -70,6 +72,7 @@ import {
   buildModel,
   changesChapters,
   focusModel,
+  namingLines,
   voiceTurns,
   voicesToName,
   liveEditsKey,
@@ -161,10 +164,20 @@ export function SessionPage({
   /** The guided naming (ADR 0062): the voice named, and which of its lines is looked at. */
   const [guide, setGuide] = useState<{
     label: string;
-    line: number;
+    /** The line looked at, by its index in the run; null: where the voice is heard best. */
+    turn: number | null;
     /** Its place among the voices to name: the next one is taken from there. */
     at: number;
+    /** The voices there were to name when it began, and how many are named since. */
+    total: number;
+    named: number;
   } | null>(null);
+  /** The order of the voice's lines in its card: the longest first, or as they come. */
+  const [namingOrder, setNamingOrder] = useState<"long" | "time">("long");
+  /** « Écouter … à la suite »: the lines being heard one after the other, and which one. */
+  const [queue, setQueue] = useState<{ rows: TurnRow[]; step: number } | null>(
+    null,
+  );
   /** Chapters folded by the user, by their first line. */
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
@@ -620,13 +633,57 @@ export function SessionPage({
   useEffect(() => {
     if (!guide || (guided && !guided.named)) return;
     // Named (or merged): gone from the list, the next one takes its place.
+    setQueue(null);
     const next = toName[guide.at] ?? toName[0];
     setGuide(
       next?.label
-        ? { label: next.label, line: 0, at: toName.indexOf(next) }
+        ? {
+            ...guide,
+            label: next.label,
+            turn: null,
+            at: toName.indexOf(next),
+            named: guide.named + 1,
+          }
         : null,
     );
   }, [guide, guided, toName]);
+  /** A line of the voice heard (or stopped, if it is being heard); a queue stops. */
+  const hearLine = (row: TurnRow) => {
+    setQueue(null);
+    if (!guide) return;
+    setGuide({ ...guide, turn: row.turn.index });
+    const { start, end } = row.turn;
+    if (start != null && !audioGone) pb.listen(start, end ?? start + EXCERPT_S);
+    // Not to be heard: what was being heard stops, nothing goes on unasked.
+    else if (pb.excerpt != null) pb.listen(pb.excerpt, pb.excerpt);
+  };
+  /** ← → from the field: the line before or after, in the card's order, heard. */
+  const moveGuide = (by: number) => {
+    if (!guideTurn || !guideOrder.length) return;
+    const at = guideOrder.indexOf(guideTurn);
+    hearLine(guideOrder[(at + by + guideOrder.length) % guideOrder.length]);
+  };
+  // The queue: each excerpt over, the next one (stopping by hand clears it first).
+  const excerptBefore = useRef<number | null>(null);
+  useEffect(() => {
+    const before = excerptBefore.current;
+    excerptBefore.current = pb.excerpt;
+    if (!queue || before === null || pb.excerpt !== null) return;
+    const step = queue.step + 1;
+    const next = queue.rows[step];
+    if (!next || next.turn.start == null || !guide) {
+      setQueue(null);
+      return;
+    }
+    setQueue({ rows: queue.rows, step });
+    setGuide({ ...guide, turn: next.turn.index });
+    pb.listen(next.turn.start, next.turn.end ?? next.turn.start + EXCERPT_S);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on each excerpt's end only
+  }, [pb.excerpt]);
+  const stopHearing = () => {
+    setQueue(null);
+    if (pb.excerpt != null) pb.listen(pb.excerpt, pb.excerpt);
+  };
   const startNaming = () => {
     const first = toName[0];
     if (!first?.label) return;
@@ -635,10 +692,22 @@ export function SessionPage({
     setNamingTurn(null);
     // The bar takes the place of the selection's: none while naming.
     setSelected(new Set());
-    setGuide({ label: first.label, line: 0, at: 0 });
+    setQueue(null);
+    setGuide({
+      label: first.label,
+      turn: null,
+      at: 0,
+      total: toName.length,
+      named: 0,
+    });
   };
   const guideTurns = guide && unfolded ? voiceTurns(unfolded, guide.label) : [];
-  const guideTurn = guideTurns[guide?.line ?? 0] ?? null;
+  // The line looked at: the one picked, else the first of the card.
+  const guideOrder = namingLines(guideTurns, namingOrder);
+  const guideTurn =
+    guideTurns.find((r) => r.turn.index === guide?.turn) ??
+    guideOrder[0] ??
+    null;
 
   const audioGone = session?.audio.state === "removed";
   const audioText = session ? audioLine(session.audio) : null;
@@ -665,7 +734,10 @@ export function SessionPage({
         <ReviewSkeleton />
       ) : (
         <>
-          <header className="cl-review__header">
+          <header
+            className="cl-review__header"
+            inert={guide ? true : undefined}
+          >
             <div className="cl-review__top">
               {session ? (
                 <ProjectCrumb
@@ -999,6 +1071,7 @@ export function SessionPage({
             <>
               <div
                 className="cl-review__columns"
+                inert={guide ? true : undefined}
                 data-arrived={arrived || undefined}
               >
                 {/* Said in both readings: what was refused or not carried over, and what an
@@ -1028,7 +1101,6 @@ export function SessionPage({
                 <div
                   className="cl-review__main"
                   hidden={reading !== "transcript"}
-                  data-guiding={guide ? "" : undefined}
                 >
                   {arrived && <VoicesArrival speakers={model.speakers} />}
                   {focused && shown && (
@@ -1046,78 +1118,11 @@ export function SessionPage({
                     />
                   )}
                   <TranscriptView
-                    // Naming, guided: every line there, none folded away.
-                    model={guide ? unfolded! : shown!}
+                    model={shown!}
                     pb={pb}
                     current={current}
                     editing={editing}
-                    guide={
-                      guide && guideTurn
-                        ? { label: guide.label, turn: guideTurn.turn.index }
-                        : null
-                    }
                   />
-                  {guide && guided && guideTurn && (
-                    // Still, over the bottom of the transcript: the lines come to it,
-                    // the buttons stay under the pointer (ADR 0062).
-                    <div className="cl-guide">
-                      <NamingBar
-                        speaker={guided}
-                        position={toName.indexOf(guided) + 1}
-                        remaining={toName.length}
-                        line={guide.line + 1}
-                        lines={guideTurns.length}
-                        cannotHear={
-                          audioGone
-                            ? "L'audio de cette séance a été supprimé"
-                            : guideTurn.turn.start == null
-                              ? "Le début de cette réplique n'est pas mesuré"
-                              : null
-                        }
-                        dev={dev}
-                        hearing={
-                          pb.excerpt != null &&
-                          pb.excerpt === guideTurn.turn.start
-                        }
-                        people={people}
-                        voices={unfolded!.speakers}
-                        attendees={session.attendee_ids}
-                        onPrevious={() =>
-                          setGuide({
-                            ...guide,
-                            line:
-                              (guide.line - 1 + guideTurns.length) %
-                              guideTurns.length,
-                          })
-                        }
-                        onNext={() =>
-                          setGuide({
-                            ...guide,
-                            line: (guide.line + 1) % guideTurns.length,
-                          })
-                        }
-                        onHear={() => {
-                          const t = guideTurn.turn;
-                          if (t.start != null)
-                            pb.listen(t.start, t.end ?? t.start + 8);
-                        }}
-                        onSkip={() => {
-                          const at =
-                            (toName.indexOf(guided) + 1) % toName.length;
-                          const next = toName[at];
-                          if (next?.label)
-                            setGuide({
-                              label: next.label,
-                              line: 0,
-                              at,
-                            });
-                        }}
-                        onClose={() => setGuide(null)}
-                        onCorrect={correct}
-                        onAddGuest={editing.addGuest}
-                      />
-                    </div>
-                  )}
                   {selected.size > 0 && !guide && (
                     <div
                       className="cl-selection"
@@ -1226,28 +1231,100 @@ export function SessionPage({
                   </div>
                 </Dialog>
               </div>
-              {audioGone ? (
-                <div className="cl-player-gone" role="status">
-                  <Text color="secondary">
-                    L'audio de cette séance a été supprimé
-                    {audioText
-                      ? ` (${audioText.replace("audio supprimé ", "")})`
-                      : ""}{" "}
-                    : la lecture n'est plus possible. Le texte reste modifiable.
-                  </Text>
-                </div>
-              ) : (
-                <PlayerBar
-                  model={shown!}
-                  pb={pb}
-                  current={currentRow}
-                  marks={marks}
-                  markInk={markInk ? inkOf(markInk) : undefined}
-                />
-              )}
+              {/* Out of reach too while naming, guided. */}
+              <div
+                className="cl-review__player"
+                inert={guide ? true : undefined}
+              >
+                {audioGone ? (
+                  <div className="cl-player-gone" role="status">
+                    <Text color="secondary">
+                      L'audio de cette séance a été supprimé
+                      {audioText
+                        ? ` (${audioText.replace("audio supprimé ", "")})`
+                        : ""}{" "}
+                      : la lecture n'est plus possible. Le texte reste
+                      modifiable.
+                    </Text>
+                  </div>
+                ) : (
+                  <PlayerBar
+                    model={shown!}
+                    pb={pb}
+                    current={currentRow}
+                    marks={marks}
+                    markInk={markInk ? inkOf(markInk) : undefined}
+                    keys={!guide}
+                  />
+                )}
+              </div>
             </>
           )}
         </>
+      )}
+      {guide && guided && guideTurn && session && unfolded && (
+        // Naming, guided (ADR 0062): the page under a veil, out of reach; over it, the card
+        // of the voice's lines, and the field of its name, still at the bottom.
+        <div className="cl-naming">
+          <div className="cl-naming__veil" aria-hidden />
+          {notice && (
+            // Said over the veil (a naming that merged two voices, P3).
+            <div className="cl-notice cl-naming__notice" role="status">
+              {notice}
+            </div>
+          )}
+          <NamingCard
+            speaker={guided}
+            lines={guideTurns}
+            sorted={guideOrder}
+            order={namingOrder}
+            onOrder={setNamingOrder}
+            current={guideTurn.turn.index}
+            duration={session.duration_s ?? pb.duration ?? 0}
+            pb={pb}
+            done={guide.named}
+            total={guide.total}
+            audioGone={audioGone}
+            queueing={queue !== null}
+            onPick={(turn) => {
+              stopHearing();
+              setGuide({ ...guide, turn });
+            }}
+            onHear={hearLine}
+            onQueue={(rows) => {
+              setQueue({ rows, step: 0 });
+              setGuide({ ...guide, turn: rows[0].turn.index });
+              const { start, end } = rows[0].turn;
+              if (start != null) pb.listen(start, end ?? start + EXCERPT_S);
+            }}
+            onStop={stopHearing}
+          />
+          <div className="cl-naming__bar">
+            <NamingBar
+              speaker={guided}
+              dev={dev}
+              people={people}
+              voices={unfolded.speakers}
+              attendees={session.attendee_ids}
+              onPrevious={() => moveGuide(-1)}
+              onNext={() => moveGuide(1)}
+              onHear={() =>
+                pb.excerpt != null ? stopHearing() : hearLine(guideTurn)
+              }
+              onSkip={() => {
+                const at = (toName.indexOf(guided) + 1) % toName.length;
+                const next = toName[at];
+                if (next?.label) {
+                  setQueue(null);
+                  setGuide({ ...guide, label: next.label, turn: null, at });
+                }
+              }}
+              onClose={() => setGuide(null)}
+              onCorrect={correct}
+              onAddGuest={editing.addGuest}
+            />
+          </div>
+        </div>
       )}
       <ProvenanceDialog
         sessionId={id}

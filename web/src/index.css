@@ -609,45 +609,228 @@ body {
   font-size: var(--font-size-sm);
 }
 
-/* The guided naming (ADR 0062): a thin bar, still, over the bottom of the transcript (its
-   names open upwards); each line looked at comes a quarter down the screen, nothing pushed; the other voices fade, the line looked at is lit. */
-.cl-transcript [data-guide] {
-  transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+/* The guided naming (ADR 0062): the page under a veil (blurred, as for the pause, ADR
+   0059), out of reach; over it, the card of the voice's lines, and the field of its name,
+   still at the bottom. */
+.cl-review__player {
+  display: contents;
 }
 
-.cl-transcript [data-guide="other"] {
-  opacity: 0.35;
+.cl-naming {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-8) var(--spacing-4) var(--spacing-4);
+  gap: var(--spacing-4);
 }
 
-.cl-transcript [data-guide="current"] .cl-turn {
-  border-radius: var(--radius-element);
+.cl-naming__veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-background-body) 82%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-namingcard {
+  position: relative;
+  width: min(36rem, 100%);
+  box-sizing: border-box;
+  max-height: calc(100% - 9rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-4) var(--spacing-3);
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-med);
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-namingcard__said {
+  margin: 0;
+  padding: var(--spacing-1) var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* What a naming did (two voices merged), over the veil, above the field. */
+.cl-naming__notice {
+  z-index: 1;
+  bottom: calc(var(--spacing-4) + 3.5rem);
+}
+
+.cl-namingcard__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+}
+
+.cl-namingcard__meta,
+.cl-namingcard__label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.cl-namingcard__dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-inline-start: auto;
+  align-self: center;
+}
+
+.cl-namingcard__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-background-muted);
+}
+
+.cl-namingcard__dots i[data-state="done"] {
+  background: var(--color-text-secondary);
+}
+
+.cl-namingcard__dots i[data-state="now"] {
+  background: var(--color-accent);
+}
+
+.cl-namingcard__strip {
+  position: relative;
+  height: 16px;
+}
+
+.cl-namingcard__track {
+  position: absolute;
+  inset-inline: 0;
+  top: 7px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-background-muted);
+}
+
+.cl-namingcard__tick {
+  position: absolute;
+  top: 3px;
+  width: 3px;
+  height: 10px;
+  margin-inline-start: -1px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  cursor: pointer;
+}
+
+.cl-namingcard__tick[data-current] {
+  top: 1px;
+  height: 14px;
+  background: var(--color-accent);
+}
+
+.cl-namingcard__order {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-1);
+}
+
+.cl-namingcard__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cl-namingcard__line {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.4rem 3.2rem 1fr auto;
+  gap: var(--spacing-2);
+  align-items: baseline;
+  padding: var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: none;
+  font: inherit;
+  text-align: start;
+  line-height: 1.55;
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-namingcard__line:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-namingcard__line[data-current] {
   background: var(--coulisses-word-current);
 }
 
-.cl-guide {
-  position: absolute;
-  inset-inline: 0;
-  bottom: var(--spacing-4);
-  z-index: 3;
+.cl-namingcard__play {
+  color: var(--color-text-secondary);
+  align-self: center;
+  display: inline-flex;
+}
+
+.cl-namingcard__line[data-current] .cl-namingcard__play {
+  color: var(--color-accent);
+}
+
+.cl-namingcard__time,
+.cl-namingcard__len {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-namingcard__more {
+  align-self: flex-start;
+  padding: var(--spacing-1) var(--spacing-2);
+  font-size: var(--font-size-sm);
+}
+
+.cl-namingcard__tools {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+  padding-top: var(--spacing-2);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.cl-naming__bar {
+  position: relative;
+  margin-top: auto;
+  width: min(36rem, 100%);
   display: flex;
   justify-content: center;
-  pointer-events: none;
-  animation: cl-fade-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.cl-guide > * {
-  pointer-events: auto;
+@media (prefers-reduced-transparency: reduce) {
+  .cl-naming__veil {
+    background: var(--color-background-body);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
-/* Room under the last lines, so that they too can come above the bar. */
-.cl-review__main[data-guiding] .cl-transcript {
-  padding-bottom: 75vh;
+@media (prefers-reduced-motion: reduce) {
+  .cl-naming__veil,
+  .cl-namingcard {
+    animation: none;
+  }
 }
 
-/* A set width (narrower on a narrow window): nothing in it moves as the names and numbers
-   change; the field takes what is left. */
 .cl-namingbar {
-  width: min(36rem, calc(100% - 2 * var(--spacing-4)));
+  width: 100%;
   box-sizing: border-box;
   display: flex;
   /* The names open upwards, over the faded lines: the bar's row stays where it is. */
@@ -671,32 +854,6 @@ body {
 .cl-namingbar .cl-iconbtn {
   width: 30px;
   height: 30px;
-}
-
-.cl-namingbar__who {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--spacing-2);
-  width: 12rem;
-  flex: none;
-  padding: 0 var(--spacing-2);
-  overflow: hidden;
-}
-
-.cl-namingbar__who .cl-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cl-namingbar__count {
-  flex: none;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  /* « 123/145 » as wide as « 1/2 »: the arrows never move. */
-  width: 7.5ch;
-  text-align: center;
 }
 
 .cl-namingbar__sep {
@@ -775,13 +932,6 @@ body {
   font-size: var(--font-size-xs);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cl-transcript [data-guide],
-  .cl-guide {
-    transition: none;
-    animation: none;
-  }
-}
 
 .cl-transcript {
   overflow-y: auto;

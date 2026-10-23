@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Pause,
-  Play,
-  SkipForward,
-  X,
-} from "lucide-react";
+import { Check, SkipForward, X } from "lucide-react";
 import type { EditRequest, Person, Speaker } from "../api.ts";
 import { speakerInk } from "../theme/shared.ts";
 import { choiceNote, namingChoices, type NameChoice } from "../transcript.ts";
@@ -15,19 +7,13 @@ import { choiceNote, namingChoices, type NameChoice } from "../transcript.ts";
 /** How many names are offered at once, above the field. */
 const SHOWN = 5;
 
-/** The guided naming of the voices (ADR 0062): a thin bar, still, over the bottom of the
- *  transcript; the line looked at comes to the same place each time, nothing is pushed. ‹ › go from one of the voice's
- *  lines to another, ▶ hears it; the field offers who it may be (the recognised person,
- *  then those present without a voice); ✓ names it and goes to the next voice. Every
+/** The guided naming of the voices (ADR 0062): the field of the name, still, at the bottom
+ *  of the veiled page, under the card of the voice's lines (NamingCard), whose lines its keys go
+ *  through (← →, Space). It offers who the voice may be (the recognised person, then
+ *  those present without a voice); ✓ names it and goes to the next voice. Every
  *  refusal is said above it (P8). */
 export function NamingBar({
   speaker,
-  position,
-  remaining,
-  line,
-  lines,
-  hearing,
-  cannotHear = null,
   dev = false,
   people,
   voices,
@@ -41,20 +27,13 @@ export function NamingBar({
   onAddGuest,
 }: {
   speaker: Speaker;
-  /** This voice among those left to name (from 1), and how many are left. */
-  position: number;
-  remaining: number;
-  /** The line looked at among the voice's lines (from 1), and how many it has. */
-  line: number;
-  lines: number;
-  hearing: boolean;
-  /** Why this line cannot be heard (the audio deleted, no measured start), if so. */
-  cannotHear?: string | null;
   /** Developer mode: the distance of a recognised voice (ADR 0057). */
   dev?: boolean;
   people: Person[];
   voices: Speaker[];
   attendees: readonly number[];
+  /** The keys of the card, from the field: ← → the line before or after (heard), Space
+   *  hears it or stops. */
   onPrevious: () => void;
   onNext: () => void;
   onHear: () => void;
@@ -148,58 +127,6 @@ export function NamingBar({
       aria-label={`Nommer ${speaker.name}`}
     >
       <div className="cl-namingbar__row">
-        <span className="cl-namingbar__who">
-          <span className="cl-name" data-unnamed title={speaker.name}>
-            {speaker.name}
-          </span>
-          <span className="cl-namingbar__count">
-            {position}/{remaining}
-          </span>
-        </span>
-        <span className="cl-namingbar__sep" aria-hidden />
-        <button
-          type="button"
-          className="cl-iconbtn"
-          onMouseDown={keep}
-          onClick={onPrevious}
-          aria-label="Réplique précédente de cette voix (←)"
-          title="Réplique précédente de cette voix (←)"
-        >
-          <ChevronLeft size={17} strokeWidth={1.75} />
-        </button>
-        <span className="cl-namingbar__count">
-          {line} / {lines}
-        </span>
-        <button
-          type="button"
-          className="cl-iconbtn"
-          onMouseDown={keep}
-          onClick={onNext}
-          aria-label="Réplique suivante de cette voix (→)"
-          title="Réplique suivante de cette voix (→)"
-        >
-          <ChevronRight size={17} strokeWidth={1.75} />
-        </button>
-        <button
-          type="button"
-          className="cl-iconbtn"
-          onMouseDown={keep}
-          onClick={onHear}
-          disabled={!!cannotHear}
-          aria-label={
-            hearing ? "Arrêter l'écoute" : "Écouter cette réplique (Espace)"
-          }
-          title={
-            hearing ? "Arrêter l'écoute" : "Écouter cette réplique (Espace)"
-          }
-        >
-          {hearing ? (
-            <Pause size={16} strokeWidth={1.75} />
-          ) : (
-            <Play size={16} strokeWidth={1.75} />
-          )}
-        </button>
-        <span className="cl-namingbar__sep" aria-hidden />
         <input
           ref={field}
           className="cl-namingbar__field"
@@ -234,7 +161,8 @@ export function NamingBar({
               onNext();
             } else if (!typed && e.key === " ") {
               e.preventDefault();
-              if (!cannotHear) onHear();
+              // Space stops what is heard, even on a line that cannot be heard itself.
+              onHear();
             }
           }}
         />

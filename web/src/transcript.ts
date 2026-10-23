@@ -601,3 +601,22 @@ export function choiceNote(
     c.person.kind === "guest" ? "invité" : (c.person.role ?? "membre");
   return attendees.includes(c.person.id) ? `${role} · présent` : role;
 }
+
+/** A line's measured length in seconds, or null when its start or end was not measured. */
+export function turnSeconds(turn: Turn): number | null {
+  return turn.start != null && turn.end != null
+    ? Math.max(0, turn.end - turn.start)
+    : null;
+}
+
+/** A voice's lines as the guided naming lists them (ADR 0062): the longest first (where
+ *  the voice is heard best; a line of unmeasured length last), or in their order. */
+export function namingLines(
+  lines: TurnRow[],
+  order: "long" | "time",
+): TurnRow[] {
+  if (order === "time") return lines;
+  return [...lines].sort(
+    (a, b) => (turnSeconds(b.turn) ?? -1) - (turnSeconds(a.turn) ?? -1),
+  );
+}
