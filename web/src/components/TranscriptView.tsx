@@ -1,5 +1,4 @@
 import {
-  type ReactNode,
   memo,
   useCallback,
   useEffect,
@@ -752,9 +751,10 @@ export function TranscriptView({
   pb: Playback;
   current: { row: TurnRow; word: number } | null;
   editing: Editing;
-  /** The guided naming (ADR 0062): the voice named, the line looked at, and the bar that
-   *  floats under it, over the lines (nothing is pushed). The other voices fade. */
-  guide?: { label: string; turn: number; bar: ReactNode } | null;
+  /** The guided naming (ADR 0062): the voice named and the line looked at, brought to
+   *  the same place each time (its bar stays still, under the reader's pointer); the
+   *  other voices fade. The bar itself is drawn by the page, over the transcript. */
+  guide?: { label: string; turn: number } | null;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -763,6 +763,10 @@ export function TranscriptView({
     estimateSize: () => 96,
     overscan: 8,
     getItemKey: (i) => model.rows[i].key,
+    // Naming, guided: each line looked at comes a quarter down the screen.
+    scrollPaddingStart: guide
+      ? Math.round((scroller.current?.clientHeight ?? 600) / 4)
+      : 0,
   });
 
   const currentIndex = current ? model.rows.indexOf(current.row) : -1;
@@ -797,16 +801,16 @@ export function TranscriptView({
     }
   }, [currentIndex, pb.playing, virtualizer]);
 
-  // The guided naming: the line looked at, brought to the centre.
+  // The guided naming: the line looked at, always brought to the same place.
   const guideIndex = guide
     ? model.rows.findIndex(
         (r) => r.kind === "turn" && r.turn.index === guide.turn,
       )
     : -1;
   useEffect(() => {
-    // Brought to the centre: the bar and its names fit under it.
+    // A quarter down the screen (scrollPaddingStart), above the still bar.
     if (guideIndex >= 0)
-      virtualizer.scrollToIndex(guideIndex, { align: "center" });
+      virtualizer.scrollToIndex(guideIndex, { align: "start" });
   }, [guideIndex, virtualizer]);
 
   // Naming a voice: on the first line of its group (a line that goes on hides its name),
@@ -856,14 +860,8 @@ export function TranscriptView({
                 left: 0,
                 right: 0,
                 transform: `translateY(${item.start}px)`,
-                // Its list floats over the lines under it; the guided naming's bar over
-                // the lines above.
-                zIndex:
-                  item.index === guideIndex
-                    ? 3
-                    : item.index === namingIndex
-                      ? 2
-                      : undefined,
+                // Its list floats over the lines under it.
+                zIndex: item.index === namingIndex ? 2 : undefined,
               }}
               data-guide={
                 guide && row.kind === "turn"
@@ -875,9 +873,6 @@ export function TranscriptView({
                   : undefined
               }
             >
-              {guide && item.index === guideIndex && (
-                <div className="cl-guide">{guide.bar}</div>
-              )}
               {row.kind === "turn" ? (
                 <TurnLine
                   row={row}

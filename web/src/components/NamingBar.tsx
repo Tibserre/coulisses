@@ -12,14 +12,14 @@ import type { EditRequest, Person, Speaker } from "../api.ts";
 import { speakerInk } from "../theme/shared.ts";
 import { choiceNote, namingChoices, type NameChoice } from "../transcript.ts";
 
-/** How many names are offered under the field at once. */
+/** How many names are offered at once, above the field. */
 const SHOWN = 5;
 
-/** The guided naming of the voices (ADR 0062): a thin bar floating over the transcript,
- *  under the line being looked at, which nothing pushes. ‹ › go from one of the voice's
+/** The guided naming of the voices (ADR 0062): a thin bar, still, over the bottom of the
+ *  transcript; the line looked at comes to the same place each time, nothing is pushed. ‹ › go from one of the voice's
  *  lines to another, ▶ hears it; the field offers who it may be (the recognised person,
  *  then those present without a voice); ✓ names it and goes to the next voice. Every
- *  refusal is said under it (P8). */
+ *  refusal is said above it (P8). */
 export function NamingBar({
   speaker,
   position,
@@ -216,10 +216,11 @@ export function NamingBar({
             if (e.key === "Enter") {
               e.preventDefault();
               void give(choices[active]);
-            } else if (e.key === "ArrowDown") {
+            } else if (e.key === "ArrowUp") {
+              // The names open upwards, the best one against the field: ↑ goes further.
               e.preventDefault();
               setActive((a) => Math.min(choices.length - 1, a + 1));
-            } else if (e.key === "ArrowUp") {
+            } else if (e.key === "ArrowDown") {
               e.preventDefault();
               setActive((a) => Math.max(0, a - 1));
             } else if (e.key === "Escape") {

@@ -609,8 +609,8 @@ body {
   font-size: var(--font-size-sm);
 }
 
-/* The guided naming (ADR 0062): a thin bar floating over the lines under the one looked
-   at (its list of names drops from it), nothing pushed; the other voices fade, the line looked at is lit. */
+/* The guided naming (ADR 0062): a thin bar, still, over the bottom of the transcript (its
+   names open upwards); each line looked at comes a quarter down the screen, nothing pushed; the other voices fade, the line looked at is lit. */
 .cl-transcript [data-guide] {
   transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -626,15 +626,28 @@ body {
 
 .cl-guide {
   position: absolute;
-  inset-inline-start: calc(4.5rem + var(--spacing-4));
-  top: calc(100% + 4px);
-  z-index: 1;
+  inset-inline: 0;
+  bottom: var(--spacing-4);
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
   animation: cl-fade-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-guide > * {
+  pointer-events: auto;
+}
+
+/* Room under the last lines, so that they too can come above the bar. */
+.cl-review__main[data-guiding] .cl-transcript {
+  padding-bottom: 75vh;
 }
 
 .cl-namingbar {
   display: flex;
-  flex-direction: column;
+  /* The names open upwards, over the faded lines: the bar's row stays where it is. */
+  flex-direction: column-reverse;
   gap: 2px;
   padding: 4px;
   border-radius: var(--radius-container);
@@ -700,10 +713,13 @@ body {
 }
 
 .cl-namingbar__list {
+  display: flex;
+  /* The best name against the field. */
+  flex-direction: column-reverse;
   list-style: none;
   margin: 0;
-  padding: 2px 0 0;
-  border-top: 1px solid var(--color-border);
+  padding: 0 0 2px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .cl-namingbar__list li {

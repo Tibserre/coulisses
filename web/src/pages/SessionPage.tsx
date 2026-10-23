@@ -466,6 +466,7 @@ export function SessionPage({
       setNamingTurn,
       selected,
       toggleSelected: (turn: number, extend: boolean) => {
+        if (guide) return; // naming, guided: no selection (its bar would be hidden)
         const order = shown
           ? shown.rows.flatMap((r) => (r.kind === "turn" ? [r.turn.index] : []))
           : [];
@@ -501,6 +502,7 @@ export function SessionPage({
       viewRun,
       refused,
       provisional,
+      guide,
     ],
   );
 
@@ -631,6 +633,8 @@ export function SessionPage({
     setReading("transcript");
     setFocus(null);
     setNamingTurn(null);
+    // The bar takes the place of the selection's: none while naming.
+    setSelected(new Set());
     setGuide({ label: first.label, line: 0, at: 0 });
   };
   const guideTurns = guide && unfolded ? voiceTurns(unfolded, guide.label) : [];
@@ -1024,6 +1028,7 @@ export function SessionPage({
                 <div
                   className="cl-review__main"
                   hidden={reading !== "transcript"}
+                  data-guiding={guide ? "" : undefined}
                 >
                   {arrived && <VoicesArrival speakers={model.speakers} />}
                   {focused && shown && (
@@ -1047,73 +1052,73 @@ export function SessionPage({
                     current={current}
                     editing={editing}
                     guide={
-                      guide && guided && guideTurn
-                        ? {
-                            label: guide.label,
-                            turn: guideTurn.turn.index,
-                            bar: (
-                              <NamingBar
-                                speaker={guided}
-                                position={toName.indexOf(guided) + 1}
-                                remaining={toName.length}
-                                line={guide.line + 1}
-                                lines={guideTurns.length}
-                                cannotHear={
-                                  audioGone
-                                    ? "L'audio de cette séance a été supprimé"
-                                    : guideTurn.turn.start == null
-                                      ? "Le début de cette réplique n'est pas mesuré"
-                                      : null
-                                }
-                                dev={dev}
-                                hearing={
-                                  pb.excerpt != null &&
-                                  pb.excerpt === guideTurn.turn.start
-                                }
-                                people={people}
-                                voices={unfolded!.speakers}
-                                attendees={session.attendee_ids}
-                                onPrevious={() =>
-                                  setGuide({
-                                    ...guide,
-                                    line:
-                                      (guide.line - 1 + guideTurns.length) %
-                                      guideTurns.length,
-                                  })
-                                }
-                                onNext={() =>
-                                  setGuide({
-                                    ...guide,
-                                    line: (guide.line + 1) % guideTurns.length,
-                                  })
-                                }
-                                onHear={() => {
-                                  const t = guideTurn.turn;
-                                  if (t.start != null)
-                                    pb.listen(t.start, t.end ?? t.start + 8);
-                                }}
-                                onSkip={() => {
-                                  const at =
-                                    (toName.indexOf(guided) + 1) %
-                                    toName.length;
-                                  const next = toName[at];
-                                  if (next?.label)
-                                    setGuide({
-                                      label: next.label,
-                                      line: 0,
-                                      at,
-                                    });
-                                }}
-                                onClose={() => setGuide(null)}
-                                onCorrect={correct}
-                                onAddGuest={editing.addGuest}
-                              />
-                            ),
-                          }
+                      guide && guideTurn
+                        ? { label: guide.label, turn: guideTurn.turn.index }
                         : null
                     }
                   />
-                  {selected.size > 0 && (
+                  {guide && guided && guideTurn && (
+                    // Still, over the bottom of the transcript: the lines come to it,
+                    // the buttons stay under the pointer (ADR 0062).
+                    <div className="cl-guide">
+                      <NamingBar
+                        speaker={guided}
+                        position={toName.indexOf(guided) + 1}
+                        remaining={toName.length}
+                        line={guide.line + 1}
+                        lines={guideTurns.length}
+                        cannotHear={
+                          audioGone
+                            ? "L'audio de cette séance a été supprimé"
+                            : guideTurn.turn.start == null
+                              ? "Le début de cette réplique n'est pas mesuré"
+                              : null
+                        }
+                        dev={dev}
+                        hearing={
+                          pb.excerpt != null &&
+                          pb.excerpt === guideTurn.turn.start
+                        }
+                        people={people}
+                        voices={unfolded!.speakers}
+                        attendees={session.attendee_ids}
+                        onPrevious={() =>
+                          setGuide({
+                            ...guide,
+                            line:
+                              (guide.line - 1 + guideTurns.length) %
+                              guideTurns.length,
+                          })
+                        }
+                        onNext={() =>
+                          setGuide({
+                            ...guide,
+                            line: (guide.line + 1) % guideTurns.length,
+                          })
+                        }
+                        onHear={() => {
+                          const t = guideTurn.turn;
+                          if (t.start != null)
+                            pb.listen(t.start, t.end ?? t.start + 8);
+                        }}
+                        onSkip={() => {
+                          const at =
+                            (toName.indexOf(guided) + 1) % toName.length;
+                          const next = toName[at];
+                          if (next?.label)
+                            setGuide({
+                              label: next.label,
+                              line: 0,
+                              at,
+                            });
+                        }}
+                        onClose={() => setGuide(null)}
+                        onCorrect={correct}
+                        onAddGuest={editing.addGuest}
+                      />
+                    </div>
+                  )}
+                  {selected.size > 0 && !guide && (
                     <div
                       className="cl-selection"
                       role="toolbar"

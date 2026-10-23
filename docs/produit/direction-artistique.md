@@ -118,7 +118,7 @@ Une seule colonne de lecture, à la largeur du texte, l'en-tête au-dessus à la
 
 **Les détails de la séance, à leur place** (ADR 0062). Les participants en pastilles sous le titre (le nom dans son encre, la part du temps de parole) ; « N voix à nommer » à leur suite, en pointillé brique. Les présents dans le fil (« 5 présents ▾ »), les corrections à droite de la bascule (« 3 corrections ▾ »), en petits menus flottants. Les versions et le traitement dans « ⋯ », en fenêtre. La note d'après séance en onglet « Ma note » de la vue Résumé.
 
-**Nommer, guidé.** Les autres voix s'estompent (400 ms), la réplique regardée est surlignée de la teinte du mot en cours. Une barre fine, sur la surface, filet et ombre légère, flotte sous elle par-dessus le texte : icônes Lucide au trait de 1,75 (‹ › ▶ ✓ ⏭ ✕), chacune dite au survol, le champ sur fond atténué, curseur brique ; la liste des noms tombe de la barre, la voix reconnue en tête.
+**Nommer, guidé.** Les autres voix s'estompent (400 ms), la réplique regardée est surlignée de la teinte du mot en cours. Une barre fine, sur la surface, filet et ombre légère, reste fixe en bas de la transcription, par-dessus le texte (la réplique regardée vient toujours au même endroit) : icônes Lucide au trait de 1,75 (‹ › ▶ ✓ ⏭ ✕), chacune dite au survol, le champ sur fond atténué, curseur brique ; la liste des noms s'ouvre vers le haut, la voix reconnue contre le champ.
 
 **Pied de page : le lecteur.** Réplique précédente, lecture, réplique suivante, position, vitesse. Espace pour lire ou mettre en pause, flèches pour changer de réplique.
 
