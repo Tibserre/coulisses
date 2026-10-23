@@ -78,6 +78,28 @@ class PhaseDetection(BaseModel):
     """What the model's answer said that had to be put right, in words (P8)."""
 
 
+class PhasesProgress(BaseModel):
+    """`phases-progress.json` of a detection while it runs (ADR 0061): how far it is, and the
+    chapters found so far. An outline to show, never read as the result: that is
+    `output.json`, written once at the end."""
+
+    step: Literal["reading", "checking", "done"]
+    """Reading the parts, then checking each chapter's kind, then done."""
+    part: int = 0
+    """Parts read so far."""
+    parts: int = 1
+    read_until: float | None = None
+    """Measured time of the last line read so far: beyond it, nothing is known yet."""
+    checked: int = 0
+    to_check: int = 0
+    detection: PhaseDetection | None = None
+    """The chapters so far, put on lines that exist exactly as the final ones are (P2). Each
+    may still change: the last one may go on into the next part, a kind may be changed when
+    checked."""
+    problem: str | None = None
+    """Why there is no outline at this step (an answer that cannot be read yet)."""
+
+
 class _Chapter(BaseModel):
     debut: str
     type: str

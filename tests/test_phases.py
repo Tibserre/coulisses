@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import corrections
+from coulisses_app import corrections, marks
 from coulisses_app.corrections import RemovePhase, SetPhase, _replay
 from coulisses_app.marks import Marker, TimedNote
 from coulisses_app.paths import DataDir
@@ -19,6 +19,7 @@ from coulisses_app.phases import (
     DetectedPhase,
     PhaseAnswerError,
     PhaseDetection,
+    PhasesProgress,
     drop_before,
     join_parts,
     parse_time,
@@ -27,6 +28,7 @@ from coulisses_app.phases import (
 )
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import PHASES_REF, _sections, _sections_by_time, generate
+from coulisses_app.storage.db import connect
 
 from .conftest import FakeModel
 from .test_corrections import PEOPLE, TRANSCRIPT, journal
@@ -758,3 +760,188 @@ def test_each_chapter_can_be_read_again_alone_and_its_kind_changed_and_said(
         "discussion à la découpe, jeu à la vérification" in a for a in detection["adjustments"]
     )
     assert (folder / "calls" / "02-response.json").read_text() == '{"type": "scene"}'
+
+
+# -- the chapters while they are written (ADR 0061) ----------------------------------------
+
+
+def test_a_running_detection_says_how_far_it_is_after_each_part_and_each_check(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    three_parts = assembly.settings().model_copy(
+        update={"phases_section_min": 25, "phases_overlap_min": 0}
+    )
+    monkeypatch.setattr(assembly, "settings", lambda: three_parts)
+    hour = [assembly.Line(float(m * 60), f"[{m}:00] Marie : on reprend") for m in range(60)]
+    monkeypatch.setattr(assembly, "transcript_lines", lambda _view, **_: hour)
+    seen: list[tuple[str, int, int, int, int, bool]] = []
+    chat = fake_model.chat
+
+    def watching(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        # What the review screen would read, just before each call.
+        newest = max(
+            data.runs_dir(session_id).glob("segment_phases-*/phases-progress.json"),
+            key=lambda p: p.stat().st_mtime_ns,
+        )
+        said = PhasesProgress.model_validate_json(newest.read_text())
+        seen.append(
+            (
+                said.step,
+                said.part,
+                said.parts,
+                said.checked,
+                said.to_check,
+                said.detection is not None,
+            )
+        )
+        return chat(model, messages, options, answer_format=answer_format)
+
+    monkeypatch.setattr(fake_model, "chat", watching)
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "succeeded", prov.error
+    # Three parts read, each answering « Essai » that goes on: one chapter, then checked.
+    assert seen == [
+        ("reading", 0, 3, 0, 0, False),
+        ("reading", 1, 3, 0, 0, True),
+        ("reading", 2, 3, 0, 0, True),
+        ("checking", 3, 3, 0, 1, True),
+    ]
+    folder = data.run_dir(session_id, prov.run_id)
+    last = PhasesProgress.model_validate_json((folder / "phases-progress.json").read_text())
+    assert (last.step, last.checked, last.to_check) == ("done", 1, 1)
+    # The result is still output.json alone, as it was (P7).
+    final = PhaseDetection.model_validate_json((folder / "output.json").read_text())
+    assert last.detection == final
+    assert not list(folder.glob(".progress*"))  # never left half written
+
+
+def test_while_the_chapters_are_written_the_review_screen_gets_them_provisional(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    chat = fake_model.chat
+    during: list[dict[str, object]] = []
+
+    def watching(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        during.append(client.get(f"/api/seances/{session_id}/chapitres").json())
+        return chat(model, messages, options, answer_format=answer_format)
+
+    monkeypatch.setattr(fake_model, "chat", watching)
+    assert client.post(f"/api/seances/{session_id}/chapitres").status_code == 202
+    run_all(data, fake_model)  # detection, then the check of its one chapter
+    first, checking = during
+    assert first["state"] == "running"
+    assert first["progress"]["step"] == "reading" and first["provisional"] == []
+    assert checking["progress"]["step"] == "checking"
+    assert checking["progress"]["read_until"] is not None
+    [chapter] = checking["provisional"]
+    # Placed like a final one: on a line that exists, from the first line.
+    assert (chapter["turn"], chapter["title"], chapter["kind"]) == (0, "Essai", "discussion")
+    done = client.get(f"/api/seances/{session_id}/chapitres").json()
+    assert done["state"] == "done" and done["progress"] is None and done["provisional"] == []
+
+
+def test_the_provisional_chapters_get_the_markers_and_the_users_changes_like_the_final_ones(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    url = f"/api/seances/{session_id}"
+    # A marker set while recording, and a change of the user's made on the chapters before.
+    conn = connect(data)
+    try:
+        with conn:
+            marks.add_marker(conn, session_id, "scene", 0.0)
+    finally:
+        conn.close()
+    changed = client.post(
+        f"{url}/corrections", json={"kind": "set_phase", "turn": 0, "title": "Mon titre"}
+    )
+    assert changed.status_code == 201, changed.text
+    chat = fake_model.chat
+    during: list[list[dict[str, object]]] = []
+
+    def watching(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        during.append(client.get(f"{url}/chapitres").json()["provisional"])
+        return chat(model, messages, options, answer_format=answer_format)
+
+    monkeypatch.setattr(fake_model, "chat", watching)
+    client.post(f"{url}/chapitres")
+    run_all(data, fake_model)
+    provisional = during[-1]  # while its kind is checked
+    final = client.get(f"{url}/transcript").json()["phases"]
+    assert provisional == final  # the same path: markers first, the user's changes kept (P5)
+    assert provisional[0]["title"] == "Mon titre" and provisional[0]["edited"]
+
+
+def test_an_unreadable_part_is_said_with_no_outline_and_the_detection_fails(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    fake_model.phases_answer = "pas du JSON"
+    prov = generate(data, session_id, PHASES_REF, "modele-essai", fake_model)
+    assert prov.status == "failed"
+    folder = data.run_dir(session_id, prov.run_id)
+    said = PhasesProgress.model_validate_json((folder / "phases-progress.json").read_text())
+    assert said.step == "reading" and said.detection is None
+    assert said.problem is not None and "lisibles" in said.problem
+
+
+def test_chapters_detected_on_another_version_are_not_shown_on_this_one(
+    client: TestClient,  # noqa: F811
+    data: DataDir,
+    recording: Path,
+    fake_model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    url = f"/api/seances/{session_id}"
+    chat = fake_model.chat
+    during: list[dict[str, object]] = []
+
+    def watching(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
+        # The version shown changes while the chapters are detected on the one before.
+        conn = connect(data)
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO run (id, session_id, stage, status, producer,"
+                    " created_at) VALUES ('une-autre-version', ?, 'segment_phases',"
+                    " 'failed', 'app', '2026-10-23T00:00:00Z')",
+                    (session_id,),
+                )
+                conn.execute(
+                    "UPDATE run_upstream SET upstream_run_id = 'une-autre-version'"
+                    " WHERE run_id IN (SELECT id FROM run WHERE status = 'running')"
+                )
+        finally:
+            conn.close()
+        during.append(client.get(f"{url}/chapitres").json())
+        return chat(model, messages, options, answer_format=answer_format)
+
+    monkeypatch.setattr(fake_model, "chat", watching)
+    client.post(f"{url}/chapitres")
+    run_all(data, fake_model)
+    checking = during[-1]
+    assert checking["provisional"] == []  # never put on lines they were not detected on (P2)
+    assert "autre version" in checking["progress"]["problem"]
