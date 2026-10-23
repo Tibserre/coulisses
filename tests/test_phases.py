@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -831,7 +832,7 @@ def test_while_the_chapters_are_written_the_review_screen_gets_them_provisional(
     session_id = imported(client, recording)
     run_all(data, fake_model)
     chat = fake_model.chat
-    during: list[dict[str, object]] = []
+    during: list[dict[str, Any]] = []
 
     def watching(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
         during.append(client.get(f"/api/seances/{session_id}/chapitres").json())
@@ -917,7 +918,7 @@ def test_chapters_detected_on_another_version_are_not_shown_on_this_one(
     run_all(data, fake_model)
     url = f"/api/seances/{session_id}"
     chat = fake_model.chat
-    during: list[dict[str, object]] = []
+    during: list[dict[str, Any]] = []
 
     def watching(model, messages, options, *, answer_format=None):  # type: ignore[no-untyped-def]
         # The version shown changes while the chapters are detected on the one before.
