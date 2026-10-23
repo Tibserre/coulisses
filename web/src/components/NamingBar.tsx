@@ -149,7 +149,7 @@ export function NamingBar({
     >
       <div className="cl-namingbar__row">
         <span className="cl-namingbar__who">
-          <span className="cl-name" data-unnamed>
+          <span className="cl-name" data-unnamed title={speaker.name}>
             {speaker.name}
           </span>
           <span className="cl-namingbar__count">

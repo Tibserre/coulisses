@@ -644,7 +644,11 @@ body {
   padding-bottom: 75vh;
 }
 
+/* A set width (narrower on a narrow window): nothing in it moves as the names and numbers
+   change; the field takes what is left. */
 .cl-namingbar {
+  width: min(36rem, calc(100% - 2 * var(--spacing-4)));
+  box-sizing: border-box;
   display: flex;
   /* The names open upwards, over the faded lines: the bar's row stays where it is. */
   flex-direction: column-reverse;
@@ -673,14 +677,25 @@ body {
   display: inline-flex;
   align-items: baseline;
   gap: var(--spacing-2);
+  width: 12rem;
+  flex: none;
   padding: 0 var(--spacing-2);
+  overflow: hidden;
+}
+
+.cl-namingbar__who .cl-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cl-namingbar__count {
+  flex: none;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
-  min-width: 2.6em;
+  /* « 123/145 » as wide as « 1/2 »: the arrows never move. */
+  width: 7.5ch;
   text-align: center;
 }
 
@@ -692,7 +707,9 @@ body {
 }
 
 .cl-namingbar__field {
-  width: 11rem;
+  flex: 1;
+  min-width: 6rem;
+  width: auto;
   height: 30px;
   padding: 0 var(--spacing-3);
   border: 0;
