@@ -33,18 +33,21 @@ import {
 import { PhaseStrip } from "../components/PhaseStrip.tsx";
 import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ReviewSkeleton } from "../components/ReviewSkeleton.tsx";
-import {
-  SpeakerFocusBar,
-  SpeakersToName,
-} from "../components/SpeakerFocus.tsx";
+import { SpeakerFocusBar } from "../components/SpeakerFocus.tsx";
+import { NamingBar } from "../components/NamingBar.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import {
   CorrectionsHistory,
   KeyFigures,
-  Participants,
   Attendees,
 } from "../components/ReviewSide.tsx";
-import { BatteryMedium, Hourglass, PanelRight, X } from "lucide-react";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import {
+  BatteryMedium,
+  ChevronDown,
+  Hourglass,
+  UserRoundSearch,
+} from "lucide-react";
 import { ProcessingOutline } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
 import {
@@ -54,7 +57,6 @@ import {
   type Editing,
 } from "../components/TranscriptView.tsx";
 import { SummaryView } from "../components/SummaryView.tsx";
-import { NotesSection } from "../components/NotesSection.tsx";
 import { VersionsSection } from "../components/VersionsSection.tsx";
 import { SessionMenu } from "../components/SessionMenu.tsx";
 import { audioLine } from "../retention.ts";
@@ -68,6 +70,8 @@ import {
   buildModel,
   changesChapters,
   focusModel,
+  voiceTurns,
+  voicesToName,
   liveEditsKey,
   phaseOf,
   toggleSelection,
@@ -137,20 +141,30 @@ export function SessionPage({
   useEffect(() => {
     if (reading === "summary") setSummaryDrawn(true);
   }, [reading]);
-  /** The details of the session (voices, attendees, notes, corrections, versions), in a
-   *  panel over the page, opened at one of its parts. */
-  const [panel, setPanel] = useState<string | null>(null);
-  const openPanel = (part: string) => {
-    setPanel(part);
-    // Once it is drawn: that part, in view.
-    window.setTimeout(
-      () =>
-        document
-          .getElementById(part)
-          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      50,
-    );
+  // The details of the session, each where it is looked for (ADR 0062): the attendees in
+  // the breadcrumb, the corrections beside the switch, the versions in « ⋯ ».
+  const [attendeesOpen, setAttendeesOpen] = useState(false);
+  const [correctionsOpen, setCorrectionsOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const openVersions = (part?: string) => {
+    setVersionsOpen(true);
+    if (part)
+      // Once it is drawn: that part, in view.
+      window.setTimeout(
+        () =>
+          document
+            .getElementById(part)
+            ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        80,
+      );
   };
+  /** The guided naming (ADR 0062): the voice named, and which of its lines is looked at. */
+  const [guide, setGuide] = useState<{
+    label: string;
+    line: number;
+    /** Its place among the voices to name: the next one is taken from there. */
+    at: number;
+  } | null>(null);
   /** Chapters folded by the user, by their first line. */
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
@@ -533,16 +547,19 @@ export function SessionPage({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target)) return;
+      // The guided naming, its field left (a click on one of its buttons): Escape ends it.
+      if (e.key === "Escape" && guide) {
+        e.preventDefault();
+        setGuide(null);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();
         void history(e.shiftKey);
         return;
       }
-      if (e.key === "Escape" && panel) {
-        e.preventDefault();
-        setPanel(null);
-        return;
-      }
+      // The other keys are the bar's while it is there.
+      if (guide) return;
       // Escape: back to all the voices (a name being typed handles its own Escape).
       if (e.key === "Escape" && focus) {
         e.preventDefault();
@@ -566,7 +583,7 @@ export function SessionPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentRow, history, correct, focus, panel, reading]);
+  }, [currentRow, history, correct, focus, reading, guide]);
 
   const session = detail?.session;
   const title = session
@@ -578,8 +595,46 @@ export function SessionPage({
     : 0;
 
   const voices = unfolded?.speakers.filter((s) => s.label !== null) ?? [];
-  const toName = voices.filter((s) => !s.named).length;
+  const toName = useMemo(
+    () => (unfolded ? voicesToName(unfolded) : []),
+    [unfolded],
+  );
   const liveEdits = view?.edits.filter((e) => !e.reverted).length ?? 0;
+  const speechTotal = voices.reduce((sum, v) => sum + v.seconds, 0) || 1;
+  // Two voices named after the same person (the engine split one person, P3): offered a
+  // merge, never done alone.
+  const twins: [Speaker, Speaker][] = voices.flatMap((v, i) => {
+    if (v.person_id == null || v.character) return [];
+    const first = voices
+      .slice(0, i)
+      .find((o) => o.person_id === v.person_id && !o.character);
+    return first ? [[first, v] as [Speaker, Speaker]] : [];
+  });
+
+  // The guided naming goes on to the next voice once one is named (or merged).
+  const guided = guide
+    ? (unfolded?.speakers.find((s) => s.label === guide.label) ?? null)
+    : null;
+  useEffect(() => {
+    if (!guide || (guided && !guided.named)) return;
+    // Named (or merged): gone from the list, the next one takes its place.
+    const next = toName[guide.at] ?? toName[0];
+    setGuide(
+      next?.label
+        ? { label: next.label, line: 0, at: toName.indexOf(next) }
+        : null,
+    );
+  }, [guide, guided, toName]);
+  const startNaming = () => {
+    const first = toName[0];
+    if (!first?.label) return;
+    setReading("transcript");
+    setFocus(null);
+    setNamingTurn(null);
+    setGuide({ label: first.label, line: 0, at: 0 });
+  };
+  const guideTurns = guide && unfolded ? voiceTurns(unfolded, guide.label) : [];
+  const guideTurn = guideTurns[guide?.line ?? 0] ?? null;
 
   const audioGone = session?.audio.state === "removed";
   const audioText = session ? audioLine(session.audio) : null;
@@ -622,7 +677,36 @@ export function SessionPage({
                 <span />
               )}
               {session && (
+                <Popover
+                  isOpen={attendeesOpen}
+                  onOpenChange={setAttendeesOpen}
+                  label="Présents"
+                  width={300}
+                  content={
+                    <div className="cl-pop">
+                      <Attendees
+                        session={session}
+                        people={people}
+                        inline
+                        onSave={async (ids, unnamed) => {
+                          await api.setAttendees(id, ids, unnamed);
+                          await refresh();
+                        }}
+                      />
+                    </div>
+                  }
+                >
+                  <button type="button" className="cl-crumbbtn">
+                    {present
+                      ? plural(present, "présent", "présents")
+                      : "Présents"}
+                    <ChevronDown size={13} strokeWidth={1.75} aria-hidden />
+                  </button>
+                </Popover>
+              )}
+              {session && (
                 <SessionMenu
+                  onVersions={() => openVersions()}
                   session={session}
                   onChanged={sessionChanged}
                   onError={setMenuError}
@@ -644,22 +728,6 @@ export function SessionPage({
                 <Text color="secondary">
                   {formatDate(session.recorded_at)} ·{" "}
                   {formatDuration(session.duration_s)}
-                  {present
-                    ? ` · ${plural(present, "présent", "présents")}`
-                    : ""}
-                  {voices.length > 0 && (
-                    <>
-                      {" · "}
-                      <button
-                        type="button"
-                        className="cl-linkbtn cl-linkbtn--quiet"
-                        onClick={() => openPanel("voix")}
-                      >
-                        {plural(voices.length, "voix", "voix")}
-                        {toName ? `, ${toName} à nommer` : ""}
-                      </button>
-                    </>
-                  )}
                   {extra && <span title={extra.title}>{extra.text}</span>}
                   {audioText && (
                     <>
@@ -718,6 +786,72 @@ export function SessionPage({
                 )}
               </div>
             )}
+            {session && voices.length > 0 && (
+              // The voices and their share of the speech; a click shows a voice's lines
+              // only. The ones without a name are named, guided, from here (ADR 0062).
+              <div className="cl-voices" aria-label="Participants">
+                {voices
+                  .filter((v) => v.named)
+                  .map((v) => (
+                    <button
+                      key={v.label}
+                      type="button"
+                      className="cl-voice"
+                      aria-pressed={focus === v.label}
+                      title={`N'afficher que les répliques de ${v.name}`}
+                      onClick={() => {
+                        setReading("transcript");
+                        setFocus(focus === v.label ? null : v.label);
+                      }}
+                      onPointerEnter={() => setPointed(v.label)}
+                      onPointerLeave={() => setPointed(null)}
+                    >
+                      <span className="cl-name" style={{ color: inkOf(v) }}>
+                        {v.name}
+                      </span>
+                      <span className="cl-voice__share">
+                        {(100 * v.seconds) / speechTotal < 1
+                          ? "< 1 %"
+                          : `${Math.round((100 * v.seconds) / speechTotal)} %`}
+                      </span>
+                    </button>
+                  ))}
+                {twins.map(([a, b]) => (
+                  <button
+                    key={`${a.label}+${b.label}`}
+                    type="button"
+                    className="cl-voice"
+                    data-merge
+                    title={`Deux voix portent le nom ${a.name} : les réunir en une seule (Cmd-Z pour annuler)`}
+                    onClick={() =>
+                      void correct({
+                        kind: "merge_speakers",
+                        source: b.label!,
+                        target: a.label!,
+                      }).catch(() => undefined)
+                    }
+                  >
+                    Fusionner les deux {a.name}
+                  </button>
+                ))}
+                {toName.length > 0 && !guide && (
+                  <button
+                    type="button"
+                    className="cl-voice"
+                    data-todo
+                    onClick={startNaming}
+                  >
+                    <UserRoundSearch size={14} strokeWidth={1.75} aria-hidden />
+                    {plural(toName.length, "voix à nommer", "voix à nommer")}
+                  </button>
+                )}
+                {view?.voices_problem && (
+                  <span className="cl-voices__problem">
+                    {view.voices_problem}
+                  </span>
+                )}
+              </div>
+            )}
             {session && view && (
               <PhaseStrip
                 view={read ?? view}
@@ -755,25 +889,46 @@ export function SessionPage({
                   ))}
                 </div>
                 <span className="cl-review__viewtools">
-                  {reading === "transcript" && liveEdits > 0 && (
-                    <button
-                      type="button"
-                      className="cl-linkbtn cl-linkbtn--quiet"
-                      onClick={() => openPanel("corrections")}
+                  {reading === "transcript" && view.edits.length > 0 && (
+                    <Popover
+                      isOpen={correctionsOpen}
+                      onOpenChange={setCorrectionsOpen}
+                      label="Corrections"
+                      width={340}
+                      content={
+                        <div className="cl-pop">
+                          <CorrectionsHistory
+                            edits={view.edits}
+                            onUndo={async (editId) => {
+                              try {
+                                setView(
+                                  await api.undo(id, editId, view.run_id),
+                                );
+                              } catch (e) {
+                                refused(e);
+                              }
+                            }}
+                            onRedo={async (editId) => {
+                              try {
+                                setView(
+                                  await api.redo(id, editId, view.run_id),
+                                );
+                              } catch (e) {
+                                refused(e);
+                              }
+                            }}
+                          />
+                        </div>
+                      }
                     >
-                      {plural(liveEdits, "correction", "corrections")}
-                    </button>
+                      <button type="button" className="cl-crumbbtn">
+                        {liveEdits
+                          ? plural(liveEdits, "correction", "corrections")
+                          : "Corrections"}
+                        <ChevronDown size={13} strokeWidth={1.75} aria-hidden />
+                      </button>
+                    </Popover>
                   )}
-                  <button
-                    type="button"
-                    className="cl-iconbtn"
-                    aria-label="Détails de la séance"
-                    title="Détails de la séance : voix, présents, notes, corrections, versions"
-                    aria-expanded={panel !== null}
-                    onClick={() => (panel ? setPanel(null) : openPanel("voix"))}
-                  >
-                    <PanelRight size={16} strokeWidth={1.75} />
-                  </button>
                 </span>
               </div>
             )}
@@ -863,7 +1018,7 @@ export function SessionPage({
                       await api.resume(id, attendees);
                       await refresh();
                     }}
-                    onShowList={() => openPanel("non-reportees")}
+                    onShowList={() => openVersions("non-reportees")}
                   />
                 </div>
                 <div
@@ -886,10 +1041,77 @@ export function SessionPage({
                     />
                   )}
                   <TranscriptView
-                    model={shown!}
+                    // Naming, guided: every line there, none folded away.
+                    model={guide ? unfolded! : shown!}
                     pb={pb}
                     current={current}
                     editing={editing}
+                    guide={
+                      guide && guided && guideTurn
+                        ? {
+                            label: guide.label,
+                            turn: guideTurn.turn.index,
+                            bar: (
+                              <NamingBar
+                                speaker={guided}
+                                position={toName.indexOf(guided) + 1}
+                                remaining={toName.length}
+                                line={guide.line + 1}
+                                lines={guideTurns.length}
+                                cannotHear={
+                                  audioGone
+                                    ? "L'audio de cette séance a été supprimé"
+                                    : guideTurn.turn.start == null
+                                      ? "Le début de cette réplique n'est pas mesuré"
+                                      : null
+                                }
+                                dev={dev}
+                                hearing={
+                                  pb.excerpt != null &&
+                                  pb.excerpt === guideTurn.turn.start
+                                }
+                                people={people}
+                                voices={unfolded!.speakers}
+                                attendees={session.attendee_ids}
+                                onPrevious={() =>
+                                  setGuide({
+                                    ...guide,
+                                    line:
+                                      (guide.line - 1 + guideTurns.length) %
+                                      guideTurns.length,
+                                  })
+                                }
+                                onNext={() =>
+                                  setGuide({
+                                    ...guide,
+                                    line: (guide.line + 1) % guideTurns.length,
+                                  })
+                                }
+                                onHear={() => {
+                                  const t = guideTurn.turn;
+                                  if (t.start != null)
+                                    pb.listen(t.start, t.end ?? t.start + 8);
+                                }}
+                                onSkip={() => {
+                                  const at =
+                                    (toName.indexOf(guided) + 1) %
+                                    toName.length;
+                                  const next = toName[at];
+                                  if (next?.label)
+                                    setGuide({
+                                      label: next.label,
+                                      line: 0,
+                                      at,
+                                    });
+                                }}
+                                onClose={() => setGuide(null)}
+                                onCorrect={correct}
+                                onAddGuest={editing.addGuest}
+                              />
+                            ),
+                          }
+                        : null
+                    }
                   />
                   {selected.size > 0 && (
                     <div
@@ -957,93 +1179,27 @@ export function SessionPage({
                     {notice}
                   </div>
                 )}
-                {panel && (
-                  <aside className="cl-panel" aria-label="Détails de la séance">
-                    <header className="cl-panel__head">
-                      <Text weight="medium">Détails de la séance</Text>
-                      <button
-                        type="button"
-                        className="cl-iconbtn"
-                        aria-label="Fermer les détails"
-                        title="Fermer (Échap)"
-                        onClick={() => setPanel(null)}
-                      >
-                        <X size={16} strokeWidth={1.75} />
-                      </button>
-                    </header>
-                    <KeyFigures view={view} model={model} dev={dev} />
-                    <div id="voix" className="cl-panel__part">
-                      <SpeakersToName
-                        model={unfolded!}
-                        pb={pb}
-                        audioGone={audioGone}
-                        onShow={(label) => {
-                          setReading("transcript");
-                          setFocus(label);
-                        }}
-                        onName={(label, turn) => {
-                          // Its lines only (never in a folded chapter), named on the first one.
-                          setReading("transcript");
-                          setFocus(label);
-                          setNamingTurn(turn);
-                        }}
-                        onCorrect={correct}
-                        onPoint={setPointed}
-                        dev={dev}
-                        problem={view.voices_problem}
-                      />
-                      <Participants
-                        model={model}
-                        onShow={(label) => {
-                          setReading("transcript");
-                          setFocus(label);
-                        }}
-                        onPoint={setPointed}
-                        onMerge={(source, target) =>
-                          correct({ kind: "merge_speakers", source, target })
-                        }
-                      />
-                    </div>
-                    <Attendees
-                      session={session}
-                      people={people}
-                      onSave={async (ids, unnamed) => {
-                        await api.setAttendees(id, ids, unnamed);
-                        await refresh();
-                      }}
+                <Dialog
+                  isOpen={versionsOpen}
+                  onOpenChange={(open) => !open && setVersionsOpen(false)}
+                  width={560}
+                >
+                  <DialogHeader
+                    title="Versions et traitement"
+                    onOpenChange={() => setVersionsOpen(false)}
+                  />
+                  <div className="cl-versions-dialog">
+                    {dev && <KeyFigures view={view} model={model} dev={dev} />}
+                    <VersionsSection
+                      sessionId={id}
+                      version={attributeRun}
+                      busy={busy}
+                      carryover={view.carryover}
+                      duration={session.duration_s}
+                      dev={dev}
+                      onChanged={refresh}
+                      onSeek={pb.seek}
                     />
-                    <NotesSection sessionId={id} />
-                    <div id="corrections" className="cl-panel__part">
-                      <CorrectionsHistory
-                        edits={view.edits}
-                        onUndo={async (editId) => {
-                          try {
-                            setView(await api.undo(id, editId, view.run_id));
-                          } catch (e) {
-                            refused(e);
-                          }
-                        }}
-                        onRedo={async (editId) => {
-                          try {
-                            setView(await api.redo(id, editId, view.run_id));
-                          } catch (e) {
-                            refused(e);
-                          }
-                        }}
-                      />
-                    </div>
-                    <div id="versions" className="cl-panel__part">
-                      <VersionsSection
-                        sessionId={id}
-                        version={attributeRun}
-                        busy={busy}
-                        carryover={view.carryover}
-                        duration={session.duration_s}
-                        dev={dev}
-                        onChanged={refresh}
-                        onSeek={pb.seek}
-                      />
-                    </div>
                     {(dev ||
                       busy ||
                       detail.stages.some(
@@ -1062,8 +1218,8 @@ export function SessionPage({
                       </section>
                     )}
                     {dev && <SourceInfo detail={detail} />}
-                  </aside>
-                )}
+                  </div>
+                </Dialog>
               </div>
               {audioGone ? (
                 <div className="cl-player-gone" role="status">

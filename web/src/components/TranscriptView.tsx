@@ -1,4 +1,5 @@
 import {
+  type ReactNode,
   memo,
   useCallback,
   useEffect,
@@ -745,11 +746,15 @@ export function TranscriptView({
   pb,
   current,
   editing,
+  guide = null,
 }: {
   model: ReviewModel;
   pb: Playback;
   current: { row: TurnRow; word: number } | null;
   editing: Editing;
+  /** The guided naming (ADR 0062): the voice named, the line looked at, and the bar that
+   *  floats under it, over the lines (nothing is pushed). The other voices fade. */
+  guide?: { label: string; turn: number; bar: ReactNode } | null;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -791,6 +796,18 @@ export function TranscriptView({
       virtualizer.scrollToIndex(currentIndex, { align: "start" });
     }
   }, [currentIndex, pb.playing, virtualizer]);
+
+  // The guided naming: the line looked at, brought to the centre.
+  const guideIndex = guide
+    ? model.rows.findIndex(
+        (r) => r.kind === "turn" && r.turn.index === guide.turn,
+      )
+    : -1;
+  useEffect(() => {
+    // Brought to the centre: the bar and its names fit under it.
+    if (guideIndex >= 0)
+      virtualizer.scrollToIndex(guideIndex, { align: "center" });
+  }, [guideIndex, virtualizer]);
 
   // Naming a voice: on the first line of its group (a line that goes on hides its name),
   // brought into view with room under it for the list, which floats over the lines below.
@@ -839,10 +856,28 @@ export function TranscriptView({
                 left: 0,
                 right: 0,
                 transform: `translateY(${item.start}px)`,
-                // Its list floats over the lines under it.
-                zIndex: item.index === namingIndex ? 2 : undefined,
+                // Its list floats over the lines under it; the guided naming's bar over
+                // the lines above.
+                zIndex:
+                  item.index === guideIndex
+                    ? 3
+                    : item.index === namingIndex
+                      ? 2
+                      : undefined,
               }}
+              data-guide={
+                guide && row.kind === "turn"
+                  ? item.index === guideIndex
+                    ? "current"
+                    : row.speaker.label === guide.label
+                      ? "voice"
+                      : "other"
+                  : undefined
+              }
             >
+              {guide && item.index === guideIndex && (
+                <div className="cl-guide">{guide.bar}</div>
+              )}
               {row.kind === "turn" ? (
                 <TurnLine
                   row={row}

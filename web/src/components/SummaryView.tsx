@@ -17,6 +17,10 @@ import { useDevMode } from "../devMode.ts";
 import { formatDateTime, formatDuration } from "../format.ts";
 import { inertMarkdown } from "../inertMarkdown.ts";
 import { summaryTabs, writable, type SummaryTab } from "../summaries.ts";
+import { NotesSection } from "./NotesSection.tsx";
+
+/** The tab of the note after the session, beside the summaries. */
+const NOTE = "ma-note";
 
 /** Nothing a generated text points to is ever fetched or opened (P1): images show their
  *  description, links their text. The parser's own forms (references included) all go
@@ -108,6 +112,7 @@ export function SummaryView({
   const tabs = data
     ? summaryTabs(data.generations, data.pending, preferred)
     : [];
+  const note = current === NOTE;
   const tab = tabs.find((t) => t.ref === current) ?? tabs[0] ?? null;
   const offered = writable(actions, tabs, preferred);
 
@@ -156,7 +161,63 @@ export function SummaryView({
         />
       )}
 
-      {tabs.length === 0 ? (
+      <div className="cl-sumtabs" role="tablist" aria-label="Résumés">
+        <button
+          type="button"
+          role="tab"
+          className="cl-sumtabs__tab"
+          aria-selected={note}
+          onClick={() => setCurrent(NOTE)}
+        >
+          Ma note
+        </button>
+        {tabs.map((t) => (
+          <button
+            key={t.ref}
+            type="button"
+            role="tab"
+            className="cl-sumtabs__tab"
+            aria-selected={!note && t.ref === tab?.ref}
+            onClick={() => setCurrent(t.ref)}
+          >
+            {t.name}
+          </button>
+        ))}
+        {tabs.length > 0 && offered.length > 0 && (
+          <Popover
+            isOpen={adding}
+            onOpenChange={setAdding}
+            label="Rédiger un autre résumé"
+            width={280}
+            content={others}
+          >
+            <button
+              type="button"
+              className="cl-sumtabs__tab"
+              data-add
+              disabled={!reachable}
+            >
+              <Plus size={14} strokeWidth={1.75} aria-hidden />
+              Rédiger…
+            </button>
+          </Popover>
+        )}
+      </div>
+      {note ? (
+        // The note after the session (ADR 0062): read and written here, beside the
+        // summaries, which read it.
+        <NotesSection sessionId={sessionId} heading={false} />
+      ) : tab ? (
+        <SummaryTabBody
+          key={tab.ref}
+          sessionId={sessionId}
+          tab={tab}
+          reachable={reachable}
+          onWrite={() => write(tab.ref)}
+          onChanged={setData}
+          onError={setError}
+        />
+      ) : (
         <div className="cl-summary__empty">
           <Text weight="medium">Pas encore de résumé</Text>
           <Text type="supporting" as="p">
@@ -184,53 +245,6 @@ export function SummaryView({
             </Popover>
           )}
         </div>
-      ) : (
-        <>
-          <div className="cl-sumtabs" role="tablist" aria-label="Résumés">
-            {tabs.map((t) => (
-              <button
-                key={t.ref}
-                type="button"
-                role="tab"
-                className="cl-sumtabs__tab"
-                aria-selected={t.ref === tab?.ref}
-                onClick={() => setCurrent(t.ref)}
-              >
-                {t.name}
-              </button>
-            ))}
-            {offered.length > 0 && (
-              <Popover
-                isOpen={adding}
-                onOpenChange={setAdding}
-                label="Rédiger un autre résumé"
-                width={280}
-                content={others}
-              >
-                <button
-                  type="button"
-                  className="cl-sumtabs__tab"
-                  data-add
-                  disabled={!reachable}
-                >
-                  <Plus size={14} strokeWidth={1.75} aria-hidden />
-                  Rédiger…
-                </button>
-              </Popover>
-            )}
-          </div>
-          {tab && (
-            <SummaryTabBody
-              key={tab.ref}
-              sessionId={sessionId}
-              tab={tab}
-              reachable={reachable}
-              onWrite={() => write(tab.ref)}
-              onChanged={setData}
-              onError={setError}
-            />
-          )}
-        </>
       )}
       {dev && data.generations.length > 1 && (
         <AllVersions generations={data.generations} />

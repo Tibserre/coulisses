@@ -4,7 +4,7 @@ Statut : retenue (2026-10-02, ADR 0017). Ce document décrit une seule direction
 
 ## En une phrase
 
-Une interface sobre et éditoriale : des fonds neutres, une typographie soignée, et la couleur réservée à ce qui porte du sens. L'écran de relecture se lit en une colonne : la transcription, ou les résumés (ADR 0060) ; les détails de la séance s'ouvrent à droite, à la demande.
+Une interface sobre et éditoriale : des fonds neutres, une typographie soignée, et la couleur réservée à ce qui porte du sens. L'écran de relecture se lit en une colonne : la transcription, ou les résumés (ADR 0060) ; les détails de la séance sont chacun à leur place (ADR 0062).
 
 ## Principes
 
@@ -101,7 +101,7 @@ La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/we
 
 Une seule colonne de lecture, à la largeur du texte, l'en-tête au-dessus à la même largeur (ADR 0060) : on lit la transcription **ou** les résumés. Dans la coquille de l'application (ADR 0030), elle s'ouvre à droite de la colonne des espaces et des séances, qui se masque pour relire au large. Elle reste sobre : texte secondaire, la séance ouverte sur un fond atténué, jamais un trait de couleur sur un côté ; un point seulement pour ce qui se passe (enregistrement, traitement, échec).
 
-**En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture. Sous la frise, la bascule « Transcription | Résumé » ; à droite, le nombre de corrections et l'icône des détails. Dans la ligne de contexte, « N voix, M à nommer » ouvre les détails.
+**En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture. Sous la frise, la bascule « Transcription | Résumé » ; à droite, le nombre de corrections.
 
 **Vue « Transcription » : la transcription entière.** Elle se lit comme un texte édité :
 - l'horodatage dans la marge, cliquable pour lire à partir de là ;
@@ -116,7 +116,9 @@ Une seule colonne de lecture, à la largeur du texte, l'en-tête au-dessus à la
 
 **Vue « Résumé ».** Un onglet par résumé rédigé, en pastilles discrètes, « + Rédiger… » en pointillé pour un autre. Sous l'onglet : la date, Copier, Exporter, Refaire ; « Revenir à la version d'avant » sous un résumé refait. Le texte à la largeur de lecture. Chaque point renvoie aux répliques qui le justifient par une **citation** : une petite étiquette à l'heure de la réplique, dans la couleur de la personne ; un clic ouvre la transcription à cet endroit.
 
-**Les détails de la séance.** Un panneau à droite, par-dessus la page, qui s'ouvre en glissant (400 ms) et se referme par ✕ ou Échap : les chiffres (voix, répliques), « À nommer », les participants (part du temps de parole ; un clic n'affiche que leurs répliques), les présents, la note d'après séance, les corrections (les trois dernières, puis « Voir les N autres »), les versions du traitement, et le traitement quand une étape s'est arrêtée.
+**Les détails de la séance, à leur place** (ADR 0062). Les participants en pastilles sous le titre (le nom dans son encre, la part du temps de parole) ; « N voix à nommer » à leur suite, en pointillé brique. Les présents dans le fil (« 5 présents ▾ »), les corrections à droite de la bascule (« 3 corrections ▾ »), en petits menus flottants. Les versions et le traitement dans « ⋯ », en fenêtre. La note d'après séance en onglet « Ma note » de la vue Résumé.
+
+**Nommer, guidé.** Les autres voix s'estompent (400 ms), la réplique regardée est surlignée de la teinte du mot en cours. Une barre fine, sur la surface, filet et ombre légère, flotte sous elle par-dessus le texte : icônes Lucide au trait de 1,75 (‹ › ▶ ✓ ⏭ ✕), chacune dite au survol, le champ sur fond atténué, curseur brique ; la liste des noms tombe de la barre, la voix reconnue en tête.
 
 **Pied de page : le lecteur.** Réplique précédente, lecture, réplique suivante, position, vitesse. Espace pour lire ou mettre en pause, flèches pour changer de réplique.
 

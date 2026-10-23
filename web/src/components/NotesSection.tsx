@@ -9,7 +9,14 @@ import { formatDateTime } from "../format.ts";
  *  box). Leaving it saves; it goes into the context of every summary made afterwards. A
  *  draft is never lost (P8): refused, it stays on screen; leaving the page or closing the
  *  window, it is saved; if that fails too, it is kept in this browser and offered back. */
-export function NotesSection({ sessionId }: { sessionId: string }) {
+export function NotesSection({
+  sessionId,
+  heading = true,
+}: {
+  sessionId: string;
+  /** Its own heading; not in the « Ma note » tab, which names it. */
+  heading?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const saved = useRef<string>("");
   /** What was typed, kept here and not read from the page: on leaving, the element may
@@ -96,7 +103,7 @@ export function NotesSection({ sessionId }: { sessionId: string }) {
 
   return (
     <section className="cl-notes">
-      <Heading level={3}>Notes</Heading>
+      {heading && <Heading level={3}>Notes</Heading>}
       <div
         ref={ref}
         className="cl-notes__text"

@@ -529,3 +529,75 @@ export function chaptersWriting(
 export function changesChapters(correction: { kind: string }): boolean {
   return correction.kind === "set_phase" || correction.kind === "remove_phase";
 }
+
+/** The voices still without a name, in the order they are first heard: the guided naming
+ *  goes through them one after the other. */
+export function voicesToName(model: ReviewModel): Speaker[] {
+  const seen: Speaker[] = [];
+  for (const row of model.rows)
+    if (
+      row.kind === "turn" &&
+      row.speaker.label !== null &&
+      !row.speaker.named &&
+      !seen.includes(row.speaker)
+    )
+      seen.push(row.speaker);
+  return seen;
+}
+
+/** A voice's lines, in their order: what « réplique précédente / suivante » goes through. */
+export function voiceTurns(model: ReviewModel, label: string): TurnRow[] {
+  return model.rows.filter(
+    (r): r is TurnRow => r.kind === "turn" && r.speaker.label === label,
+  );
+}
+
+/** Who a voice may be, for the guided naming: the person whose voice it seems to be first
+ *  (ADR 0057), then the people checked present who have no voice yet, then the others;
+ *  a name typed and not found becomes a guest or a free name. */
+export function namingChoices(
+  speaker: Speaker,
+  people: Person[],
+  voices: Speaker[],
+  attendees: readonly number[],
+  typed: string,
+): NameChoice[] {
+  const choices = nameChoices("who", speaker, people, voices, typed);
+  const proposed = speaker.proposal?.person_id;
+  const voiced = new Set(
+    voices.flatMap((v) =>
+      v.person_id != null && v.named ? [v.person_id] : [],
+    ),
+  );
+  const rank = (c: NameChoice) =>
+    c.kind !== "person"
+      ? 3
+      : c.person.id === proposed
+        ? 0
+        : attendees.includes(c.person.id) && !voiced.has(c.person.id)
+          ? 1
+          : 2;
+  return choices
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i)
+    .map(({ c }) => c);
+}
+
+/** What the guided naming says of a choice. */
+export function choiceNote(
+  c: NameChoice,
+  speaker: Speaker,
+  attendees: readonly number[],
+  voices: readonly Speaker[] = [],
+): string {
+  if (c.kind === "guest") return "nouvel invité";
+  if (c.kind === "free") return "nom libre";
+  if (c.kind === "voice") return "même voix";
+  if (c.person.id === speaker.proposal?.person_id) return "voix reconnue";
+  // Naming it after them makes one voice of the two (the engine had split a person, P3).
+  if (voices.some((v) => v.named && v.person_id === c.person.id))
+    return "a déjà une voix : les réunir";
+  const role =
+    c.person.kind === "guest" ? "invité" : (c.person.role ?? "membre");
+  return attendees.includes(c.person.id) ? `${role} · présent` : role;
+}

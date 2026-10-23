@@ -1,9 +1,13 @@
 // Run with `npm test` (Node's own test runner, no extra dependency).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { CorrectedView, Speaker, Word } from "./api.ts";
+import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
+  choiceNote,
+  namingChoices,
+  voiceTurns,
+  voicesToName,
   chaptersWriting,
   stripLayout,
   buildModel,
@@ -536,4 +540,86 @@ test("what the strip says while the chapters are written", () => {
   );
   assert.equal(changesChapters({ kind: "set_phase" }), true);
   assert.equal(changesChapters({ kind: "edit_text" }), false);
+});
+
+test("the guided naming: voices in the order heard, the recognised person, then those present", () => {
+  const people = [
+    {
+      id: 1,
+      space_id: 1,
+      kind: "member",
+      name: "Ana",
+      role: null,
+      color_slot: 1,
+      archived: false,
+    },
+    {
+      id: 2,
+      space_id: 1,
+      kind: "member",
+      name: "Bob",
+      role: null,
+      color_slot: 2,
+      archived: false,
+    },
+    {
+      id: 3,
+      space_id: 1,
+      kind: "member",
+      name: "Cléo",
+      role: null,
+      color_slot: 3,
+      archived: false,
+    },
+  ] as Person[];
+  const v1 = speaker("1", "Voix 1", {
+    proposal: { person_id: 3, name: "Cléo", color_slot: 3, distance: 0.1 },
+  });
+  const v2 = speaker("2", "Voix 2");
+  const ana = speaker("3", "Ana", { named: true, person_id: 1 });
+  const choices = namingChoices(v1, people, [v1, v2, ana], [1, 2], "");
+  assert.deepEqual(
+    choices.map((c) => (c.kind === "person" ? c.person.name : c.kind)),
+    ["Cléo", "Bob", "Ana"],
+  );
+  assert.equal(choiceNote(choices[0], v1, [1, 2]), "voix reconnue");
+  assert.equal(choiceNote(choices[1], v1, [1, 2]), "membre · présent");
+  assert.equal(
+    choiceNote(choices[2], v1, [1, 2], [v1, v2, ana]),
+    "a déjà une voix : les réunir",
+  );
+  const typed = namingChoices(v2, people, [v1, v2], [], "Zoé");
+  assert.deepEqual(
+    typed.map((c) => c.kind),
+    ["guest", "free"],
+  );
+});
+
+test("voices to name come in the order first heard, with their own lines", () => {
+  const line = (index: number, who: string) => ({
+    index,
+    speaker: who,
+    start: index * 10,
+    end: index * 10 + 2,
+    edited: false,
+    words: [word("mot", index * 10)],
+  });
+  const model = buildModel({
+    ...VIEW,
+    turns: [line(0, "2"), line(1, "1"), line(2, "2"), line(3, "3")],
+    speakers: [
+      speaker("1", "Voix 1"),
+      speaker("2", "Voix 2"),
+      speaker("3", "Marie", { named: true }),
+    ],
+    phases: [],
+  });
+  assert.deepEqual(
+    voicesToName(model).map((s) => s.label),
+    ["2", "1"],
+  );
+  assert.deepEqual(
+    voiceTurns(model, "2").map((r) => r.turn.index),
+    [0, 2],
+  );
 });

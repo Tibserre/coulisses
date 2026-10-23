@@ -7,8 +7,6 @@ import { Text } from "@astryxdesign/core/Text";
 import type { CorrectedView, EditInfo, Person, Session } from "../api.ts";
 import { formatDateTime } from "../format.ts";
 import type { ReviewModel } from "../transcript.ts";
-import { speakerTitle } from "../transcript.ts";
-import { inkOf } from "./TranscriptView.tsx";
 
 export function KeyFigures({
   view,
@@ -41,114 +39,18 @@ export function KeyFigures({
   );
 }
 
-/** The voices, with their share of the time. Two voices named after the same person (the
- *  engine split one person, P3) are offered a merge. */
-export function Participants({
-  model,
-  onShow,
-  onPoint,
-  onMerge,
-}: {
-  model: ReviewModel;
-  /** Shows a voice's lines only. */
-  onShow: (label: string) => void;
-  /** The voice pointed at: where it speaks is marked on the player bar. */
-  onPoint: (label: string | null) => void;
-  onMerge: (source: string, target: string) => Promise<void>;
-}) {
-  const total = model.speakers.reduce((sum, s) => sum + s.seconds, 0) || 1;
-  const unnamed = model.speakers.filter(
-    (s) => !s.named && s.label !== null,
-  ).length;
-  return (
-    <section>
-      <Heading level={3}>Participants</Heading>
-      <Text type="supporting">
-        {unnamed > 0
-          ? "Cliquez sur une voix pour n'afficher que ses répliques."
-          : "Toutes les voix sont nommées. Cliquez sur une voix pour n'afficher que ses répliques."}
-      </Text>
-      <ul className="cl-participants">
-        {model.speakers.map((s, i) => {
-          const twin =
-            s.person_id != null && !s.character && s.label !== null
-              ? model.speakers
-                  .slice(0, i)
-                  .find(
-                    (o) =>
-                      o.person_id === s.person_id &&
-                      !o.character &&
-                      o.label !== null,
-                  )
-              : undefined;
-          return (
-            <li
-              key={s.label ?? "inconnu"}
-              onPointerEnter={() => s.label !== null && onPoint(s.label)}
-              onPointerLeave={() => onPoint(null)}
-              onFocus={() => s.label !== null && onPoint(s.label)}
-              onBlur={() => onPoint(null)}
-            >
-              {s.label !== null ? (
-                <button
-                  type="button"
-                  className="cl-name"
-                  data-unnamed={!s.named || undefined}
-                  style={{ color: inkOf(s) }}
-                  title={`N'afficher que les répliques de ${s.name}`}
-                  onClick={() => onShow(s.label!)}
-                >
-                  {speakerTitle(s)}
-                </button>
-              ) : (
-                <span
-                  className="cl-name"
-                  data-unnamed
-                  style={{ color: inkOf(s) }}
-                >
-                  {speakerTitle(s)}
-                </span>
-              )}
-              <span className="cl-share" aria-hidden>
-                <span
-                  style={{
-                    width: `${(100 * s.seconds) / total}%`,
-                    background: inkOf(s),
-                  }}
-                />
-              </span>
-              <Text type="supporting">
-                {Math.round((100 * s.seconds) / total)} %
-              </Text>
-              {twin && (
-                <button
-                  type="button"
-                  className="cl-participants__merge"
-                  title={`Deux voix portent le nom ${s.name} : les réunir en une seule (Cmd-Z pour annuler)`}
-                  onClick={() =>
-                    void onMerge(s.label!, twin.label!).catch(() => undefined)
-                  }
-                >
-                  Fusionner les deux {s.name}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
 /** Who was there, checked after the fact. It does not reprocess anything. */
 export function Attendees({
   session,
   people,
   onSave,
+  inline = false,
 }: {
   session: Session;
   people: Person[];
   onSave: (ids: number[], unnamed: number | null) => Promise<void>;
+  /** In its own small menu (ADR 0062): the list at once, without its heading. */
+  inline?: boolean;
 }) {
   const [ids, setIds] = useState<number[]>(session.attendee_ids);
   const [unnamed, setUnnamed] = useState<number | null>(
@@ -180,7 +82,7 @@ export function Attendees({
     listed.length > 1
       ? `${listed.slice(0, -1).join(", ")} et ${listed[listed.length - 1]}`
       : listed[0];
-  if (!open && !changed) {
+  if (!open && !changed && !inline) {
     return (
       <section>
         <div className="cl-side__line">
@@ -204,17 +106,19 @@ export function Attendees({
   }
   return (
     <section>
-      <div className="cl-side__line">
-        <Heading level={3}>Présents</Heading>
-        {!changed && (
-          <Button
-            size="sm"
-            variant="ghost"
-            label="Fermer"
-            onClick={() => setOpen(false)}
-          />
-        )}
-      </div>
+      {!inline && (
+        <div className="cl-side__line">
+          <Heading level={3}>Présents</Heading>
+          {!changed && (
+            <Button
+              size="sm"
+              variant="ghost"
+              label="Fermer"
+              onClick={() => setOpen(false)}
+            />
+          )}
+        </div>
+      )}
       {shown.length === 0 ? (
         <Text type="supporting">
           Aucune personne dans l'espace « {session.space_name} » : ajoutez-en

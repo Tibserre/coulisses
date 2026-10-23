@@ -520,52 +520,232 @@ body {
   box-shadow: 0 0 0 1px var(--color-border);
 }
 
-/* The details of the session, over the page on its right: opened on demand, closed by ✕ or
-   Escape. It slides in, to show where it comes from (art direction). */
-.cl-panel {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  z-index: 4;
-  width: clamp(320px, 32vw, 420px);
-  overflow-y: auto;
+/* The details of the session, each where it is looked for (ADR 0062). */
+.cl-crumbbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-crumbbtn:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-pop {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-8);
-  padding: 0 var(--spacing-6) var(--spacing-8);
-  background: var(--color-background-surface);
-  border-inline-start: 1px solid var(--color-border);
-  box-shadow: -12px 0 32px -24px rgb(0 0 0 / 0.35);
-  animation: cl-panel-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  gap: var(--spacing-3);
+  max-height: 60dvh;
+  overflow-y: auto;
 }
 
-@keyframes cl-panel-in {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
+.cl-pop section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
 }
 
-.cl-panel__head {
-  position: sticky;
-  top: 0;
+.cl-versions-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.cl-versions-dialog section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+/* The voices under the title: each one's share of the speech; a click shows its lines. */
+.cl-voices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-1) var(--spacing-2);
+}
+
+.cl-voice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-1);
+  border: 1px solid transparent;
+  background: var(--color-background-muted);
+  padding: 2px var(--spacing-3);
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-voice:hover,
+.cl-voice[aria-pressed="true"] {
+  border-color: var(--color-border);
+}
+
+.cl-voice__share {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-voice[data-todo] {
+  align-items: center;
+  background: none;
+  border: 1px dashed var(--color-accent);
+  color: var(--color-accent);
+}
+
+.cl-voices__problem {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The guided naming (ADR 0062): a thin bar floating over the lines under the one looked
+   at (its list of names drops from it), nothing pushed; the other voices fade, the line looked at is lit. */
+.cl-transcript [data-guide] {
+  transition: opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-transcript [data-guide="other"] {
+  opacity: 0.35;
+}
+
+.cl-transcript [data-guide="current"] .cl-turn {
+  border-radius: var(--radius-element);
+  background: var(--coulisses-word-current);
+}
+
+.cl-guide {
+  position: absolute;
+  inset-inline-start: calc(4.5rem + var(--spacing-4));
+  top: calc(100% + 4px);
   z-index: 1;
+  animation: cl-fade-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-namingbar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-med);
+  font-size: var(--font-size-sm);
+}
+
+.cl-namingbar__row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-4) 0 var(--spacing-2);
-  background: var(--color-background-surface);
+  gap: 2px;
+  white-space: nowrap;
 }
 
-.cl-panel__part {
+.cl-namingbar .cl-iconbtn {
+  width: 30px;
+  height: 30px;
+}
+
+.cl-namingbar__who {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  padding: 0 var(--spacing-2);
+}
+
+.cl-namingbar__count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.6em;
+  text-align: center;
+}
+
+.cl-namingbar__sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 var(--spacing-1);
+  background: var(--color-border);
+}
+
+.cl-namingbar__field {
+  width: 11rem;
+  height: 30px;
+  padding: 0 var(--spacing-3);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: var(--color-background-muted);
+  font: inherit;
+  color: var(--color-text-primary);
+  caret-color: var(--color-accent);
+  outline: none;
+}
+
+.cl-namingbar__field:focus-visible {
+  box-shadow: 0 0 0 1.5px var(--color-accent);
+}
+
+.cl-namingbar__ok:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.cl-namingbar__list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-namingbar__list li {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-8);
-  scroll-margin-top: 56px;
+  align-items: center;
+}
+
+.cl-namingbar__choice {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+  border: 0;
+  background: none;
+  padding: 5px var(--spacing-3);
+  border-radius: var(--radius-inner);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cl-namingbar__choice[data-active] {
+  background: var(--color-background-muted);
+}
+
+.cl-namingbar__note {
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.cl-namingbar__error {
+  margin: 0;
+  padding: 2px var(--spacing-3) 4px;
+  color: var(--color-error, var(--color-accent));
+  font-size: var(--font-size-xs);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-panel {
+  .cl-transcript [data-guide],
+  .cl-guide {
+    transition: none;
     animation: none;
   }
 }
@@ -697,7 +877,7 @@ button.cl-time {
   font-size: var(--font-size-sm);
 }
 
-.cl-panel section {
+.cl-section-plain section {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
@@ -2682,8 +2862,11 @@ a.cl-iconbtn {
 .cl-review__top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--spacing-3);
+}
+
+.cl-review__top > :last-child {
+  margin-inline-start: auto;
 }
 
 .cl-audio-note[data-announced] {
