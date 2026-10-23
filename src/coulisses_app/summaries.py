@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from coulisses_app import actions, corrections, jobs, notes, sessions
 from coulisses_app.paths import DataDir
-from coulisses_app.phases import PhaseDetection
+from coulisses_app.phases import PhaseDetection, PhasesProgress
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, Provenance
 from coulisses_app.storage.db import connect
@@ -303,6 +303,21 @@ def inert_markdown(text: str) -> str:
     return _TAG.sub("&lt;", text)
 
 
+class PhasesSteps(BaseModel):
+    """How far a running detection is (ADR 0061)."""
+
+    step: Literal["reading", "checking", "done"]
+    """Reading part after part, then checking each chapter's kind."""
+    part: int
+    parts: int
+    read_until: float | None
+    """Measured time of the last line read: beyond it, nothing is known yet."""
+    checked: int
+    to_check: int
+    problem: str | None = None
+    """Why the chapters so far cannot be shown at this step."""
+
+
 class PhasesStatus(BaseModel):
     """Where the chapter detection stands, for the review screen."""
 
@@ -312,6 +327,15 @@ class PhasesStatus(BaseModel):
     finished_at: datetime | None = None
     adjustments: list[str] = []
     """What the model's answer said that had to be put right (shown in developer mode)."""
+    progress: PhasesSteps | None = None
+    """While running: how far the detection is (ADR 0061)."""
+    progress_problem: str | None = None
+    """While running: why its progress cannot be read. The detection goes on: not a failure."""
+    provisional: list[corrections.Phase] = []
+    """While running: the chapters so far, placed on lines that exist like the final ones,
+    the markers set while recording first, the user's changes over them (ADR 0061). All may
+    still change until the state is « done »: the last one may go on, a kind may be changed
+    when checked. Not to be changed by the user meanwhile; never kept as the result."""
 
 
 def phases_status(data: DataDir, session_id: str) -> PhasesStatus:
@@ -331,6 +355,8 @@ def phases_status(data: DataDir, session_id: str) -> PhasesStatus:
         state: Literal["queued", "running", "failed"] = (
             "running" if job.state == "running" else "failed" if job.state == "failed" else "queued"
         )
+        if state == "running":
+            return _running(data, session_id, job.id, job.params.model)
         return PhasesStatus(state=state, error=job.error, model=job.params.model)
     if view is None or view.phases_run_id is None:
         return PhasesStatus(state="none")
@@ -349,3 +375,62 @@ def phases_status(data: DataDir, session_id: str) -> PhasesStatus:
         finished_at=prov.finished_at,
         adjustments=detection.adjustments,
     )
+
+
+def _running(data: DataDir, session_id: str, job_id: int, model: str) -> PhasesStatus:
+    """A running detection, with how far it is and its chapters so far, read from its run's
+    `phases-progress.json` (ADR 0061). Before its first step there is nothing more to say than
+    « running ». The chapters so far are shown only on the version of « who said what » they
+    were detected on: on another, their lines would be others (P2)."""
+    conn = connect(data)
+    try:
+        row = conn.execute(
+            "SELECT id FROM run WHERE job_id = ? AND stage = 'segment_phases'"
+            " AND status = 'running' ORDER BY created_at DESC LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        upstream = (
+            conn.execute(
+                "SELECT upstream_run_id FROM run_upstream WHERE run_id = ?", (row["id"],)
+            ).fetchone()
+            if row is not None
+            else None
+        )
+    finally:
+        conn.close()
+    status = PhasesStatus(state="running", model=model)
+    if row is None:
+        return status
+    path = data.run_dir(session_id, row["id"]) / "phases-progress.json"
+    try:
+        progress = PhasesProgress.model_validate_json(path.read_text("utf-8"))
+    except FileNotFoundError:
+        return status
+    except (OSError, ValueError) as exc:
+        status.progress_problem = (
+            f"L'avancement des chapitres est illisible ({type(exc).__name__})."
+        )
+        return status
+    status.progress = PhasesSteps(
+        step=progress.step,
+        part=progress.part,
+        parts=progress.parts,
+        read_until=progress.read_until,
+        checked=progress.checked,
+        to_check=progress.to_check,
+        problem=progress.problem,
+    )
+    if progress.detection is not None and progress.detection.phases:
+        view = corrections.build_view(
+            data, session_id, recognise=False, provisional=(row["id"], progress.detection)
+        )
+        if view is None:
+            return status
+        if upstream is None or view.run_id != upstream["upstream_run_id"]:
+            status.progress.problem = (
+                "Les chapitres en cours sont détectés sur une autre version de la séance : "
+                "ils s'afficheront une fois la détection finie."
+            )
+        else:
+            status.provisional = view.phases
+    return status

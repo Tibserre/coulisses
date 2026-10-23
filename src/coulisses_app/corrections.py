@@ -390,11 +390,18 @@ def journal_of(conn: sqlite3.Connection, session_id: str) -> list[JournalEntry]:
 
 
 def build_view(
-    data: DataDir, session_id: str, *, run_id: str | None = None, recognise: bool = True
+    data: DataDir,
+    session_id: str,
+    *,
+    run_id: str | None = None,
+    recognise: bool = True,
+    provisional: tuple[str, PhaseDetection] | None = None,
 ) -> CorrectedView | None:
     """The corrected view of the session's active « who said what » run (or of another of
     its runs, with that run's own corrections); None before it exists. `recognise`: in a
-    space that recognises voices, propose a person for each unnamed voice (ADR 0057)."""
+    space that recognises voices, propose a person for each unnamed voice (ADR 0057).
+    `provisional`: a running detection's run and its chapters so far, in place of the active
+    detection, with the markers and the user's changes over them as over any (ADR 0061)."""
     conn = connect(data)
     try:
         if run_id is None:
@@ -417,7 +424,9 @@ def build_view(
         conn.close()
     detection: PhaseDetection | None = None
     problem: str | None = None
-    if detection_run is not None:
+    if provisional is not None:
+        detection_run, detection = provisional
+    elif detection_run is not None:
         path = data.run_dir(session_id, detection_run) / "output.json"
         try:
             detection = PhaseDetection.model_validate_json(path.read_text(encoding="utf-8"))
