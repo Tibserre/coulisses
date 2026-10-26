@@ -710,7 +710,8 @@ body {
   box-sizing: border-box;
   padding: var(--spacing-3);
   border-radius: var(--radius-element);
-  background: var(--coulisses-word-current);
+  /* A fine frame, all round: the line is set apart without a coloured ground. */
+  border: 1px solid var(--color-border);
 }
 
 .cl-namingcard__focus .cl-namingcard__said-line {
