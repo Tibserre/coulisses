@@ -21,6 +21,13 @@ Aujourd'hui, pour tirer quelque chose d'une séance, on choisit un prompt dans u
   - **Contenu** : ce qu'il doit produire, construit à partir de choix simples (voir « Construire un résumé ») et non tapé en vrac. Le prompt envoyé au modèle en découle, et reste visible et modifiable.
 - **La bibliothèque** : tous les résumés, en un seul endroit, communs à toute l'application. Aucun n'est « pour l'impro » ou « pour les réunions ».
 - **Les résumés d'un espace** : un espace (une troupe, une équipe : le groupe, avec ses membres, son glossaire) a sa sélection de résumés, ceux qu'on propose pour ses séances. À la création d'un espace, **4 résumés de base** y sont associés ; on en ajoute, on en retire, on les réordonne, et on les modifie, depuis les paramètres de l'espace. Toutes les séances ont un espace : aucune n'est sans résumés proposés. Les projets restent de simples dossiers dans l'espace, sans réglage de résumés.
+- **Les 4 résumés de base** (choisis par l'utilisateur le 2026-10-26), pour tout type de séance, sans doublon :
+  1. **« Le raconter à quelqu'un qui n'était pas là »** : un compte rendu de toute la séance, pour comprendre ce qui s'est dit sans l'avoir vécu ;
+  2. **« Savoir qui fait quoi »** : les actions décidées pendant la séance, avec qui s'en charge et l'échéance quand elle a été dite ;
+  3. **« Ce que chacun a apporté »** : par personne, ses idées, ses positions, ses retours (en répétition, les retours de jeu ; en réunion, qui défendait quoi) ;
+  4. **« Ce qui reste ouvert »** : les questions sans réponse, les désaccords, les sujets à reprendre.
+
+  Les autres (les idées à garder, un message court à envoyer, les moments forts, les résumés actuels…) restent dans la bibliothèque, à ajouter dans un espace qui en a l'usage.
 - **Trois niveaux, pas plus** : la bibliothèque (tous les résumés), les résumés de l'espace, la séance (un objectif de son espace, ou une demande libre).
 - **Les habitudes** : dans un espace, les résumés les plus rédigés passent en tête. Rien de deviné : on compte ce qui a été rédigé.
 - **La demande libre** : une phrase écrite pour cette séance (« les moments où on a ri », « ce que Camille a proposé »). Elle est rédigée une fois, dans son onglet, et **n'est pas gardée comme résumé**. Le texte rédigé, lui, reste avec sa provenance, comme tout texte rédigé. « Ajouter à mes résumés » la transforme en résumé si on le veut.
@@ -76,6 +83,5 @@ Créer ou modifier un résumé, c'est répondre à des questions, avec le prompt
 
 ## Questions ouvertes
 
-1. **Les 4 résumés de base** : lesquels ? Ils doivent convenir à tout type de séance.
-2. **L'essai d'un résumé** : son texte est-il gardé comme une version de la séance essayée, ou mis de côté (P5 : rien de rédigé n'est jamais purgé) ?
-3. **Un résumé modifié depuis un espace** : il change pour tous les espaces qui l'utilisent, ou l'espace en garde une copie à lui ?
+1. **L'essai d'un résumé** : son texte est-il gardé comme une version de la séance essayée, ou mis de côté (P5 : rien de rédigé n'est jamais purgé) ?
+2. **Un résumé modifié depuis un espace** : il change pour tous les espaces qui l'utilisent, ou l'espace en garde une copie à lui ?
