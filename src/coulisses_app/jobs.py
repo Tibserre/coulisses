@@ -10,11 +10,12 @@ from pydantic import BaseModel
 
 from coulisses_app.storage.db import now_iso
 
-Rerun = Literal["transcribe", "diarize"]
+Rerun = Literal["transcribe", "diarize", "all"]
 
 REDONE: dict[str, tuple[str, ...]] = {
     "transcribe": ("transcribe", "align", "attribute"),
     "diarize": ("diarize", "attribute"),
+    "all": ("transcribe", "align", "diarize", "attribute"),
 }
 """The stages a rerun makes again; the others are those of the version it starts from."""
 

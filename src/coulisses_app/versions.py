@@ -30,7 +30,7 @@ class Version(BaseModel):
     """1 for the first processing, then in the order they were made."""
     finished_at: str | None
     shown: bool
-    origin: Literal["first", "transcribe", "diarize"]
+    origin: Literal["first", "transcribe", "diarize", "all"]
     min_voices: int | None
     """The minimum of voices its voice separation was asked for (P3)."""
     engine_version: str | None
@@ -161,7 +161,9 @@ def request_rerun(
     data: DataDir, session_id: str, rerun: Rerun, *, attendees: int | None, profile: str
 ) -> int:
     """Queue a rerun of the shown version: the transcription (with the space's glossary as
-    it is today) or the voices (with `attendees` as the minimum of voices, P3)."""
+    it is today), the voices (with `attendees` as the minimum of voices, P3), or both, nothing
+    kept (`all`, ADR 0066: the glossary of today, and `attendees`, else the shown version's
+    minimum)."""
     if attendees is not None and attendees < 1:
         raise SpaceError("Il faut au moins une personne présente.")
     conn = connect(data)
@@ -184,7 +186,11 @@ def request_rerun(
             for stage, run_id in chain.items()
             if stage not in REDONE[rerun] and stage != "attribute"
         }
-        if rerun == "transcribe":
+        if rerun == "all":
+            glossary = spaces.glossary_terms(conn, row["space_id"])
+            if attendees is None:
+                attendees = _min_voices(conn, chain.get("diarize"))
+        elif rerun == "transcribe":
             if "diarize" not in reuse:
                 raise SpaceError("La séparation des voix de cette version est introuvable.")
             glossary = spaces.glossary_terms(conn, row["space_id"])
