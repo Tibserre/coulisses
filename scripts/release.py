@@ -1,17 +1,27 @@
-"""Publish a version from the commits merged since the last one: run on `main` after each
-merge (the `post-merge` hook does it), never by hand-editing a version number.
+"""Versions of the app, numbered at publication only (ADR 0064), never by hand-editing a
+version number.
 
 Commits follow Conventional Commits, in French after the type (see CLAUDE.md):
     feat(portée): ajoute …        -> minor version
     fix(portée): corrige …        -> patch version
     perf(portée): accélère …      -> patch version
     feat(contrat)!: …  or a « BREAKING CHANGE: » line in the body -> major version
-Other types (docs, test, refactor, build, chore, style) publish nothing on their own.
+Other types (docs, test, refactor, build, chore, style) bring no version on their own.
 
-What it does: computes the next version (Semantic Versioning; before 1.0.0, an
-incompatible change only raises the minor number), writes it in the files listed in
-`release.toml`, adds a section to CHANGELOG.md, commits « chore(version): vX.Y.Z » and
-tags vX.Y.Z. Nothing to publish: it says so and changes nothing. Standard library only.
+    release.py            after each merge into main (the `post-merge` hook): rewrites the
+                          « Non publié » section of CHANGELOG.md from the commits since the
+                          last version, and commits it; no version, no tag
+    release.py --apercu   says the version a publication would take now, writes nothing
+    release.py --publier  numbers the publication (`publier.py --numeroter` runs it): the
+                          next version (Semantic Versioning; before 1.0.0, an incompatible
+                          change only raises the minor number) in the files of
+                          `release.toml`, the « Non publié » section becomes its own,
+                          « chore(version): vX.Y.Z », tag vX.Y.Z
+    release.py --identifiant   the identifier of this checkout between two versions
+                          (`git describe`, e.g. v0.38.0-12-gabc1234, « -modifie » if tracked
+                          files are changed)
+
+Only main is numbered, from a clean checkout. Standard library only.
 """
 
 from __future__ import annotations
@@ -24,6 +34,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+UNRELEASED = "## Non publié"
 HEADER = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?: (?P<desc>.+)$")
 SECTIONS = {
     "breaking": "Changements incompatibles",
@@ -41,11 +52,20 @@ def git(*args: str) -> str:
 
 def last_tag() -> str | None:
     tags = git("tag", "--list", "v*", "--sort=-v:refname").splitlines()
+    tags = [tag for tag in tags if re.fullmatch(r"v\d+\.\d+\.\d+", tag)]
     return tags[0] if tags else None
 
 
-def commits_since(tag: str | None) -> list[tuple[str, str]]:
-    span = f"{tag}..HEAD" if tag else "HEAD"
+def identifier() -> str:
+    """This checkout between two versions: `vX.Y.Z` on a version, else
+    `vX.Y.Z-<commits since>-g<commit>`, `-modifie` when tracked files are changed."""
+    return git(
+        "describe", "--tags", "--match", "v[0-9]*.[0-9]*.[0-9]*", "--dirty=-modifie", "--always"
+    )
+
+
+def commits_since(tag: str | None, end: str = "HEAD") -> list[tuple[str, str]]:
+    span = f"{tag}..{end}" if tag else end
     raw = git("log", span, "--no-merges", "--format=%s%x1f%b%x1e")
     out: list[tuple[str, str]] = []
     for record in raw.split("\x1e"):
@@ -59,7 +79,7 @@ def classify(commits: list[tuple[str, str]]) -> dict[str, list[str]]:
     groups: dict[str, list[str]] = {key: [] for key in SECTIONS}
     for subject, body in commits:
         m = HEADER.match(subject)
-        if not m or m["type"] == "chore" and (m["scope"] or "") == "version":
+        if not m or (m["type"] == "chore" and (m["scope"] or "") == "version"):
             continue
         scope = f" ({m['scope']})" if m["scope"] else ""
         line = f"{m['desc']}{scope}"
@@ -115,7 +135,10 @@ def relock() -> list[str]:
     touched: list[str] = []
     for folder in config.get("verrous", []):
         result = subprocess.run(
-            ["uv", "lock", "--offline", "--quiet"], cwd=ROOT / folder, capture_output=True, text=True
+            ["uv", "lock", "--offline", "--quiet"],
+            cwd=ROOT / folder,
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             sys.exit(f"Verrou non mis à jour dans {folder} : {result.stderr.strip()}")
@@ -123,47 +146,136 @@ def relock() -> list[str]:
     return touched
 
 
-def write_changelog(version: str, groups: dict[str, list[str]]) -> None:
-    path = ROOT / "CHANGELOG.md"
-    lines = [f"## v{version} — {date.today().isoformat()}", ""]
-    for key, title in SECTIONS.items():
+def section(title: str, groups: dict[str, list[str]]) -> str:
+    lines = [title, ""]
+    for key, heading in SECTIONS.items():
         if groups[key]:
-            lines += [f"### {title}", "", *(f"- {item}" for item in groups[key]), ""]
-    section = "\n".join(lines).rstrip() + "\n"
+            lines += [f"### {heading}", "", *(f"- {item}" for item in groups[key]), ""]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def unreleased_section() -> str | None:
+    """The « Non publié » section as it is in CHANGELOG.md, if any."""
+    path = ROOT / "CHANGELOG.md"
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    start = text.find("\n" + UNRELEASED + "\n")
+    if start < 0 or text.find("\n## ") != start:
+        return None
+    following = text.find("\n## ", start + 1)
+    return text[start + 1 : following + 1 if following >= 0 else None].rstrip() + "\n"
+
+
+def written_by_hand(tag: str | None) -> bool:
+    """« Non publié » is not what this script wrote at its last change of CHANGELOG.md:
+    someone rewrote it, and the next rewrite replaces it (git keeps it)."""
+    found = unreleased_section()
+    if found is None:
+        return False
+    last = git("log", "-1", "--format=%H", "--", "CHANGELOG.md")
+    if not last:
+        return True
+    return found != section(UNRELEASED, classify(commits_since(tag, last)))
+
+
+def write_changelog(text: str | None) -> bool:
+    """Puts `text` (a section, or None for none) where « Non publié » is: on top, under the
+    title, in place of the former one. True if CHANGELOG.md changed."""
+    path = ROOT / "CHANGELOG.md"
     old = path.read_text(encoding="utf-8") if path.exists() else "# Journal des versions\n"
-    first = old.find("\n## ")  # the newest version goes on top, under the title
-    if first < 0:
-        new = old.rstrip() + "\n\n" + section
-    else:
-        new = old[:first].rstrip() + "\n\n" + section + "\n" + old[first + 1 :]
+    head, sections = old, ""
+    first = old.find("\n## ")
+    if first >= 0:
+        head, sections = old[:first].rstrip() + "\n", old[first + 1 :]
+    if sections.startswith(UNRELEASED + "\n") or sections.rstrip() == UNRELEASED:
+        following = sections.find("\n## ")
+        sections = sections[following + 1 :] if following >= 0 else ""
+    parts = [head.rstrip() + "\n"]
+    if text:
+        parts.append(text)
+    if sections:
+        parts.append(sections)
+    new = "\n".join(parts)
+    if new == old:
+        return False
     path.write_text(new, encoding="utf-8")
+    return True
 
 
-def main() -> None:
-    if git("rev-parse", "--abbrev-ref", "HEAD") != "main":
-        return  # versions are published from main only
-    if git("status", "--porcelain", "--untracked-files=no"):
-        sys.exit("Version non publiée : des modifications ne sont pas commitées.")
-    tag = last_tag()
-    groups = classify(commits_since(tag))
-    version = next_version(tag or current_version(), groups)
-    if version is None:
-        print("Aucune version à publier (pas de feat, fix, perf ni changement incompatible).")
-        return
-    touched = write_version(version)
-    touched += relock()
-    write_changelog(version, groups)
-    git("add", "CHANGELOG.md", *touched)
+def commit(message: str, *paths: str) -> None:
+    git("add", *paths)
     git(
         "commit",
         "-q",
         "-m",
-        f"chore(version): v{version}",
+        message,
         "-m",
         "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
     )
+
+
+def on_clean_main() -> bool:
+    if git("rev-parse", "--abbrev-ref", "HEAD") != "main":
+        return False
+    if git("status", "--porcelain", "--untracked-files=no"):
+        sys.exit("CHANGELOG.md non mis à jour : des modifications ne sont pas commitées.")
+    return True
+
+
+def unreleased() -> None:
+    """After a merge: the « Non publié » section says what the next publication brings."""
+    if not on_clean_main():
+        return  # versions are numbered from main only
+    tag = last_tag()
+    by_hand = written_by_hand(tag)
+    groups = classify(commits_since(tag))
+    text = section(UNRELEASED, groups) if any(groups.values()) else None
+    if write_changelog(text):
+        if by_hand:
+            print(
+                "ATTENTION : la section « Non publié » avait été réécrite à la main ; elle est "
+                "remplacée par celle des commits (l'ancienne reste dans git : "
+                "git log -p CHANGELOG.md). Réécrire les notes après publier.py --numeroter.",
+                file=sys.stderr,
+            )
+        commit("chore(changelog): met à jour la section « Non publié »", "CHANGELOG.md")
+        print("CHANGELOG.md : section « Non publié » mise à jour (aucune version posée)")
+
+
+def upcoming() -> tuple[str | None, dict[str, list[str]]]:
+    tag = last_tag()
+    groups = classify(commits_since(tag))
+    return next_version(tag or current_version(), groups), groups
+
+
+def number() -> str:
+    """The publication's version: files, CHANGELOG.md, commit and tag. Exits if none."""
+    if not on_clean_main():
+        sys.exit("Une version ne se numérote que sur main.")
+    version, groups = upcoming()
+    if version is None:
+        sys.exit("Aucune version à publier (pas de feat, fix, perf ni changement incompatible).")
+    touched = write_version(version)
+    touched += relock()
+    write_changelog(section(f"## v{version} — {date.today().isoformat()}", groups))
+    commit(f"chore(version): v{version}", "CHANGELOG.md", *touched)
     git("tag", "-a", f"v{version}", "-m", f"v{version}")
-    print(f"Version publiée : v{version} (étiquette v{version}, CHANGELOG.md à jour)")
+    print(f"Version numérotée : v{version} (étiquette v{version}, CHANGELOG.md à jour)")
+    return version
+
+
+def main() -> None:
+    action = sys.argv[1] if len(sys.argv) > 1 else None
+    if action is None:
+        unreleased()
+    elif action == "--publier":
+        number()
+    elif action == "--apercu":
+        version, _ = upcoming()
+        print(f"v{version}" if version else "Aucune version à publier.")
+    elif action == "--identifiant":
+        print(identifier())
+    else:
+        sys.exit(f"Option inconnue : {action} (--apercu, --publier, --identifiant)")
 
 
 if __name__ == "__main__":

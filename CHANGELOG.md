@@ -1,8 +1,10 @@
 # Journal des versions
 
-Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
-à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
-Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
+Versions de l'application Coulisses, numérotées à la publication (ADR 0064) à partir des
+messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaque fusion dans
+`main`, la section « Non publié » est réécrite d'après les commits : ne pas la retoucher.
+La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
+la publication lit celle de `main`.
 
 ## v0.37.1 — 2026-10-27
 

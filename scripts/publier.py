@@ -1,9 +1,15 @@
-"""Publish a version of Coulisses.app for the friends (ADR 0040; plan step 11f), from this Mac.
+"""Publish a version of Coulisses.app for the friends (ADR 0040, 0064; plan step 11f), from this
+Mac.
 
+    uv run python scripts/publier.py --numeroter          numbers it, on main (ADR 0064)
     uv run python scripts/publier.py vX.Y.Z [--premiere]  prepares, sends nothing
     uv run python scripts/publier.py vX.Y.Z --envoyer     that preparation, as a pre-release
     uv run python scripts/publier.py vX.Y.Z --confirmer   the friends get it
 
+Numbering (--numeroter) gives the publication its version, the next one after the last
+published (scripts/release.py --publier): version files, the « Non publié » section of
+CHANGELOG.md becomes its own, commit and tag. That section is then rewritten for the users
+and committed, before preparing. Merges into main set no version.
 Preparing, in this order, each step stopping the next:
 1. the tag exists and this repository is clean; the tag is checked out in a worktree of the
    cache: what is published is exactly the tag;
@@ -188,7 +194,7 @@ def checked_out(tag: str) -> Path:
     if run(["git", "-C", ROOT, "status", "--porcelain"]).stdout.strip():
         fail("le dépôt a des changements non commités : commitez ou rangez-les d'abord")
     if not run(["git", "-C", ROOT, "tag", "--list", tag]).stdout.strip():
-        fail(f"l'étiquette {tag} n'existe pas (elle naît d'une fusion dans main)")
+        fail(f"l'étiquette {tag} n'existe pas (elle naît de publier.py --numeroter)")
     # The notes come from this checkout's CHANGELOG.md: it must hold the tag, so that its
     # section is the one written for it (and corrected since, if need be).
     merged = subprocess.run(["git", "-C", ROOT, "merge-base", "--is-ancestor", tag, "HEAD"])
@@ -235,10 +241,17 @@ def test_everything(work: Path) -> None:
         shown(["npm", "run", "-s", script], web)
 
 
-def build_and_test(work: Path) -> Path:
+def built_as(identifier: str, tag: str) -> None:
+    """The app built says it is exactly the tag (ADR 0064), not code around it."""
+    if identifier.strip() != tag:
+        fail(f"l'app construite se dit « {identifier.strip()} », pas {tag}")
+
+
+def build_and_test(work: Path, tag: str) -> Path:
     say("3. Construction signée, puis essai du paquet…")
     shown(["uv", "run", "--offline", "python", "scripts/construire.py"], work)
     app = work / "dist" / "Coulisses.app"
+    built_as((app / "Contents" / "Resources" / "identifiant-de-version").read_text("utf-8"), tag)
     shown(["scripts/essai-paquet.sh", "--publication", app], work)
     return app
 
@@ -428,7 +441,7 @@ def prepare(tag: str, first: bool) -> Path:
     work = checked_out(tag)
     say(f"   (en cas d'échec, l'étiquette reste dans {work} pour comprendre)")
     test_everything(work)
-    app = build_and_test(work)
+    app = build_and_test(work, tag)
 
     say("4. La même exigence désignée que la version publiée avant…")
     requirement = designated_requirement(app)
@@ -586,14 +599,36 @@ def confirm(tag: str) -> None:
     say(f"{tag} est publiée : les apps des amis la trouveront à leur prochaine recherche.")
 
 
+def number() -> None:
+    """The version of the next publication (scripts/release.py --publier), from main."""
+    done = subprocess.run(
+        [sys.executable, ROOT / "scripts" / "release.py", "--publier"], check=False
+    )
+    if done.returncode != 0:
+        raise SystemExit(done.returncode)
+    tag = run(["git", "-C", ROOT, "describe", "--tags", "--exact-match"]).stdout.strip()
+    say(
+        f"Ensuite : réécrire pour les utilisateurs la section {tag} de CHANGELOG.md, la "
+        f"commiter, puis : uv run python scripts/publier.py {tag}"
+    )
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Publie Coulisses.app (ADR 0040).")
-    parser.add_argument("etiquette", help="vX.Y.Z")
+    parser = argparse.ArgumentParser(description="Publie Coulisses.app (ADR 0040, 0064).")
+    parser.add_argument("etiquette", nargs="?", help="vX.Y.Z")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--envoyer", action="store_true", help="envoyer la pré-version préparée")
     action.add_argument("--confirmer", action="store_true", help="la publier pour les amis")
+    action.add_argument("--numeroter", action="store_true", help="numéroter la publication")
     parser.add_argument("--premiere", action="store_true", help="la toute première publication")
     args = parser.parse_args()
+    if args.numeroter:
+        if args.etiquette or args.premiere:
+            parser.error("--numeroter se lance seul : il donne l'étiquette")
+        number()
+        return
+    if not args.etiquette:
+        parser.error("l'étiquette vX.Y.Z est demandée (ou --numeroter)")
     if args.premiere and (args.envoyer or args.confirmer):
         parser.error("--premiere ne vaut que pour préparer")
     lock = one_at_a_time()

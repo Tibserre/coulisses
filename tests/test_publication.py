@@ -242,3 +242,40 @@ def test_premiere_only_prepares(action: str) -> None:
     )
     assert done.returncode == 2
     assert "--premiere ne vaut que pour préparer" in done.stderr
+
+
+@pytest.mark.parametrize("extra", [["v0.38.0"], ["--premiere"]])
+def test_numbering_runs_alone(extra: list[str]) -> None:
+    """--numeroter gives the tag (ADR 0064): it takes neither a tag nor --premiere."""
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "publier.py"), "--numeroter", *extra],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 2
+    assert "--numeroter se lance seul" in done.stderr
+
+
+def test_a_tag_is_needed_to_prepare() -> None:
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "publier.py")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 2
+    assert "l'étiquette vX.Y.Z est demandée" in done.stderr
+
+
+def test_only_an_app_built_from_the_very_tag_is_published(publier) -> None:
+    publier.built_as("v0.38.0\n", "v0.38.0")
+    for other in ("v0.37.1-3-gabc1234", "v0.38.0-modifie", "v0.38.0-1-gabc1234"):
+        with pytest.raises(SystemExit):
+            publier.built_as(other, "v0.38.0")
