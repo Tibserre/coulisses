@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import jobs, sessions
+from coulisses_app import bundle, jobs, sessions
 from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -46,6 +46,8 @@ def test_the_service_reports_where_its_data_lives(client: TestClient, data: Data
     info = client.get("/api/etat").json()
     assert info["data_dir"] == str(data.root)
     assert info["engine_version"].startswith("1.")
+    # Which code runs, from the repository: `git describe` (ADR 0064).
+    assert info["app_build"] == bundle.build_identifier() != ""
 
 
 def test_import_then_follow_then_read(client: TestClient, data: DataDir, recording: Path) -> None:
@@ -256,7 +258,7 @@ def test_the_settings_show_the_folders_in_the_finder(
     )
     monkeypatch.setattr(api, "SERVICE_LOG", tmp_path / "absent.log")
     client = local_client(
-        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, app_build="v0")
     )
     folders = client.get("/api/dossiers").json()
     assert folders["data"] == str(data.root) and folders["log"] is None
