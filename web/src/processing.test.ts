@@ -146,5 +146,6 @@ test("phases left out, or out of range, are read as one", () => {
       3600,
     ).voices;
   assert.equal(at(null, null), 0.5);
-  assert.equal(at(5, 3), 0.9);
+  // A step past the count is the last one.
+  assert.equal(at(5, 3), (2 + 0.5) / 3);
 });
