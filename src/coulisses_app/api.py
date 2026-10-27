@@ -140,9 +140,9 @@ class SessionDetail(BaseModel):
 
 class RerunRequest(BaseModel):
     etape: jobs.Rerun
-    """transcribe: the transcription (and the alignment); diarize: the voices."""
+    """transcribe: the transcription (and the alignment); diarize: the voices; all: both."""
     presents: int | None = Field(default=None, ge=1)
-    """For the voices: the minimum of voices to look for (P3)."""
+    """For the voices (diarize, all): the minimum of voices to look for (P3)."""
 
 
 class ResumeRequest(BaseModel):
@@ -607,9 +607,9 @@ def create_app(
 
     @app.post("/api/seances/{session_id}/relancer", status_code=202)
     def rerun(session_id: str, demande: RerunRequest) -> sessions.Session:
-        """Run the transcription or the voices again, from the version shown: a new version,
-        which replaces it once complete, with the corrections carried over."""
-        attendees = demande.presents if demande.etape == "diarize" else None
+        """Run the transcription, the voices or both again, from the version shown: a new
+        version, which replaces it once complete, with the corrections carried over."""
+        attendees = demande.presents if demande.etape in ("diarize", "all") else None
         versions.request_rerun(
             data, session_id, demande.etape, attendees=attendees, profile=profile
         )

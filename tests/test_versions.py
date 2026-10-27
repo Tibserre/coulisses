@@ -123,6 +123,55 @@ def test_the_voices_run_again_with_another_minimum(data: DataDir, recording: Pat
     assert session is not None and session.unnamed_attendees == 2
 
 
+def test_everything_runs_again_with_the_glossary_and_minimum_of_today(
+    data: DataDir, recording: Path
+) -> None:
+    session_id = processed(data, recording, attendees=2)
+    first = shown(data, session_id)
+    correct(data, session_id)
+    space = sessions.get_session(data, session_id)
+    assert space is not None
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO glossary_entry (space_id, term, variants, created_at)"
+                " VALUES (?, 'Kathy', '[]', ?)",
+                (space.space_id, now_iso()),
+            )
+    finally:
+        conn.close()
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
+    answer = client.post(
+        f"/api/seances/{session_id}/relancer", json={"etape": "all", "presents": 3}
+    )
+    assert answer.status_code == 202, answer.text
+    conn = connect(data)
+    try:
+        row = conn.execute("SELECT params FROM job ORDER BY id DESC LIMIT 1").fetchone()
+    finally:
+        conn.close()
+    params = jobs.ChainParams.model_validate_json(row["params"])
+    assert params.reuse == {}  # nothing kept
+    assert params.glossary == ["Kathy"]
+    assert Processor(data, FAKE_CHAIN).run_job(claim(data)).error is None
+
+    now = shown(data, session_id)
+    assert all(now[stage] != first[stage] for stage in ("transcribe", "align", "diarize"))
+    prov = read_provenance(data.run_dir(session_id, now["diarize"]))
+    assert prov is not None and prov.inputs["min_speakers"] == 3
+    listed = versions.list_versions(data, session_id).versions
+    assert [(x.origin, x.min_voices) for x in listed] == [("all", 3), ("first", 2)]
+    assert listed[0].carried is not None  # carried over as for the other reruns
+
+    # Without a minimum given, the shown version's.
+    client.post(f"/api/seances/{session_id}/relancer", json={"etape": "all"})
+    assert Processor(data, FAKE_CHAIN).run_job(claim(data)).error is None
+    assert versions.list_versions(data, session_id).versions[0].min_voices == 3
+
+
 def test_a_rerun_that_stops_halfway_leaves_the_version_shown(
     data: DataDir, recording: Path
 ) -> None:
