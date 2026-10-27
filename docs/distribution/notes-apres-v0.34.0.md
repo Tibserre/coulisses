@@ -1,11 +1,11 @@
-# Notes de version prêtes : de v0.34.0 (dernière publiée) à v0.37.0
+# Notes de version prêtes : de v0.34.0 (dernière publiée) à v0.35.0
 
 À recopier, juste après `publier.py --numeroter` (ADR 0064), dans la section de la version de `CHANGELOG.md`
 (titre « Nouveautés depuis la 0.34.0 », comme pour v0.33.1) : `scripts/publier.py` lit
 ces notes dans `CHANGELOG.md`, pas ici. Ce fichier disparaît une fois la version publiée.
 
 À ajuster avant de publier :
-- **Chapitres** : `main` (v0.37.0) n'a que la partie service ; l'écran qui les montre est
+- **Chapitres** : `main` n'a que la partie service ; l'écran qui les montre est
   sur la branche Interface (`feat/vue-resume-objectifs`). Sans sa fusion, retirer ce point.
 - Ajouter ce qu'apporteront les branches Interface et Rédaction si elles sont fusionnées.
 

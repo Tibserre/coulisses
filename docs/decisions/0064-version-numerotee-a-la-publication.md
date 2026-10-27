@@ -1,6 +1,6 @@
 # 0064 — La version de l'application se numérote à la publication, pas à chaque fusion
 
-Statut : Proposée (2026-10-27). L'utilisateur a décidé le principe (« la version se numérote à la publication »). Il reste à valider le détail ci-dessous et le sort des étiquettes v0.35.0 à v0.37.1. Remplace, pour l'application seulement, la règle « à chaque fusion » de l'ADR 0016 et l'étape 1 de la publication de l'ADR 0040. Le moteur ne change pas.
+Statut : Acceptée (2026-10-27, choix de l'utilisateur : la version se numérote à la publication ; les étiquettes v0.35.0 à v0.37.1 sont supprimées, option B). Remplace, pour l'application seulement, la règle « à chaque fusion » de l'ADR 0016 et l'étape 1 de la publication de l'ADR 0040. Le moteur ne change pas.
 
 ## Contexte
 - Depuis l'ADR 0016, chaque fusion dans `main` qui apporte un `feat`, un `fix` ou un `perf` pose une version et son étiquette (`scripts/release.py`, hook `post-merge`).
@@ -26,7 +26,7 @@ Statut : Proposée (2026-10-27). L'utilisateur a décidé le principe (« la ver
   - le service le donne à côté de la version (`/api/etat`). Il le lit dans l'app, à défaut par `git describe` dans le dépôt (`--dev`), à défaut il donne la version du paquet ;
   - les Réglages montrent la version, et l'identifiant s'il diffère (en mode développeur) ;
   - la provenance des générations (`prompting/`) garde l'identifiant (P7).
-- **Les étiquettes v0.35.0 à v0.37.1**, jamais poussées : leur sort revient à l'utilisateur (voir « Alternatives »).
+- **Les étiquettes v0.35.0 à v0.37.1**, jamais poussées, sont supprimées de ce Mac (2026-10-27). Leurs sections de `CHANGELOG.md` sont fondues dans « Non publié ». La prochaine publiée est v0.35.0 : aucun saut pour les amis. Jusque-là, `pyproject.toml` dit encore 0.37.1, et l'identifiant dit `v0.34.0-…`. Elles visaient 44b7aa2, 74a3914, b11df44 et 92a452a, pour les reposer s'il le fallait.
 
 ## Conséquences
 - Moins de bruit dans `main` (plus de `chore(version)` à chaque fusion). En contrepartie, un `chore(changelog)` à chaque fusion qui apporte du nouveau.
@@ -38,6 +38,4 @@ Statut : Proposée (2026-10-27). L'utilisateur a décidé le principe (« la ver
 ## Alternatives écartées
 - Garder une version à chaque fusion : c'est ce qui donne les sauts.
 - Mettre l'identifiant `git describe` dans `CFBundleVersion` : Sparkle ne sait pas comparer ce format.
-- Étiquettes v0.35.0 à v0.37.1 (décision de l'utilisateur, une seule à retenir) :
-  - **A. Les garder.** Rien n'est supprimé. La prochaine publiée est v0.38.0 : un dernier saut, depuis v0.34.0.
-  - **B. Les supprimer de ce Mac (recommandé).** Elles n'ont jamais quitté ce Mac. Leurs sections de `CHANGELOG.md` sont fondues dans « Non publié ». La prochaine publiée est v0.35.0 : aucun saut. Jusque-là, `pyproject.toml` dit encore 0.37.1, et l'identifiant dit `v0.34.0-…`.
+- Garder les étiquettes v0.35.0 à v0.37.1 : la prochaine publiée aurait été v0.38.0, un dernier saut depuis v0.34.0.
