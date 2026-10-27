@@ -25,7 +25,7 @@ import { useAppNotifications } from "../appBridge.ts";
 import { setDevMode, useDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
-import { PARTS, partOf, type Part } from "../settingsParts.ts";
+import { buildShown, PARTS, partOf, type Part } from "../settingsParts.ts";
 
 /** Lists that only grow (the deletion log, the backups): the latest first, the rest on
  *  demand. */
@@ -376,7 +376,10 @@ export function SettingsPage({
               />
               {dev && about && (
                 <Text type="supporting">
-                  Coulisses {about.app_version} · moteur {about.engine_version}{" "}
+                  Coulisses {about.app_version}
+                  {buildShown(about.app_version, about.app_build) !== null &&
+                    ` (code ${about.app_build})`}{" "}
+                  · moteur {about.engine_version}{" "}
                   · chaîne « {about.profile} »
                 </Text>
               )}

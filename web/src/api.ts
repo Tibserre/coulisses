@@ -529,7 +529,10 @@ export interface AppInfo {
   /** The service's process (the app in the Dock takes back one left running alone). */
   pid: number;
   engine_version: string;
+  /** The last published version. */
   app_version: string;
+  /** Which code runs: `v` + the version, or `git describe` between two (ADR 0064). */
+  app_build: string;
   profile: string;
   recovery_problems: string[];
   processing_error: string | null;
