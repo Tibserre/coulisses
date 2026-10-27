@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Text } from "@astryxdesign/core/Text";
 import { FileText, PenLine, Star, Users } from "lucide-react";
 import { api, type Preview, type SessionDetail } from "../api.ts";
@@ -77,10 +77,17 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
     };
   }, [id, done]);
 
+  // What the discs showed last, so that they never go back (the page is remounted for
+  // another session).
+  const shown = useRef<{ text: number; voices: number } | null>(null);
   const discs = processingDiscs(
     detail.stages,
     detail.source?.duration_s ?? null,
+    shown.current,
   );
+  useEffect(() => {
+    shown.current = { text: discs.text, voices: discs.voices };
+  });
   const queued = detail.session.job_state === "queued";
 
   const lines = outline?.lines ?? [];

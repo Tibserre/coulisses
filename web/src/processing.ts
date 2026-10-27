@@ -9,6 +9,11 @@ import type { StageView } from "./api.ts";
  *  share of the disc, not a measured time. */
 const TEXT_WEIGHTS: Record<string, number> = { transcribe: 3, align: 1 };
 
+/** A stage under way stops short of full: only its end fills the disc. The engine counts
+ *  each phase of a stage from zero (the diarisation has four) without saying which one it
+ *  is or how many there are, so a phase done is not the stage done. */
+const RUNNING_MAX = 0.9;
+
 function share(stage: StageView | undefined): number {
   if (!stage) return 0;
   if (stage.state === "succeeded") return 1;
@@ -18,7 +23,7 @@ function share(stage: StageView | undefined): number {
     p &&
     p.total > 0
   )
-    return Math.min(1, Math.max(0, p.done / p.total));
+    return Math.min(RUNNING_MAX, Math.max(0, p.done / p.total));
   return 0;
 }
 
@@ -35,18 +40,24 @@ export interface Discs {
   minutesLeft: number | null;
 }
 
+/** `before`: the shares shown until now, for this session. A disc never goes back: when
+ *  the engine starts a new phase from zero, it waits where it was. */
 export function processingDiscs(
   stages: StageView[],
   durationS: number | null,
+  before: Pick<Discs, "text" | "voices"> | null = null,
 ): Discs {
   const by = new Map(stages.map((s) => [s.stage, s]));
   const parts = Object.entries(TEXT_WEIGHTS).filter(([name]) => by.has(name));
   const weight = parts.reduce((sum, [, w]) => sum + w, 0);
-  const text = weight
-    ? parts.reduce((sum, [name, w]) => sum + w * share(by.get(name)), 0) /
-      weight
-    : 0;
-  const voices = share(by.get("diarize"));
+  const text = Math.max(
+    before?.text ?? 0,
+    weight
+      ? parts.reduce((sum, [name, w]) => sum + w * share(by.get(name)), 0) /
+          weight
+      : 0,
+  );
+  const voices = Math.max(before?.voices ?? 0, share(by.get("diarize")));
   const hours = (durationS ?? 0) / 3600;
   // The two run side by side: what is left is what the slower one has left.
   const left = 1 - Math.min(text, voices);
