@@ -292,6 +292,8 @@ export function RerunDialog({
 
   useEffect(() => {
     if (!isOpen) return;
+    // Each opening starts afresh, from « Tout ».
+    setStage("all");
     setError(null);
     setVoices(null);
     setFacts(null);
