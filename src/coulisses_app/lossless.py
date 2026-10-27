@@ -452,17 +452,24 @@ def _convert_listening(data: DataDir, session_id: str, done: list[Converted]) ->
 
 
 def available() -> str | None:
-    """Why no conversion can be made here (no ffmpeg able to write FLAC), or None."""
+    """Why no conversion can be made here, or None: ffmpeg must write FLAC, and read it and
+    the WAV back as 24-bit PCM to prove it (`decoded_pcm_sha256`). Without one of them, each
+    recording would end with a conversion error; the tracks stay in WAV, the log says why."""
     found = shutil.which("ffmpeg")
     if found is None:
         return "ffmpeg est introuvable"
-    for listing, name in (("-encoders", "l'encodeur"), ("-muxers", "le format")):
+    for listing, needed in (
+        ("-encoders", (("flac", "l'encodeur FLAC"), (WAV_CODEC, "l'encodeur PCM 24 bits"))),
+        ("-muxers", (("flac", "le format FLAC"), ("s24le", "le format PCM 24 bits"))),
+        ("-decoders", (("flac", "le décodeur FLAC"), (WAV_CODEC, "le décodeur PCM 24 bits"))),
+    ):
         listed = subprocess.run(
             [found, "-hide_banner", listing], capture_output=True, text=True, check=False
         )
         names = {line.split()[1] for line in listed.stdout.splitlines() if len(line.split()) > 1}
-        if "flac" not in names:
-            return f"le ffmpeg de cette app n'a pas {name} FLAC"
+        for key, name in needed:
+            if key not in names:
+                return f"le ffmpeg de cette app n'a pas {name}"
     return None
 
 
