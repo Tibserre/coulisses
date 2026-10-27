@@ -1,6 +1,6 @@
 # Résumés par objectif : définition produit
 
-Statut : **proposition, à valider par l'utilisateur** (2026-10-26 ; les résumés vont à l'espace, pas au projet : choix de l'utilisateur le même jour). Rédigée par la conversation Interface à partir des choix de l'utilisateur (maquettes Q1 à Q3, retenue : Q2 avec la demande libre). Une fois validée, elle entre dans la spec (§7.9) et fait l'objet d'un ADR.
+Statut : **validée par l'utilisateur** (2026-10-26 et 27 ; les résumés vont à l'espace, pas au projet : choix de l'utilisateur le même jour). Rédigée par la conversation Interface à partir des choix de l'utilisateur (maquettes Q1 à Q3, retenue : Q2 avec la demande libre). Une fois validée, elle entre dans la spec (§7.9) et fait l'objet d'un ADR.
 
 ## Pourquoi
 
@@ -81,7 +81,7 @@ Créer ou modifier un résumé, c'est répondre à des questions, avec le prompt
 - la durée mesurée d'un résumé avec un modèle ;
 - le contrat d'API que l'interface lira, l'ADR, et la migration du schéma (à faire valider par l'utilisateur).
 
-## Questions ouvertes
+## Décidé (2026-10-27, choix de l'utilisateur)
 
-1. **L'essai d'un résumé** : son texte est-il gardé comme une version de la séance essayée, ou mis de côté (P5 : rien de rédigé n'est jamais purgé) ?
-2. **Un résumé modifié depuis un espace** : il change pour tous les espaces qui l'utilisent, ou l'espace en garde une copie à lui ?
+1. **L'essai d'un résumé** ne sert qu'à le régler : son texte se lit dans l'éditeur et n'apparaît pas dans la séance essayée. Il reste sur le disque, avec sa provenance, comme tout texte rédigé (P5).
+2. **Un résumé utilisé par plusieurs espaces** est le même partout : le modifier depuis un espace le change pour tous. L'éditeur le dit (« Utilisé aussi dans Équipe produit »). Pour une version propre à un espace, on le duplique.
