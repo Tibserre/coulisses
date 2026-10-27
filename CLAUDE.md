@@ -13,7 +13,7 @@ App macOS 100 % locale de débrief de séances (répétitions d'impro d'abord, r
 
 ## Le moteur
 - Dépôt `~/Coulisses/Moteur`. Son contrat : `engine/README.md` (entrées, sorties, organisation des exécutions, garanties) et `engine/schemas/*.schema.json`.
-- L'application en dépend **par étiquette** (`vX.Y.Z`), jamais par chemin vers le code d'un autre dépôt. Dans le `pyproject.toml` de l'application : `coulisses = { git = "https://github.com/Tibserre/coulisses-moteur", subdirectory = "engine", tag = "v1.12.1" }` (dans `[tool.uv.sources]`, avec `coulisses[mlx-audio,pyannote,wav2vec2]` en dépendance). Monter de version = changer cette étiquette (une fois poussée sur GitHub par la conversation Moteur), `uv lock` (le seul pas qui demande le réseau, et l'accès `gh` puisque le dépôt du moteur est privé), relire le `CHANGELOG.md` du moteur, puis passer les tests de l'application. Une version **majeure** du moteur change le contrat : l'application doit s'adapter.
+- L'application en dépend **par étiquette** (`vX.Y.Z`), jamais par chemin vers le code d'un autre dépôt. Dans le `pyproject.toml` de l'application : `coulisses = { git = "https://github.com/Tibserre/coulisses-moteur", subdirectory = "engine", tag = "v1.12.1" }` (dans `[tool.uv.sources]`, avec `coulisses[mlx-audio,pyannote,wav2vec2]` en dépendance). Monter de version = changer cette étiquette (une fois poussée sur GitHub par le rôle Moteur), `uv lock` (le seul pas qui demande le réseau, et l'accès `gh` puisque le dépôt du moteur est privé), relire le `CHANGELOG.md` du moteur, puis passer les tests de l'application. Une version **majeure** du moteur change le contrat : l'application doit s'adapter.
 - Le paquet Python de l'application ne s'appelle pas `coulisses` (nom pris par le moteur) : `coulisses_app`.
 - Le moteur ne fait que transcription, alignement, diarisation, attribution (un seul profil, `chaine-retenue`). Phases, titre et résumés sont faits par l'application (`prompting/`).
 - **Seul `coulisses.api` est public** (et `coulisses.testing` pour les tests), depuis la v1.2.0 (ADR 0019 du moteur). On appelle le moteur par `run_chain` ou `coulisses-traiter`, et on lit ses sorties selon ses schémas (`read_output`, `read_provenance`). `run_chain` laisse l'application choisir le dossier de chaque exécution et fournir la fonction `run_stage` qui lance chaque étape (celle du moteur : `execute_stage(séance)`, que l'application enveloppe pour réutiliser une exécution réussie) : c'est ce qui permet de reprendre ou de relancer une seule étape. L'avancement se lit dans `chain.json` et `progress.json` (`chain-plan.schema.json`, `progress.schema.json`, règle de suivi dans `engine/README.md`). Arrêter une étape : `cancel`, `stop_all` (à la fermeture), `close_interrupted` (après un plantage de l'application). On n'importe jamais rien d'autre que `coulisses.api` et on n'écrit jamais dans ses exécutions.
@@ -49,21 +49,10 @@ Des hooks bloquent une partie de ces violations (`.claude/hooks/`). Un blocage n
 - **Versions : jamais à la main.** À chaque fusion dans `main`, `scripts/release.py` (hook `post-merge`) calcule la version suivante, met à jour les fichiers listés dans `release.toml` et `CHANGELOG.md`, commite `chore(version): vX.Y.Z` et pose l'étiquette. Dès que l'application a un `pyproject.toml` ou un `package.json`, ajoute-les à `release.toml` (`fichiers`), et le dossier de son `uv.lock` à `verrous`.
 
 ## Organisation des conversations
-Plusieurs conversations travaillent en parallèle, **une par rôle**. Chacune reste dans son territoire. Si un sujet déborde, elle écrit une note de relais (ce qui est fait, où, la suite, ce qui attend l'utilisateur) et le travail continue dans la conversation du rôle.
-
-| Rôle | Territoire |
-|---|---|
-| Pilotage | `docs/produit/plan-v1.md`, `questions-ouvertes.md`, ordre des lots, jalons |
-| Moteur | le dépôt `~/Coulisses/Moteur`, seul ; publie des étiquettes, poussées sur GitHub, jamais de code ici |
-| Interface | `web/`, direction artistique |
-| Distribution | construction, publication, mises à jour, lanceur, sécurité, GitHub |
-| Rédaction et modèles | `prompting/` (prompts, `reglages.toml`), choix et mesure des modèles (`scripts/mesurer-modeles.py`) |
-| Ponctuelle | un sujet borné (exploration, enquête) ; close une fois le sujet traité |
-
-- **Chaque conversation de l'app travaille dans son propre worktree** (`.claude/worktrees/…`) : jamais de changement de branche dans `~/Coulisses/App`, que d'autres utilisent.
-- **Le fil commun est le dépôt** (plan, ADR, CHANGELOG, branches), pas la mémoire d'une conversation.
-- **Une fusion dans `main` est annoncée** aux conversations dont le territoire est touché (message entre conversations : ce qui a changé, s'il faut se remettre à jour sur `main`). Un message n'arrive que quand l'autre conversation est active ; il ne vaut jamais accord de l'utilisateur.
-- Ce qui manque au moteur lui est demandé par un prompt structuré, à transmettre à la conversation Moteur.
+Une session par rôle (Pilotage, Moteur, Service, Interface, Rédaction et modèles, Distribution), chacune dans son territoire : voir `~/Coulisses/Pilotage/organisation.md`, chargé par `~/Coulisses/CLAUDE.md`. L'état de chaque rôle vit dans `~/Coulisses/Pilotage/` (carnets, tableau de bord, relais ouverts), hors de ce dépôt.
+- En début de session : `/reprendre <rôle>`. À la fin d'un bloc de travail, ou quand un sujet sort du territoire : `/relais`.
+- **Chaque session de l'app travaille dans son propre worktree** (`.claude/worktrees/…`) : jamais de changement de branche dans `~/Coulisses/App`, que d'autres utilisent.
+- Un carnet dit l'état présent et se réécrit ; l'historique reste dans git, `CHANGELOG.md`, les ADR et le plan.
 
 ## Langues
 Code, identifiants, commentaires et logs techniques en anglais. Docs, commits, interface, messages d'erreur montrés à l'utilisateur et prompts en français (prompts rédigés en français natif, jamais traduits).
