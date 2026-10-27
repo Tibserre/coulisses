@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import jobs
+from coulisses_app import bundle, jobs
 from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.prompting import assembly
-from coulisses_app.prompting.generate import generate
+from coulisses_app.prompting.generate import Provenance, generate
 from coulisses_app.storage.db import connect
 
 from .conftest import FAKE_CHAIN, FakeModel, local_client
@@ -489,6 +489,20 @@ def test_think_and_the_ollama_version_are_in_the_provenance(
     run_all(data, fake_model)
     prov = generate(data, session_id, "resume-impro", "modele-essai", fake_model)
     assert prov.options["think"] is False and prov.ollama_version == "0.0-essai"
+
+
+def test_the_code_that_wrote_it_is_in_the_provenance(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    prov = generate(data, session_id, "resume-impro", "modele-essai", fake_model)
+    assert prov.app_build == bundle.build_identifier()
+    folder = data.run_dir(session_id, prov.run_id)
+    saved = json.loads((folder / "provenance.json").read_text(encoding="utf-8"))
+    assert saved["app_build"] == prov.app_build
+    del saved["app_build"]  # written before ADR 0064: still read
+    assert Provenance.model_validate(saved).app_build is None
 
 
 def test_a_failed_title_can_be_asked_again_and_the_failure_then_goes(
