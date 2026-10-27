@@ -101,3 +101,50 @@ test("the text disc goes on from the transcription to the alignment", () => {
   );
   assert.equal(d.text, (3 + 0.9) / 4);
 });
+
+const phase = (step: number, steps: number, done: number, total: number) =>
+  ({
+    stage: "diarize",
+    label: "diarize",
+    state: "running",
+    progress: { phase: "", done, total, unit: "windows", step, steps },
+  }) as StageView;
+
+test("the voices disc goes through the phases the engine counts, each a part", () => {
+  const at = (s: StageView) => processingDiscs([s], 3600).voices;
+  assert.equal(at(phase(1, 3, 0, 95)), 0);
+  assert.equal(at(phase(1, 3, 95, 95)), 1 / 3);
+  assert.equal(at(phase(2, 3, 19, 95)), (1 + 0.2) / 3);
+  // The last phase done still stops short of full: only the end of the stage fills it.
+  assert.equal(at(phase(3, 3, 1, 1)), 0.9);
+});
+
+test("a phase more, and the disc waits rather than go back", () => {
+  const before = processingDiscs([phase(3, 3, 1, 1)], 3600);
+  const after = processingDiscs([phase(4, 4, 0, 1)], 3600, before);
+  assert.equal(after.voices, 0.9);
+});
+
+test("phases left out, or out of range, are read as one", () => {
+  const at = (step: number | null, steps: number | null) =>
+    processingDiscs(
+      [
+        {
+          stage: "diarize",
+          label: "diarize",
+          state: "running",
+          progress: {
+            phase: "",
+            done: 1,
+            total: 2,
+            unit: "windows",
+            step,
+            steps,
+          },
+        } as StageView,
+      ],
+      3600,
+    ).voices;
+  assert.equal(at(null, null), 0.5);
+  assert.equal(at(5, 3), 0.9);
+});

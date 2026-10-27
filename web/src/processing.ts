@@ -10,8 +10,9 @@ import type { StageView } from "./api.ts";
 const TEXT_WEIGHTS: Record<string, number> = { transcribe: 3, align: 1 };
 
 /** A stage under way stops short of full: only its end fills the disc. The engine counts
- *  each phase of a stage from zero (the diarisation has four) without saying which one it
- *  is or how many there are, so a phase done is not the stage done. */
+ *  each phase of a stage from zero (the diarisation has three, four with its pyannote
+ *  net); since v1.13.0 it says which one out of how many, each an equal part (no phase
+ *  is measured longer than another). Before, a phase done is not the stage done. */
 const RUNNING_MAX = 0.9;
 
 function share(stage: StageView | undefined): number {
@@ -22,8 +23,12 @@ function share(stage: StageView | undefined): number {
     (stage.state === "running" || stage.state === "stalled") &&
     p &&
     p.total > 0
-  )
-    return Math.min(RUNNING_MAX, Math.max(0, p.done / p.total));
+  ) {
+    const inPhase = Math.min(1, Math.max(0, p.done / p.total));
+    const steps = Math.max(1, p.steps ?? 1);
+    const step = Math.min(steps, Math.max(1, p.step ?? 1));
+    return Math.min(RUNNING_MAX, (step - 1 + inPhase) / steps);
+  }
   return 0;
 }
 

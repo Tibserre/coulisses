@@ -439,6 +439,10 @@ export interface StageView {
     done: number;
     total: number;
     unit: "s" | "windows" | "steps";
+    /** Which phase of the stage, from 1, out of `steps` (engine v1.13.0 on; absent
+     *  before). `steps` may grow while the stage runs, never shrink. */
+    step?: number | null;
+    steps?: number | null;
   } | null;
   started_at: string | null;
   finished_at: string | null;
