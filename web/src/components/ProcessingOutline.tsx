@@ -4,7 +4,7 @@ import { FileText, PenLine, Star, Users } from "lucide-react";
 import { api, type Preview, type Rerun, type SessionDetail } from "../api.ts";
 import { formatClock } from "../format.ts";
 import { outlineRows } from "../outline.ts";
-import { processingDiscs, rerunShare } from "../processing.ts";
+import { processingDiscs } from "../processing.ts";
 import { RERUN_DOING } from "../versions.ts";
 import { KIND_LABEL } from "../transcript.ts";
 
@@ -48,40 +48,18 @@ function Disc({
   );
 }
 
-/** The ring of a disc, small, alone: for a rerun above the transcript. */
-function SmallRing({ share }: { share: number }) {
-  const r = 9;
-  const length = 2 * Math.PI * r;
-  return (
-    <svg
-      className="cl-rerunning__ring"
-      width="22"
-      height="22"
-      viewBox="0 0 22 22"
-      aria-hidden
-    >
-      <circle cx="11" cy="11" r={r} className="cl-disc__ground" />
-      <circle
-        cx="11"
-        cy="11"
-        r={r}
-        className="cl-disc__ring"
-        strokeDasharray={length}
-        strokeDashoffset={length * (1 - share)}
-      />
-    </svg>
-  );
-}
-
-/** A rerun under way, above the transcript (the version shown stays): what is redone, its
- *  ring as the processing screen fills it (never going back), about how long is left. */
-export function RerunRunning({
+/** The two discs and the sentence under them, read from the engine's stages: for the
+ *  first processing, and for a rerun above the text shown (ADR 0066). A disc never goes
+ *  back. In a rerun, the part kept is said so, full. */
+function ProcessingDiscs({
   detail,
-  rerun,
+  rerun = null,
 }: {
   detail: SessionDetail;
-  rerun: Rerun;
+  rerun?: Rerun | null;
 }) {
+  // What the discs showed last, so that they never go back (the page is remounted for
+  // another session).
   const shown = useRef<{ text: number; voices: number } | null>(null);
   const discs = processingDiscs(
     detail.stages,
@@ -92,25 +70,56 @@ export function RerunRunning({
     shown.current = { text: discs.text, voices: discs.voices };
   });
   const queued = detail.session.job_state === "queued";
-  const share = rerunShare(discs, rerun);
+  const left =
+    discs.minutesLeft !== null ? `environ ${discs.minutesLeft} min · ` : "";
   return (
-    <div className="cl-rerunning" role="status">
-      <SmallRing share={share} />
-      <div>
-        <Text weight="medium">
-          {RERUN_DOING[rerun]}
-          {queued
-            ? " · en file d'attente"
-            : discs.minutesLeft !== null
-              ? ` · environ ${discs.minutesLeft} min`
-              : ""}
-        </Text>
-        <Text as="p" type="supporting">
-          La version affichée reste en place ; à la fin, vos corrections sont
-          reportées sur la nouvelle.
-        </Text>
+    <div className="cl-outline__discs" role="status">
+      <div className="cl-outline__pair">
+        <Disc
+          share={discs.text}
+          label={rerun === "diarize" ? "Le texte · gardé" : "Le texte"}
+          icon={<FileText size={30} strokeWidth={1.5} aria-hidden />}
+        />
+        <Disc
+          share={discs.voices}
+          label={
+            rerun === "transcribe"
+              ? "Les voix · gardées"
+              : discs.voices >= 1 && !discs.joining
+                ? "Les voix · prêtes"
+                : "Les voix"
+          }
+          icon={<Users size={30} strokeWidth={1.5} aria-hidden />}
+        />
       </div>
+      <Text type="supporting">
+        {queued
+          ? "En file : un autre traitement passe d'abord."
+          : discs.stalled
+            ? `Une étape ne donne plus de nouvelles depuis un moment : elle s'est peut-être arrêtée. Le détail des étapes est ${rerun ? "dans « ⋯ › Versions… »" : "ci-dessous"}.`
+            : discs.joining
+              ? "Qui a dit quoi · quelques secondes"
+              : rerun
+                ? `${left}la version affichée reste en place, vos corrections seront reportées`
+                : `${left}vous pouvez fermer Coulisses`}
+      </Text>
     </div>
+  );
+}
+
+/** A rerun under way (ADR 0066): the discs of the processing, above the version shown,
+ *  which stays until the new one is complete. */
+export function RerunRunning({
+  detail,
+  rerun,
+}: {
+  detail: SessionDetail;
+  rerun: Rerun;
+}) {
+  return (
+    <section className="cl-rerunning" aria-label={RERUN_DOING[rerun]}>
+      <ProcessingDiscs detail={detail} rerun={rerun} />
+    </section>
   );
 }
 
@@ -144,19 +153,6 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
     };
   }, [id, done]);
 
-  // What the discs showed last, so that they never go back (the page is remounted for
-  // another session).
-  const shown = useRef<{ text: number; voices: number } | null>(null);
-  const discs = processingDiscs(
-    detail.stages,
-    detail.source?.duration_s ?? null,
-    shown.current,
-  );
-  useEffect(() => {
-    shown.current = { text: discs.text, voices: discs.voices };
-  });
-  const queued = detail.session.job_state === "queued";
-
   const lines = outline?.lines ?? [];
   const marks = [
     ...(outline?.markers ?? []).map((m) => ({
@@ -187,33 +183,7 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
       className="cl-outline"
       aria-label="La séance en cours de traitement"
     >
-      <div className="cl-outline__discs" role="status">
-        <div className="cl-outline__pair">
-          <Disc
-            share={discs.text}
-            label="Le texte"
-            icon={<FileText size={30} strokeWidth={1.5} aria-hidden />}
-          />
-          <Disc
-            share={discs.voices}
-            label={
-              discs.voices >= 1 && !discs.joining
-                ? "Les voix · prêtes"
-                : "Les voix"
-            }
-            icon={<Users size={30} strokeWidth={1.5} aria-hidden />}
-          />
-        </div>
-        <Text type="supporting">
-          {queued
-            ? "En file : un autre traitement passe d'abord."
-            : discs.stalled
-              ? "Une étape ne donne plus de nouvelles depuis un moment : elle s'est peut-être arrêtée. Le détail des étapes est ci-dessous."
-              : discs.joining
-                ? "Qui a dit quoi · quelques secondes"
-                : `${discs.minutesLeft !== null ? `environ ${discs.minutesLeft} min · ` : ""}vous pouvez fermer Coulisses`}
-        </Text>
-      </div>
+      <ProcessingDiscs detail={detail} />
       {error && (
         <Text type="supporting">L'aperçu n'a pas pu être lu : {error}</Text>
       )}

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { StageView } from "./api.ts";
-import { processingDiscs, rerunShare } from "./processing.ts";
+import { processingDiscs } from "./processing.ts";
 
 const stage = (
   name: string,
@@ -150,11 +150,14 @@ test("phases left out, or out of range, are read as one", () => {
   assert.equal(at(5, 3), (2 + 0.5) / 3);
 });
 
-test("a rerun's ring follows the stages it redoes", () => {
-  const discs = { text: 0.5, voices: 0.25 };
-  assert.equal(rerunShare(discs, "transcribe"), 0.5);
-  assert.equal(rerunShare(discs, "diarize"), 0.25);
-  assert.equal(rerunShare(discs, "all"), 0.375);
-  // Its stages done, « who said what » still runs: not full yet.
-  assert.equal(rerunShare({ text: 1, voices: 1 }, "transcribe"), 0.9);
+test("a rerun waiting: what is to redo is empty, what is kept is full", () => {
+  const redo = (name: string): StageView =>
+    ({ ...stage(name, "succeeded"), stale: true }) as StageView;
+  const d = processingDiscs(
+    [redo("transcribe"), redo("align"), stage("diarize", "succeeded")],
+    3600,
+  );
+  assert.equal(d.text, 0);
+  assert.equal(d.voices, 1);
+  assert.equal(d.joining, false);
 });
