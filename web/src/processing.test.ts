@@ -155,4 +155,6 @@ test("a rerun's ring follows the stages it redoes", () => {
   assert.equal(rerunShare(discs, "transcribe"), 0.5);
   assert.equal(rerunShare(discs, "diarize"), 0.25);
   assert.equal(rerunShare(discs, "all"), 0.375);
+  // Its stages done, « who said what » still runs: not full yet.
+  assert.equal(rerunShare({ text: 1, voices: 1 }, "transcribe"), 0.9);
 });

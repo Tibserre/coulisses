@@ -45,14 +45,19 @@ export interface Discs {
   minutesLeft: number | null;
 }
 
-/** How far a rerun is, from the discs of the stages it redoes. */
+/** How far a rerun is, from the discs of the stages it redoes. Shown while it runs, it
+ *  stops short of full: « who said what » still follows its stages. */
 export function rerunShare(
   discs: Pick<Discs, "text" | "voices">,
   rerun: Rerun,
 ): number {
-  if (rerun === "transcribe") return discs.text;
-  if (rerun === "diarize") return discs.voices;
-  return (discs.text + discs.voices) / 2;
+  const share =
+    rerun === "transcribe"
+      ? discs.text
+      : rerun === "diarize"
+        ? discs.voices
+        : (discs.text + discs.voices) / 2;
+  return Math.min(RUNNING_MAX, share);
 }
 
 /** `before`: the shares shown until now, for this session. A disc never goes back: when
