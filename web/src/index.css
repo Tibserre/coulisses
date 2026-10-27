@@ -4916,12 +4916,13 @@ button.cl-tree__more:hover {
   color: var(--color-text-primary);
 }
 
-.cl-disc__face svg {
+/* The ring alone fills the face; the icon stays centred above it. */
+.cl-disc__track {
   position: absolute;
   inset: 0;
 }
 
-.cl-disc__face > :not(svg) {
+.cl-disc__face > :not(.cl-disc__track) {
   position: relative;
 }
 

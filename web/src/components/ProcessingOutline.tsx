@@ -23,7 +23,13 @@ function Disc({
   return (
     <div className="cl-disc">
       <span className="cl-disc__face">
-        <svg width="72" height="72" viewBox="0 0 72 72" aria-hidden>
+        <svg
+          className="cl-disc__track"
+          width="72"
+          height="72"
+          viewBox="0 0 72 72"
+          aria-hidden
+        >
           <circle cx="36" cy="36" r={r} className="cl-disc__ground" />
           <circle
             cx="36"
