@@ -482,7 +482,9 @@ export interface SessionDetail {
   mix: MixFacts | null;
 }
 
-export type Rerun = "transcribe" | "diarize";
+/** transcribe: the text (transcription, alignment); diarize: the voices; all: both, from
+ *  the audio. */
+export type Rerun = "transcribe" | "diarize" | "all";
 
 export interface Version {
   run_id: string;

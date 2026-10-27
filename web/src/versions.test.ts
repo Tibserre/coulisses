@@ -38,3 +38,15 @@ test("a transcription rerun says what it brings, or that nothing changed", () =>
   );
   assert.match(transcribeGain({ glossary_added: [], engine_updated: false }), /^Rien n'a changé/);
 });
+
+test("all of it takes as long as the longer of the text and the voices", () => {
+  assert.deepEqual(
+    rerunMinutes({ transcribe_s: 300, diarize_s: 540 }, "all", 3600),
+    { minutes: 9, measured: true },
+  );
+  assert.deepEqual(rerunMinutes({ transcribe_s: 300, diarize_s: null }, "all", 3600), {
+    minutes: 10,
+    measured: false,
+  });
+  assert.equal(versionOrigin({ origin: "all", min_voices: 3 }), "tout refait");
+});

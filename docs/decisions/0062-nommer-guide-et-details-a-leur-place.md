@@ -1,6 +1,6 @@
 # 0062 — Nommer les voix, guidé ; les détails de la séance à leur place
 
-Statut : Acceptée (2026-10-23, choix de l'utilisateur sur maquettes : « la N1 est intéressante… pouvoir faire suivant ou précédent sur des répliques », puis « un truc par au-dessus, et fin veut pas dire illisible, utilise des icônes », « oui, construis »). Remplace, dans l'ADR 0060, le panneau des détails de la séance.
+Statut : Acceptée (2026-10-23, choix de l'utilisateur sur maquettes : « la N1 est intéressante… pouvoir faire suivant ou précédent sur des répliques », puis « un truc par au-dessus, et fin veut pas dire illisible, utilise des icônes », « oui, construis »). Remplace, dans l'ADR 0060, le panneau des détails de la séance. La relance : précisée par 0066 (« Refaire le traitement… » à part, « Versions… »).
 
 ## Contexte
 Le panneau à droite (0060) réunissait les voix à nommer, les participants, les présents, la note, les corrections et les versions. L'utilisateur : « le système pour nommer ne devrait pas ouvrir un tel panneau, et tous les détails ne s'affichent pas forcément au bon endroit… renommer et les détails de la séance, ce sont deux actions bien différentes ». Nommer une voix ne doit pas reposer sur une seule réplique tirée au hasard : il faut pouvoir en entendre plusieurs.

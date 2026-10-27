@@ -2966,15 +2966,22 @@ a.cl-iconbtn {
 
 .cl-rerunning {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-element);
   background: var(--color-background-muted);
 }
 
-.cl-rerunning > :first-child {
-  margin-top: 0.35em;
+/* The ring of the processing screen, small: it fills as the engine says, never turns. */
+.cl-rerunning__ring {
+  flex: none;
+}
+
+.cl-rerunning__ring .cl-disc__ground {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 2.5;
 }
 
 .cl-rerunning > div {
@@ -2990,9 +2997,60 @@ a.cl-iconbtn {
   padding: var(--spacing-2) var(--spacing-5) var(--spacing-5);
 }
 
+.cl-rerun__choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-2);
+}
+
+/* Three tiles, the one chosen in the accent: as the discs of the processing screen. */
+.cl-rerun__choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-inner);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.cl-rerun__choice:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-rerun__choice:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.cl-rerun__choice[aria-checked="true"] {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  color: var(--color-accent);
+}
+
+.cl-rerun__icons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-1);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
 .cl-rerun__voices {
   width: 300px;
-  padding-inline-start: var(--spacing-7);
 }
 
 .cl-rerun__actions {

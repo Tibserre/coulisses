@@ -50,7 +50,10 @@ import {
   Hourglass,
   UserRoundSearch,
 } from "lucide-react";
-import { ProcessingOutline } from "../components/ProcessingOutline.tsx";
+import {
+  ProcessingOutline,
+  RerunRunning,
+} from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
 import {
   GiveToPanel,
@@ -59,7 +62,10 @@ import {
   type Editing,
 } from "../components/TranscriptView.tsx";
 import { SummaryView } from "../components/SummaryView.tsx";
-import { VersionsSection } from "../components/VersionsSection.tsx";
+import {
+  RerunDialog,
+  VersionsSection,
+} from "../components/VersionsSection.tsx";
 import { SessionMenu } from "../components/SessionMenu.tsx";
 import { audioLine } from "../retention.ts";
 import { libraryChanged } from "../library.ts";
@@ -149,6 +155,7 @@ export function SessionPage({
   const [attendeesOpen, setAttendeesOpen] = useState(false);
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [rerunOpen, setRerunOpen] = useState(false);
   const openVersions = (part?: string) => {
     setVersionsOpen(true);
     if (part)
@@ -781,6 +788,7 @@ export function SessionPage({
               {session && (
                 <SessionMenu
                   onVersions={() => openVersions()}
+                  onRerun={() => setRerunOpen(true)}
                   session={session}
                   onChanged={sessionChanged}
                   onError={setMenuError}
@@ -1187,13 +1195,23 @@ export function SessionPage({
                     {notice}
                   </div>
                 )}
+                <RerunDialog
+                  isOpen={rerunOpen}
+                  sessionId={id}
+                  duration={session.duration_s}
+                  onClose={() => setRerunOpen(false)}
+                  onAsked={async () => {
+                    setRerunOpen(false);
+                    await refresh();
+                  }}
+                />
                 <Dialog
                   isOpen={versionsOpen}
                   onOpenChange={(open) => !open && setVersionsOpen(false)}
                   width={560}
                 >
                   <DialogHeader
-                    title="Versions et traitement"
+                    title="Versions"
                     onOpenChange={() => setVersionsOpen(false)}
                   />
                   <div className="cl-versions-dialog">
@@ -1426,31 +1444,8 @@ function RerunNotices({
     rerun &&
     (session.job_state === "queued" || session.job_state === "running")
   ) {
-    const running = detail.stages.find((s) => s.state === "running");
-    const progress =
-      running?.progress && running.progress.total > 0
-        ? ` (${Math.round((100 * running.progress.done) / running.progress.total)} %)`
-        : "";
     // A rerun going as it should: said quietly, not as an alert.
-    notices.push(
-      <div key="running" className="cl-rerunning" role="status">
-        <Spinner size="sm" shade="subtle" aria-label="Relance en cours" />
-        <div>
-          <Text weight="medium">
-            Relance de {RERUN_NAME[rerun]} en cours
-            {session.job_state === "queued"
-              ? " : en file d'attente"
-              : running
-                ? ` : « ${running.label} »${progress}`
-                : ""}
-          </Text>
-          <Text as="p" type="supporting">
-            La version affichée reste en place ; à la fin, vos corrections sont
-            reportées sur la nouvelle.
-          </Text>
-        </div>
-      </div>,
-    );
+    notices.push(<RerunRunning key="running" detail={detail} rerun={rerun} />);
   }
   // The audio deleted since: the rerun cannot be resumed, nothing is offered (spec §7.10).
   if (

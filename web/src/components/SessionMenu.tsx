@@ -16,9 +16,12 @@ export function SessionMenu({
   onIncomplete,
   onDone,
   onVersions,
+  onRerun,
 }: {
   session: Session;
-  /** Opens « Versions et traitement » (ADR 0062). */
+  /** Opens « Refaire le traitement ». */
+  onRerun?: () => void;
+  /** Opens « Versions » (ADR 0062, 0066). */
   onVersions?: () => void;
   onChanged: (session: Session) => void;
   onError: (message: string) => void;
@@ -98,9 +101,10 @@ export function SessionMenu({
             label: "Exporter vers le dossier",
             onClick: () => void exportNow(false),
           },
-          ...(onVersions
-            ? [{ label: "Versions et traitement…", onClick: onVersions }]
+          ...(onRerun && !removed
+            ? [{ label: "Refaire le traitement…", onClick: onRerun }]
             : []),
+          ...(onVersions ? [{ label: "Versions…", onClick: onVersions }] : []),
           { type: "divider" as const },
           {
             label: "Supprimer la séance…",

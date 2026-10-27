@@ -6,6 +6,7 @@ import { plural } from "./format.ts";
 export function versionOrigin(
   v: Pick<Version, "origin" | "min_voices">,
 ): string {
+  if (v.origin === "all") return "tout refait";
   if (v.origin === "transcribe") return "transcription refaite";
   if (v.origin === "diarize")
     return v.min_voices ? `voix séparées à nouveau (au moins ${v.min_voices})` : "voix séparées à nouveau";
@@ -34,8 +35,15 @@ export function rerunMinutes(
   stage: Rerun,
   audioSeconds: number | null,
 ): { minutes: number; measured: boolean } | null {
+  // All of it: the text and the voices are made side by side, the longer one sets the time.
   const measured =
-    stage === "transcribe" ? facts.transcribe_s : facts.diarize_s;
+    stage === "all"
+      ? facts.transcribe_s != null && facts.diarize_s != null
+        ? Math.max(facts.transcribe_s, facts.diarize_s)
+        : null
+      : stage === "transcribe"
+        ? facts.transcribe_s
+        : facts.diarize_s;
   if (measured != null)
     return { minutes: Math.max(1, Math.round(measured / 60)), measured: true };
   if (audioSeconds == null) return null;
@@ -69,4 +77,12 @@ export function transcribeGain(
 export const RERUN_NAME: Record<Rerun, string> = {
   transcribe: "la transcription",
   diarize: "la séparation des voix",
+  all: "tout le traitement",
+};
+
+/** While it runs, in a few words (above the transcript). */
+export const RERUN_DOING: Record<Rerun, string> = {
+  transcribe: "Le texte est refait",
+  diarize: "Les voix sont refaites",
+  all: "Le texte et les voix sont refaits",
 };

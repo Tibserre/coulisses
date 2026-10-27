@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Text } from "@astryxdesign/core/Text";
 import { FileText, PenLine, Star, Users } from "lucide-react";
-import { api, type Preview, type SessionDetail } from "../api.ts";
+import { api, type Preview, type Rerun, type SessionDetail } from "../api.ts";
 import { formatClock } from "../format.ts";
 import { outlineRows } from "../outline.ts";
-import { processingDiscs } from "../processing.ts";
+import { processingDiscs, rerunShare } from "../processing.ts";
+import { RERUN_DOING } from "../versions.ts";
 import { KIND_LABEL } from "../transcript.ts";
 
 /** A big disc whose ring fills as the engine says (400 ms to each new share): the disc
@@ -43,6 +44,72 @@ function Disc({
         {icon}
       </span>
       <Text type="supporting">{label}</Text>
+    </div>
+  );
+}
+
+/** The ring of a disc, small, alone: for a rerun above the transcript. */
+function SmallRing({ share }: { share: number }) {
+  const r = 9;
+  const length = 2 * Math.PI * r;
+  return (
+    <svg
+      className="cl-rerunning__ring"
+      width="22"
+      height="22"
+      viewBox="0 0 22 22"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r={r} className="cl-disc__ground" />
+      <circle
+        cx="11"
+        cy="11"
+        r={r}
+        className="cl-disc__ring"
+        strokeDasharray={length}
+        strokeDashoffset={length * (1 - share)}
+      />
+    </svg>
+  );
+}
+
+/** A rerun under way, above the transcript (the version shown stays): what is redone, its
+ *  ring as the processing screen fills it (never going back), about how long is left. */
+export function RerunRunning({
+  detail,
+  rerun,
+}: {
+  detail: SessionDetail;
+  rerun: Rerun;
+}) {
+  const shown = useRef<{ text: number; voices: number } | null>(null);
+  const discs = processingDiscs(
+    detail.stages,
+    detail.source?.duration_s ?? null,
+    shown.current,
+  );
+  useEffect(() => {
+    shown.current = { text: discs.text, voices: discs.voices };
+  });
+  const queued = detail.session.job_state === "queued";
+  const share = rerunShare(discs, rerun);
+  return (
+    <div className="cl-rerunning" role="status">
+      <SmallRing share={share} />
+      <div>
+        <Text weight="medium">
+          {RERUN_DOING[rerun]}
+          {queued
+            ? " · en file d'attente"
+            : discs.minutesLeft !== null
+              ? ` · environ ${discs.minutesLeft} min`
+              : ""}
+        </Text>
+        <Text as="p" type="supporting">
+          La version affichée reste en place ; à la fin, vos corrections sont
+          reportées sur la nouvelle.
+        </Text>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@
  *  (diarisation), run at the same time by the engine; then « Qui a dit quoi »
  *  (attribution), which joins them. Each disc's share comes from what the engine publishes
  *  (progress.json): nothing is made up; a stage with no progress counts as not started. */
-import type { StageView } from "./api.ts";
+import type { Rerun, StageView } from "./api.ts";
 
 /** Within « Le texte »: the transcription is most of the work, the alignment the rest. A
  *  share of the disc, not a measured time. */
@@ -43,6 +43,16 @@ export interface Discs {
   /** About this many minutes left, from about ten per hour of audio (spec §7.4); null
    *  when the length of the audio is unknown. */
   minutesLeft: number | null;
+}
+
+/** How far a rerun is, from the discs of the stages it redoes. */
+export function rerunShare(
+  discs: Pick<Discs, "text" | "voices">,
+  rerun: Rerun,
+): number {
+  if (rerun === "transcribe") return discs.text;
+  if (rerun === "diarize") return discs.voices;
+  return (discs.text + discs.voices) / 2;
 }
 
 /** `before`: the shares shown until now, for this session. A disc never goes back: when

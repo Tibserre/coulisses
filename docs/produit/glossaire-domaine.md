@@ -33,7 +33,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Exécution | `run` | Une exécution d'une étape sur une séance, avec ses entrées, sa sortie, sa provenance, son statut. Immuable une fois terminée. |
 | Exécution active | `active_run` | Pour une séance et une étape, l'exécution affichée et utilisée en aval. Les exécutions d'une version deviennent actives ensemble. |
 | Version (du traitement) | `version` | Une exécution « qui a dit quoi » réussie, avec les exécutions dont elle vient. Chaque version a ses propres corrections ; une seule est affichée. |
-| Relance | `rerun` | Refaire une étape (la transcription ou la séparation des voix) depuis la version affichée, pour en faire une nouvelle. |
+| Relance | `rerun` | Refaire le traitement depuis la version affichée, pour en faire une nouvelle : tout (`all`), le texte (la transcription) ou les voix (la séparation des voix). |
 | Statut d'exécution | `run_status` | `queued`, `running`, `succeeded`, `failed`, `stale` (périmée : l'exécution affichée d'une étape qu'une relance refait ; état calculé, le statut enregistré d'une exécution finie ne change jamais). |
 | Tâche | `job` | Travail mis en file pour une séance (une chaîne à lancer, une étape à relancer, une génération). Produit une ou plusieurs exécutions. La file survit à un redémarrage. |
 | Rédaction | `writing` | Ce qu'un modèle de langage écrit pour une séance : son titre, ses chapitres, ses résumés. Chacune a son modèle, choisi dans les Réglages (ADR 0039). Pas une tâche (`job`) : une rédaction demandée devient une tâche en file. |
