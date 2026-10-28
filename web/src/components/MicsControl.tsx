@@ -85,7 +85,7 @@ export function MicsControl({
         label="Les micros"
         placement="below"
         alignment="start"
-        width={280}
+        width={312}
         padding={1}
         content={
           adding ? (
@@ -149,6 +149,7 @@ export function MicsControl({
                         className="cl-mics__lost"
                         size={16}
                         strokeWidth={1.75}
+                        role="img"
                         aria-label="Plus rien n'arrive"
                       />
                     ) : isPhone(m.device) ? (
@@ -170,7 +171,7 @@ export function MicsControl({
                     <button
                       type="button"
                       className="cl-mics__icon"
-                      aria-pressed={m.muted}
+                      data-on={m.muted || undefined}
                       title={
                         m.muted ? `Rétablir ${m.device}` : `Couper ${m.device}`
                       }

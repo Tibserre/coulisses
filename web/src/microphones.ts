@@ -150,17 +150,31 @@ export function micEvents(
         groups.set(key, g);
       }
     }
-  for (const [key, g] of groups)
+  for (const [key, g] of groups) {
+    // Those recording then (one added later is not counted) and those cut just after: when
+    // a cut leaves them all cut, or a return brings them all back, it is « the
+    // microphones ».
+    const present = mics.filter((m) => (addedAt.get(m.sourceId) ?? 0) <= g.at);
+    const cutAfter = present.filter((m) =>
+      m.cuts.some(
+        (c) =>
+          c.from_s <= g.at + 0.05 && (c.to_s === null || c.to_s > g.at + 0.05),
+      ),
+    );
+    const whole = g.back
+      ? cutAfter.length === 0 && g.names.length > 1
+      : cutAfter.length === present.length && present.length > 1;
+    const several = g.names.length > 1;
     events.push({
       key,
       at: g.at,
-      text:
-        mics.length > 1 && g.names.length === mics.length
-          ? g.back
-            ? "Micros rétablis"
-            : "Micros coupés"
-          : `${list(g.names)} ${g.back ? "rétabli" : "coupé"}`,
+      text: whole
+        ? g.back
+          ? "Micros rétablis"
+          : "Micros coupés"
+        : `${list(g.names)} ${g.back ? "rétabli" : "coupé"}${several ? "s" : ""}`,
     });
+  }
   return events.sort((a, b) => a.at - b.at);
 }
 

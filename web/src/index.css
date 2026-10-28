@@ -4836,7 +4836,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-mics__icon:hover,
-.cl-mics__icon[aria-pressed="true"] {
+.cl-mics__icon[data-on] {
   background: var(--color-background-muted);
   color: var(--color-text-primary);
 }

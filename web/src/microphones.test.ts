@@ -134,3 +134,21 @@ test("the timeline says last time, what was added, each cut and return", () => {
     ],
   );
 });
+
+test("a cut that leaves them all cut is « the microphones », one added later aside", () => {
+  const mics = microphones(
+    state({ cuts: [{ from_s: 250, to_s: 400 }] }, [
+      track("mic2", "iPhone", { cuts: [{ from_s: 100, to_s: null }] }),
+      track("mic3", "Micro USB", { cuts: [{ from_s: 250, to_s: 400 }] }),
+    ]),
+  );
+  const said = micEvents(mics, null, new Map([["mic3", 200]])).map(
+    (e) => e.text,
+  );
+  assert.deepEqual(said, [
+    "iPhone coupé",
+    "Micro USB ajouté",
+    "Micros coupés",
+    "Micro du MacBook et Micro USB rétablis",
+  ]);
+});
