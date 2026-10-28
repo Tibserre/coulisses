@@ -26,6 +26,11 @@ class ProgressView(BaseModel):
     done: float
     total: float
     unit: str
+    step: int | None = None
+    """The phase's rank, from 1 (engine v1.13.0); each phase counts from zero."""
+    steps: int | None = None
+    """How many phases the stage has: it may grow while it runs, never shrink. Both absent
+    from runs made before engine v1.13.0."""
 
 
 class StageView(BaseModel):
@@ -68,7 +73,12 @@ def _read_progress(folder: Path) -> ProgressView | None:
         # next poll, nothing is lost.
         return None
     return ProgressView(
-        phase=progress.phase, done=progress.done, total=progress.total, unit=progress.unit
+        phase=progress.phase,
+        done=progress.done,
+        total=progress.total,
+        unit=progress.unit,
+        step=progress.step,
+        steps=progress.steps,
     )
 
 
