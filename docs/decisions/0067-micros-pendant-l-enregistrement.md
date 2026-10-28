@@ -1,6 +1,6 @@
 # 0067 — Les micros pendant l'enregistrement : couper, ajouter et retirer à la demande
 
-Statut : Proposée (2026-10-28, parcours d'Interface validé par l'utilisateur sur maquettes, planches « B · 1 à 8 »). Précise les ADR 0031, 0033 et 0056.
+Statut : Acceptée (2026-10-28, par l'utilisateur ; parcours d'Interface validé sur maquettes, planches « B · 1 à 8 »). Précise les ADR 0031, 0033 et 0056.
 
 ## Contexte
 Depuis l'ADR 0056 (un geste), « Nouvelle note » démarre avec le micro par défaut du Mac : on ne choisit plus ni n'ajoute de micro au départ. L'utilisateur veut pouvoir couper un micro, les couper tous, en ajouter un en cours, et retirer un micro ajouté par erreur. Par défaut, seuls comptent le micro courant du Mac (ou des écouteurs branchés) et le son du Mac ; l'iPhone ou tout autre micro s'ajoute à la demande. P2 : les temps restent mesurés, chaque fichier sur l'horloge de la référence. P8 : rien n'est perdu ni tu.
