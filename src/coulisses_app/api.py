@@ -843,6 +843,11 @@ def create_app(
         """One track cut or back: `ref` (the main microphone), `mic2`…, `system`."""
         return recorder.mute(source_id, demande.coupe)
 
+    @app.post("/api/enregistrement/pistes/{source_id}/retirer")
+    def remove_microphone(source_id: str) -> capture.RecordingState:
+        """A microphone added, taken off now: its file is kept with the session."""
+        return recorder.remove_microphone(source_id)
+
     @app.post("/api/enregistrement/micros/coupe")
     def mute_microphones(demande: MuteRequest) -> capture.RecordingState:
         """Every microphone cut or back at once; the computer's sound keeps its own."""
