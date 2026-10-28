@@ -199,50 +199,53 @@ export function MicsControl({
             data-fresh={fresh === m.sourceId || undefined}
             data-busy={removing === m.sourceId || undefined}
           >
-            {m.lost && !m.muted ? (
-              <TriangleAlert
-                className="cl-mics__lost"
-                size={16}
-                strokeWidth={1.75}
-                role="img"
-                aria-label="Plus rien n'arrive"
-              />
-            ) : isPhone(m.device) ? (
-              <Smartphone size={16} strokeWidth={1.75} aria-hidden />
-            ) : (
-              <Mic size={16} strokeWidth={1.75} aria-hidden />
-            )}
-            <span className="cl-mics__name" title={m.device}>
-              {m.device}
-              {removing === m.sourceId ? (
-                <span role="status"> · retrait…</span>
-              ) : (
-                m.muted && " · coupé"
-              )}
-            </span>
-            <span className="cl-mics__meter">
-              <LevelMeter
-                level={m.muted ? 0 : meterValue(m.rms_db)}
-                peak={m.muted ? 0 : meterValue(m.peak_db)}
-                clipping={!m.muted && m.clipping}
-              />
-            </span>
+            {/* As the bar's button: its icon and level cut it or bring it back, the icon
+                then crossed and the level flat. */}
             <button
               type="button"
-              className="cl-mics__icon"
-              data-on={m.muted || undefined}
+              className="cl-mics__src"
+              data-muted={m.muted || undefined}
               title={m.muted ? `Rétablir ${m.device}` : `Couper ${m.device}`}
               aria-label={
-                m.muted ? `Rétablir ${m.device}` : `Couper ${m.device}`
+                m.muted
+                  ? `${m.device} coupé. Le rétablir`
+                  : `${m.device}${m.lost ? ", plus rien n'arrive" : ""}. Le couper`
               }
               disabled={removing === m.sourceId}
-              onClick={() =>
+              onClick={(e) => {
+                e.currentTarget.blur();
                 void cut([m.sourceId], !m.muted, () =>
                   api.muteTrack(m.sourceId, !m.muted),
-                )
-              }
+                );
+              }}
             >
-              <MicOff size={15} strokeWidth={1.75} aria-hidden />
+              {m.muted ? (
+                <MicOff size={16} strokeWidth={1.75} aria-hidden />
+              ) : m.lost ? (
+                <TriangleAlert
+                  className="cl-mics__lost"
+                  size={16}
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+              ) : isPhone(m.device) ? (
+                <Smartphone size={16} strokeWidth={1.75} aria-hidden />
+              ) : (
+                <Mic size={16} strokeWidth={1.75} aria-hidden />
+              )}
+              <span className="cl-mics__name">
+                {m.device}
+                {removing === m.sourceId && (
+                  <span role="status"> · retrait…</span>
+                )}
+              </span>
+              <span className="cl-mics__meter">
+                <LevelMeter
+                  level={m.muted ? 0 : meterValue(m.rms_db)}
+                  peak={m.muted ? 0 : meterValue(m.peak_db)}
+                  clipping={!m.muted && m.clipping}
+                />
+              </span>
             </button>
             {/* The main microphone stays: the processing listens to it. */}
             {m.sourceId !== mics[0]?.sourceId && (

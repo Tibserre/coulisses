@@ -4806,10 +4806,6 @@ button.cl-tree__more:hover {
   width: 2.75rem;
 }
 
-.cl-mics__row[data-muted] .cl-mics__meter {
-  opacity: 0.5;
-}
-
 .cl-mics__lost {
   flex: none;
   color: var(--color-warning);
@@ -4830,23 +4826,54 @@ button.cl-tree__more:hover {
 .cl-mics__row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-3);
+  gap: var(--spacing-1);
   height: 36px;
-  padding: 0 var(--spacing-1) 0 var(--spacing-3);
   color: var(--color-text-primary);
 }
 
-.cl-mics__row > svg,
-.cl-mics__pick > svg {
+/* A microphone of the list, as the bar's button: its icon and level are one button that
+   cuts it or brings it back; cut, the icon is crossed and the level flat. */
+.cl-mics__src {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: var(--spacing-3);
+  height: 32px;
+  padding: 0 var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__src:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-mics__src > svg {
   flex: none;
   color: var(--color-text-secondary);
 }
 
-.cl-mics__row > svg.cl-mics__lost {
+.cl-mics__src > svg.cl-mics__lost {
   color: var(--color-warning);
 }
 
-.cl-mics__row[data-muted] {
+.cl-mics__src[data-muted] {
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__src[data-muted] .cl-mics__meter {
+  opacity: 0.5;
+}
+
+.cl-mics__pick > svg {
+  flex: none;
   color: var(--color-text-secondary);
 }
 
@@ -4871,8 +4898,7 @@ button.cl-tree__more:hover {
   cursor: pointer;
 }
 
-.cl-mics__icon:hover,
-.cl-mics__icon[data-on] {
+.cl-mics__icon:hover {
   background: var(--color-background-muted);
   color: var(--color-text-primary);
 }
