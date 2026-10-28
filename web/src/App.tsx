@@ -219,6 +219,7 @@ function Shell({ route }: { route: Route }) {
           micro: null,
           micros_en_plus: [],
           son_ordinateur: system,
+          micros_precedents: true,
         });
         setStartError(null);
         window.location.hash = "#/enregistrement";

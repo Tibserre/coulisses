@@ -349,8 +349,16 @@ export interface RecordingState {
   /** Recorded so far, pauses left out. */
   elapsed_s: number;
   device: string;
+  /** `ref`: what the main microphone's cut is asked by. */
+  source_id: string;
   channels: number;
   levels: { peak_db: number; rms_db: number };
+  /** The main microphone, cut by the user for now: silence is written in its place. */
+  muted: boolean;
+  /** When it was cut and back, in recorded time, while recording only. */
+  cuts: Cut[];
+  /** The microphones of last time, when « Nouvelle note » asked for them. */
+  last_time: LastTime | null;
   too_quiet: boolean;
   clipping: boolean;
   /** Times the Mac could not keep up and lost some sound. */
@@ -382,14 +390,30 @@ export interface Reminders {
   duration_min: number;
 }
 
+/** A track cut by the user (silence written in its place), in recorded time. */
+export interface Cut {
+  from_s: number;
+  /** Null while it lasts. */
+  to_s: number | null;
+}
+
+export interface LastTime {
+  taken: string[];
+  /** Not here now, or not opened: the recording started without them. */
+  missing: string[];
+}
+
 export interface TrackState {
   device: string;
+  /** `mic2`, `mic3`… or `system`: what its cut is asked by. */
+  source_id: string;
+  cuts: Cut[];
   levels: { peak_db: number; rms_db: number };
   too_quiet: boolean;
   clipping: boolean;
   dropouts: number;
   error: string | null;
-  /** The computer's sound, cut by the user for now: silence is written in its place. */
+  /** Cut by the user for now: silence is written in its place. */
   muted: boolean;
 }
 
@@ -409,6 +433,8 @@ export interface RecordingRequest {
   micros_en_plus: number[];
   /** The computer's sound too: a meeting online or hybrid. */
   son_ordinateur: boolean;
+  /** The microphones added to the last recording too, those here now (ADR 0067). */
+  micros_precedents?: boolean;
   presents: number[];
   non_nommes: number | null;
   micro: number | null;
@@ -919,6 +945,19 @@ export const api = {
   /** Cut the computer's sound for now (true), or bring it back (false). */
   muteSystem: (cut: boolean) =>
     send<RecordingState>("POST", "/api/enregistrement/son-ordinateur", { coupe: cut }),
+  /** One track cut for now (true) or back (false): `ref`, `mic2`…, `system` (ADR 0067). */
+  muteTrack: (sourceId: string, cut: boolean) =>
+    send<RecordingState>(
+      "POST",
+      `/api/enregistrement/pistes/${encodeURIComponent(sourceId)}/coupe`,
+      { coupe: cut },
+    ),
+  /** Every microphone cut or back at once; the computer's sound keeps its own. */
+  muteMicrophones: (cut: boolean) =>
+    send<RecordingState>("POST", "/api/enregistrement/micros/coupe", { coupe: cut }),
+  /** A microphone added while recording: it records from now on. */
+  addMicrophone: (index: number) =>
+    send<RecordingState>("POST", "/api/enregistrement/micros", { micro: index }),
   /** Into another space, while nothing is processed yet; its people there are unchecked. */
   moveSession: (id: string, spaceId: number) =>
     send<{ session: Session; unchecked: string[] }>("PUT", `${sessionPath(id)}/espace`, {

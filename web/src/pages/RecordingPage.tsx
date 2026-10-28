@@ -25,12 +25,14 @@ import {
   type TrackState,
 } from "../api.ts";
 import { LevelMeter } from "../components/LevelMeter.tsx";
+import { MicsControl } from "../components/MicsControl.tsx";
 import { keepStopProblem } from "../stopNotice.ts";
 import { LiveStrip } from "../components/LiveStrip.tsx";
 import { RecordingContext } from "../components/RecordingContext.tsx";
 import { formatClock } from "../format.ts";
 import { currentMode, type Mode } from "../liveStrip.ts";
 import { meterValue } from "../meter.ts";
+import { micEvents, microphones } from "../microphones.ts";
 import { KIND_LABEL } from "../transcript.ts";
 
 const OTHER: Record<Mode, Mode> = { scene: "discussion", discussion: "scene" };
@@ -104,6 +106,20 @@ export function RecordingPage({
   }, [undo]);
   const latest = useRef<RecordingState | null>(null);
   latest.current = state ?? null;
+  /** The microphones added while this page was open, and when it saw them come: the
+   *  timeline says so. Those there when it opened are not said (their time is unknown). */
+  const addedAt = useRef(new Map<string, number>());
+  const seenTracks = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!state) return;
+    const ids = state.extra.map((t) => t.source_id);
+    if (seenTracks.current === null) seenTracks.current = new Set(ids);
+    for (const id of ids)
+      if (!seenTracks.current.has(id)) {
+        seenTracks.current.add(id);
+        addedAt.current.set(id, state.elapsed_s);
+      }
+  }, [state]);
   const pending = useRef<{ text: string; at: number | null }>({
     text: "",
     at: null,
@@ -316,9 +332,8 @@ export function RecordingPage({
     state && state.extra.length > 0
       ? `${state.extra.length + 1} micros coupés`
       : "Micro coupé";
-  const level = state ? meterValue(state.levels.rms_db) : 0;
-  const peak = state ? meterValue(state.levels.peak_db) : 0;
   const elapsed = state?.elapsed_s ?? 0;
+  const mics = state ? microphones(state) : [];
   const marks = state
     ? [
         ...state.markers.map((m) => ({
@@ -326,12 +341,21 @@ export function RecordingPage({
           at: m.at_s,
           marker: m,
           note: null,
+          said: null,
         })),
         ...state.notes.map((n) => ({
           key: `n${n.id}`,
           at: n.at_s,
           marker: null,
           note: n,
+          said: null,
+        })),
+        ...micEvents(mics, state.last_time, addedAt.current).map((e) => ({
+          key: `micro-${e.key}`,
+          at: e.at,
+          marker: null,
+          note: null,
+          said: e.text,
         })),
       ].sort((a, b) => a.at - b.at)
     : [];
@@ -369,9 +393,7 @@ export function RecordingPage({
                 {formatClock(elapsed)}
               </span>
             </span>
-            <span className="cl-rec__meter" title={state.device}>
-              <LevelMeter level={level} peak={peak} clipping={state.clipping} />
-            </span>
+            <MicsControl mics={mics} act={act} />
             {system && (
               // The computer's sound: its icon and its level are one button (ADR 0056);
               // cut, the icon is crossed and the level greyed and flat.
@@ -561,24 +583,6 @@ export function RecordingPage({
                 onError={setError}
               />
             )}
-            {state.extra.length > 0 && (
-              <span className="cl-rec__extra">
-                {state.extra.map((track) => (
-                  <span
-                    key={track.device}
-                    className="cl-rec__meter"
-                    title={track.device}
-                  >
-                    <span>{track.device}</span>
-                    <LevelMeter
-                      level={meterValue(track.levels.rms_db)}
-                      peak={meterValue(track.levels.peak_db)}
-                      clipping={track.clipping}
-                    />
-                  </span>
-                ))}
-              </span>
-            )}
             <LiveStrip
               markers={state.markers}
               elapsed={elapsed}
@@ -601,7 +605,9 @@ export function RecordingPage({
                 <li
                   key={item.key}
                   className="cl-rec__line"
-                  data-kind={item.marker?.kind ?? "note"}
+                  data-kind={
+                    item.marker?.kind ?? (item.note ? "note" : "micro")
+                  }
                 >
                   <span className="cl-rec__at">{formatClock(item.at)}</span>
                   <span className="cl-rec__what">
@@ -617,47 +623,54 @@ export function RecordingPage({
                           {KIND_LABEL[item.marker.kind]}
                         </>
                       )
-                    ) : (
+                    ) : item.note ? (
                       <>
                         <PenLine size={13} strokeWidth={1.75} aria-hidden />{" "}
-                        {item.note?.text}
+                        {item.note.text}
                       </>
+                    ) : (
+                      item.said
                     )}
                   </span>
-                  <button
-                    type="button"
-                    className="cl-marks__remove"
-                    aria-label="Retirer"
-                    title="Retirer"
-                    onClick={(e) => {
-                      e.currentTarget.blur();
-                      const marker = item.marker;
-                      const taken = item.note;
-                      void act(() =>
-                        marker
-                          ? api.unmark(marker.id)
-                          : api.removeTimedNote(taken!.id),
-                      ).then(
-                        (done) =>
-                          done &&
-                          setUndo(
-                            marker
-                              ? {
-                                  label: `${marker.kind === "key_moment" ? "Moment clé" : KIND_LABEL[marker.kind]} à ${formatClock(marker.at_s)} retiré`,
-                                  restore: () =>
-                                    api.mark(marker.kind, marker.at_s),
-                                }
-                              : {
-                                  label: `Annotation de ${formatClock(taken!.at_s)} retirée`,
-                                  restore: () =>
-                                    api.addTimedNote(taken!.text, taken!.at_s),
-                                },
-                          ),
-                      );
-                    }}
-                  >
-                    <X size={13} strokeWidth={1.75} />
-                  </button>
+                  {(item.marker || item.note) && (
+                    <button
+                      type="button"
+                      className="cl-marks__remove"
+                      aria-label="Retirer"
+                      title="Retirer"
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        const marker = item.marker;
+                        const taken = item.note;
+                        void act(() =>
+                          marker
+                            ? api.unmark(marker.id)
+                            : api.removeTimedNote(taken!.id),
+                        ).then(
+                          (done) =>
+                            done &&
+                            setUndo(
+                              marker
+                                ? {
+                                    label: `${marker.kind === "key_moment" ? "Moment clé" : KIND_LABEL[marker.kind]} à ${formatClock(marker.at_s)} retiré`,
+                                    restore: () =>
+                                      api.mark(marker.kind, marker.at_s),
+                                  }
+                                : {
+                                    label: `Annotation de ${formatClock(taken!.at_s)} retirée`,
+                                    restore: () =>
+                                      api.addTimedNote(
+                                        taken!.text,
+                                        taken!.at_s,
+                                      ),
+                                  },
+                            ),
+                        );
+                      }}
+                    >
+                      <X size={13} strokeWidth={1.75} />
+                    </button>
+                  )}
                 </li>
               ))}
             </ol>

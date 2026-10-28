@@ -4722,6 +4722,189 @@ button.cl-tree__more:hover {
   opacity: 0.5;
 }
 
+/* The microphones (ADR 0067): one button in two, as quiet as the computer's sound. Its icon
+   cuts or brings back every microphone; the rest opens their list. */
+.cl-mics {
+  display: inline-flex;
+  align-items: center;
+}
+
+.cl-mics__all,
+.cl-mics__more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__all {
+  padding: 0 var(--spacing-1) 0 var(--spacing-2);
+  border-radius: var(--radius-element) 0 0 var(--radius-element);
+}
+
+.cl-mics__more {
+  padding: 0 var(--spacing-2) 0 var(--spacing-1);
+  border-radius: 0 var(--radius-element) var(--radius-element) 0;
+}
+
+.cl-mics__all:hover,
+.cl-mics__more:hover,
+.cl-mics__more[data-open] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-mics__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-mics__meter {
+  display: inline-flex;
+  width: 2.75rem;
+}
+
+.cl-mics__row[data-muted] .cl-mics__meter {
+  opacity: 0.5;
+}
+
+.cl-mics__lost {
+  flex: none;
+  color: var(--color-warning);
+}
+
+.cl-mics__pop {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-1);
+}
+
+.cl-mics__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cl-mics__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  height: 36px;
+  padding: 0 var(--spacing-1) 0 var(--spacing-3);
+  color: var(--color-text-primary);
+}
+
+.cl-mics__row > svg,
+.cl-mics__pick > svg {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__row > svg.cl-mics__lost {
+  color: var(--color-warning);
+}
+
+.cl-mics__row[data-muted] {
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cl-mics__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-mics__icon:hover,
+.cl-mics__icon[aria-pressed="true"] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-mics__rule {
+  height: 1px;
+  margin: var(--spacing-1) var(--spacing-2);
+  background: var(--color-border);
+}
+
+.cl-mics__action,
+.cl-mics__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--spacing-3);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cl-mics__pick {
+  gap: var(--spacing-3);
+  height: 36px;
+  color: var(--color-text-primary);
+}
+
+.cl-mics__action[data-kind="add"] {
+  color: var(--color-accent);
+}
+
+.cl-mics__action:hover,
+.cl-mics__pick:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-mics__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  height: 34px;
+  padding: 0 var(--spacing-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-mics__foot,
+.cl-mics__problem {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__problem {
+  color: var(--color-text-primary);
+}
+
+.cl-rec__line[data-kind="micro"] .cl-rec__what {
+  color: var(--color-text-secondary);
+}
+
 .cl-rec__spacer {
   flex: 1;
 }
@@ -4757,12 +4940,6 @@ button.cl-tree__more:hover {
 .cl-rec__said {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-}
-
-.cl-rec__extra {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-4);
 }
 
 /* A quiet label that opens its list: no box, a light ground under the pointer. */
