@@ -258,8 +258,6 @@ class RecordingRequest(BaseModel):
     """Microphones added, recording at the same time (often an iPhone), each its file."""
     son_ordinateur: bool = False
     """The computer's sound too: a meeting online or hybrid (ADR 0032)."""
-    micros_precedents: bool = False
-    """The microphones added to the last recording too, those here now (« Nouvelle note »)."""
 
 
 class AddMicrophoneRequest(BaseModel):
@@ -834,7 +832,6 @@ def create_app(
             device_index=demande.micro,
             extra_device_indexes=demande.micros_en_plus,
             system=demande.son_ordinateur,
-            previous_microphones=demande.micros_precedents,
         )
 
     @app.post("/api/enregistrement/son-ordinateur")

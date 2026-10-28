@@ -514,32 +514,6 @@ def add_capture_source(
         conn.close()
 
 
-def last_added_microphones(data: DataDir) -> list[str]:
-    """The microphones added to the last session recorded in the app (at its start or while
-    it ran), by name, in the order they were added: what « the microphones of last time »
-    are. No setting is kept: the last recording says it."""
-    conn = connect(data)
-    try:
-        last = conn.execute(
-            "SELECT session_id FROM audio_source WHERE origin = 'captured'"
-            " AND source_id = ? ORDER BY added_at DESC, rowid DESC LIMIT 1",
-            (REFERENCE_SOURCE_ID,),
-        ).fetchone()
-        if last is None:
-            return []
-        rows = conn.execute(
-            "SELECT source_id, device FROM audio_source WHERE session_id = ?"
-            " AND origin = 'captured'",
-            (last["session_id"],),
-        ).fetchall()
-    finally:
-        conn.close()
-    added = [
-        (int(r["source_id"][3:]), r["device"]) for r in rows if is_extra_microphone(r["source_id"])
-    ]
-    return list(dict.fromkeys(device for _, device in sorted(added) if device))
-
-
 def finish_capture(
     data: DataDir,
     session_id: str,

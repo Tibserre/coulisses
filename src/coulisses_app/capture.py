@@ -88,14 +88,6 @@ class Cut(BaseModel):
     """None while it lasts."""
 
 
-class LastTime(BaseModel):
-    """The microphones of the last recording, taken back when asked (« Nouvelle note »)."""
-
-    taken: list[str] = []
-    missing: list[str] = []
-    """Not here now, or not opened: the recording started without them."""
-
-
 class RecordingState(BaseModel):
     session_id: str
     state: Literal["recording", "paused"]
@@ -109,8 +101,6 @@ class RecordingState(BaseModel):
     """Cut by the user for now: silence is written in its place, on the same clock."""
     cuts: list[Cut] = []
     """When it was cut, and back (pauses left out), while recording only."""
-    last_time: LastTime | None = None
-    """The microphones of last time, when asked to take them back."""
     too_quiet: bool
     """The input has been very low for a while: wrong microphone, too far, or no access."""
     clipping: bool
@@ -399,7 +389,6 @@ class _Recording:
     """The reference first; its time is the recording's (markers, notes)."""
     markers: list[marks.Marker] = field(default_factory=lambda: list[marks.Marker]())
     notes: list[marks.TimedNote] = field(default_factory=lambda: list[marks.TimedNote]())
-    last_time: LastTime | None = None
 
     @property
     def main(self) -> _Track:
@@ -513,13 +502,10 @@ class Recorder:
         project_id: int | None = None,
         extra_device_indexes: list[int] | None = None,
         system: bool = False,
-        previous_microphones: bool = False,
     ) -> RecordingState:
         """`extra_device_indexes`: microphones added, recording at the same time (often the
         iPhone through Continuity, ADR 0031, 0033), each into a file of its own. `system`:
-        the computer's sound too, for a meeting online or hybrid (ADR 0032).
-        `previous_microphones`: those added to the last recording too, the ones here now;
-        one missing never keeps it from starting (said in `last_time`)."""
+        the computer's sound too, for a meeting online or hybrid (ADR 0032)."""
         with self._lock:
             if self._current is not None:
                 raise RecordingError("Un enregistrement est déjà en cours.")
@@ -558,20 +544,6 @@ class Recorder:
                 if found.name in {chosen.name, *(d.name for d in added)}:
                     raise RecordingError("Un même micro ne peut être choisi qu'une fois.")
                 added.append(found)
-            last_time: LastTime | None = None
-            taken_back: set[str] = set()
-            if previous_microphones:
-                last_time = LastTime()
-                for name in sessions.last_added_microphones(self.data):
-                    if name in {chosen.name, *(d.name for d in added)}:
-                        continue  # chosen anyway
-                    here = next((d for d in devices if d.name == name), None)
-                    if here is None:
-                        last_time.missing.append(name)
-                        continue
-                    added.append(here)
-                    taken_back.add(name)
-                    last_time.taken.append(name)
             flags = _Flags()
             # The microphones are opened and started before the session is made: one that
             # refuses leaves nothing behind (their first blocks wait in their queues).
@@ -629,16 +601,6 @@ class Recorder:
                 for other in added:
                     position = sum(sessions.is_extra_microphone(o.source_id) for o in opened)
                     source_id = sessions.extra_source_id(position)
-                    if other.name in taken_back and last_time is not None:
-                        # Last time's: one that does not open does not keep this one from
-                        # starting; it is said missing.
-                        try:
-                            opened.append(self._open_added(source_id, other, flags))
-                        except RecordingError as exc:
-                            log.warning("microphone of last time %s: %s", other.name, exc)
-                            last_time.taken.remove(other.name)
-                            last_time.missing.append(other.name)
-                        continue
                     opened.append(self._open_added(source_id, other, flags))
             except RecordingError:
                 for made in opened:
@@ -698,9 +660,7 @@ class Recorder:
                         last_block_at=self._clock(),
                     )
                 )
-            recording = _Recording(
-                session_id=session_id, flags=flags, tracks=tracks, last_time=last_time
-            )
+            recording = _Recording(session_id=session_id, flags=flags, tracks=tracks)
             for track in tracks:
                 track.writer_thread = threading.Thread(
                     target=self._write,
@@ -865,7 +825,6 @@ class Recorder:
             levels=main.levels,
             muted=main_muted,
             cuts=[c.model_copy() for c in main.cuts],
-            last_time=recording.last_time.model_copy() if recording.last_time else None,
             too_quiet=too_quiet and not main_muted,
             clipping=clipping,
             dropouts=main.dropouts,
