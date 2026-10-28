@@ -4,6 +4,7 @@ import { test } from "node:test";
 import type { RecordingState, TrackState } from "./api.ts";
 import {
   addable,
+  timelineMics,
   barLevel,
   isPhone,
   micEvents,
@@ -25,6 +26,8 @@ const track = (
   error: null,
   muted: false,
   cuts: [],
+  started_at_s: 0,
+  removed_at_s: null,
   ...more,
 });
 const state = (more: Partial<RecordingState> = {}, extra: TrackState[] = []) =>
@@ -38,6 +41,7 @@ const state = (more: Partial<RecordingState> = {}, extra: TrackState[] = []) =>
     clipping: false,
     error: null,
     extra,
+    removed: [],
     ...more,
   }) as RecordingState;
 
@@ -114,10 +118,13 @@ test("the timeline says what was added, each cut and return", () => {
           { from_s: 300, to_s: null },
         ],
       }),
-      track("mic3", "Micro USB", { cuts: [{ from_s: 300, to_s: null }] }),
+      track("mic3", "Micro USB", {
+        started_at_s: 200,
+        cuts: [{ from_s: 300, to_s: null }],
+      }),
     ]),
   );
-  const events = micEvents(mics, new Map([["mic3", 200]]));
+  const events = micEvents(mics);
   assert.deepEqual(
     events.map((e) => [e.at, e.text]),
     [
@@ -133,14 +140,39 @@ test("a cut that leaves them all cut is « the microphones », one added later a
   const mics = microphones(
     state({ cuts: [{ from_s: 250, to_s: 400 }] }, [
       track("mic2", "iPhone", { cuts: [{ from_s: 100, to_s: null }] }),
-      track("mic3", "Micro USB", { cuts: [{ from_s: 250, to_s: 400 }] }),
+      track("mic3", "Micro USB", {
+        started_at_s: 200,
+        cuts: [{ from_s: 250, to_s: 400 }],
+      }),
     ]),
   );
-  const said = micEvents(mics, new Map([["mic3", 200]])).map((e) => e.text);
+  const said = micEvents(mics).map((e) => e.text);
   assert.deepEqual(said, [
     "iPhone coupé",
     "Micro USB ajouté",
     "Micros coupés",
     "Micro du MacBook et Micro USB rétablis",
   ]);
+});
+
+test("one taken away is told, and not counted after it went", () => {
+  const mics = timelineMics({
+    ...state({ cuts: [{ from_s: 500, to_s: null }] }),
+    removed: [
+      track("mic2", "iPhone", {
+        started_at_s: 120,
+        removed_at_s: 130,
+        cuts: [{ from_s: 125, to_s: 130 }],
+      }),
+    ],
+  } as RecordingState);
+  assert.deepEqual(
+    micEvents(mics).map((e) => [e.at, e.text]),
+    [
+      [120, "iPhone ajouté"],
+      [125, "iPhone coupé"],
+      [130, "iPhone retiré · enregistrement gardé"],
+      [500, "Micro du MacBook coupé"],
+    ],
+  );
 });

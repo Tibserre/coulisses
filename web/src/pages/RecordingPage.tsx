@@ -32,7 +32,7 @@ import { RecordingContext } from "../components/RecordingContext.tsx";
 import { formatClock } from "../format.ts";
 import { currentMode, type Mode } from "../liveStrip.ts";
 import { meterValue } from "../meter.ts";
-import { micEvents, microphones } from "../microphones.ts";
+import { micEvents, microphones, timelineMics } from "../microphones.ts";
 import { KIND_LABEL } from "../transcript.ts";
 
 const OTHER: Record<Mode, Mode> = { scene: "discussion", discussion: "scene" };
@@ -106,20 +106,6 @@ export function RecordingPage({
   }, [undo]);
   const latest = useRef<RecordingState | null>(null);
   latest.current = state ?? null;
-  /** The microphones added while this page was open, and when it saw them come: the
-   *  timeline says so. Those there when it opened are not said (their time is unknown). */
-  const addedAt = useRef(new Map<string, number>());
-  const seenTracks = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    if (!state) return;
-    const ids = state.extra.map((t) => t.source_id);
-    if (seenTracks.current === null) seenTracks.current = new Set(ids);
-    for (const id of ids)
-      if (!seenTracks.current.has(id)) {
-        seenTracks.current.add(id);
-        addedAt.current.set(id, state.elapsed_s);
-      }
-  }, [state]);
   const pending = useRef<{ text: string; at: number | null }>({
     text: "",
     at: null,
@@ -350,7 +336,7 @@ export function RecordingPage({
           note: n,
           said: null,
         })),
-        ...micEvents(mics, addedAt.current).map((e) => ({
+        ...micEvents(timelineMics(state)).map((e) => ({
           key: `micro-${e.key}`,
           at: e.at,
           marker: null,

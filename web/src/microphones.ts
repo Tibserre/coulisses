@@ -1,7 +1,7 @@
 /** The microphones while recording (ADR 0067), kept apart to be tested: the main one and
  *  those added, what the bar says of them, which can still be added, and what the timeline
  *  shows of their cuts. The computer's sound is not one of them: it keeps its own button. */
-import type { Cut, InputDevice, RecordingState } from "./api.ts";
+import type { Cut, InputDevice, RecordingState, TrackState } from "./api.ts";
 
 export interface Mic {
   sourceId: string;
@@ -13,6 +13,10 @@ export interface Mic {
   peak_db: number;
   clipping: boolean;
   cuts: Cut[];
+  /** When it was first heard, measured on the main microphone: 0 from the start. */
+  startedAt: number;
+  /** When it was taken away, measured; null while it records. */
+  removedAt: number | null;
 }
 
 type MicsOf = Pick<
@@ -26,6 +30,7 @@ type MicsOf = Pick<
   | "error"
   | "clipping"
   | "extra"
+  | "removed"
 >;
 
 /** The main microphone first, then those added, in the order they came. */
@@ -40,18 +45,31 @@ export function microphones(state: MicsOf): Mic[] {
       peak_db: state.levels.peak_db,
       clipping: state.clipping,
       cuts: state.cuts,
+      startedAt: 0,
+      removedAt: null,
     },
-    ...state.extra.map((t) => ({
-      sourceId: t.source_id,
-      device: t.device,
-      muted: t.muted,
-      lost: t.error !== null || (!t.muted && t.too_quiet),
-      rms_db: t.levels.rms_db,
-      peak_db: t.levels.peak_db,
-      clipping: t.clipping,
-      cuts: t.cuts,
-    })),
+    ...state.extra.map(track),
   ];
+}
+
+/** Every microphone of the recording, those taken away too: what the timeline tells. */
+export function timelineMics(state: MicsOf): Mic[] {
+  return [...microphones(state), ...state.removed.map(track)];
+}
+
+function track(t: TrackState): Mic {
+  return {
+    sourceId: t.source_id,
+    device: t.device,
+    muted: t.muted,
+    lost: t.error !== null || (!t.muted && t.too_quiet),
+    rms_db: t.levels.rms_db,
+    peak_db: t.levels.peak_db,
+    clipping: t.clipping,
+    cuts: t.cuts,
+    startedAt: t.started_at_s,
+    removedAt: t.removed_at_s,
+  };
 }
 
 /** What the bar says beside the microphone: how many, how many cut, all of them cut. */
@@ -104,20 +122,23 @@ export interface MicEvent {
   text: string;
 }
 
-/** What the timeline says of the microphones: each one added (when this page saw it
- *  come), each cut and each return. A cut that leaves them all cut is said once. */
-export function micEvents(
-  mics: readonly Mic[],
-  addedAt: ReadonlyMap<string, number>,
-): MicEvent[] {
+/** What the timeline says of the microphones, at their measured times: each one added,
+ *  each taken away, each cut and each return. A cut that leaves them all cut is said once.
+ *  `mics`: all of them, those taken away too (`timelineMics`). */
+export function micEvents(mics: readonly Mic[]): MicEvent[] {
   const events: MicEvent[] = [];
   for (const m of mics) {
-    const at = addedAt.get(m.sourceId);
-    if (at !== undefined)
+    if (m.startedAt > 0)
       events.push({
         key: `added-${m.sourceId}`,
-        at,
+        at: m.startedAt,
         text: `${m.device} ajouté`,
+      });
+    if (m.removedAt !== null)
+      events.push({
+        key: `removed-${m.sourceId}`,
+        at: m.removedAt,
+        text: `${m.device} retiré · enregistrement gardé`,
       });
   }
   // Cuts and returns, grouped by their time.
@@ -128,7 +149,9 @@ export function micEvents(
   for (const m of mics)
     for (const c of m.cuts) {
       const moments: [number, boolean][] = [[c.from_s, false]];
-      if (c.to_s !== null) moments.push([c.to_s, true]);
+      // A cut closed by taking the microphone away is no return.
+      if (c.to_s !== null && c.to_s !== m.removedAt)
+        moments.push([c.to_s, true]);
       for (const [at, back] of moments) {
         const key = `${back ? "back" : "cut"}-${at.toFixed(1)}`;
         const g = groups.get(key) ?? { at, back, names: [] };
@@ -137,10 +160,13 @@ export function micEvents(
       }
     }
   for (const [key, g] of groups) {
-    // Those recording then (one added later is not counted) and those cut just after: when
-    // a cut leaves them all cut, or a return brings them all back, it is « the
-    // microphones ».
-    const present = mics.filter((m) => (addedAt.get(m.sourceId) ?? 0) <= g.at);
+    // Those recording then (one added later, or taken away before, is not counted) and
+    // those cut just after: a cut that leaves them all cut, or a return that brings them
+    // all back, is « the microphones ».
+    const present = mics.filter(
+      (m) =>
+        m.startedAt <= g.at && (m.removedAt === null || m.removedAt > g.at),
+    );
     const cutAfter = present.filter((m) =>
       m.cuts.some(
         (c) =>

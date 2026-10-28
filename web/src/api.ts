@@ -366,6 +366,8 @@ export interface RecordingState {
   notes: TimedNote[];
   /** The microphones added, recording at the same time, each with its own alerts. */
   extra: TrackState[];
+  /** The microphones added then taken away: their files end there, kept (ADR 0067). */
+  removed: TrackState[];
   /** The computer's sound, recorded with the microphone (a meeting online or hybrid).
    *  Silence is normal there: `too_quiet` only says it has been silent for a while. */
   system: TrackState | null;
@@ -400,6 +402,10 @@ export interface TrackState {
   /** `mic2`, `mic3`… or `system`: what its cut is asked by. */
   source_id: string;
   cuts: Cut[];
+  /** When it was first heard, measured on the main microphone: 0 from the start. */
+  started_at_s: number;
+  /** When it was taken away, measured; null while it records. */
+  removed_at_s: number | null;
   levels: { peak_db: number; rms_db: number };
   too_quiet: boolean;
   clipping: boolean;
@@ -945,6 +951,13 @@ export const api = {
   /** Every microphone cut or back at once; the computer's sound keeps its own. */
   muteMicrophones: (cut: boolean) =>
     send<RecordingState>("POST", "/api/enregistrement/micros/coupe", { coupe: cut }),
+  /** A microphone added, taken away while recording: its file ends there, kept with the
+   *  session; the main one and the computer's sound are cut, not taken away (ADR 0067). */
+  removeMicrophone: (sourceId: string) =>
+    send<RecordingState>(
+      "POST",
+      `/api/enregistrement/pistes/${encodeURIComponent(sourceId)}/retirer`,
+    ),
   /** A microphone added while recording: it records from now on. */
   addMicrophone: (index: number) =>
     send<RecordingState>("POST", "/api/enregistrement/micros", { micro: index }),

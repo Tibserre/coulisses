@@ -9,6 +9,7 @@ import {
   Plus,
   Smartphone,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { api, type InputDevice, type RecordingState } from "../api.ts";
 import { LevelMeter } from "./LevelMeter.tsx";
@@ -24,9 +25,9 @@ import {
 /** The microphones in the recording bar (ADR 0067), as the computer's sound: their icon
  *  and level are one button, which cuts or brings back every microphone (the icon then
  *  crossed); beside it, the chevron opens their list under the whole button (each cut on
- *  its own, one added), or « + » adds a second one when there is only one. A click shows
- *  at once: a cut before the service answers (taken back if it refuses), a microphone
- *  being opened says so. */
+ *  its own, one added taken away, one added), or « + » adds a second one when there is
+ *  only one. A click shows at once: a cut before the service answers (taken back if it
+ *  refuses), a microphone being opened or taken away says so. */
 export function MicsControl({
   mics: heard,
   act,
@@ -43,6 +44,8 @@ export function MicsControl({
   const [asked, setAsked] = useState<Record<string, boolean>>({});
   /** The microphone being opened (its index). */
   const [opening, setOpening] = useState<number | null>(null);
+  /** The microphone being taken away (its source). */
+  const [removing, setRemoving] = useState<string | null>(null);
   /** The one just added: it comes in. */
   const [fresh, setFresh] = useState<string | null>(null);
   useEffect(() => {
@@ -126,6 +129,13 @@ export function MicsControl({
     }
   };
 
+  // Taken away: its file ends there and stays with the session; a refusal is said.
+  const remove = async (m: MicTrack) => {
+    setRemoving(m.sourceId);
+    await act(() => api.removeMicrophone(m.sourceId));
+    setRemoving(null);
+  };
+
   const list = adding ? (
     <div className="cl-mics__pop">
       <div className="cl-mics__head">
@@ -187,6 +197,7 @@ export function MicsControl({
             className="cl-mics__row"
             data-muted={m.muted || undefined}
             data-fresh={fresh === m.sourceId || undefined}
+            data-busy={removing === m.sourceId || undefined}
           >
             {m.lost && !m.muted ? (
               <TriangleAlert
@@ -203,7 +214,11 @@ export function MicsControl({
             )}
             <span className="cl-mics__name" title={m.device}>
               {m.device}
-              {m.muted && " · coupé"}
+              {removing === m.sourceId ? (
+                <span role="status"> · retrait…</span>
+              ) : (
+                m.muted && " · coupé"
+              )}
             </span>
             <span className="cl-mics__meter">
               <LevelMeter
@@ -220,6 +235,7 @@ export function MicsControl({
               aria-label={
                 m.muted ? `Rétablir ${m.device}` : `Couper ${m.device}`
               }
+              disabled={removing === m.sourceId}
               onClick={() =>
                 void cut([m.sourceId], !m.muted, () =>
                   api.muteTrack(m.sourceId, !m.muted),
@@ -228,6 +244,19 @@ export function MicsControl({
             >
               <MicOff size={15} strokeWidth={1.75} aria-hidden />
             </button>
+            {/* The main microphone stays: the processing listens to it. */}
+            {m.sourceId !== mics[0]?.sourceId && (
+              <button
+                type="button"
+                className="cl-mics__icon"
+                title={`Retirer ${m.device} (ce qu'il a enregistré est gardé)`}
+                aria-label={`Retirer ${m.device}`}
+                disabled={removing !== null}
+                onClick={() => void remove(m)}
+              >
+                <X size={15} strokeWidth={1.75} aria-hidden />
+              </button>
+            )}
           </li>
         ))}
       </ul>
