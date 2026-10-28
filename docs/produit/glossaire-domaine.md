@@ -21,7 +21,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, puis `listening.flac`, ADR 0037, 0046). Le moteur ne l'entend pas. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Micro principal | `reference_source` (captée) | Le micro choisi en premier à l'enregistrement : la source de référence, celle qui est traitée (ADR 0033). |
-| Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, par « Ajouter un micro » ; gardé, pas encore traité (ADR 0031, 0033). |
+| Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, choisi dans la liste des micros (« + » ou le chevron à côté du micro) ; gardé, pas encore traité (ADR 0031, 0033, 0067). |
 | Audio dérivé | `derived_audio` | Audio produit par une étape (rééchantillonné, déréverbéré, mixé). Purgé avec l'original. |
 | Alerte d'enregistrement | `recording_alert` | Ce qu'un enregistrement en cours demande à l'utilisateur : personne ne parle depuis un moment, ou il dure depuis longtemps (ADR 0054). Une question, jamais un arrêt. |
 | Rappel d'enregistrement | `reminders` | Réglage : après combien de silence, et toutes les combien de temps, un enregistrement en cours le rappelle (ADR 0054). |

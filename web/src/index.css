@@ -4909,7 +4909,6 @@ button.cl-tree__more:hover {
   background: var(--color-border);
 }
 
-.cl-mics__action,
 .cl-mics__pick {
   display: flex;
   align-items: center;
@@ -4932,26 +4931,16 @@ button.cl-tree__more:hover {
   color: var(--color-text-primary);
 }
 
-.cl-mics__action[data-kind="add"] {
-  color: var(--color-accent);
+.cl-mics__src:focus-visible,
+.cl-mics__pick:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 
-.cl-mics__action:hover,
 .cl-mics__pick:hover {
   background: var(--color-background-muted);
 }
 
-.cl-mics__head {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  height: 34px;
-  padding: 0 var(--spacing-1);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.cl-mics__foot,
 .cl-mics__problem {
   margin: 0;
   padding: var(--spacing-2) var(--spacing-3);
@@ -4961,6 +4950,43 @@ button.cl-tree__more:hover {
 
 .cl-mics__problem {
   color: var(--color-text-primary);
+}
+
+.cl-mics__title {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The place of the cross, kept on every row so that the levels line up; the cross shows
+   while the row is pointed at or holds the focus. */
+.cl-mics__end {
+  display: inline-flex;
+  flex: none;
+  width: 28px;
+}
+
+.cl-mics__remove {
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__row:hover .cl-mics__remove,
+.cl-mics__row:focus-within .cl-mics__remove {
+  opacity: 1;
+}
+
+/* « Tous les micros », its chevron at the end. */
+.cl-mics__others > svg:last-child {
+  margin-left: auto;
+}
+
+.cl-mics__foot {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .cl-rec__line[data-kind="micro"] .cl-rec__what {
