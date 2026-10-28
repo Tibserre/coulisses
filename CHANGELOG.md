@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
+- garde l'identifiant du code dans la provenance des générations (resumes)
 - montre l'identifiant du code en mode développeur (reglages)
 - donne l'identifiant du code qui tourne (app_build) (etat)
 - montre l'avancement et les chapitres provisoires pendant leur détection (chapitres)
