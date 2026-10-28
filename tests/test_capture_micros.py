@@ -247,3 +247,84 @@ def test_a_file_that_cannot_be_made_for_a_microphone_added_is_said_and_tried_aga
     elapsed(rec, 1.0)
     rec.stop(profile="essai")
     assert {s.source_id for s in sessions.other_sources(data, session_id)} >= {"mic3"}
+
+
+def test_a_microphone_added_by_mistake_is_taken_off_and_its_file_kept(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    session_id = start_mac(rec).session_id
+    mics.mac.push(tone(1.0, 0.3))
+    elapsed(rec, 1.0)
+    added = rec.add_microphone(PHONE.index).extra[0]
+    assert added.source_id == "mic2" and added.started_at_s == pytest.approx(1.0)
+    mics.phone.push(tone(0.5, 0.2))
+    mics.mac.push(tone(0.5, 0.3))
+    elapsed(rec, 1.5)
+    rec.mute("mic2", True)
+    state = rec.remove_microphone("mic2")
+    assert state.extra == []
+    [gone] = state.removed
+    assert (gone.source_id, gone.removed_at_s) == ("mic2", pytest.approx(1.5))
+    assert gone.started_at_s == pytest.approx(1.0) and gone.error is None
+    assert gone.cuts == [capture.Cut(from_s=1.5, to_s=1.5)]  # its cut ends with it
+    for refused in ("ref", "system", "mic2"):
+        with pytest.raises(capture.RecordingError):
+            rec.remove_microphone(refused)
+    # The same microphone again: the next source, never the one taken off.
+    assert [t.source_id for t in rec.add_microphone(PHONE.index).extra] == ["mic3"]
+    mics.mac.push(tone(0.5, 0.3))
+    elapsed(rec, 2.0)
+    rec.stop(profile="essai")
+
+    kept = {s.source_id: s for s in sessions.other_sources(data, session_id)}
+    assert kept["mic2"].capture_state == "complete"
+    assert kept["mic2"].duration_s == pytest.approx(1.5)  # silence, then what it heard
+    sound = read(data.sources_dir(session_id) / "mic2.wav")
+    assert np.max(np.abs(sound[:SECOND])) == 0.0
+    assert np.max(np.abs(sound[SECOND:])) == pytest.approx(0.2, abs=1e-3)
+    assert "mic3" in kept
+
+
+def test_the_service_takes_a_microphone_off(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    from coulisses_app.api import create_app
+
+    from .conftest import FAKE_CHAIN, local_client
+
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
+    )
+    client.post("/api/enregistrement", json={"micro": MIC.index})
+    client.post("/api/enregistrement/micros", json={"micro": PHONE.index})
+    off = client.post("/api/enregistrement/pistes/mic2/retirer")
+    assert off.status_code == 200, off.text
+    assert off.json()["extra"] == [] and off.json()["removed"][0]["source_id"] == "mic2"
+    main = client.post("/api/enregistrement/pistes/ref/retirer")
+    assert main.status_code == 422 and "se coupent" in main.json()["detail"]
+    assert client.post("/api/enregistrement/arret").status_code == 200
+
+
+def test_a_microphone_taken_off_while_paused_keeps_the_silence_before_it(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    mics = TwoMics()
+    rec = two_recorder(data, mics, awake, clock)
+    session_id = start_mac(rec).session_id
+    mics.mac.push(tone(1.0, 0.3))
+    elapsed(rec, 1.0)
+    rec.pause()
+    rec.add_microphone(PHONE.index)
+    mics.phone.push(tone(0.5, 0.2))  # heard while paused: written nowhere
+    gone = rec.remove_microphone("mic2").removed[0]
+    assert gone.removed_at_s == pytest.approx(1.0)
+    rec.resume()
+    mics.mac.push(tone(0.5, 0.3))
+    elapsed(rec, 1.5)
+    rec.stop(profile="essai")
+    [phone] = sessions.other_sources(data, session_id)
+    assert phone.duration_s == pytest.approx(1.0)  # its silence up to when it came
