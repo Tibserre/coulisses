@@ -154,6 +154,18 @@
       "title": "App Version",
       "type": "string"
     },
+    "app_build": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "App Build"
+    },
     "status": {
       "enum": [
         "succeeded",

@@ -25,7 +25,7 @@ from typing import Literal, NamedTuple, Protocol
 
 from pydantic import BaseModel
 
-from coulisses_app import actions, corrections, notes, sessions, spaces
+from coulisses_app import actions, bundle, corrections, notes, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import (
@@ -97,6 +97,9 @@ class Provenance(BaseModel):
     stage: Stage
     producer: Literal["app"] = "app"
     app_version: str
+    app_build: str | None = None
+    """Which code wrote it (`git describe`, ADR 0064): `app_version` stays the last published
+    version between two publications. Absent from the provenances written before."""
     status: Literal["succeeded", "failed"]
     action_ref: str
     action_name: str
@@ -325,6 +328,7 @@ def generate(
         > cfg.num_ctx - reserve - 2000
     ):
         title_input = None  # too long to read at once: the transcript path cuts in sections
+    build = bundle.build_identifier()  # read before the run exists: a failure leaves none
     run_id = f"{stage}-{secrets.token_hex(4)}"
     folder = data.run_dir(session_id, run_id)
     conn = connect(data)
@@ -758,6 +762,7 @@ def generate(
             session_id=session_id,
             stage=stage,
             app_version=version("coulisses-app"),
+            app_build=build,
             status="failed" if error else "succeeded",
             action_ref=chosen.ref,
             action_name=chosen.name,
