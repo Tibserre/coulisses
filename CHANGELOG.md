@@ -1,33 +1,23 @@
 # Journal des versions
 
-Versions de l'application Coulisses, publiées automatiquement à chaque fusion dans `main`
-à partir des messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`).
-Une section peut être réécrite ensuite pour les utilisateurs : la publication lit celle de `main`.
+Versions de l'application Coulisses, numérotées à la publication (ADR 0064) à partir des
+messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaque fusion dans
+`main`, la section « Non publié » est réécrite d'après les commits : ne pas la retoucher.
+La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
+la publication lit celle de `main`.
 
-## v0.37.1 — 2026-10-27
-
-### Corrections
-
-- un ffmpeg sans PCM 24 bits garde les pistes en WAV (conversion)
-
-## v0.37.0 — 2026-10-23
+## Non publié
 
 ### Nouveautés
 
 - montre l'avancement et les chapitres provisoires pendant leur détection (chapitres)
-
-## v0.36.0 — 2026-10-21
-
-### Nouveautés
-
 - reconnaît les voix d'une séance à l'autre (voix)
-
-## v0.35.0 — 2026-10-21
-
-### Nouveautés
-
 - rappelle qu'un enregistrement tourne (enregistrement)
 - montre l'enregistrement en cours dans la barre des menus, avec ses rappels (lanceur)
+
+### Corrections
+
+- un ffmpeg sans PCM 24 bits garde les pistes en WAV (conversion)
 
 ## v0.34.0 — 2026-10-20
 

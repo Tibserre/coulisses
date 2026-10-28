@@ -253,6 +253,13 @@ def app_version() -> str:
     ]
 
 
+def version_identifier() -> str:
+    """Which code is built (ADR 0064): `vX.Y.Z` on a published version, else what
+    `git describe` says (`vX.Y.Z-12-gabc1234`, `-modifie`); written in the .app for the
+    service to show it."""
+    return run([sys.executable, ROOT / "scripts" / "release.py", "--identifiant"]).stdout.strip()
+
+
 def size_of(path: Path) -> int:
     if path.is_symlink() or not path.is_dir():
         return path.lstat().st_size
@@ -545,6 +552,7 @@ def main() -> None:
     settings = tomllib.loads((ROOT / "scripts" / "construction.toml").read_text(encoding="utf-8"))
     app, minimum_macos = settings["app"], settings["app"]["minimum_macos"]
     version = app_version()
+    identifier = version_identifier()
 
     identity = signing_identity(settings["signature"], args.ad_hoc)
     uv = pinned_uv(settings["uv"])
@@ -566,7 +574,8 @@ def main() -> None:
     resources = contents / "Resources"
     resources.mkdir(parents=True)
 
-    say(f"Assemblage de {app['name']} {version}…")
+    say(f"Assemblage de {app['name']} {version} ({identifier})…")
+    (resources / "identifiant-de-version").write_text(identifier + "\n", encoding="utf-8")
     report = args.sortie / f"{app['name']}-elagage.txt"
     install_python(python_dir, resources / "python", settings["elagage"], report)
     shutil.copytree(interface, resources / "web")

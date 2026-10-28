@@ -1,5 +1,5 @@
-# Dossiers dont le uv.lock est remis à jour à chaque version (il contient la version du
-# projet).
+# Dossiers dont le uv.lock est remis à jour à chaque version numérotée (il contient la
+# version du projet). Ces fichiers ne portent que la dernière version publiée (ADR 0064).
 verrous = ["."]
 
 # Fichiers où scripts/release.py écrit la version publiée de l'application (groupe 1 du
