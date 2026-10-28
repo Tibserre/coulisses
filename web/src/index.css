@@ -4767,6 +4767,30 @@ button.cl-tree__more:hover {
   opacity: 0.5;
 }
 
+/* What a click does shows at once: the level fades as the microphone is cut (160 ms), one
+   added comes in (400 ms), one being opened or taken away is quieter while it is done. */
+.cl-mics__meter {
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__row[data-fresh] {
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-mics__pick:disabled:not([data-busy]) {
+  opacity: 0.55;
+}
+
+.cl-mics__pick:disabled {
+  cursor: progress;
+}
+
+.cl-mics__busy {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
 /* The same width as the computer's sound beside it. */
 .cl-mics__all .cl-mics__meter {
   width: 7rem;
