@@ -21,9 +21,10 @@ import {
   type Mic as MicTrack,
 } from "../microphones.ts";
 
-/** The microphones in the recording bar (ADR 0067): one button in two. Its icon cuts or
- *  brings back every microphone at once; the rest opens their list, where each is cut on
- *  its own, and one is added. The computer's sound keeps its own button beside. */
+/** The microphones in the recording bar (ADR 0067), as the computer's sound: their icon
+ *  and level are one button, which cuts or brings back every microphone (the icon then
+ *  crossed); beside it, the chevron opens their list (each cut on its own, one added), or
+ *  « + » adds a second one when there is only one. */
 export function MicsControl({
   mics,
   act,
@@ -35,21 +36,30 @@ export function MicsControl({
   const [isOpen, setOpen] = useState(false);
   const [adding, setAdding] = useState<InputDevice[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const summary = micSummary(mics);
   const level = barLevel(mics);
+  // One microphone only: « + » opens straight on those one can add.
+  const single = mics.length === 1;
   const open = (next: boolean) => {
     setOpen(next);
+    if (next && single) void showAddable();
     if (!next) {
       setAdding(null);
       setProblem(null);
     }
   };
   const showAddable = async () => {
+    // The adding view at once, empty while the Mac lists its microphones.
+    setLoading(true);
+    setAdding((now) => now ?? []);
     try {
       setAdding(addable(await api.microphones(), mics));
       setProblem(null);
     } catch (e) {
       setProblem((e as Error).message);
+    } finally {
+      setLoading(false);
     }
   };
   // A refusal (not here any more, already there) is said by the page; the list stays.
@@ -67,17 +77,39 @@ export function MicsControl({
         className="cl-mics__all"
         data-muted={summary.allCut || undefined}
         title={all}
-        aria-label={all}
+        aria-label={`${summary.count === 1 ? "Micro" : `${summary.count} micros`}${
+          summary.cut && !summary.allCut
+            ? `, dont ${summary.cut} coupé${summary.cut > 1 ? "s" : ""}`
+            : ""
+        }${summary.lost ? ", l'un ne répond plus" : ""}. ${all}`}
         onClick={(e) => {
           e.currentTarget.blur();
           void act(() => api.muteMicrophones(!summary.allCut));
         }}
       >
         {summary.allCut ? (
-          <MicOff size={16} strokeWidth={1.75} aria-hidden />
+          <MicOff size={18} strokeWidth={1.75} aria-hidden />
         ) : (
-          <Mic size={16} strokeWidth={1.75} aria-hidden />
+          <Mic size={18} strokeWidth={1.75} aria-hidden />
         )}
+        {summary.count > 1 && (
+          <span className="cl-mics__count">{summary.count}</span>
+        )}
+        {summary.lost && (
+          <TriangleAlert
+            className="cl-mics__lost"
+            size={13}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        )}
+        <span className="cl-mics__meter">
+          <LevelMeter
+            level={summary.allCut ? 0 : meterValue(level.rms_db)}
+            peak={summary.allCut ? 0 : meterValue(level.peak_db)}
+            clipping={mics.some((m) => !m.muted && m.clipping)}
+          />
+        </span>
       </button>
       <Popover
         isOpen={isOpen}
@@ -104,7 +136,7 @@ export function MicsControl({
                 </button>
                 Ajouter un micro
               </div>
-              {adding.length === 0 && (
+              {adding.length === 0 && !loading && !problem && (
                 <p className="cl-mics__foot">
                   Aucun autre micro sur ce Mac. Un iPhone apparaît s'il est près
                   du Mac, avec Continuité.
@@ -129,7 +161,7 @@ export function MicsControl({
                 ))}
               </ul>
               {problem && <p className="cl-mics__problem">{problem}</p>}
-              {adding.length > 0 && (
+              {adding.length > 0 && !loading && (
                 <p className="cl-mics__foot">
                   Il enregistre à partir de maintenant.
                 </p>
@@ -220,45 +252,19 @@ export function MicsControl({
           type="button"
           className="cl-mics__more"
           data-open={isOpen || undefined}
-          aria-label={`${summary.count === 1 ? "1 micro" : `${summary.count} micros`}${
-            summary.cut && !summary.allCut
-              ? `, dont ${summary.cut} coupé${summary.cut > 1 ? "s" : ""}`
-              : ""
-          }${summary.lost ? ", l'un ne répond plus" : ""}. ${isOpen ? "Masquer" : "Voir"} les micros`}
+          title={single ? "Ajouter un micro" : "Les micros"}
+          aria-label={
+            single
+              ? "Ajouter un micro"
+              : `${isOpen ? "Masquer" : "Voir"} les micros`
+          }
         >
-          {summary.allCut ? (
-            "Micros coupés"
+          {single ? (
+            <Plus size={14} strokeWidth={1.75} aria-hidden />
+          ) : isOpen ? (
+            <ChevronUp size={14} strokeWidth={1.75} aria-hidden />
           ) : (
-            <>
-              {summary.count > 1 && (
-                <span className="cl-mics__count">{summary.count}</span>
-              )}
-              {summary.cut > 0 && (
-                <span>
-                  · {summary.cut === 1 ? "1 coupé" : `${summary.cut} coupés`}
-                </span>
-              )}
-            </>
-          )}
-          {summary.lost && (
-            <TriangleAlert
-              className="cl-mics__lost"
-              size={13}
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          )}
-          <span className="cl-mics__meter">
-            <LevelMeter
-              level={meterValue(level.rms_db)}
-              peak={meterValue(level.peak_db)}
-              clipping={mics.some((m) => !m.muted && m.clipping)}
-            />
-          </span>
-          {isOpen ? (
-            <ChevronUp size={12} strokeWidth={1.75} aria-hidden />
-          ) : (
-            <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+            <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
           )}
         </button>
       </Popover>

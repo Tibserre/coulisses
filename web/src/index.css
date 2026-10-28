@@ -4722,20 +4722,22 @@ button.cl-tree__more:hover {
   opacity: 0.5;
 }
 
-/* The microphones (ADR 0067): one button in two, as quiet as the computer's sound. Its icon
-   cuts or brings back every microphone; the rest opens their list. */
+/* The microphones (ADR 0067), as the computer's sound: their icon and level are one button
+   that cuts them all (the icon crossed, the level flat); beside it, a small chevron (their
+   list) or « + » (a second one). */
 .cl-mics {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
 }
 
 .cl-mics__all,
 .cl-mics__more {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-2);
   height: 28px;
   border: 0;
+  border-radius: var(--radius-element);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
@@ -4745,13 +4747,13 @@ button.cl-tree__more:hover {
 }
 
 .cl-mics__all {
-  padding: 0 var(--spacing-1) 0 var(--spacing-2);
-  border-radius: var(--radius-element) 0 0 var(--radius-element);
+  gap: var(--spacing-2);
+  padding: 0 var(--spacing-2) 0 var(--spacing-1);
 }
 
 .cl-mics__more {
-  padding: 0 var(--spacing-2) 0 var(--spacing-1);
-  border-radius: 0 var(--radius-element) var(--radius-element) 0;
+  justify-content: center;
+  width: 24px;
 }
 
 .cl-mics__all:hover,
@@ -4759,6 +4761,15 @@ button.cl-tree__more:hover {
 .cl-mics__more[data-open] {
   background: var(--color-background-muted);
   color: var(--color-text-primary);
+}
+
+.cl-mics__all[data-muted] .cl-mics__meter {
+  opacity: 0.5;
+}
+
+/* The same width as the computer's sound beside it. */
+.cl-mics__all .cl-mics__meter {
+  width: 7rem;
 }
 
 .cl-mics__count {
