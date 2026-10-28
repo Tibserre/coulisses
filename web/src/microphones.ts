@@ -134,7 +134,7 @@ export function micEvents(
         text: `${m.device} ajouté`,
       });
   }
-  // Cuts, grouped by time: every microphone at the same time is « the microphones ».
+  // Cuts and returns, grouped by their time.
   const groups = new Map<
     string,
     { at: number; back: boolean; names: string[] }
