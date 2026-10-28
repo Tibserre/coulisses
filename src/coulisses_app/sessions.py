@@ -459,6 +459,87 @@ def start_capture(
     return session_id, sources / CAPTURE_FILE
 
 
+def next_extra_source_id(data: DataDir, session_id: str) -> str:
+    """The source id of the next microphone added to this session (`mic2`, `mic3`…), after
+    every one it has, those that never recorded included."""
+    conn = connect(data)
+    try:
+        taken = [
+            int(r["source_id"][3:])
+            for r in conn.execute(
+                "SELECT source_id FROM audio_source WHERE session_id = ?", (session_id,)
+            )
+            if is_extra_microphone(r["source_id"])
+        ]
+    finally:
+        conn.close()
+    return extra_source_id(max(taken, default=1) - 1)
+
+
+def add_capture_source(
+    data: DataDir,
+    session_id: str,
+    source_id: str,
+    *,
+    device: str,
+    sample_rate: int,
+    channels: int,
+) -> None:
+    """A microphone added while recording (`mic2`, `mic3`…): its source, made `recording`
+    like those added at the start."""
+    conn = connect(data)
+    try:
+        with conn:
+            recorded = conn.execute(
+                "SELECT recorded_at FROM session WHERE id = ?", (session_id,)
+            ).fetchone()["recorded_at"]
+            when = datetime.fromisoformat(recorded.replace("Z", "+00:00")).astimezone()
+            conn.execute(
+                "INSERT INTO audio_source (session_id, source_id, origin, original_name,"
+                " file_name, sha256, size_bytes, sample_rate, channels, codec, device,"
+                " added_at, capture_state) VALUES (?, ?, 'captured', ?, ?, '', 0, ?, ?,"
+                " 'pcm_s24le', ?, ?, 'recording')",
+                (
+                    session_id,
+                    source_id,
+                    f"Enregistrement du {when.strftime('%d/%m/%Y %H:%M')}{_label(source_id)}.wav",
+                    capture_file(source_id),
+                    sample_rate,
+                    channels,
+                    device,
+                    now_iso(),
+                ),
+            )
+    finally:
+        conn.close()
+
+
+def last_added_microphones(data: DataDir) -> list[str]:
+    """The microphones added to the last session recorded in the app (at its start or while
+    it ran), by name, in the order they were added: what « the microphones of last time »
+    are. No setting is kept: the last recording says it."""
+    conn = connect(data)
+    try:
+        last = conn.execute(
+            "SELECT session_id FROM audio_source WHERE origin = 'captured'"
+            " AND source_id = ? ORDER BY added_at DESC, rowid DESC LIMIT 1",
+            (REFERENCE_SOURCE_ID,),
+        ).fetchone()
+        if last is None:
+            return []
+        rows = conn.execute(
+            "SELECT source_id, device FROM audio_source WHERE session_id = ?"
+            " AND origin = 'captured'",
+            (last["session_id"],),
+        ).fetchall()
+    finally:
+        conn.close()
+    added = [
+        (int(r["source_id"][3:]), r["device"]) for r in rows if is_extra_microphone(r["source_id"])
+    ]
+    return list(dict.fromkeys(device for _, device in sorted(added) if device))
+
+
 def finish_capture(
     data: DataDir,
     session_id: str,

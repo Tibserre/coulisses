@@ -241,9 +241,10 @@ class SpaceMoved(BaseModel):
     """The people of the old space who were checked, unchecked by the move: said."""
 
 
-class SystemSoundRequest(BaseModel):
+class MuteRequest(BaseModel):
     coupe: bool
-    """True: the computer's sound is cut for now (silence written); false: it is back."""
+    """True: the track (the computer's sound, a microphone, or all the microphones) is cut for
+    now (silence written); false: it is back."""
 
 
 class RecordingRequest(BaseModel):
@@ -257,6 +258,13 @@ class RecordingRequest(BaseModel):
     """Microphones added, recording at the same time (often an iPhone), each its file."""
     son_ordinateur: bool = False
     """The computer's sound too: a meeting online or hybrid (ADR 0032)."""
+    micros_precedents: bool = False
+    """The microphones added to the last recording too, those here now (« Nouvelle note »)."""
+
+
+class AddMicrophoneRequest(BaseModel):
+    micro: int
+    """Index of the input device, from GET /api/micros."""
 
 
 class MarkerRequest(BaseModel):
@@ -826,11 +834,26 @@ def create_app(
             device_index=demande.micro,
             extra_device_indexes=demande.micros_en_plus,
             system=demande.son_ordinateur,
+            previous_microphones=demande.micros_precedents,
         )
 
     @app.post("/api/enregistrement/son-ordinateur")
-    def mute_system_sound(demande: SystemSoundRequest) -> capture.RecordingState:
+    def mute_system_sound(demande: MuteRequest) -> capture.RecordingState:
         return recorder.mute_system(demande.coupe)
+
+    @app.post("/api/enregistrement/pistes/{source_id}/coupe")
+    def mute_track(source_id: str, demande: MuteRequest) -> capture.RecordingState:
+        """One track cut or back: `ref` (the main microphone), `mic2`…, `system`."""
+        return recorder.mute(source_id, demande.coupe)
+
+    @app.post("/api/enregistrement/micros/coupe")
+    def mute_microphones(demande: MuteRequest) -> capture.RecordingState:
+        """Every microphone cut or back at once; the computer's sound keeps its own."""
+        return recorder.mute_microphones(demande.coupe)
+
+    @app.post("/api/enregistrement/micros")
+    def add_microphone(demande: AddMicrophoneRequest) -> capture.RecordingState:
+        return recorder.add_microphone(demande.micro)
 
     @app.post("/api/enregistrement/pause")
     def pause_recording() -> capture.RecordingState:

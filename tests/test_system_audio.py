@@ -567,6 +567,22 @@ def test_the_computers_sound_is_cut_and_back_on_the_same_clock(
     assert np.max(np.abs(ref[second : 2 * second])) == pytest.approx(0.3, abs=1e-3)
 
 
+def test_all_the_microphones_cut_leave_the_computers_sound(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    session_id = start_online(rec).session_id
+    state = rec.mute_microphones(True)
+    assert state.muted and state.system is not None and not state.system.muted
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    rec.stop(profile="essai")
+    folder = data.sources_dir(session_id)
+    assert np.max(np.abs(read(folder / "ref.wav"))) == 0.0
+    assert np.max(np.abs(read(folder / "system.wav"))) == pytest.approx(0.1, abs=1e-3)
+
+
 def test_a_recording_without_the_computers_sound_cannot_cut_it(
     data: DataDir, awake: CountingAwake, clock: Clock
 ) -> None:
