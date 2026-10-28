@@ -1,5 +1,5 @@
-"""The microphones while recording: cut one, or all, and bring them back; add one on the way;
-take back those of last time. Silence is written in their place, on the reference's clock
+"""The microphones while recording: cut one, or all, and bring them back; add one on the way.
+Silence is written in their place, on the reference's clock
 (P2): every file keeps the recording's length."""
 
 from __future__ import annotations
@@ -159,45 +159,7 @@ def test_a_microphone_that_will_not_open_on_the_way_changes_nothing(
     assert sessions.other_sources(data, session_id) == []
 
 
-def test_the_microphones_of_last_time_are_taken_back_when_here(
-    data: DataDir, awake: CountingAwake, clock: Clock
-) -> None:
-    mics = TwoMics()
-    rec = two_recorder(data, mics, awake, clock)
-    first = start_mac(rec, previous_microphones=True)
-    assert first.last_time == capture.LastTime()  # nothing recorded before
-    rec.add_microphone(PHONE.index)  # added on the way: it counts for next time
-    mics.mac.push(tone(0.5, 0.3))
-    elapsed(rec, 0.5)
-    rec.stop(profile="essai")
-
-    again = start_mac(rec, previous_microphones=True)
-    assert again.last_time == capture.LastTime(taken=[PHONE.name])
-    assert [t.device for t in again.extra] == [PHONE.name]
-    rec.stop(profile="essai")
-
-    away = capture.Recorder(
-        data,
-        stream_factory=mics.factory,
-        devices=lambda: [MIC],  # the iPhone is not here: the recording starts without it
-        keep_awake=awake,
-        battery=lambda: False,
-        clock=clock,
-        retry_wait_s=0.0,
-    )
-    alone = start_mac(away, previous_microphones=True)
-    assert alone.last_time == capture.LastTime(missing=[PHONE.name]) and alone.extra == []
-    away.stop(profile="essai")
-    # Not asked: none taken back. The last recording says it: it had none, so none next.
-    assert start_mac(rec).last_time is None
-    rec.stop(profile="essai")
-    assert start_mac(rec, previous_microphones=True).last_time == capture.LastTime()
-    rec.stop(profile="essai")
-
-
-def test_the_service_cuts_adds_and_takes_back(
-    data: DataDir, awake: CountingAwake, clock: Clock
-) -> None:
+def test_the_service_cuts_and_adds(data: DataDir, awake: CountingAwake, clock: Clock) -> None:
     from coulisses_app.api import create_app
 
     from .conftest import FAKE_CHAIN, local_client
@@ -207,11 +169,8 @@ def test_the_service_cuts_adds_and_takes_back(
     client = local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, recorder=rec)
     )
-    started = client.post(
-        "/api/enregistrement", json={"micro": MIC.index, "micros_precedents": True}
-    )
+    started = client.post("/api/enregistrement", json={"micro": MIC.index})
     assert started.status_code == 201, started.text
-    assert started.json()["last_time"] == {"taken": [], "missing": []}
     added = client.post("/api/enregistrement/micros", json={"micro": PHONE.index})
     assert added.status_code == 200, added.text
     assert added.json()["extra"][0]["source_id"] == "mic2"
@@ -263,19 +222,6 @@ def test_a_microphone_added_then_silent_until_the_stop_still_says_when_it_came(
     rec.stop(profile="essai")
     [phone] = sessions.other_sources(data, session_id)
     assert phone.duration_s == pytest.approx(1.0)  # silence up to when it came
-
-
-def test_a_microphone_of_last_time_that_will_not_open_is_said_missing(
-    data: DataDir, awake: CountingAwake, clock: Clock
-) -> None:
-    mics = TwoMics()
-    rec = two_recorder(data, mics, awake, clock)
-    start_both(rec)
-    rec.stop(profile="essai")
-    mics.phone.refuse_start = True
-    state = start_mac(rec, previous_microphones=True)
-    assert state.last_time == capture.LastTime(missing=[PHONE.name]) and state.extra == []
-    rec.stop(profile="essai")
 
 
 def test_a_file_that_cannot_be_made_for_a_microphone_added_is_said_and_tried_again(

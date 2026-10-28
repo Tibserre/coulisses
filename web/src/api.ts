@@ -357,8 +357,6 @@ export interface RecordingState {
   muted: boolean;
   /** When it was cut and back, in recorded time, while recording only. */
   cuts: Cut[];
-  /** The microphones of last time, when « Nouvelle note » asked for them. */
-  last_time: LastTime | null;
   too_quiet: boolean;
   clipping: boolean;
   /** Times the Mac could not keep up and lost some sound. */
@@ -397,12 +395,6 @@ export interface Cut {
   to_s: number | null;
 }
 
-export interface LastTime {
-  taken: string[];
-  /** Not here now, or not opened: the recording started without them. */
-  missing: string[];
-}
-
 export interface TrackState {
   device: string;
   /** `mic2`, `mic3`… or `system`: what its cut is asked by. */
@@ -433,8 +425,6 @@ export interface RecordingRequest {
   micros_en_plus: number[];
   /** The computer's sound too: a meeting online or hybrid. */
   son_ordinateur: boolean;
-  /** The microphones added to the last recording too, those here now (ADR 0067). */
-  micros_precedents?: boolean;
   presents: number[];
   non_nommes: number | null;
   micro: number | null;

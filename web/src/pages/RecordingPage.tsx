@@ -350,7 +350,7 @@ export function RecordingPage({
           note: n,
           said: null,
         })),
-        ...micEvents(mics, state.last_time, addedAt.current).map((e) => ({
+        ...micEvents(mics, addedAt.current).map((e) => ({
           key: `micro-${e.key}`,
           at: e.at,
           marker: null,

@@ -1,7 +1,7 @@
 /** The microphones while recording (ADR 0067), kept apart to be tested: the main one and
  *  those added, what the bar says of them, which can still be added, and what the timeline
  *  shows of their cuts. The computer's sound is not one of them: it keeps its own button. */
-import type { Cut, InputDevice, LastTime, RecordingState } from "./api.ts";
+import type { Cut, InputDevice, RecordingState } from "./api.ts";
 
 export interface Mic {
   sourceId: string;
@@ -104,27 +104,13 @@ export interface MicEvent {
   text: string;
 }
 
-/** What the timeline says of the microphones: last time's taken or missing at the start,
- *  each one added (when this page saw it come), each cut and each return. A cut of every
- *  microphone at once is said once. */
+/** What the timeline says of the microphones: each one added (when this page saw it
+ *  come), each cut and each return. A cut that leaves them all cut is said once. */
 export function micEvents(
   mics: readonly Mic[],
-  lastTime: LastTime | null,
   addedAt: ReadonlyMap<string, number>,
 ): MicEvent[] {
   const events: MicEvent[] = [];
-  if (lastTime?.taken.length)
-    events.push({
-      key: "last-taken",
-      at: 0,
-      text: `Avec ${list([mics[0]?.device ?? "le micro", ...lastTime.taken])}, comme la dernière fois`,
-    });
-  for (const name of lastTime?.missing ?? [])
-    events.push({
-      key: `last-missing-${name}`,
-      at: 0,
-      text: `${name} n'est pas là : démarré sans lui`,
-    });
   for (const m of mics) {
     const at = addedAt.get(m.sourceId);
     if (at !== undefined)

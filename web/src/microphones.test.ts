@@ -105,7 +105,7 @@ test("only the microphones not already recording can be added", () => {
   assert.equal(isPhone("Micro USB"), false);
 });
 
-test("the timeline says last time, what was added, each cut and return", () => {
+test("the timeline says what was added, each cut and return", () => {
   const mics = microphones(
     state({ cuts: [{ from_s: 300, to_s: null }] }, [
       track("mic2", "iPhone", {
@@ -117,16 +117,10 @@ test("the timeline says last time, what was added, each cut and return", () => {
       track("mic3", "Micro USB", { cuts: [{ from_s: 300, to_s: null }] }),
     ]),
   );
-  const events = micEvents(
-    mics,
-    { taken: ["iPhone"], missing: ["Casque"] },
-    new Map([["mic3", 200]]),
-  );
+  const events = micEvents(mics, new Map([["mic3", 200]]));
   assert.deepEqual(
     events.map((e) => [e.at, e.text]),
     [
-      [0, "Avec Micro du MacBook et iPhone, comme la dernière fois"],
-      [0, "Casque n'est pas là : démarré sans lui"],
       [120, "iPhone coupé"],
       [180, "iPhone rétabli"],
       [200, "Micro USB ajouté"],
@@ -142,9 +136,7 @@ test("a cut that leaves them all cut is « the microphones », one added later a
       track("mic3", "Micro USB", { cuts: [{ from_s: 250, to_s: 400 }] }),
     ]),
   );
-  const said = micEvents(mics, null, new Map([["mic3", 200]])).map(
-    (e) => e.text,
-  );
+  const said = micEvents(mics, new Map([["mic3", 200]])).map((e) => e.text);
   assert.deepEqual(said, [
     "iPhone coupé",
     "Micro USB ajouté",
