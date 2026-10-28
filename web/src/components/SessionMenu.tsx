@@ -15,8 +15,14 @@ export function SessionMenu({
   onError,
   onIncomplete,
   onDone,
+  onVersions,
+  onRerun,
 }: {
   session: Session;
+  /** Opens « Refaire le traitement ». */
+  onRerun?: () => void;
+  /** Opens « Versions » (ADR 0062, 0066). */
+  onVersions?: () => void;
   onChanged: (session: Session) => void;
   onError: (message: string) => void;
   /** Done in Coulisses, but something stayed on the disk. */
@@ -32,7 +38,12 @@ export function SessionMenu({
   const [existing, setExisting] = useState<string | null>(null);
   const exportNow = async (replace: boolean) => {
     try {
-      const { fichier, resume } = await api.exportToFolder(session.id, "tout", null, replace);
+      const { fichier, resume } = await api.exportToFolder(
+        session.id,
+        "tout",
+        null,
+        replace,
+      );
       setAsking(null);
       onDone?.(
         resume
@@ -76,16 +87,30 @@ export function SessionMenu({
                   // Short: the rule (kept from the purge, or purged after a notice) is said in
                   // the Réglages; a purge always comes with a notice first (ADR 0029).
                   label: kept ? "Ne plus garder l'audio" : "Garder l'audio",
-                  onClick: () => void run(async () => onChanged(await api.keepAudio(session.id, !kept)))(),
+                  onClick: () =>
+                    void run(async () =>
+                      onChanged(await api.keepAudio(session.id, !kept)),
+                    )(),
                 },
-                { label: "Supprimer l'audio…", onClick: () => setAsking("audio") },
+                {
+                  label: "Supprimer l'audio…",
+                  onClick: () => setAsking("audio"),
+                },
               ]),
           {
             label: "Exporter vers le dossier",
             onClick: () => void exportNow(false),
           },
+          ...(onRerun && !removed
+            ? [{ label: "Refaire le traitement…", onClick: onRerun }]
+            : []),
+          ...(onVersions ? [{ label: "Versions…", onClick: onVersions }] : []),
           { type: "divider" as const },
-          { label: "Supprimer la séance…", variant: "destructive" as const, onClick: () => setAsking("session") },
+          {
+            label: "Supprimer la séance…",
+            variant: "destructive" as const,
+            onClick: () => setAsking("session"),
+          },
         ]}
       />
       <AlertDialog
@@ -100,7 +125,9 @@ export function SessionMenu({
           const { session: next, problems } = await api.removeAudio(session.id);
           onChanged(next);
           if (problems.length)
-            onIncomplete(`L'audio est supprimé de Coulisses, mais pas entièrement du disque : ${problems.join(" ; ")}.`);
+            onIncomplete(
+              `L'audio est supprimé de Coulisses, mais pas entièrement du disque : ${problems.join(" ; ")}.`,
+            );
         })}
       />
       <AlertDialog
@@ -115,7 +142,9 @@ export function SessionMenu({
           const { problems } = await api.deleteSession(session.id);
           libraryChanged();
           if (problems.length)
-            leaveMessage(`La séance est supprimée de Coulisses, mais pas entièrement du disque : ${problems.join(" ; ")}.`);
+            leaveMessage(
+              `La séance est supprimée de Coulisses, mais pas entièrement du disque : ${problems.join(" ; ")}.`,
+            );
           window.location.hash = "#/";
         })}
       />

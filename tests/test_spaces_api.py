@@ -298,3 +298,59 @@ def test_naming_a_voice_after_a_person_who_has_one_merges_them(
         json={"kind": "assign_speaker", "speaker": "4", "person_id": marie, "character": "Le roi"},
     ).json()
     assert {s["name"] for s in played["speakers"]} >= {"Marie", "Le roi"}
+
+
+def test_a_session_not_processed_yet_moves_to_another_space(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    from coulisses_app import sessions
+
+    first = client.post("/api/espaces", json={"name": "Ma troupe"}).json()
+    other = client.post("/api/espaces", json={"name": "Équipe produit"}).json()
+    ana = client.post(f"/api/espaces/{first['id']}/personnes", json={"name": "Ana"}).json()
+    project = client.post(f"/api/espaces/{first['id']}/projets", json={"name": "Spectacle"}).json()
+    # A recording started in the space selected, the wrong one: not processed yet.
+    session_id, _ = sessions.start_capture(
+        data,
+        space_id=first["id"],
+        project_id=project["id"],
+        attendee_ids=[ana["id"]],
+        unnamed_attendees=2,
+        device="Micro",
+        sample_rate=48_000,
+        channels=1,
+    )
+    moved = client.put(f"/api/seances/{session_id}/espace", json={"espace": other["id"]})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["session"]["space_id"] == other["id"]
+    assert moved.json()["session"]["project_id"] is None
+    assert moved.json()["unchecked"] == ["Ana"]  # said on the recording screen
+    conn = connect(data)
+    try:
+        attendees = conn.execute(
+            "SELECT COUNT(*) FROM attendee WHERE session_id = ?", (session_id,)
+        ).fetchone()[0]
+        unnamed = conn.execute(
+            "SELECT unnamed_attendees FROM session WHERE id = ?", (session_id,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert attendees == 0 and unnamed == 2  # the people of the old space are unchecked
+
+    # Once processed, a session stays in its space.
+    processed = processed_session(client, data, recording)
+    refused = client.put(f"/api/seances/{processed}/espace", json={"espace": other["id"]})
+    assert refused.status_code == 422 and "reste dans son espace" in refused.json()["detail"]
+
+
+def test_while_processed_the_text_shows_before_anyone_is_told_apart(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = processed_session(client, data, recording)
+    outline = client.get(f"/api/seances/{session_id}/apercu").json()
+    assert outline["lines"], "the transcription's text, in lines"
+    assert all(line["text"] for line in outline["lines"])
+    # Times are the engine's measured ones, or none: never spread over the text (P2).
+    starts = [line["start"] for line in outline["lines"] if line["start"] is not None]
+    assert starts == sorted(starts)
+    assert client.get("/api/seances/inconnue/apercu").status_code == 404

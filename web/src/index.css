@@ -399,7 +399,6 @@ body {
   padding-inline-start: var(--spacing-4);
 }
 
-.cl-side .cl-skeleton__text,
 .cl-skeleton__text--flush {
   padding-inline-start: 0;
 }
@@ -433,13 +432,591 @@ body {
   color: var(--color-text-primary);
 }
 
+/* One reading at a time (ADR 0060): the transcript or the summaries, in one column of
+   reading width, the header over it at the same width. */
+.cl-review {
+  --cl-measure: calc(70ch + 6rem + var(--spacing-5) + var(--spacing-4));
+  position: relative;
+}
+
+.cl-review__header > *,
+.cl-measure {
+  width: 100%;
+  max-width: var(--cl-measure);
+  margin-inline: auto;
+}
+
 .cl-review__columns {
+  position: relative;
   display: grid;
-  /* The side column gives way first on a narrow window: the transcript keeps a reading
-     width. */
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 30vw, 420px);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
 }
+
+.cl-review__shared:empty {
+  display: none;
+}
+
+.cl-review__main,
+.cl-review__summary {
+  grid-row: 2;
+}
+
+.cl-review__main[hidden],
+.cl-review__summary[hidden] {
+  display: none;
+}
+
+.cl-review__summary {
+  overflow-y: auto;
+  padding: var(--spacing-6) var(--spacing-8) var(--spacing-10);
+}
+
+.cl-review__views {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-1);
+}
+
+.cl-review__viewtools {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+/* Transcription | Résumé: two options side by side, the one read raised. */
+.cl-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+}
+
+.cl-seg button {
+  border: 0;
+  background: none;
+  padding: 4px var(--spacing-4);
+  border-radius: var(--radius-inner);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-seg button:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-seg button[aria-selected="true"] {
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+/* The details of the session, each where it is looked for (ADR 0062). */
+.cl-crumbbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-crumbbtn:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  max-height: 60dvh;
+  overflow-y: auto;
+}
+
+.cl-pop section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-versions-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.cl-versions-dialog section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+/* The voices under the title: each one's share of the speech; a click shows its lines. */
+.cl-voices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-1) var(--spacing-2);
+}
+
+.cl-voice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-1);
+  border: 1px solid transparent;
+  background: var(--color-background-muted);
+  padding: 2px var(--spacing-3);
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-voice:hover,
+.cl-voice[aria-pressed="true"] {
+  border-color: var(--color-border);
+}
+
+.cl-voice__share {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-voice[data-todo] {
+  align-items: center;
+  background: none;
+  border: 1px dashed var(--color-accent);
+  color: var(--color-accent);
+}
+
+.cl-voices__problem {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The guided naming (ADR 0062): the page under a veil (blurred, as for the pause, ADR
+   0059), out of reach; over it, the card of the voice's lines, and the field of its name,
+   still at the bottom. */
+.cl-review__player {
+  display: contents;
+}
+
+.cl-naming {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-8) var(--spacing-4) var(--spacing-4);
+  gap: var(--spacing-4);
+}
+
+.cl-naming__veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-background-body) 82%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-namingcard {
+  position: relative;
+  width: min(36rem, 100%);
+  box-sizing: border-box;
+  max-height: calc(100% - 9rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-4) var(--spacing-3);
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-med);
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-namingcard__said {
+  margin: 0;
+  padding: var(--spacing-1) var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* What a naming did (two voices merged), over the veil, above the field. */
+.cl-naming__notice {
+  z-index: 1;
+  bottom: calc(var(--spacing-4) + 3.5rem);
+}
+
+.cl-namingcard__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+}
+
+.cl-namingcard__meta {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.cl-namingcard__dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-inline-start: auto;
+  align-self: center;
+}
+
+.cl-namingcard__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-background-muted);
+}
+
+.cl-namingcard__dots i[data-state="done"] {
+  background: var(--color-text-secondary);
+}
+
+.cl-namingcard__dots i[data-state="now"] {
+  background: var(--color-accent);
+}
+
+/* The line looked at: its own place, large (K1). */
+.cl-namingcard__focus {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: var(--spacing-3);
+  align-items: start;
+  /* A set height: a long line or a short one, the strip under it never moves. */
+  height: 7.5rem;
+  box-sizing: border-box;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-element);
+  /* A fine frame, all round: the line is set apart without a coloured ground. */
+  border: 1px solid var(--color-border);
+}
+
+.cl-namingcard__focus .cl-namingcard__said-line {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.cl-namingcard__hear {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.cl-namingcard__hear:disabled {
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.cl-namingcard__said-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cl-namingcard__focus .cl-namingcard__text {
+  font-size: var(--font-size-lg, 1.0625rem);
+  line-height: 1.5;
+}
+
+/* Where it speaks: run over, not aimed at; the line nearest the pointer lit and shown. */
+.cl-namingcard__strip {
+  position: relative;
+  height: 32px;
+  margin-top: var(--spacing-3);
+  border-radius: var(--radius-inner);
+  cursor: pointer;
+  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-namingcard__strip:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-namingcard__track {
+  position: absolute;
+  inset-inline: 0;
+  top: 15px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-border);
+}
+
+.cl-namingcard__tick {
+  position: absolute;
+  top: 9px;
+  height: 14px;
+  border-radius: 2px;
+  /* From its measured start (P2). */
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  pointer-events: none;
+  transition:
+    top 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-namingcard__tick[data-state="near"] {
+  top: 6px;
+  height: 20px;
+  background: color-mix(in srgb, var(--color-accent) 75%, transparent);
+}
+
+.cl-namingcard__tick[data-state="current"] {
+  top: 5px;
+  height: 22px;
+  background: var(--color-accent);
+}
+
+.cl-namingcard__peek {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  width: 15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-med);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  pointer-events: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cl-namingcard__peek .cl-namingcard__meta {
+  display: block;
+}
+
+.cl-namingcard__ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Its lines in a list, on demand: one line each. */
+.cl-namingcard__lines {
+  list-style: none;
+  margin: var(--spacing-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.cl-namingcard__line {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 3.2rem 1fr auto;
+  gap: var(--spacing-2);
+  align-items: baseline;
+  padding: var(--spacing-1) var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.cl-namingcard__line .cl-namingcard__text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cl-namingcard__line:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-namingcard__line[data-current] {
+  color: var(--color-accent);
+}
+
+.cl-namingcard__time {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-namingcard__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2) var(--spacing-5);
+  padding-top: var(--spacing-2);
+  font-size: var(--font-size-sm);
+}
+
+.cl-naming__bar {
+  position: relative;
+  margin-top: auto;
+  width: min(36rem, 100%);
+  display: flex;
+  justify-content: center;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .cl-naming__veil {
+    background: var(--color-background-body);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-naming__veil,
+  .cl-namingcard {
+    animation: none;
+  }
+
+  .cl-namingcard__tick,
+  .cl-namingcard__strip {
+    transition: none;
+  }
+}
+
+.cl-namingbar {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  /* The names open upwards, over the faded lines: the bar's row stays where it is. */
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-container);
+  background: var(--color-background-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-med);
+  font-size: var(--font-size-sm);
+}
+
+.cl-namingbar__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.cl-namingbar .cl-iconbtn {
+  width: 30px;
+  height: 30px;
+}
+
+.cl-namingbar__sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 var(--spacing-1);
+  background: var(--color-border);
+}
+
+.cl-namingbar__field {
+  flex: 1;
+  min-width: 6rem;
+  width: auto;
+  height: 30px;
+  padding: 0 var(--spacing-3);
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: var(--color-background-muted);
+  font: inherit;
+  color: var(--color-text-primary);
+  caret-color: var(--color-accent);
+  outline: none;
+}
+
+.cl-namingbar__field:focus-visible {
+  box-shadow: 0 0 0 1.5px var(--color-accent);
+}
+
+.cl-namingbar__ok:not(:disabled) {
+  color: var(--color-accent);
+}
+
+.cl-namingbar__list {
+  display: flex;
+  /* The best name against the field. */
+  flex-direction: column-reverse;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 2px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-namingbar__list li {
+  display: flex;
+  align-items: center;
+}
+
+.cl-namingbar__choice {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+  border: 0;
+  background: none;
+  padding: 5px var(--spacing-3);
+  border-radius: var(--radius-inner);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cl-namingbar__choice[data-active] {
+  background: var(--color-background-muted);
+}
+
+.cl-namingbar__note {
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.cl-namingbar__error {
+  margin: 0;
+  padding: 2px var(--spacing-3) 4px;
+  color: var(--color-error, var(--color-accent));
+  font-size: var(--font-size-xs);
+}
+
 
 .cl-transcript {
   overflow-y: auto;
@@ -447,7 +1024,8 @@ body {
 }
 
 .cl-transcript > div {
-  max-width: calc(70ch + 6rem + var(--spacing-5) + var(--spacing-4));
+  max-width: var(--cl-measure);
+  margin-inline: auto;
   margin: 0 auto;
 }
 
@@ -567,16 +1145,7 @@ button.cl-time {
   font-size: var(--font-size-sm);
 }
 
-.cl-side {
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-8);
-  padding: var(--spacing-6);
-  border-inline-start: 1px solid var(--color-border);
-}
-
-.cl-side section {
+.cl-section-plain section {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
@@ -1740,10 +2309,6 @@ button.cl-name {
 
 /* -------------------------------------------------------------- Summaries --- */
 
-.cl-side .astryx-tab-list,
-.cl-side [role="tablist"] {
-  margin-bottom: calc(-1 * var(--spacing-4));
-}
 
 .cl-title {
   margin: 0;
@@ -1816,6 +2381,94 @@ a.cl-iconbtn {
 .cl-summary__body {
   font-size: var(--font-size-base);
   line-height: 1.6;
+}
+
+/* One tab per summary written; « + Rédiger… » for another (ADR 0060). */
+.cl-sumtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+}
+
+.cl-sumtabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  border: 1px solid transparent;
+  background: none;
+  padding: 4px var(--spacing-3);
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-sumtabs__tab:hover {
+  color: var(--color-text-primary);
+}
+
+.cl-sumtabs__tab[aria-selected="true"] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-sumtabs__tab[data-add] {
+  border-style: dashed;
+  border-color: var(--color-border);
+}
+
+.cl-sumtabs__tab:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.cl-summary__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-10) 0;
+  text-align: center;
+}
+
+.cl-summary__empty p {
+  margin: 0;
+}
+
+/* Being written: said, and its shapes, still (nothing moves in a loop). */
+.cl-summary__writing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-summary__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cl-summary__lines i {
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--color-background-muted);
+}
+
+.cl-summary__lines i:nth-child(1) {
+  width: 92%;
+}
+
+.cl-summary__lines i:nth-child(2) {
+  width: 74%;
+}
+
+.cl-summary__lines i:nth-child(3) {
+  width: 84%;
 }
 
 .cl-summary__new {
@@ -2221,6 +2874,10 @@ a.cl-iconbtn {
   text-underline-offset: 3px;
 }
 
+.cl-linkbtn--quiet {
+  color: inherit;
+}
+
 /* -------------------------------------------------------------- Versions --- */
 
 .cl-review__notices {
@@ -2308,22 +2965,8 @@ a.cl-iconbtn {
 }
 
 .cl-rerunning {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-3);
-  padding: var(--spacing-3) var(--spacing-4);
-  border-radius: var(--radius-element);
-  background: var(--color-background-muted);
-}
-
-.cl-rerunning > :first-child {
-  margin-top: 0.35em;
-}
-
-.cl-rerunning > div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--spacing-2);
 }
 
 .cl-rerun {
@@ -2333,9 +2976,60 @@ a.cl-iconbtn {
   padding: var(--spacing-2) var(--spacing-5) var(--spacing-5);
 }
 
+.cl-rerun__choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-2);
+}
+
+/* Three tiles, the one chosen in the accent: as the discs of the processing screen. */
+.cl-rerun__choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-inner);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.cl-rerun__choice:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-rerun__choice:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.cl-rerun__choice[aria-checked="true"] {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  color: var(--color-accent);
+}
+
+.cl-rerun__icons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-1);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
 .cl-rerun__voices {
   width: 300px;
-  padding-inline-start: var(--spacing-7);
 }
 
 .cl-rerun__actions {
@@ -2473,8 +3167,11 @@ a.cl-iconbtn {
 .cl-review__top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--spacing-3);
+}
+
+.cl-review__top > :last-child {
+  margin-inline-start: auto;
 }
 
 .cl-audio-note[data-announced] {
@@ -3601,7 +4298,7 @@ button.cl-tree__more:hover {
 
 /* -- new session, new space -- */
 
-/* « Nouvelle séance »: the choices scroll, the actions stay in view at the bottom. */
+/* « Nouvelle note » (the window): the choices scroll, the actions stay in view at the bottom. */
 .cl-newsession {
   display: flex;
   flex-direction: column;
@@ -3950,4 +4647,939 @@ button.cl-tree__more:hover {
   .cl-transcript > div {
     max-width: calc(70ch + 4.5rem + var(--spacing-3) + var(--spacing-4));
   }
+}
+
+/* ------------------------------------------------- Recording, the text at its centre --- */
+/* ADR 0056: a thin bar, where it goes and who is there, then what is marked at its time,
+   laid out like the transcript it will become. */
+
+.cl-rec {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+
+.cl-rec__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-6);
+  background: var(--color-background-body);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-rec__now {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__now[data-paused] .cl-recording__dot {
+  background: var(--color-text-secondary);
+}
+
+/* The text's font: its digits all have the same width (the headings' do not). */
+.cl-rec__time {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-lg);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.cl-rec__meter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 7rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__system {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  height: 28px;
+  padding: 0 var(--spacing-2) 0 var(--spacing-1);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-rec__system:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-rec__system[data-muted] .cl-rec__meter {
+  opacity: 0.5;
+}
+
+/* The microphones (ADR 0067), as the computer's sound: their icon and level are one button
+   that cuts them all (the icon crossed, the level flat); beside it, a small chevron (their
+   list) or « + » (a second one). */
+.cl-mics {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cl-mics__all,
+.cl-mics__more {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__all {
+  gap: var(--spacing-2);
+  padding: 0 var(--spacing-2) 0 var(--spacing-1);
+}
+
+.cl-mics__more {
+  justify-content: center;
+  width: 24px;
+}
+
+.cl-mics__all:hover,
+.cl-mics__more:hover,
+.cl-mics__more[data-open] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-mics__all[data-muted] .cl-mics__meter {
+  opacity: 0.5;
+}
+
+/* What a click does shows at once: the level fades as the microphone is cut (160 ms), one
+   added comes in (400 ms), one being opened or taken away is quieter while it is done. */
+.cl-mics__meter {
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__row[data-fresh] {
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-mics__row[data-busy],
+.cl-mics__pick:disabled:not([data-busy]) {
+  opacity: 0.55;
+}
+
+.cl-mics__pick:disabled {
+  cursor: progress;
+}
+
+.cl-mics__busy {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The same width as the computer's sound beside it. */
+.cl-mics__all .cl-mics__meter {
+  width: 7rem;
+}
+
+.cl-mics__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-mics__meter {
+  display: inline-flex;
+  width: 2.75rem;
+}
+
+.cl-mics__lost {
+  flex: none;
+  color: var(--color-warning);
+}
+
+.cl-mics__pop {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-1);
+}
+
+.cl-mics__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cl-mics__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  height: 36px;
+  color: var(--color-text-primary);
+}
+
+/* A microphone of the list, as the bar's button: its icon and level are one button that
+   cuts it or brings it back; cut, the icon is crossed and the level flat. */
+.cl-mics__src {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: var(--spacing-3);
+  height: 32px;
+  padding: 0 var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__src:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-mics__src > svg {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__src > svg.cl-mics__lost {
+  color: var(--color-warning);
+}
+
+.cl-mics__src[data-muted] {
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__src[data-muted] .cl-mics__meter {
+  opacity: 0.5;
+}
+
+.cl-mics__pick > svg {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cl-mics__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-mics__icon:hover {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-mics__rule {
+  height: 1px;
+  margin: var(--spacing-1) var(--spacing-2);
+  background: var(--color-border);
+}
+
+.cl-mics__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--spacing-3);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cl-mics__pick {
+  gap: var(--spacing-3);
+  height: 36px;
+  color: var(--color-text-primary);
+}
+
+.cl-mics__src:focus-visible,
+.cl-mics__pick:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.cl-mics__pick:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-mics__problem {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-mics__problem {
+  color: var(--color-text-primary);
+}
+
+.cl-mics__title {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The place of the cross, kept on every row so that the levels line up; the cross shows
+   while the row is pointed at or holds the focus. */
+.cl-mics__end {
+  display: inline-flex;
+  flex: none;
+  width: 28px;
+}
+
+.cl-mics__remove {
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-mics__row:hover .cl-mics__remove,
+.cl-mics__row:focus-within .cl-mics__remove {
+  opacity: 1;
+}
+
+/* « Tous les micros », its chevron at the end. */
+.cl-mics__others > svg:last-child {
+  margin-left: auto;
+}
+
+.cl-mics__foot {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__line[data-kind="micro"] .cl-rec__what {
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__spacer {
+  flex: 1;
+}
+
+.cl-rec__alerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: 0 var(--spacing-6);
+}
+
+.cl-rec__alerts:not(:empty) {
+  padding-top: var(--spacing-3);
+}
+
+.cl-rec__top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  width: 100%;
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: var(--spacing-4) var(--spacing-6) 0;
+}
+
+.cl-rec__context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__said {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* A quiet label that opens its list: no box, a light ground under the pointer. */
+.cl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  height: 28px;
+  padding: 0 var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-chip:hover,
+.cl-chip[aria-expanded="true"] {
+  background: var(--color-border);
+}
+
+.cl-chip svg {
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  width: 100%;
+  max-width: 50rem;
+  margin: 0 auto;
+  padding: var(--spacing-5) var(--spacing-6) var(--spacing-10);
+}
+
+.cl-rec__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__line,
+.cl-rec__annotate {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--spacing-3);
+}
+
+.cl-rec__at {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-rec__what {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  font-size: var(--text-large-size);
+  line-height: 1.6;
+}
+
+.cl-rec__line[data-kind="note"] .cl-rec__what {
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.cl-rec__line[data-kind="key_moment"] .cl-rec__what,
+.cl-rec__line[data-kind="scene"] .cl-rec__what,
+.cl-rec__line[data-kind="discussion"] .cl-rec__what {
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.cl-rec__line:hover .cl-marks__remove,
+.cl-rec__line .cl-marks__remove:focus-visible {
+  opacity: 1;
+}
+
+/* The line to annotate: no box (direct editing), only the caret shows where one writes. */
+.cl-rec__annotate {
+  grid-template-columns: 4.5rem 1fr;
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-rec__annotate input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-base);
+  caret-color: var(--color-accent);
+}
+
+.cl-rec__annotate input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__none {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  max-width: 36rem;
+  margin: var(--spacing-10) auto;
+  padding: 0 var(--spacing-6);
+}
+
+@media (max-width: 700px) {
+  .cl-rec__bar,
+  .cl-rec__alerts,
+  .cl-rec__top,
+  .cl-rec__flow {
+    padding-inline: var(--spacing-4);
+  }
+
+  .cl-rec__line,
+  .cl-rec__annotate {
+    grid-template-columns: 3.5rem 1fr auto;
+  }
+}
+
+/* In the thin bar: the same switches, compact, square cornered (no pill, ADR 0017). */
+.cl-rec__bar .cl-mode {
+  gap: var(--spacing-2);
+}
+
+.cl-rec__bar .cl-mode__switch,
+.cl-rec__bar .cl-moment {
+  height: 28px;
+  padding: 0 var(--spacing-2);
+  border-radius: var(--radius-element);
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__bar .cl-mode__now {
+  font-size: var(--font-size-sm);
+}
+
+/* ---------------------------------------------- After the stop: the review builds itself --- */
+/* ADR 0058. A thin line says where the processing is; the text comes grey, the names settle
+   on it once « who said what » is done. */
+
+.cl-outline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+/* The two discs, still: only their rings move, 400 ms to each share the engine gives. */
+.cl-outline__discs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-6) 0 var(--spacing-4);
+}
+
+.cl-outline__pair {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-10);
+}
+
+.cl-disc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-disc__face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  color: var(--color-text-primary);
+}
+
+/* The ring alone fills the face; the icon stays centred above it. */
+.cl-disc__track {
+  position: absolute;
+  inset: 0;
+}
+
+.cl-disc__face > :not(.cl-disc__track) {
+  position: relative;
+}
+
+.cl-disc__ground {
+  fill: var(--color-background-muted);
+}
+
+.cl-disc__ring {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-outline__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.cl-outline__line {
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: var(--spacing-3);
+  align-items: baseline;
+}
+
+.cl-outline__text {
+  color: var(--color-text-secondary);
+  font-size: var(--text-large-size);
+  line-height: var(--text-large-leading);
+}
+
+.cl-outline__line[data-kind="note"] .cl-outline__text {
+  font-style: italic;
+  font-size: var(--font-size-base);
+}
+
+.cl-outline__line[data-kind="key_moment"] .cl-outline__text,
+.cl-outline__line[data-kind="scene"] .cl-outline__text,
+.cl-outline__line[data-kind="discussion"] .cl-outline__text {
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* A question or a stop, said calmly: a light ground, no bar on a side, no red. */
+.cl-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-muted);
+}
+
+.cl-ask__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+}
+
+/* On battery, the processing waits for a click (ADR 0027): one line, at a glance. */
+.cl-wait {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+}
+
+.cl-wait__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-primary);
+}
+
+/* Processed while the page was open: the names settle on the text. */
+.cl-review__columns[data-arrived] .cl-turn__head {
+  animation: cl-names-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cl-names-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes cl-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The voices have come (ADR 0058): the share of each one's speech, for a moment, where the
+   discs were; then it fades (400 ms) and its room closes in 850 ms, the rare moment of the
+   art direction. The shares stay in the details of the session. */
+.cl-arrival {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: cl-arrival 3400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-arrival > div {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.cl-arrival__inner {
+  padding: var(--spacing-6) 0 var(--spacing-4);
+}
+
+.cl-arrival__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-1) var(--spacing-5);
+  font-size: var(--font-size-sm);
+}
+
+@keyframes cl-arrival {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  63% {
+    opacity: 1;
+    grid-template-rows: 1fr;
+  }
+  75% {
+    opacity: 0;
+    grid-template-rows: 1fr;
+  }
+  100% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+  }
+}
+
+/* Being written (ADR 0061): pale bars, the part read washed in grey; they fill in once set. */
+.cl-strip__bars[data-provisional] .cl-strip__bar {
+  opacity: 0.45;
+}
+
+.cl-strip__bars .cl-strip__bar {
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard),
+    opacity 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-strip__read {
+  position: absolute;
+  inset-block: -2px;
+  inset-inline-start: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.cl-strip__unread {
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.cl-chapter[data-provisional] {
+  opacity: 0.6;
+}
+
+.cl-strip__writing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.cl-strip__bars {
+  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-review__columns[data-arrived] .cl-turn__head,
+  .cl-outline__line,
+  .cl-strip__bars {
+    animation: none;
+  }
+
+  .cl-disc__ring,
+  .cl-strip__read,
+  .cl-strip__bars .cl-strip__bar {
+    transition: none;
+  }
+
+  /* No moment: the review at once. */
+  .cl-arrival {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------- Paused, stopping: said to the room --- */
+/* ADR 0059: the session blurred behind what is put forward; opaque if macOS reduces the
+   transparency. The microphones and the computer's sound are cut while it shows. */
+
+.cl-rec {
+  position: relative;
+}
+
+.cl-rec__veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-background-body) 70%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: cl-veil-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cl-rec__veil:focus {
+  outline: none;
+}
+
+.cl-rec__veilbody {
+  position: sticky;
+  top: 18vh;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  max-width: 32rem;
+  padding: var(--spacing-8) var(--spacing-6);
+  text-align: center;
+}
+
+/* The big icon of the veil, in its disc: seen from across the room. */
+.cl-rec__disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+.cl-rec__veiltitle {
+  margin: 0;
+  font-family: var(--font-family-heading);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-3xl);
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.cl-rec__veilcut {
+  margin: 0 0 var(--spacing-2);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-5);
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__veilcut span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-rec__veiltrack {
+  width: 16rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-background-muted);
+  overflow: hidden;
+}
+
+.cl-rec__veiltrack i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--color-accent);
+  transform-origin: left;
+  animation: cl-veil-fill linear both;
+}
+
+@keyframes cl-veil-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes cl-veil-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .cl-rec__veil {
+    background: var(--color-background-body);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-rec__veil {
+    animation: none;
+  }
+}
+
+.cl-rec__veilalerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  width: 100%;
+  text-align: left;
+}
+
+.cl-rec__veilalerts:empty {
+  display: none;
+}
+
+/* Read out, not shown. */
+.cl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

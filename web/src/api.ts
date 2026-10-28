@@ -349,8 +349,14 @@ export interface RecordingState {
   /** Recorded so far, pauses left out. */
   elapsed_s: number;
   device: string;
+  /** `ref`: what the main microphone's cut is asked by. */
+  source_id: string;
   channels: number;
   levels: { peak_db: number; rms_db: number };
+  /** The main microphone, cut by the user for now: silence is written in its place. */
+  muted: boolean;
+  /** When it was cut and back, in recorded time, while recording only. */
+  cuts: Cut[];
   too_quiet: boolean;
   clipping: boolean;
   /** Times the Mac could not keep up and lost some sound. */
@@ -360,6 +366,8 @@ export interface RecordingState {
   notes: TimedNote[];
   /** The microphones added, recording at the same time, each with its own alerts. */
   extra: TrackState[];
+  /** The microphones added then taken away: their files end there, kept (ADR 0067). */
+  removed: TrackState[];
   /** The computer's sound, recorded with the microphone (a meeting online or hybrid).
    *  Silence is normal there: `too_quiet` only says it has been silent for a while. */
   system: TrackState | null;
@@ -382,13 +390,29 @@ export interface Reminders {
   duration_min: number;
 }
 
+/** A track cut by the user (silence written in its place), in recorded time. */
+export interface Cut {
+  from_s: number;
+  /** Null while it lasts. */
+  to_s: number | null;
+}
+
 export interface TrackState {
   device: string;
+  /** `mic2`, `mic3`… or `system`: what its cut is asked by. */
+  source_id: string;
+  cuts: Cut[];
+  /** When it was first heard, measured on the main microphone: 0 from the start. */
+  started_at_s: number;
+  /** When it was taken away, measured; null while it records. */
+  removed_at_s: number | null;
   levels: { peak_db: number; rms_db: number };
   too_quiet: boolean;
   clipping: boolean;
   dropouts: number;
   error: string | null;
+  /** Cut by the user for now: silence is written in its place. */
+  muted: boolean;
 }
 
 export interface StopResult {
@@ -437,6 +461,10 @@ export interface StageView {
     done: number;
     total: number;
     unit: "s" | "windows" | "steps";
+    /** Which phase of the stage, from 1, out of `steps` (engine v1.13.0 on; absent
+     *  before). `steps` may grow while the stage runs, never shrink. */
+    step?: number | null;
+    steps?: number | null;
   } | null;
   started_at: string | null;
   finished_at: string | null;
@@ -453,6 +481,15 @@ export interface StageView {
   stale: boolean;
 }
 
+/** While a session is processed (ADR 0058): the text once transcribed, before anyone is
+ *  told apart, with what was marked during the recording. */
+export interface Preview {
+  lines: { start: number | null; text: string }[];
+  aligned: boolean;
+  markers: Marker[];
+  notes: TimedNote[];
+}
+
 export interface SessionDetail {
   session: Session;
   source: AudioSource | null;
@@ -467,7 +504,9 @@ export interface SessionDetail {
   mix: MixFacts | null;
 }
 
-export type Rerun = "transcribe" | "diarize";
+/** transcribe: the text (transcription, alignment); diarize: the voices; all: both, from
+ *  the audio. */
+export type Rerun = "transcribe" | "diarize" | "all";
 
 export interface Version {
   run_id: string;
@@ -588,6 +627,26 @@ export interface PhasesStatus {
   finished_at: string | null;
   /** What the model's answer said that had to be put right (developer mode). */
   adjustments: string[];
+  /** While running: how far the detection is (ADR 0061); null before its first step. */
+  progress?: PhasesSteps | null;
+  /** While running: why its progress cannot be read (not a failure: it goes on). */
+  progress_problem?: string | null;
+  /** While running: the chapters so far, placed like the final ones. They may still change
+   *  (the last one may go on until `read_until`, a kind when checked): never edited. */
+  provisional?: Phase[];
+}
+
+export interface PhasesSteps {
+  step: "reading" | "checking" | "done";
+  /** Parts read so far, out of `parts`. */
+  part: number;
+  parts: number;
+  /** Measured time of the last line read: beyond it, nothing is known yet. */
+  read_until: number | null;
+  checked: number;
+  to_check: number;
+  /** Why the chapters so far cannot be shown at this step. */
+  problem: string | null;
 }
 
 export interface Speaker {
@@ -703,6 +762,10 @@ export interface Generation {
   stale: boolean;
   /** Why it cannot be read as usual (missing or unreadable files). */
   problem: string | null;
+  /** A version brought back (« Revenir à la version d'avant »). */
+  restored: boolean;
+  /** The latest of its summary, made again: the version before can come back, once. */
+  restorable: boolean;
 }
 
 export interface PendingGeneration {
@@ -840,6 +903,7 @@ export const api = {
   info: () => getJson<AppInfo>("/api/etat"),
   sessions: () => getJson<Session[]>("/api/seances"),
   session: (id: string) => getJson<SessionDetail>(sessionPath(id)),
+  preview: (id: string) => getJson<Preview>(`${sessionPath(id)}/apercu`),
   transcript: (id: string) =>
     getJson<CorrectedView>(`${sessionPath(id)}/transcript`),
   // `version`: the « who said what » run the page shows. A correction meant for another
@@ -877,8 +941,46 @@ export const api = {
   startRecording: (request: RecordingRequest) =>
     send<RecordingState>("POST", "/api/enregistrement", request),
   pauseRecording: () => send<RecordingState>("POST", "/api/enregistrement/pause"),
+  /** Cut the computer's sound for now (true), or bring it back (false). */
+  muteSystem: (cut: boolean) =>
+    send<RecordingState>("POST", "/api/enregistrement/son-ordinateur", { coupe: cut }),
+  /** One track cut for now (true) or back (false): `ref`, `mic2`…, `system` (ADR 0067). */
+  muteTrack: (sourceId: string, cut: boolean) =>
+    send<RecordingState>(
+      "POST",
+      `/api/enregistrement/pistes/${encodeURIComponent(sourceId)}/coupe`,
+      { coupe: cut },
+    ),
+  /** Every microphone cut or back at once; the computer's sound keeps its own. */
+  muteMicrophones: (cut: boolean) =>
+    send<RecordingState>("POST", "/api/enregistrement/micros/coupe", { coupe: cut }),
+  /** A microphone added, taken away while recording: its file ends there, kept with the
+   *  session; the main one and the computer's sound are cut, not taken away (ADR 0067). */
+  removeMicrophone: (sourceId: string) =>
+    send<RecordingState>(
+      "POST",
+      `/api/enregistrement/pistes/${encodeURIComponent(sourceId)}/retirer`,
+    ),
+  /** A microphone added while recording: it records from now on. */
+  addMicrophone: (index: number) =>
+    send<RecordingState>("POST", "/api/enregistrement/micros", { micro: index }),
+  /** Into another space, while nothing is processed yet; its people there are unchecked. */
+  moveSession: (id: string, spaceId: number) =>
+    send<{ session: Session; unchecked: string[] }>("PUT", `${sessionPath(id)}/espace`, {
+      espace: spaceId,
+    }),
   resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
   stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
+  /** Paused at once, stopped a moment later unless resumed (ADR 0058). */
+  stopRecordingSoon: () =>
+    send<{ state: RecordingState; delay_s: number }>("POST", "/api/enregistrement/arret-differe"),
+  /** The stop taken back, the recording left paused (it was paused before « Arrêter »). */
+  cancelStop: () => send<RecordingState>("POST", "/api/enregistrement/arret-annule"),
+  /** How the last stop went: still under way, done (where to go), or failed. */
+  lastStop: () =>
+    getJson<{ pending: boolean; stopped: StopResult | null; error: string | null }>(
+      "/api/enregistrement/arret",
+    ),
   levelsUrl: "/api/enregistrement/niveaux",
   mark: (kind: MarkerKind, atS?: number) =>
     send<RecordingState>("POST", "/api/enregistrement/marqueurs", { kind, at_s: atS ?? null }),
@@ -986,6 +1088,9 @@ export const api = {
   generations: (id: string) => getJson<Generations>(`${sessionPath(id)}/resumes`),
   phases: (id: string) => getJson<PhasesStatus>(`${sessionPath(id)}/chapitres`),
   detectPhases: (id: string) => send<PhasesStatus>("POST", `${sessionPath(id)}/chapitres`),
+  /** « Revenir à la version d'avant »: the summary before the latest one, shown again. */
+  restoreGeneration: (id: string, generationId: number) =>
+    send<Generations>("POST", `${sessionPath(id)}/resumes/${generationId}/revenir`),
   requestGeneration: (id: string, actionRef: string, model: string | null) =>
     send<Generations>("POST", `${sessionPath(id)}/resumes`, { action_ref: actionRef, model }),
   async generationPrompts(id: string, generationId: number): Promise<string> {

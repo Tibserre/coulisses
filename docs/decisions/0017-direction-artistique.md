@@ -1,6 +1,6 @@
 # 0017 — Direction artistique : sobre et éditoriale, relecture en deux colonnes
 
-Statut : Acceptée (2026-10-02 : l'utilisateur retient la finition « Texte de scène » sobre et l'organisation « Deux colonnes »). L'échelle typographique est **remplacée par 0038**.
+Statut : Acceptée (2026-10-02 : l'utilisateur retient la finition « Texte de scène » sobre et l'organisation « Deux colonnes »). L'échelle typographique est **remplacée par 0038**. Le flou pour mettre une information au premier plan : permis par 0059. L'organisation « Deux colonnes » : remplacée par 0060 (une lecture à la fois).
 
 ## Contexte
 L'interface repose sur Astryx (ADR 0007), dont le thème par défaut n'a pas d'identité. Du 28 septembre au 2 octobre 2026, plusieurs directions ont été comparées en direct dans l'atelier du moteur (ADR 0015), sur une maquette de l'écran de relecture. L'utilisateur a tranché au fil des essais :

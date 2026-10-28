@@ -46,6 +46,7 @@ from coulisses_app import (
     marks,
     mixing,
     notes,
+    preview,
     projects,
     reminders,
     retention,
@@ -53,6 +54,7 @@ from coulisses_app import (
     sessions,
     settings,
     spaces,
+    stopping,
     summaries,
     versions,
 )
@@ -143,9 +145,9 @@ class SessionDetail(BaseModel):
 
 class RerunRequest(BaseModel):
     etape: jobs.Rerun
-    """transcribe: the transcription (and the alignment); diarize: the voices."""
+    """transcribe: the transcription (and the alignment); diarize: the voices; all: both."""
     presents: int | None = Field(default=None, ge=1)
-    """For the voices: the minimum of voices to look for (P3)."""
+    """For the voices (diarize, all): the minimum of voices to look for (P3)."""
 
 
 class ResumeRequest(BaseModel):
@@ -224,6 +226,32 @@ class ModelsInfo(BaseModel):
     advice: WritingAdvice
 
 
+STOP_DELAY_S = 3.0
+"""Between « Arrêter » and the stop: time to take it back (ADR 0058)."""
+
+
+class StopSoon(BaseModel):
+    state: capture.RecordingState
+    delay_s: float
+    """When the service stops it, from now: the page counts down to it."""
+
+
+class SpaceMoveRequest(BaseModel):
+    espace: int
+
+
+class SpaceMoved(BaseModel):
+    session: sessions.Session
+    unchecked: list[str]
+    """The people of the old space who were checked, unchecked by the move: said."""
+
+
+class MuteRequest(BaseModel):
+    coupe: bool
+    """True: the track (the computer's sound, a microphone, or all the microphones) is cut for
+    now (silence written); false: it is back."""
+
+
 class RecordingRequest(BaseModel):
     espace: int | None = None
     projet: int | None = None
@@ -235,6 +263,11 @@ class RecordingRequest(BaseModel):
     """Microphones added, recording at the same time (often an iPhone), each its file."""
     son_ordinateur: bool = False
     """The computer's sound too: a meeting online or hybrid (ADR 0032)."""
+
+
+class AddMicrophoneRequest(BaseModel):
+    micro: int
+    """Index of the input device, from GET /api/micros."""
 
 
 class MarkerRequest(BaseModel):
@@ -381,6 +414,9 @@ def create_app(
                 engine_store.shutdown()
             finally:
                 try:
+                    # A stop under way is waited for; one still waiting is dropped, and the
+                    # recording is closed properly below, never lost (spec §7.2, ADR 0058).
+                    app.state.delayed_stop.shutdown()
                     # A recording in progress is closed properly, never lost (spec §7.2).
                     recorder.shutdown(profile=profile)
                 finally:
@@ -586,9 +622,9 @@ def create_app(
 
     @app.post("/api/seances/{session_id}/relancer", status_code=202)
     def rerun(session_id: str, demande: RerunRequest) -> sessions.Session:
-        """Run the transcription or the voices again, from the version shown: a new version,
-        which replaces it once complete, with the corrections carried over."""
-        attendees = demande.presents if demande.etape == "diarize" else None
+        """Run the transcription, the voices or both again, from the version shown: a new
+        version, which replaces it once complete, with the corrections carried over."""
+        attendees = demande.presents if demande.etape in ("diarize", "all") else None
         versions.request_rerun(
             data, session_id, demande.etape, attendees=attendees, profile=profile
         )
@@ -642,6 +678,17 @@ def create_app(
             raise HTTPException(status_code=409, detail="Cette étape n'est pas terminée.")
         return prov.model_dump(mode="json")
 
+    @app.get("/api/seances/{session_id}/apercu")
+    def session_preview(session_id: str) -> preview.Preview:
+        """While it is processed: the text once transcribed, before anyone is told apart
+        (ADR 0058), with what was marked during the recording."""
+        if sessions.get_session(data, session_id) is None:
+            raise _not_found("Séance introuvable.")
+        try:
+            return preview.preview(data, session_id)
+        except preview.PreviewError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @app.get("/api/seances/{session_id}/transcript")
     def transcript(session_id: str) -> corrections.CorrectedView:
         """The corrected view: the active run with the user's corrections applied."""
@@ -672,6 +719,13 @@ def create_app(
         session_id: str, turn: int, version: str | None = None
     ) -> corrections.CorrectedView:
         return corrections.reset_text(data, session_id, turn, version=version)
+
+    @app.put("/api/seances/{session_id}/espace")
+    def move_session(session_id: str, demande: SpaceMoveRequest) -> SpaceMoved:
+        unchecked = spaces.move_session(data, session_id, demande.espace)
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return SpaceMoved(session=session, unchecked=unchecked)
 
     @app.put("/api/seances/{session_id}/presents")
     def set_attendees(session_id: str, demande: AttendeesRequest) -> sessions.Session:
@@ -789,20 +843,76 @@ def create_app(
             system=demande.son_ordinateur,
         )
 
+    @app.post("/api/enregistrement/son-ordinateur")
+    def mute_system_sound(demande: MuteRequest) -> capture.RecordingState:
+        return recorder.mute_system(demande.coupe)
+
+    @app.post("/api/enregistrement/pistes/{source_id}/coupe")
+    def mute_track(source_id: str, demande: MuteRequest) -> capture.RecordingState:
+        """One track cut or back: `ref` (the main microphone), `mic2`…, `system`."""
+        return recorder.mute(source_id, demande.coupe)
+
+    @app.post("/api/enregistrement/pistes/{source_id}/retirer")
+    def remove_microphone(source_id: str) -> capture.RecordingState:
+        """A microphone added, taken off now: its file is kept with the session."""
+        return recorder.remove_microphone(source_id)
+
+    @app.post("/api/enregistrement/micros/coupe")
+    def mute_microphones(demande: MuteRequest) -> capture.RecordingState:
+        """Every microphone cut or back at once; the computer's sound keeps its own."""
+        return recorder.mute_microphones(demande.coupe)
+
+    @app.post("/api/enregistrement/micros")
+    def add_microphone(demande: AddMicrophoneRequest) -> capture.RecordingState:
+        return recorder.add_microphone(demande.micro)
+
     @app.post("/api/enregistrement/pause")
     def pause_recording() -> capture.RecordingState:
         return recorder.pause()
 
-    @app.post("/api/enregistrement/reprise")
-    def resume_recording() -> capture.RecordingState:
-        return recorder.resume()
-
-    @app.post("/api/enregistrement/arret")
-    def stop_recording() -> capture.StopResult:
+    # « Arrêter » on the recording screen (ADR 0058): paused at once, stopped a moment later
+    # unless taken back, by the service, so that it stops even if the page is closed.
+    def _stop_and_wake() -> capture.StopResult:
         stopped = recorder.stop(profile=profile)
         if processor is not None and stopped.processing:
             processor.wake()
         return stopped
+
+    delayed = stopping.DelayedStop(_stop_and_wake, STOP_DELAY_S)
+    app.state.delayed_stop = delayed
+
+    @app.post("/api/enregistrement/reprise")
+    def resume_recording() -> capture.RecordingState:
+        if not delayed.cancel():
+            raise HTTPException(status_code=409, detail="L'arrêt est déjà en cours.")
+        return recorder.resume()
+
+    @app.post("/api/enregistrement/arret")
+    def stop_recording() -> capture.StopResult:
+        return delayed.stop_now()
+
+    @app.post("/api/enregistrement/arret-differe")
+    def stop_recording_soon() -> StopSoon:
+        """Paused now, stopped in `STOP_DELAY_S` unless taken back: « Reprendre » for a
+        slip. Says when, so that the page counts down to the service's time."""
+        state = recorder.pause()
+        delayed.schedule()
+        return StopSoon(state=state, delay_s=delayed.delay_s)
+
+    @app.post("/api/enregistrement/arret-annule")
+    def cancel_stop() -> capture.RecordingState:
+        """The stop taken back, the recording left paused (it was paused before)."""
+        if not delayed.cancel():
+            raise HTTPException(status_code=409, detail="L'arrêt est déjà en cours.")
+        state = recorder.state()
+        if state is None:
+            raise HTTPException(status_code=409, detail="L'enregistrement est déjà arrêté.")
+        return state
+
+    @app.get("/api/enregistrement/arret")
+    def last_stop() -> stopping.StopOutcome:
+        """How the last stop went: under way, done (where to go, what to say), or failed."""
+        return delayed.outcome()
 
     @app.post("/api/enregistrement/marqueurs", status_code=201)
     def mark(demande: MarkerRequest) -> capture.RecordingState:
@@ -909,6 +1019,16 @@ def create_app(
         if processor is not None:
             processor.wake()
         return summaries.list_generations(data, session_id)
+
+    @app.post("/api/seances/{session_id}/resumes/{generation_id}/revenir")
+    def restore_generation(session_id: str, generation_id: int) -> summaries.Generations:
+        """« Revenir à la version d'avant », once (ADR 0060)."""
+        try:
+            return summaries.restore_previous(data, session_id, generation_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Résumé introuvable.") from None
+        except summaries.RestoreError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
 
     @app.get("/api/seances/{session_id}/chapitres")
     def phases(session_id: str) -> summaries.PhasesStatus:

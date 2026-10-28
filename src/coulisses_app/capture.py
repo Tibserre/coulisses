@@ -64,6 +64,10 @@ class RecordingError(SpaceError):
     """A recording that cannot start, go on or stop; the message is shown to the user."""
 
 
+class NotRecordingError(RecordingError):
+    """Nothing is being recorded: a stop asked twice, a pause after the stop."""
+
+
 class InputDevice(BaseModel):
     index: int
     name: str
@@ -76,14 +80,27 @@ class Levels(BaseModel):
     rms_db: float
 
 
+class Cut(BaseModel):
+    """A track cut by the user (silence written in its place), in recorded time."""
+
+    from_s: float
+    to_s: float | None = None
+    """None while it lasts."""
+
+
 class RecordingState(BaseModel):
     session_id: str
     state: Literal["recording", "paused"]
     elapsed_s: float
     """Recorded so far (pauses left out): the time markers and notes are set at."""
     device: str
+    source_id: str = sessions.REFERENCE_SOURCE_ID
     channels: int
     levels: Levels
+    muted: bool = False
+    """Cut by the user for now: silence is written in its place, on the same clock."""
+    cuts: list[Cut] = []
+    """When it was cut, and back (pauses left out), while recording only."""
     too_quiet: bool
     """The input has been very low for a while: wrong microphone, too far, or no access."""
     clipping: bool
@@ -98,6 +115,8 @@ class RecordingState(BaseModel):
     extra: list[TrackState] = []
     """The microphones added, recording at the same time (ADR 0031, 0033), each with its
     own alerts."""
+    removed: list[TrackState] = []
+    """The microphones added then taken off while recording: their files are kept."""
     system: TrackState | None = None
     """The computer's sound, recorded with the microphone (ADR 0032). Silence is normal
     there: `too_quiet` only says it has been silent for a while."""
@@ -114,6 +133,8 @@ class TrackState(BaseModel):
     recording screen shows it."""
 
     device: str
+    source_id: str = ""
+    """`mic2`, `mic3`… or `system`: what its cut is asked by."""
     levels: Levels
     too_quiet: bool
     clipping: bool
@@ -121,6 +142,14 @@ class TrackState(BaseModel):
     error: str | None = None
     """It stopped (unplugged, the iPhone gone away, the disk…): the main recording goes on;
     what it recorded is kept."""
+    muted: bool = False
+    """Cut by the user for now: silence is written in its place, on the same clock."""
+    cuts: list[Cut] = []
+    started_at_s: float = 0.0
+    """Recorded time it started at: 0 from the start, later for a microphone added on the
+    way (measured on the reference, at a block)."""
+    removed_at_s: float | None = None
+    """A microphone added then taken off: the recorded time it was."""
 
 
 class InputStream(Protocol):
@@ -277,6 +306,15 @@ class KeepAwake:
 @dataclass
 class _Flags:
     paused: bool = False
+    muted: set[str] = field(default_factory=lambda: set[str]())
+    """The tracks cut by the user (source ids): silence written in their place, on the same
+    clock (their files keep their length; times stay measured)."""
+    heard_frames: int = 0
+    """Frames heard from the reference while not paused: the recording's time as it is
+    heard, ahead of what is written by the blocks waiting."""
+    system_heard_unmuted: bool = False
+    """Some of the computer's sound was written without being cut: a file all silent then
+    says the permission is missing (`SYSTEM_SILENT`)."""
 
 
 Block = tuple[NDArray[np.float32], bool, bool]
@@ -307,6 +345,13 @@ class _Track:
     """Recorded time of the last voice heard (`SPEECH_DB`, `SPEECH_MIN_S`)."""
     loud_for_s: float = 0.0
     """How long the sound has stayed at `SPEECH_DB` or above, up to now."""
+    lead: list[int] | None = None
+    """A microphone added while recording: the recording's time when its first block was
+    heard (in frames, set by its stream), written as silence before it."""
+    cuts: list[Cut] = field(default_factory=lambda: list[Cut]())
+    added_at_frames: int = 0
+    """The recording's time (frames) when it was added: 0 from the start."""
+    removed_at_s: float | None = None
 
 
 @dataclass
@@ -318,13 +363,30 @@ class _Opened:
     channels: int
     stream: InputStream
     blocks: queue.Queue[Block | None]
+    lead: list[int] | None = None
 
 
-def _heard(blocks: queue.Queue[Block | None], flags: _Flags) -> OnBlock:
+def _heard(
+    blocks: queue.Queue[Block | None],
+    flags: _Flags,
+    source_id: str,
+    *,
+    lead: list[int] | None = None,
+) -> OnBlock:
+    """`lead`, for a microphone added while recording: filled with the recording's time at
+    its first block."""
+
     def heard(block: NDArray[np.float32], lost: bool) -> None:
-        # Paused or not when heard, not when written: a pause cuts exactly there, on
-        # every microphone at once.
-        blocks.put((block, lost, flags.paused))
+        # Paused or cut when heard, not when written: a pause or a cut falls exactly there,
+        # on every microphone at once.
+        paused = flags.paused
+        if source_id == sessions.REFERENCE_SOURCE_ID and not paused:
+            flags.heard_frames += len(block)
+        if lead is not None and not lead:
+            lead.append(flags.heard_frames)
+        if source_id in flags.muted:
+            block = np.zeros_like(block)
+        blocks.put((block, lost, paused))
 
     return heard
 
@@ -337,6 +399,8 @@ class _Recording:
     """The reference first; its time is the recording's (markers, notes)."""
     markers: list[marks.Marker] = field(default_factory=lambda: list[marks.Marker]())
     notes: list[marks.TimedNote] = field(default_factory=lambda: list[marks.TimedNote]())
+    removed: list[_Track] = field(default_factory=lambda: list[_Track]())
+    """Microphones added then taken off: closed, kept, still said."""
 
     @property
     def main(self) -> _Track:
@@ -352,6 +416,40 @@ class StopResult(BaseModel):
     second_problem: str | None = None
     """What went wrong with the other tracks (a file not read back, the computer's sound
     silent all along): said after stopping."""
+
+
+def recording_track(recording: _Recording, source_id: str) -> _Track | None:
+    return next((t for t in recording.tracks if t.source_id == source_id), None)
+
+
+def _write_silence(writer: wav.WavWriter, frames: int, channels: int) -> None:
+    """`frames` of silence, a second at a time."""
+    while frames > 0:
+        chunk = min(frames, SAMPLE_RATE)
+        writer.write(np.zeros((chunk, channels), np.float32))
+        frames -= chunk
+
+
+def _started_at(track: _Track) -> float:
+    frames = track.lead[0] if track.lead else track.added_at_frames
+    return frames / SAMPLE_RATE
+
+
+def _seal(track: _Track) -> None:
+    """Its writer done: the silence before a microphone added and never heard after, then
+    its file closed. Never raised: `repair` makes the header true from what is on disk."""
+    if track.lead and track.writer.frames == 0 and track.error is None:
+        # Added, then nothing written from it (paused or silent until now): its file still
+        # says when it came, as silence on the reference's clock.
+        try:
+            _write_silence(track.writer, track.lead[0], track.channels)
+        except Exception:  # its file is closed and described after, as it is
+            log.exception("silence before %s", track.writer.path)
+    try:
+        track.writer.close()
+    # Its last header write, whatever failed: `repair` makes it true.
+    except Exception:
+        log.exception("closing %s", track.writer.path)
 
 
 def _close_quietly(stream: InputStream) -> str | None:
@@ -493,8 +591,18 @@ class Recorder:
                     def heard_both(block: NDArray[np.float32], lost: bool) -> None:
                         # One block, cut in two: the same instant on both files.
                         paused = flags.paused
-                        blocks.put((block[:, :channels], lost, paused))
-                        heard_system.put((block[:, channels:], lost, paused))
+                        if not paused:
+                            flags.heard_frames += len(block)
+                        main_part = block[:, :channels]
+                        if sessions.REFERENCE_SOURCE_ID in flags.muted:
+                            main_part = np.zeros_like(main_part)
+                        blocks.put((main_part, lost, paused))
+                        system_part = block[:, channels:]
+                        if sessions.SYSTEM_SOURCE_ID in flags.muted:
+                            system_part = np.zeros_like(system_part)
+                        elif not paused:
+                            flags.system_heard_unmuted = True
+                        heard_system.put((system_part, lost, paused))
 
                     stream = self._open(
                         chosen,
@@ -515,13 +623,19 @@ class Recorder:
                 else:
                     stream = self._open(
                         chosen,
-                        lambda: self._stream_factory(chosen.index, channels, _heard(blocks, flags)),
+                        lambda: self._stream_factory(
+                            chosen.index,
+                            channels,
+                            _heard(blocks, flags, sessions.REFERENCE_SOURCE_ID),
+                        ),
                     )
                     opened.append(
                         _Opened(sessions.REFERENCE_SOURCE_ID, chosen.name, channels, stream, blocks)
                     )
-                for position, other in enumerate(added):
-                    opened.append(self._open_added(position, other, flags))
+                for other in added:
+                    position = sum(sessions.is_extra_microphone(o.source_id) for o in opened)
+                    source_id = sessions.extra_source_id(position)
+                    opened.append(self._open_added(source_id, other, flags))
             except RecordingError:
                 for made in opened:
                     _close_quietly(made.stream)
@@ -593,14 +707,20 @@ class Recorder:
             self._current = recording
             return self._state(recording)
 
-    def _open_added(self, position: int, device: InputDevice, flags: _Flags) -> _Opened:
+    def _open_added(
+        self, source_id: str, device: InputDevice, flags: _Flags, *, late: bool = False
+    ) -> _Opened:
+        """`late`: added while recording, it starts with silence up to its first block."""
         channels = min(device.channels, MAX_CHANNELS)
         blocks: queue.Queue[Block | None] = queue.Queue()
+        lead: list[int] | None = [] if late else None
         stream = self._open(
             device,
-            lambda: self._stream_factory(device.index, channels, _heard(blocks, flags)),
+            lambda: self._stream_factory(
+                device.index, channels, _heard(blocks, flags, source_id, lead=lead)
+            ),
         )
-        return _Opened(sessions.extra_source_id(position), device.name, channels, stream, blocks)
+        return _Opened(source_id, device.name, channels, stream, blocks, lead)
 
     def _open(self, device: InputDevice, make: Callable[[], InputStream]) -> InputStream:
         failure: Exception | None = None
@@ -656,6 +776,9 @@ class Recorder:
                 continue
             track.loudest = max(track.loudest, peak)
             try:
+                if track.lead and track.writer.frames == 0:
+                    # Added while recording: silence up to now, on the reference's clock.
+                    _write_silence(track.writer, track.lead[0], track.channels)
                 track.writer.write(block)
                 if track.levels.rms_db >= SPEECH_DB:
                     track.loud_for_s += len(block) / SAMPLE_RATE
@@ -699,16 +822,23 @@ class Recorder:
         main = recording.main
         paused = recording.flags.paused
         too_quiet, clipping, error = self._alerts(main, paused)
+        main_muted = main.source_id in recording.flags.muted
 
         def state_of(other: _Track) -> TrackState:
             quiet2, clip2, error2 = self._alerts(other, paused)
+            muted = other.source_id in recording.flags.muted
             return TrackState(
                 device=other.device,
+                source_id=other.source_id,
                 levels=other.levels,
-                too_quiet=quiet2,
+                too_quiet=quiet2 and not muted,
                 clipping=clip2,
                 dropouts=other.dropouts,
                 error=error2,
+                muted=muted,
+                cuts=[c.model_copy() for c in other.cuts],
+                started_at_s=_started_at(other),
+                removed_at_s=other.removed_at_s,
             )
 
         elapsed = main.writer.frames / SAMPLE_RATE
@@ -729,7 +859,9 @@ class Recorder:
             device=main.device,
             channels=main.channels,
             levels=main.levels,
-            too_quiet=too_quiet,
+            muted=main_muted,
+            cuts=[c.model_copy() for c in main.cuts],
+            too_quiet=too_quiet and not main_muted,
             clipping=clipping,
             dropouts=main.dropouts,
             markers=list(recording.markers),
@@ -737,6 +869,13 @@ class Recorder:
             error=error,
             extra=[
                 state_of(t) for t in recording.tracks if sessions.is_extra_microphone(t.source_id)
+            ],
+            removed=[
+                # Its levels say nothing any more; an error it had (the disk…) still holds.
+                state_of(t).model_copy(
+                    update={"too_quiet": False, "clipping": False, "error": t.error}
+                )
+                for t in recording.removed
             ],
             system=next(
                 (state_of(t) for t in recording.tracks if t.source_id == sessions.SYSTEM_SOURCE_ID),
@@ -748,6 +887,153 @@ class Recorder:
         with self._lock:
             return self._state(self._current) if self._current else None
 
+    def mute_system(self, muted: bool) -> RecordingState:
+        """Cut the computer's sound, or bring it back, at any time (spec §7.2): silence is
+        written in its place, the microphone goes on."""
+        with self._lock:
+            recording = self._require()
+            if not any(t.source_id == sessions.SYSTEM_SOURCE_ID for t in recording.tracks):
+                raise RecordingError("Cet enregistrement ne prend pas le son de l'ordinateur.")
+            self._cut(recording, recording_track(recording, sessions.SYSTEM_SOURCE_ID), muted)
+            return self._state(recording)
+
+    def mute(self, source_id: str, muted: bool) -> RecordingState:
+        """Cut one track (a microphone, the main one included, or the computer's sound), or
+        bring it back: silence is written in its place, on the same clock (P2)."""
+        with self._lock:
+            recording = self._require()
+            track = recording_track(recording, source_id)
+            if track is None:
+                raise RecordingError("Cette piste n'est pas dans l'enregistrement.")
+            self._cut(recording, track, muted)
+            return self._state(recording)
+
+    def mute_microphones(self, muted: bool) -> RecordingState:
+        """Cut every microphone at once (the main one and those added), or bring them all
+        back; the computer's sound keeps its own switch."""
+        with self._lock:
+            recording = self._require()
+            for track in recording.tracks:
+                if track.source_id != sessions.SYSTEM_SOURCE_ID:
+                    self._cut(recording, track, muted)
+            return self._state(recording)
+
+    def _cut(self, recording: _Recording, track: _Track | None, muted: bool) -> None:
+        """Under the lock. Cut or brought back at the time heard now; twice is once."""
+        if track is None or (track.source_id in recording.flags.muted) == muted:
+            return
+        at = recording.flags.heard_frames / SAMPLE_RATE
+        if muted:
+            recording.flags.muted.add(track.source_id)
+            track.cuts.append(Cut(from_s=at))
+        else:
+            recording.flags.muted.discard(track.source_id)
+            track.cuts[-1].to_s = at
+            track.quiet_since = None  # its silence is measured again from now
+
+    def add_microphone(self, device_index: int) -> RecordingState:
+        """A microphone added while recording (ADR 0031, 0033): it records from now, with
+        silence before, on the reference's clock. If it fails later, the recording goes on;
+        if it cannot open, nothing changes and it is said."""
+        with self._lock:
+            recording = self._require()
+            device = next((d for d in self._devices() if d.index == device_index), None)
+            if device is None:
+                raise RecordingError(
+                    "Ce micro n'est plus là : s'il s'agit d'un iPhone, est-il encore près du "
+                    "Mac, déverrouillé ?"
+                )
+            if device.name in {t.device for t in recording.tracks}:
+                raise RecordingError("Ce micro enregistre déjà.")
+            # The next one in the session, those that failed to start included: never
+            # written over.
+            source_id = sessions.next_extra_source_id(self.data, recording.session_id)
+            opened = self._open_added(source_id, device, recording.flags, late=True)
+            try:
+                sessions.add_capture_source(
+                    self.data,
+                    recording.session_id,
+                    source_id,
+                    device=device.name,
+                    sample_rate=SAMPLE_RATE,
+                    channels=opened.channels,
+                )
+            except Exception as exc:
+                log.exception("adding %s to %s", device.name, recording.session_id)
+                _close_quietly(opened.stream)
+                raise RecordingError(
+                    f"Le micro « {device.name} » n'a pas pu être ajouté : {exc}. "
+                    "L'enregistrement continue sans lui."
+                ) from exc
+            target = self.data.sources_dir(recording.session_id) / sessions.capture_file(source_id)
+            try:
+                writer = wav.WavWriter(
+                    target, SAMPLE_RATE, opened.channels, max_data_bytes=self._max_data_bytes
+                )
+            except Exception as exc:
+                _close_quietly(opened.stream)
+                sessions.close_empty_capture(
+                    self.data, recording.session_id, reason=str(exc), source_id=source_id
+                )
+                raise RecordingError(
+                    f"Le fichier de ce micro n'a pas pu être créé : {exc}. "
+                    "L'enregistrement continue sans lui."
+                ) from exc
+            track = _Track(
+                source_id=source_id,
+                device=opened.device,
+                channels=opened.channels,
+                writer=writer,
+                stream=opened.stream,
+                blocks=opened.blocks,
+                last_block_at=self._clock(),
+                lead=opened.lead,
+                added_at_frames=recording.flags.heard_frames,
+            )
+            track.writer_thread = threading.Thread(
+                target=self._write,
+                args=(recording, track),
+                name=f"capture-writer-{source_id}",
+                daemon=True,
+            )
+            track.writer_thread.start()
+            recording.tracks.append(track)
+            return self._state(recording)
+
+    def remove_microphone(self, source_id: str) -> RecordingState:
+        """A microphone added, taken off while recording (added by mistake): it stops now,
+        its file is closed and kept with the session, shorter (P8). Its source is never used
+        again. The main microphone and the computer's sound are cut, never taken off."""
+        with self._lock:
+            recording = self._require()
+            track = recording_track(recording, source_id)
+            if track is None or not sessions.is_extra_microphone(source_id):
+                raise RecordingError(
+                    "Seul un micro ajouté se retire ; le micro principal et le son de "
+                    "l'ordinateur se coupent."
+                    if source_id in (sessions.REFERENCE_SOURCE_ID, sessions.SYSTEM_SOURCE_ID)
+                    else "Ce micro n'est pas dans l'enregistrement."
+                )
+            track.removed_at_s = recording.flags.heard_frames / SAMPLE_RATE
+            recording.tracks.remove(track)
+            recording.flags.muted.discard(source_id)
+            if track.cuts and track.cuts[-1].to_s is None:
+                track.cuts[-1].to_s = track.removed_at_s
+            if (said := _close_quietly(track.stream)) is not None:
+                log.warning("taking off %s: %s", track.device, said)
+            track.blocks.put(None)
+            # Its writer drains what it heard before (a moment); under the lock, so that a
+            # stop asked meanwhile waits for its file to be closed and described.
+            if track.writer_thread is not None:
+                track.writer_thread.join()
+            _seal(track)
+            problem = self._close_extra(recording.session_id, track)
+            recording.removed.append(track)
+            state = self._state(recording)
+        if problem is not None:
+            raise RecordingError(problem)
+        return state
+
     def pause(self) -> RecordingState:
         return self._set_paused(True)
 
@@ -757,7 +1043,7 @@ class Recorder:
     def _set_paused(self, paused: bool) -> RecordingState:
         with self._lock:
             if self._current is None:
-                raise RecordingError("Aucun enregistrement en cours.")
+                raise NotRecordingError("Aucun enregistrement en cours.")
             self._current.flags.paused = paused
             return self._state(self._current)
 
@@ -813,7 +1099,7 @@ class Recorder:
 
     def _require(self) -> _Recording:
         if self._current is None:
-            raise RecordingError("Aucun enregistrement en cours.")
+            raise NotRecordingError("Aucun enregistrement en cours.")
         return self._current
 
     def stop(self, *, profile: str) -> StopResult:
@@ -824,7 +1110,7 @@ class Recorder:
         with self._lock:
             recording = self._current
             if recording is None:
-                raise RecordingError("Aucun enregistrement en cours.")
+                raise NotRecordingError("Aucun enregistrement en cours.")
             self._current = None
             self._closing = True
         said: list[str] = []
@@ -841,11 +1127,7 @@ class Recorder:
                 track.writer_thread.join()
         try:
             for track in recording.tracks:
-                try:
-                    track.writer.close()
-                # Its last header write, whatever failed: `repair` below makes it true.
-                except Exception:
-                    log.exception("closing %s", track.writer.path)
+                _seal(track)
         finally:
             self.keep_awake.release()
         # From what is on disk, whatever the writers managed: the headers are made true.
@@ -871,7 +1153,13 @@ class Recorder:
             (t for t in recording.tracks if t.source_id == sessions.SYSTEM_SOURCE_ID), None
         )
         if system is not None:
-            if system.writer.frames and system.loudest < mixing.SILENT_PEAK:
+            # Cut by the user all along: a silent file says nothing about the permission.
+            # Heard uncut, even a moment, and silent: the permission is likely missing.
+            if (
+                system.writer.frames
+                and system.loudest < mixing.SILENT_PEAK
+                and recording.flags.system_heard_unmuted
+            ):
                 problems.append(SYSTEM_SILENT)
             # To be heard on the session's page at once, before the processing gets to it.
             mixing.prepare_in_background(self.data, recording.session_id)

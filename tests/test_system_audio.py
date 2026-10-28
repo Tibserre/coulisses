@@ -538,3 +538,82 @@ def test_a_voice_in_the_computers_sound_ends_a_silence_and_a_pause_does_not_coun
     assert rec.state().alert is None  # type: ignore[union-attr]  # paused: nothing asked
     rec.resume()
     rec.stop(profile="essai")
+
+
+def test_the_computers_sound_is_cut_and_back_on_the_same_clock(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    session_id = start_online(rec).session_id
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    assert rec.mute_system(True).system.muted  # type: ignore[union-attr]
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))  # cut: silence in its place
+    wait_for(lambda: rec.state().elapsed_s >= 2.0)  # type: ignore[union-attr]
+    assert not rec.mute_system(False).system.muted  # type: ignore[union-attr]
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    wait_for(lambda: rec.state().elapsed_s >= 3.0)  # type: ignore[union-attr]
+    result = rec.stop(profile="essai")
+    assert result.second_problem is None  # cut by the user: not a permission missing
+
+    folder = data.sources_dir(session_id)
+    ref, system = read(folder / "ref.wav"), read(folder / "system.wav")
+    assert ref.shape == system.shape == (3 * capture.SAMPLE_RATE, 1)  # the same clock
+    second = capture.SAMPLE_RATE
+    assert np.max(np.abs(system[:second])) == pytest.approx(0.1, abs=1e-3)
+    assert np.max(np.abs(system[second : 2 * second])) == 0.0
+    assert np.max(np.abs(system[2 * second :])) == pytest.approx(0.1, abs=1e-3)
+    assert np.max(np.abs(ref[second : 2 * second])) == pytest.approx(0.3, abs=1e-3)
+
+
+def test_all_the_microphones_cut_leave_the_computers_sound(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    session_id = start_online(rec).session_id
+    state = rec.mute_microphones(True)
+    assert state.muted and state.system is not None and not state.system.muted
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    rec.stop(profile="essai")
+    folder = data.sources_dir(session_id)
+    assert np.max(np.abs(read(folder / "ref.wav"))) == 0.0
+    assert np.max(np.abs(read(folder / "system.wav"))) == pytest.approx(0.1, abs=1e-3)
+
+
+def test_a_recording_without_the_computers_sound_cannot_cut_it(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    rec.start(space_id=None, attendee_ids=[], unnamed_attendees=None, device_index=MIC.index)
+    with pytest.raises(capture.RecordingError, match="son de l'ordinateur"):
+        rec.mute_system(True)
+    rec.stop(profile="essai")
+
+
+def test_cut_all_along_says_nothing_of_the_permission_but_silent_uncut_still_does(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    silent = np.zeros((48_000, 1), np.float32)
+    # Cut from the start to the end: a silent file says nothing about the permission.
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    start_online(rec)
+    rec.mute_system(True)
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    assert rec.stop(profile="essai").second_problem is None
+    # Cut a moment, silent the rest of the time: the permission is likely missing.
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    start_online(rec)
+    tap.push(both(tone(1.0, 0.3), silent))
+    wait_for(lambda: rec.state().elapsed_s >= 1.0)  # type: ignore[union-attr]
+    rec.mute_system(True)
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    wait_for(lambda: rec.state().elapsed_s >= 2.0)  # type: ignore[union-attr]
+    rec.mute_system(False)
+    assert rec.stop(profile="essai").second_problem == capture.SYSTEM_SILENT

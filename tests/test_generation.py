@@ -625,3 +625,43 @@ def test_an_export_fetches_nothing_the_model_wrote() -> None:
     assert "&lt;img" in shown and "&lt;script>" in shown
     assert "3 < 4 et **gras**, [crochets] seuls" in shown  # the rest is untouched
     assert "![" not in shown  # no image of any form, so no definition is ever fetched
+
+
+def test_the_version_before_comes_back_once_and_nothing_is_erased(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = summarized(client, data, recording, fake_model)
+    base = f"/api/seances/{session_id}/resumes"
+    first = client.get(base).json()["generations"][0]
+    assert first["restorable"] is False
+    client.post(base, json={"action_ref": "resume-impro"})
+    run_all(data, fake_model)
+    latest = client.get(base).json()["generations"][0]
+    assert latest["run_id"] != first["run_id"] and latest["restorable"] is True
+
+    back = client.post(f"{base}/{latest['id']}/revenir")
+    assert back.status_code == 200
+    shown = back.json()["generations"]
+    assert shown[0]["run_id"] == first["run_id"]
+    assert shown[0]["restored"] is True and shown[0]["restorable"] is False
+    assert shown[0]["created_at"] == first["created_at"]
+    # Every version is still there (P5).
+    assert {g["run_id"] for g in shown} == {first["run_id"], latest["run_id"]}
+
+    again = client.post(f"{base}/{shown[0]['id']}/revenir")
+    assert again.status_code == 409
+    assert "un cran" in again.json()["detail"]
+
+
+def test_only_the_latest_version_gives_way(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = summarized(client, data, recording, fake_model)
+    base = f"/api/seances/{session_id}/resumes"
+    first = client.get(base).json()["generations"][0]
+    alone = client.post(f"{base}/{first['id']}/revenir")
+    assert alone.status_code == 409
+    client.post(base, json={"action_ref": "resume-impro"})
+    run_all(data, fake_model)
+    assert client.post(f"{base}/{first['id']}/revenir").status_code == 409
+    assert client.post(f"{base}/999999/revenir").status_code == 404

@@ -4,7 +4,7 @@ Statut : retenue (2026-10-02, ADR 0017). Ce document décrit une seule direction
 
 ## En une phrase
 
-Une interface sobre et éditoriale : des fonds neutres, une typographie soignée, et la couleur réservée à ce qui porte du sens. L'écran de relecture montre toute la transcription à gauche, la vue d'ensemble et le résumé à droite.
+Une interface sobre et éditoriale : des fonds neutres, une typographie soignée, et la couleur réservée à ce qui porte du sens. L'écran de relecture se lit en une colonne : la transcription, ou les résumés (ADR 0060) ; les détails de la séance sont chacun à leur place (ADR 0062).
 
 ## Principes
 
@@ -55,7 +55,7 @@ Valeurs données en clair puis en sombre. Les deux modes sont conçus ensemble.
 - **Angles nets** : 4 px pour les petits éléments, 8 px pour les contrôles, 10 px pour les conteneurs. Les boutons ne sont pas en pilule.
 - **Filets plutôt que boîtes.** On sépare par un filet ou par de l'espace. La carte est réservée à un bloc isolé.
 - **Ombres** rares, amples et neutres. En sombre, un liseré clair remplace l'ombre.
-- **Aucun effet de matière** : ni grain, ni verre dépoli, ni halo, ni dégradé de fond.
+- **Aucun effet de matière** : ni grain, ni verre dépoli, ni halo, ni dégradé de fond. Une seule exception (ADR 0059) : le **flou du contenu derrière une information mise au premier plan** (la pause, l'arrêt en cours), modéré (8 px au plus), sous un voile neutre d'environ 70 %, opaque si macOS réduit la transparence.
 - **Icônes** : Lucide, trait de 1,75. Une seule famille. Pas d'emoji dans l'interface.
 
 ## Mouvement
@@ -75,6 +75,7 @@ Valeurs données en clair puis en sombre. Les deux modes sont conçus ensemble.
 Deux outils, chacun pour ce qu'il fait le mieux.
 
 - **En code** : tout ce qui dépend des données ou du pointeur. Les micro-interactions de la relecture, et l'écran « Traitement en cours » : chaque voix est une corde, le fil gris emmêlé se sépare en une corde colorée par personne, avec ses mots et son nom. Les cordes se pincent au survol, se tirent et se relâchent ; un son facultatif donne une note par voix.
+- **Le traitement, de l'arrêt aux chapitres** : la proposition retenue (deux disques, les voix qui arrivent, les chapitres progressifs) est décrite dans [animation-du-traitement.md](animation-du-traitement.md). Elle remplace l'idée des cordes, pas encore construite.
 - **Dans Rive** : ce qui est dessiné. Une illustration d'état, un moment de réussite. Les fichiers seront produits plus tard. En attendant, chaque emplacement affiche un visuel d'attente fait en code, pensé pour avoir l'air fini.
 
 Emplacements prévus :
@@ -96,29 +97,28 @@ Règles :
 
 La fiche complète pour la personne qui dessine est dans l'atelier : `atelier/web/src/illustrations/rive/README.md`.
 
-## L'écran de relecture : deux colonnes
+## L'écran de relecture : une lecture à la fois
 
-Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à droite de la colonne des espaces et des séances, qui se masque pour relire au large. Elle reste sobre : texte secondaire, la séance ouverte sur un fond atténué, jamais un trait de couleur sur un côté ; un point seulement pour ce qui se passe (enregistrement, traitement, échec).
+Une seule colonne de lecture, à la largeur du texte, l'en-tête au-dessus à la même largeur (ADR 0060) : on lit la transcription **ou** les résumés. Dans la coquille de l'application (ADR 0030), elle s'ouvre à droite de la colonne des espaces et des séances, qui se masque pour relire au large. Elle reste sobre : texte secondaire, la séance ouverte sur un fond atténué, jamais un trait de couleur sur un côté ; un point seulement pour ce qui se passe (enregistrement, traitement, échec).
 
-**En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture.
+**En-tête.** Le type d'enregistrement, le titre, une ligne de contexte (date, lieu, durée, nombre de participants). À droite, « Exporter » (discret) et « Compte rendu » (principal). Dessous, une frise fine des chapitres : une barre par chapitre, proportionnelle à sa durée, le nom du chapitre en cours au-dessus, une tête de lecture. Sous la frise, la bascule « Transcription | Résumé » ; à droite, le nombre de corrections.
 
-**Colonne de gauche : la transcription entière.** Elle se lit comme un texte édité :
+**Vue « Transcription » : la transcription entière.** Elle se lit comme un texte édité :
 - l'horodatage dans la marge, cliquable pour lire à partir de là ;
 - le nom en petites capitales dans l'encre du participant, puis la réplique ; quand la même voix continue, sans rien entre, son nom n'est pas répété : la ligne garde son horodatage, et au survol une petite barre au-dessus de sa fin rend le nom (pour nommer la voix) et ses actions ;
 - pas de pastille ni d'avatar dans le texte ;
 - la réplique en cours a son horodatage en brique ; le mot en cours est surligné. Aucun trait de couleur sur le bord (retour de l'utilisateur du 2026-10-06) ;
 - le texte d'une réplique se modifie directement, comme dans Notion : ni cadre, ni fond, ni contour, au survol comme pendant la saisie ; seul le curseur (brique) montre où l'on écrit ;
 - un titre de chapitre, centré entre deux filets, à chaque changement de chapitre ;
-- une note prise à la main s'intercale dans une ligne atténuée, en italique, avec son icône ;
+- une annotation prise pendant l'enregistrement s'intercale dans une ligne atténuée, en italique, avec son icône ;
 - un mot peu sûr est souligné en pointillé ; au survol, « le modèle doutait » et sa certitude, qui compte depuis 0 ;
 - un mot ajouté à la main, sans temps mesuré, porte un petit « + » en exposant (ADR 0011 du moteur).
 
-**Colonne de droite : vue d'ensemble et résumé.** Environ 420 px, jusqu'à 300 px sur une fenêtre étroite : la transcription garde sa largeur de lecture.
-- En haut, les chiffres clés sur une ligne : voix, répliques (la durée est sous le titre), puis décisions, actions, questions quand elles existent.
-- Ce qui sert rarement tient en une ligne jusqu'à ce qu'on le demande : les présents (« Modifier »), les corrections (les trois dernières, puis « Voir les N autres »).
-- Onglet « Vue d'ensemble » : les participants (pastille aux initiales, rôle, part du temps de parole), puis les décisions, les actions (responsable, échéance) et les questions ouvertes.
-- Onglet « Résumé » : le compte rendu par sections, puis le message court prêt à copier.
-- Chaque point renvoie aux répliques qui le justifient par une **citation** : une petite étiquette à l'heure de la réplique, dans la couleur de la personne. Cliquer y amène la lecture ; survoler surligne la réplique à gauche.
+**Vue « Résumé ».** Un onglet par résumé rédigé, en pastilles discrètes, « + Rédiger… » en pointillé pour un autre. Sous l'onglet : la date, Copier, Exporter, Refaire ; « Revenir à la version d'avant » sous un résumé refait. Le texte à la largeur de lecture. Chaque point renvoie aux répliques qui le justifient par une **citation** : une petite étiquette à l'heure de la réplique, dans la couleur de la personne ; un clic ouvre la transcription à cet endroit.
+
+**Les détails de la séance, à leur place** (ADR 0062). Les participants en pastilles sous le titre (le nom dans son encre, la part du temps de parole) ; « N voix à nommer » à leur suite, en pointillé brique. Les présents dans le fil (« 5 présents ▾ »), les corrections à droite de la bascule (« 3 corrections ▾ »), en petits menus flottants. Les versions et le traitement dans « ⋯ », en fenêtre. La note d'après séance en onglet « Ma note » de la vue Résumé.
+
+**Nommer, guidé.** La page passe sous un voile flouté, comme celui de la pause mais plus dense (fond à 82 % au lieu de 70 %, flou modéré, ADR 0059), en 400 ms. Au premier plan, une carte sur la surface (filet, ombre légère), toujours au même endroit : le nom de la voix en petites capitales italiques grises ; la réplique regardée en grand, dans un cadre fin de hauteur fixe (un filet tout autour, sans fond coloré), ▶ dans un rond ; une frise haute, qu'on parcourt au pointeur : chaque réplique un trait brique pâle, de largeur selon sa durée, celle approchée plus haute et plus franche avec son aperçu au-dessus, celle regardée pleine. À la demande, ses répliques en liste, une ligne chacune, coupée en points de suspension. En bas, fixe, le champ du nom, les noms proposés s'ouvrant au-dessus, la voix reconnue contre le champ. Icônes Lucide au trait de 1,75, chacune dite au survol.
 
 **Pied de page : le lecteur.** Réplique précédente, lecture, réplique suivante, position, vitesse. Espace pour lire ou mettre en pause, flèches pour changer de réplique.
 
@@ -132,7 +132,7 @@ Dans la coquille de l'application (ADR 0030), ces deux colonnes s'ouvrent à dro
 
 - Une barre ou un bord de couleur sur un seul côté d'un élément (réplique, élément sélectionné, carte) : jugé « signature IA ». On signale par la couleur du texte, un fond léger ou la graisse.
 - Fonds crème, beige, jaunâtres ou « papier ». Grain sur un fond plat.
-- Dégradés de fond, dégradés maillés, verre dépoli, halos.
+- Dégradés de fond, dégradés maillés, verre dépoli décoratif, halos. (Le flou n'est permis que pour mettre une information au premier plan, ADR 0059.)
 - Violet ou bleu électrique en accent. Plus d'un accent.
 - Icône d'étincelles, baguette magique, ou tout code visuel « IA ».
 - Inter, Roboto ou la police système comme choix par défaut.

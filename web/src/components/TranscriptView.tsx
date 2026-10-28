@@ -1,4 +1,11 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Popover } from "@astryxdesign/core/Popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -15,14 +22,24 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { ServiceError } from "../api.ts";
-import type { EditRequest, Person, PhaseKind, Speaker, Word as WordData } from "../api.ts";
+import type {
+  EditRequest,
+  Person,
+  PhaseKind,
+  Speaker,
+  Word as WordData,
+} from "../api.ts";
 import { formatClock, plural } from "../format.ts";
 import { speakerInk } from "../theme/shared.ts";
 import type { PhaseRow, ReviewModel, Row, TurnRow } from "../transcript.ts";
-import { KIND_LABEL, isDoubtful, speakerTitle, wordTip } from "../transcript.ts";
+import {
+  KIND_LABEL,
+  isDoubtful,
+  speakerTitle,
+  wordTip,
+} from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
 import { NameEditor } from "./NamePanel.tsx";
-
 
 /** The art direction's curve: lively start, soft landing, no bounce. */
 const GLIDE = { duration: 0.16, ease: [0.22, 1, 0.36, 1] } as const;
@@ -48,6 +65,8 @@ export interface Editing {
   setTyping: (on: boolean) => void;
   /** Shows this voice's lines only. */
   showSpeaker: (label: string) => void;
+  /** The chapters are being written (ADR 0061): shown, not changed until they are set. */
+  chaptersProvisional: boolean;
 }
 
 /** Refused because the version shown changed meanwhile: nothing was written, and the page
@@ -77,10 +96,19 @@ function Word({ word, isCurrent }: { word: WordData; isCurrent: boolean }) {
       data-tip-kind={tip?.kind}
       data-tip={tip?.text}
       aria-description={tip?.label}
-      style={tip?.percent != null ? ({ "--cl-conf": tip.percent } as React.CSSProperties) : undefined}
+      style={
+        tip?.percent != null
+          ? ({ "--cl-conf": tip.percent } as React.CSSProperties)
+          : undefined
+      }
     >
       {isCurrent && (
-        <motion.span layoutId="mot-courant" className="cl-word__current" transition={GLIDE} aria-hidden />
+        <motion.span
+          layoutId="mot-courant"
+          className="cl-word__current"
+          transition={GLIDE}
+          aria-hidden
+        />
       )}
       {word.text}
     </span>
@@ -217,7 +245,12 @@ function EditableText({
   useEffect(
     () => () => {
       const typed = draft.current?.replace(/\s+/g, " ").trim();
-      if (typed && typed !== text) void correct({ kind: "edit_text", turn: turn.index, text: typed }).catch(() => undefined);
+      if (typed && typed !== text)
+        void correct({
+          kind: "edit_text",
+          turn: turn.index,
+          text: typed,
+        }).catch(() => undefined);
     },
     [correct, text, turn.index],
   );
@@ -415,14 +448,16 @@ const TurnLine = memo(function TurnLine({
                 <SpellCheck size={14} strokeWidth={1.75} />
               </button>
             )}
-            {!startsChapter && (
+            {!startsChapter && !editing.chaptersProvisional && (
               <button
                 type="button"
                 className="cl-iconbtn"
                 aria-label="Commencer un chapitre ici"
                 title="Commencer un chapitre ici (C)"
                 onClick={() =>
-                  void editing.correct({ kind: "set_phase", turn: turn.index }).catch(() => undefined)
+                  void editing
+                    .correct({ kind: "set_phase", turn: turn.index })
+                    .catch(() => undefined)
                 }
               >
                 <BookmarkPlus size={14} strokeWidth={1.75} />
@@ -501,7 +536,8 @@ function PhaseTitle({
 
   // The text is set here, not rendered by React: typing changes the DOM.
   useEffect(() => {
-    if (!typing.current && ref.current && ref.current.innerText !== title) ref.current.innerText = title;
+    if (!typing.current && ref.current && ref.current.innerText !== title)
+      ref.current.innerText = title;
   }, [title]);
 
   const finish = async () => {
@@ -512,10 +548,12 @@ function PhaseTitle({
       if (ref.current) ref.current.innerText = title;
       return;
     }
-    await correct({ kind: "set_phase", turn, title: typed }).catch((e: unknown) => {
-      // The version changed meanwhile: given back by the page, the title shows again.
-      if (versionChanged(e) && ref.current) ref.current.innerText = title;
-    });
+    await correct({ kind: "set_phase", turn, title: typed }).catch(
+      (e: unknown) => {
+        // The version changed meanwhile: given back by the page, the title shows again.
+        if (versionChanged(e) && ref.current) ref.current.innerText = title;
+      },
+    );
   };
 
   return (
@@ -576,8 +614,30 @@ const PhaseHeading = memo(function PhaseHeading({
     setMenu(false);
     void editing.correct(request).catch(() => undefined);
   };
+  if (editing.chaptersProvisional)
+    // Being written (ADR 0061): read, never changed until the chapters are set.
+    return (
+      <div className="cl-chapter" data-kind={phase.kind} data-provisional>
+        <div className="cl-turn__margin">
+          <TimeLink t={phase.start} isCurrent={false} onSeek={onSeek} />
+        </div>
+        <div className="cl-chapter__body">
+          <span className="cl-chapter__rule" aria-hidden />
+          <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>
+          <span className="cl-chapter__title">
+            {phase.title || "Chapitre sans titre"}
+          </span>
+          <span className="cl-chapter__count">provisoire</span>
+          <span className="cl-chapter__rule" aria-hidden />
+        </div>
+      </div>
+    );
   return (
-    <div className="cl-chapter" data-kind={phase.kind} data-folded={folded || undefined}>
+    <div
+      className="cl-chapter"
+      data-kind={phase.kind}
+      data-folded={folded || undefined}
+    >
       <div className="cl-turn__margin">
         <button
           type="button"
@@ -595,7 +655,12 @@ const PhaseHeading = memo(function PhaseHeading({
         <span className="cl-chapter__rule" aria-hidden />
         <span className="cl-chapter__kind">
           {phase.marked && (
-            <Flag size={11} strokeWidth={2} aria-label="Coupure posée pendant la séance" className="cl-chapter__marked" />
+            <Flag
+              size={11}
+              strokeWidth={2}
+              aria-label="Coupure posée pendant la séance"
+              className="cl-chapter__marked"
+            />
           )}
           {KIND_LABEL[phase.kind]}
         </span>
@@ -605,7 +670,11 @@ const PhaseHeading = memo(function PhaseHeading({
           correct={editing.correct}
           setTyping={editing.setTyping}
         />
-        {folded && <span className="cl-chapter__count">{plural(lines, "réplique", "répliques")}</span>}
+        {folded && (
+          <span className="cl-chapter__count">
+            {plural(lines, "réplique", "répliques")}
+          </span>
+        )}
         <span className="cl-chapter__rule" aria-hidden />
         <Popover
           isOpen={menu}
@@ -621,9 +690,19 @@ const PhaseHeading = memo(function PhaseHeading({
                     className="cl-namepanel__person"
                     aria-current={kind === phase.kind || undefined}
                     disabled={kind === phase.kind}
-                    onClick={() => change({ kind: "set_phase", turn: phase.turn, phase_kind: kind })}
+                    onClick={() =>
+                      change({
+                        kind: "set_phase",
+                        turn: phase.turn,
+                        phase_kind: kind,
+                      })
+                    }
                   >
-                    <span className="cl-chapter__swatch" data-kind={kind} aria-hidden />
+                    <span
+                      className="cl-chapter__swatch"
+                      data-kind={kind}
+                      aria-hidden
+                    />
                     <span>{KIND_LABEL[kind]}</span>
                   </button>
                 </li>
@@ -633,7 +712,9 @@ const PhaseHeading = memo(function PhaseHeading({
                   <button
                     type="button"
                     className="cl-namepanel__person"
-                    onClick={() => change({ kind: "remove_phase", turn: phase.turn })}
+                    onClick={() =>
+                      change({ kind: "remove_phase", turn: phase.turn })
+                    }
                     title="Ses répliques rejoignent le chapitre précédent"
                   >
                     <span />
@@ -644,7 +725,12 @@ const PhaseHeading = memo(function PhaseHeading({
             </ul>
           }
         >
-          <button type="button" className="cl-iconbtn cl-chapter__menu" aria-label="Changer ce chapitre" title="Changer ce chapitre">
+          <button
+            type="button"
+            className="cl-iconbtn cl-chapter__menu"
+            aria-label="Changer ce chapitre"
+            title="Changer ce chapitre"
+          >
             <Ellipsis size={14} strokeWidth={1.75} />
           </button>
         </Popover>
@@ -710,7 +796,12 @@ export function TranscriptView({
   // brought into view with room under it for the list, which floats over the lines below.
   const naming = editing.namingTurn;
   const { setNamingTurn } = editing;
-  const namingIndex = naming == null ? -1 : model.rows.findIndex((r) => r.kind === "turn" && r.turn.index === naming);
+  const namingIndex =
+    naming == null
+      ? -1
+      : model.rows.findIndex(
+          (r) => r.kind === "turn" && r.turn.index === naming,
+        );
   useEffect(() => {
     if (namingIndex < 0) return;
     let head = namingIndex;
@@ -726,8 +817,10 @@ export function TranscriptView({
       virtualizer.scrollToIndex(head, { align: "start" });
       return;
     }
-    const top = line.getBoundingClientRect().top - box.getBoundingClientRect().top;
-    if (top < 0 || top > box.clientHeight - 360) box.scrollBy({ top: top - 96, behavior: "smooth" });
+    const top =
+      line.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    if (top < 0 || top > box.clientHeight - 360)
+      box.scrollBy({ top: top - 96, behavior: "smooth" });
   }, [namingIndex, naming, model.rows, setNamingTurn, virtualizer]);
 
   return (
@@ -769,18 +862,26 @@ export function TranscriptView({
                 <div className="cl-aside" data-kind="moment">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />
                   <span>
-                    <Star size={14} strokeWidth={1.75} aria-hidden /> Moment clé, marqué pendant la séance
+                    <Star size={14} strokeWidth={1.75} aria-hidden /> Moment
+                    clé, marqué pendant la séance
                   </span>
                 </div>
               ) : row.kind === "note" ? (
                 <div className="cl-aside" data-kind="note">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />
                   <span>
-                    <PenLine size={14} strokeWidth={1.75} aria-hidden /> {row.note.text}
+                    <PenLine size={14} strokeWidth={1.75} aria-hidden />{" "}
+                    {row.note.text}
                   </span>
                 </div>
               ) : row.kind === "others" ? (
-                <div className="cl-others">{plural(row.count, "réplique d'une autre voix", "répliques d'autres voix")}</div>
+                <div className="cl-others">
+                  {plural(
+                    row.count,
+                    "réplique d'une autre voix",
+                    "répliques d'autres voix",
+                  )}
+                </div>
               ) : (
                 <div className="cl-gap">
                   <TimeLink t={row.start} isCurrent={false} onSeek={pb.seek} />

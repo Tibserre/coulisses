@@ -11,7 +11,7 @@ const LINES = [
 ];
 
 /** A session page while it is read: the shapes of the page it will be (header, transcript,
- *  side column, player), at their sizes, so that nothing moves when the page comes. */
+ *  the switch between the transcript and the summaries, player), at their sizes, so that nothing moves when the page comes. */
 export function ReviewSkeleton() {
   let n = 0;
   return (
@@ -37,6 +37,9 @@ export function ReviewSkeleton() {
             <Skeleton width={200} height={12} radius={1} index={n++} />
           </div>
           <Skeleton height={6} radius="rounded" index={n++} />
+        </div>
+        <div className="cl-review__views">
+          <Skeleton width={190} height={28} radius={2} index={n++} />
         </div>
       </header>
       <div className="cl-review__columns cl-skeleton">
@@ -67,18 +70,6 @@ export function ReviewSkeleton() {
             ))}
           </div>
         </div>
-        <aside className="cl-side">
-          <div className="cl-skeleton__tabs">
-            <Skeleton width={110} height={12} radius={1} />
-            <Skeleton width={70} height={12} radius={1} />
-          </div>
-          <div className="cl-skeleton__text">
-            <Skeleton width="60%" height={16} radius={1} index={1} />
-            <Skeleton width="100%" height={12} radius={1} index={2} />
-            <Skeleton width="90%" height={12} radius={1} index={3} />
-            <Skeleton width="75%" height={12} radius={1} index={4} />
-          </div>
-        </aside>
       </div>
       <div className="cl-player cl-skeleton cl-skeleton__player">
         <Skeleton width={36} height={36} radius="rounded" />

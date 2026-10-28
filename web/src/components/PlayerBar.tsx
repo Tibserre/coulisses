@@ -18,7 +18,9 @@ function isTyping(target: EventTarget | null): boolean {
   return (
     target.isContentEditable ||
     ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(target.tagName) ||
-    target.closest('[role="button"], [role="slider"], [role="radio"], [role="tab"], dialog') !== null
+    target.closest(
+      '[role="button"], [role="slider"], [role="radio"], [role="tab"], dialog',
+    ) !== null
   );
 }
 
@@ -30,6 +32,7 @@ export function PlayerBar({
   current,
   marks = [],
   markInk,
+  keys = true,
 }: {
   model: ReviewModel;
   pb: Playback;
@@ -37,6 +40,8 @@ export function PlayerBar({
   /** Where a voice speaks (the one shown, or pointed at), marked on the position bar. */
   marks?: { start: number; end: number }[];
   markInk?: string;
+  /** Its keys (Space, the arrows); off while naming, guided: the page is out of reach. */
+  keys?: boolean;
 }) {
   const timed = model.timed;
   const position = current ? timed.indexOf(current) : -1;
@@ -55,7 +60,8 @@ export function PlayerBar({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!keys || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey)
+        return;
       if (e.code === "Space") {
         e.preventDefault();
         pb.toggle();
@@ -116,7 +122,12 @@ export function PlayerBar({
           aria-label="Position dans l'enregistrement"
         />
         {pb.duration != null && marks.length > 0 && (
-          <Marks marks={marks} duration={pb.duration} ink={markInk} seek={pb.seek} />
+          <Marks
+            marks={marks}
+            duration={pb.duration}
+            ink={markInk}
+            seek={pb.seek}
+          />
         )}
       </span>
       <SegmentedControl

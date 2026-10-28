@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Heading } from "@astryxdesign/core/Heading";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
-import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { Text } from "@astryxdesign/core/Text";
+import { FileText, Users } from "lucide-react";
 import { api } from "../api.ts";
-import type { Carryover, NotCarried, Rerun, Versions } from "../api.ts";
+import type {
+  Carryover,
+  NotCarried,
+  Rerun,
+  RerunFacts,
+  Versions,
+} from "../api.ts";
 import { formatClock, formatDateTime, plural } from "../format.ts";
 import {
   carriedText,
@@ -18,7 +24,7 @@ import {
 
 /** The versions of the session's processing (spec §7.4, §7.6): the one shown, the former
  *  ones (shown again on demand, each with its own corrections), what was not carried over
- *  to the one shown, and « Relancer… ». `version` and `busy` change when the session's
+ *  to the one shown, and « Refaire le traitement… ». `version` and `busy` change when the session's
  *  processing does: the list is read again then. */
 export function VersionsSection({
   sessionId,
@@ -122,7 +128,7 @@ export function VersionsSection({
       <div>
         <Button
           size="sm"
-          label="Relancer…"
+          label="Refaire le traitement…"
           isDisabled={!facts.possible}
           clickAction={() => setAsking(true)}
         />
@@ -138,7 +144,6 @@ export function VersionsSection({
       <RerunDialog
         isOpen={asking}
         sessionId={sessionId}
-        versions={versions}
         duration={duration}
         onClose={() => setAsking(false)}
         onAsked={async () => {
@@ -222,41 +227,92 @@ function NotCarriedItem({ item, onSeek }: { item: NotCarried; onSeek: (seconds: 
   );
 }
 
-function RerunDialog({
+const CHOICES: {
+  value: Rerun;
+  label: string;
+  icons: ReactNode;
+}[] = [
+  {
+    value: "all",
+    label: "Tout",
+    icons: (
+      <>
+        <FileText size={20} strokeWidth={1.75} aria-hidden />
+        <Users size={20} strokeWidth={1.75} aria-hidden />
+      </>
+    ),
+  },
+  {
+    value: "transcribe",
+    label: "Le texte",
+    icons: <FileText size={20} strokeWidth={1.75} aria-hidden />,
+  },
+  {
+    value: "diarize",
+    label: "Les voix",
+    icons: <Users size={20} strokeWidth={1.75} aria-hidden />,
+  },
+];
+
+const ACTION: Record<Rerun, string> = {
+  all: "Tout refaire",
+  transcribe: "Refaire le texte",
+  diarize: "Refaire les voix",
+};
+
+/** What a rerun redoes and keeps, in a sentence. */
+function rerunSays(stage: Rerun, facts: RerunFacts): string {
+  if (stage === "all")
+    return "Le texte et les voix sont refaits depuis l'audio, avec le glossaire de l'espace tel qu'il est aujourd'hui.";
+  if (stage === "transcribe")
+    return `${transcribeGain(facts)} Les voix sont gardées.`;
+  return `Le texte est gardé${facts.min_voices ? ` ; la dernière fois, au moins ${plural(facts.min_voices, "voix a été cherchée", "voix ont été cherchées")}` : ""}.`;
+}
+
+/** « Refaire le traitement » (spec §7.4): all of it, the text, or the voices, from the
+ *  version shown. Its facts are read when it opens. */
+export function RerunDialog({
   isOpen,
   sessionId,
-  versions,
   duration,
   onClose,
   onAsked,
 }: {
   isOpen: boolean;
   sessionId: string;
-  versions: Versions;
   duration: number | null;
   onClose: () => void;
   onAsked: () => Promise<void>;
 }) {
-  const facts = versions.rerun;
-  const [stage, setStage] = useState<Rerun>("transcribe");
+  const [facts, setFacts] = useState<RerunFacts | null>(null);
+  const [stage, setStage] = useState<Rerun>("all");
   const [voices, setVoices] = useState<number | null>(null);
   const [battery, setBattery] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const proposed = voices ?? facts.attendees_now ?? facts.min_voices ?? 1;
 
   useEffect(() => {
     if (!isOpen) return;
+    // Each opening starts afresh, from « Tout ».
+    setStage("all");
     setError(null);
+    setVoices(null);
+    setFacts(null);
+    api.versions(sessionId).then(
+      (v) => setFacts(v.rerun),
+      (e: Error) => setError(e.message),
+    );
     api.power().then(
       (p) => setBattery(p.on_battery),
       () => setBattery(null), // unknown: nothing said, the rerun is the user's call anyway
     );
-  }, [isOpen]);
+  }, [isOpen, sessionId]);
 
-  const time = rerunMinutes(facts, stage, duration);
+  const proposed = voices ?? facts?.attendees_now ?? facts?.min_voices ?? 1;
+  const time = facts ? rerunMinutes(facts, stage, duration) : null;
+  const withVoices = stage !== "transcribe";
   const ask = async () => {
     try {
-      await api.rerun(sessionId, stage, stage === "diarize" ? proposed : null);
+      await api.rerun(sessionId, stage, withVoices ? proposed : null);
       await onAsked();
     } catch (e) {
       setError((e as Error).message);
@@ -266,28 +322,52 @@ function RerunDialog({
     <Dialog
       isOpen={isOpen}
       onOpenChange={(open) => !open && onClose()}
-      width={560}
+      width={520}
     >
-      <DialogHeader title="Relancer une étape" onOpenChange={onClose} />
+      <DialogHeader title="Refaire le traitement" onOpenChange={onClose} />
       <div className="cl-rerun">
-        <RadioList
-          label="Étape à refaire"
-          isLabelHidden
-          value={stage}
-          onChange={(v) => setStage(v as Rerun)}
+        <div
+          className="cl-rerun__choices"
+          role="radiogroup"
+          aria-label="Ce qui est refait"
         >
-          <RadioListItem
-            value="transcribe"
-            label="La transcription"
-            description={`${transcribeGain(facts)} La séparation des voix est gardée.`}
-          />
-          <RadioListItem
-            value="diarize"
-            label="La séparation des voix"
-            description={`Avec un autre nombre de présents${facts.min_voices ? ` (la dernière fois : au moins ${facts.min_voices})` : ""}. La transcription est gardée.`}
-          />
-        </RadioList>
-        {stage === "diarize" && (
+          {CHOICES.map((c, i) => (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={stage === c.value}
+              // One tile in the tab order, the arrows go from one to the next (radio group).
+              tabIndex={stage === c.value ? 0 : -1}
+              className="cl-rerun__choice"
+              onClick={() => setStage(c.value)}
+              onKeyDown={(e) => {
+                const step =
+                  e.key === "ArrowRight" || e.key === "ArrowDown"
+                    ? 1
+                    : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                      ? -1
+                      : 0;
+                if (!step) return;
+                e.preventDefault();
+                const next = (i + step + CHOICES.length) % CHOICES.length;
+                setStage(CHOICES[next].value);
+                const tiles =
+                  e.currentTarget.parentElement?.querySelectorAll("button");
+                tiles?.[next]?.focus();
+              }}
+            >
+              <span className="cl-rerun__icons">{c.icons}</span>
+              {c.label}
+            </button>
+          ))}
+        </div>
+        {facts && (
+          <Text as="p" color="secondary">
+            {rerunSays(stage, facts)}
+          </Text>
+        )}
+        {withVoices && facts && (
           <div className="cl-rerun__voices">
             <NumberInput
               label="Nombre de présents"
@@ -299,19 +379,29 @@ function RerunDialog({
             />
           </div>
         )}
-        <Text as="p" color="secondary">
+        <Text as="p" type="supporting">
           {time
-            ? `Environ ${time.minutes} min de calcul${time.measured ? ", comme la dernière fois" : ""}. `
+            ? `Environ ${time.minutes} min${time.measured ? ", comme la dernière fois" : ""}. `
             : ""}
-          La version affichée reste en place jusqu'à la fin ; vos corrections
-          sont alors reportées sur la nouvelle, et ce qui ne peut pas l'être est
-          listé. L'ancienne version reste consultable.
+          La séance reste lisible pendant ce temps. À la fin, vos corrections
+          sont reportées sur la nouvelle version, et l'ancienne reste dans
+          « Versions ».
         </Text>
         {battery && (
           <Banner
             status="warning"
             title="Le Mac est sur batterie"
             description="Mieux vaut le brancher : le calcul est long et sollicite la batterie."
+          />
+        )}
+        {facts && !facts.possible && (
+          <Banner
+            status="info"
+            title="Pas maintenant"
+            description={
+              facts.why_not ??
+              "Le traitement de cette séance ne peut pas être refait pour l'instant."
+            }
           />
         )}
         {error && (
@@ -321,11 +411,8 @@ function RerunDialog({
           <Button variant="ghost" label="Annuler" onClick={onClose} />
           <Button
             variant="primary"
-            label={
-              stage === "transcribe"
-                ? "Refaire la transcription"
-                : "Refaire la séparation des voix"
-            }
+            label={ACTION[stage]}
+            isDisabled={!facts?.possible}
             clickAction={ask}
           />
         </div>

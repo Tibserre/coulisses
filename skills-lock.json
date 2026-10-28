@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "skills": {
+    "accessible-motion": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/01-by-domain/accessible-motion/SKILL.md",
+      "computedHash": "b93e61a0740c84bf7435cc746dc113213726bc5e42b7f9efabf8e0ff420f83f2"
+    },
+    "brand-consistency": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/12-by-problem-type/brand-consistency/SKILL.md",
+      "computedHash": "d1edf054ffebe406003d60322c9171257dba161bf2edba6c47fa36ead21f5992"
+    },
+    "buttons-ctas": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/07-by-ui-element/buttons-ctas/SKILL.md",
+      "computedHash": "f96a46b83334137059fad7ca179d883428be51099f6b939b8923d4d0c19d19bb"
+    },
+    "creative-director": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/03-by-role-persona/creative-director/SKILL.md",
+      "computedHash": "b4cfc2a00cc8e32fd223f7345425bba9db1f1f30478400b576c79ddee2703c6f"
+    },
+    "css-native": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/09-by-tool-framework/css-native/SKILL.md",
+      "computedHash": "9355d5676166acba71a80fad4e8bf41f6b08152bee785ac9259f9a37acab5098"
+    },
+    "elegance-sophistication": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/06-by-emotional-outcome/elegance-sophistication/SKILL.md",
+      "computedHash": "8575f5fb712247e5eb4e3591fedf3176b8bde779659ff1da432f3e9b21152cda"
+    },
+    "entrance-animations": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/05-by-animation-type/entrance-animations/SKILL.md",
+      "computedHash": "273d6f42e16b98d45ada32d336e4cd38f137915ef53dce19b3220e3f98287f1f"
+    },
+    "frontend-developer": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/03-by-role-persona/frontend-developer/SKILL.md",
+      "computedHash": "39fa330f101fb32270deba53bae3710cf285aab40d0906477c005245c5c21965"
+    },
+    "gesture-responses": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/05-by-animation-type/gesture-responses/SKILL.md",
+      "computedHash": "4e402bb4ad925c4475d39a09f5e910e07cdb0395acf0c7d9fadc364c0ec0946e"
+    },
+    "hover-interactions": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/05-by-animation-type/hover-interactions/SKILL.md",
+      "computedHash": "a8c213b86cfb4f828421ba77fafc92bc96eff6800cd0f32c9a9363b9790e8482"
+    },
+    "loading-states": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/05-by-animation-type/loading-states/SKILL.md",
+      "computedHash": "2356ecbdf34f5dd585f42314f89e053c1d1e05f643930478c8e4e98a126d3b00"
+    },
+    "micro-100-200ms": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/10-by-time-scale/micro-100-200ms/SKILL.md",
+      "computedHash": "30217fa45b6ca4617a64ba76f343d4eea35ae77c02aba8090b7ef5706dba7a85"
+    },
+    "micro-interactions": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/01-by-domain/micro-interactions/SKILL.md",
+      "computedHash": "22a154d2e1a33e32f2946504502849dba5a934ac3654ba625a5807b836272955"
+    },
+    "motion-designer": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/03-by-role-persona/motion-designer/SKILL.md",
+      "computedHash": "b3e9b1f0b9ed1154523cb93833dcc08cbdf2177b829d1ec6400a1df26b09a522"
+    },
+    "navigation-menus": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/07-by-ui-element/navigation-menus/SKILL.md",
+      "computedHash": "ea979bdd07ffe92fce609d72a606f57f5f2250ccc644c720a85c07e4e2efa29e"
+    },
+    "notifications-toasts": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/07-by-ui-element/notifications-toasts/SKILL.md",
+      "computedHash": "91fdc218713a330d39cf8d0eeaa1a5e41afb55f2735058e0877c435440c63491"
+    },
+    "playfulness-fun": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/06-by-emotional-outcome/playfulness-fun/SKILL.md",
+      "computedHash": "9716e3e321a0c7183f5408c60e1ce411e8f3ec9091d8ae53a63867960bc4a601"
+    },
+    "transition-sequences": {
+      "source": "dylantarre/animation-principles",
+      "sourceType": "github",
+      "skillPath": "skills/05-by-animation-type/transition-sequences/SKILL.md",
+      "computedHash": "68db4a9e096dd152c865eccfac97a8e9a26ec4d599baa5e6c9cef8c1809e883e"
+    }
+  }
+}
