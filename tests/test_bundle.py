@@ -4,7 +4,10 @@ From the repository, nothing changes."""
 
 from __future__ import annotations
 
+import logging
 import os
+import subprocess
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -21,6 +24,8 @@ def make_app(root: Path, *, without: str | None = None) -> Path:
         (resources / "web").mkdir(parents=True)
         (resources / "web" / "index.html").write_text("<!doctype html>", encoding="utf-8")
     (resources / "bin").mkdir(parents=True)
+    if without != "l'identifiant de version":
+        (resources / bundle.BUILD_ID_FILE).write_text("v0.37.1-3-gabc1234\n", encoding="utf-8")
     for tool in TOOLS:
         if tool != without:
             program = resources / "bin" / tool
@@ -50,7 +55,7 @@ def test_the_app_gives_its_interface_and_tools(tmp_path: Path) -> None:
     assert resources.system_audio_program == root / "bin" / "coulisses-son-ordinateur"
 
 
-@pytest.mark.parametrize("missing", ["l'interface", *TOOLS])
+@pytest.mark.parametrize("missing", ["l'interface", "l'identifiant de version", *TOOLS])
 def test_an_incomplete_app_is_said(tmp_path: Path, missing: str) -> None:
     resources = Resources(make_app(tmp_path, without=missing))
     with pytest.raises(IncompleteAppError, match=f"il manque {missing} dans"):
@@ -125,3 +130,50 @@ def test_the_interface_comes_from_the_app_unless_told_otherwise(
     assert cli.default_web_dir(Resources(root)) == root / "web"
     monkeypatch.setenv(cli.WEB_DIR_ENV, str(tmp_path / "autre"))
     assert cli.default_web_dir(Resources(root)) == tmp_path / "autre"
+
+
+# -- which code runs (ADR 0064) ------------------------------------------------------------
+
+
+def test_the_app_says_the_code_its_build_wrote(tmp_path: Path) -> None:
+    assert Resources(make_app(tmp_path)).build_identifier() == "v0.37.1-3-gabc1234"
+
+
+def test_an_empty_identifier_is_an_incomplete_app(tmp_path: Path) -> None:
+    root = make_app(tmp_path)
+    (root / bundle.BUILD_ID_FILE).write_text("\n", encoding="utf-8")
+    with pytest.raises(IncompleteAppError, match="il manque l'identifiant de version"):
+        Resources(root).check()
+    with pytest.raises(IncompleteAppError):
+        Resources(root).build_identifier()
+
+
+@pytest.mark.parametrize(
+    "described", ["v0.34.0", "v0.34.0-36-gcac1f05", "v0.34.0-36-gcac1f05-modifie", "cac1f05"]
+)
+def test_the_repository_says_what_git_describes(
+    monkeypatch: pytest.MonkeyPatch, described: str
+) -> None:
+    asked: list[list[str]] = []
+
+    def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        asked.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=f"{described}\n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert Resources(None).build_identifier() == described
+    assert asked[0][:4] == ["git", "-C", str(bundle.REPOSITORY), "describe"]
+    assert "--dirty=-modifie" in asked[0]
+
+
+def test_the_real_repository_is_described_once() -> None:
+    assert bundle.build_identifier() == bundle.build_identifier() != ""
+
+
+def test_without_git_the_packages_version_is_given_and_the_log_says_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(bundle, "REPOSITORY", tmp_path)  # not a repository
+    with caplog.at_level(logging.WARNING, logger="coulisses_app.bundle"):
+        assert Resources(None).build_identifier() == version("coulisses-app")
+    assert "build identifier unknown" in caplog.text

@@ -56,6 +56,7 @@ from coulisses_app import (
     summaries,
     versions,
 )
+from coulisses_app.bundle import build_identifier
 from coulisses_app.local_only import LocalOnly
 from coulisses_app.machine import memory_gb
 from coulisses_app.media import UnreadableAudioError
@@ -74,6 +75,10 @@ class AppInfo(BaseModel):
     data_dir: str
     engine_version: str
     app_version: str
+    """The last version published (ADR 0064): the same between two publications."""
+    app_build: str
+    """Which code runs: `vX.Y.Z`, or `vX.Y.Z-<commits since>-g<commit>` between two
+    versions (ADR 0064)."""
     pid: int
     """The service's process: the app in the Dock takes back one left running alone."""
     profile: str
@@ -350,9 +355,12 @@ def create_app(
     recorder: capture.Recorder | None = None,
     watcher: retention.Watcher | None = None,
     engine_store: engine_models.EngineModels | None = None,
+    app_build: str | None = None,
 ) -> FastAPI:
     """`processor` is started and stopped with the service; None in tests that drive it.
-    `model_client` answers the list of installed models (Ollama by default)."""
+    `model_client` answers the list of installed models (Ollama by default). `app_build`:
+    which code runs (`bundle.build_identifier` by default)."""
+    app_build = build_identifier() if app_build is None else app_build
     model_client = model_client or (processor.model_client if processor else OllamaClient())
     recorder = recorder or capture.Recorder(data)
     engine_store = engine_store or engine_models.EngineModels(profile)
@@ -413,6 +421,7 @@ def create_app(
             data_dir=str(data.root),
             engine_version=version("coulisses"),
             app_version=version("coulisses-app"),
+            app_build=app_build,
             pid=os.getpid(),
             profile=profile,
             recovery_problems=problems,
