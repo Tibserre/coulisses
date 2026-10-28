@@ -219,7 +219,9 @@ function Shell({ route }: { route: Route }) {
           micro: null,
           micros_en_plus: [],
           son_ordinateur: system,
-          micros_precedents: true,
+          // Only the Mac's microphone in use (or the earphones plugged in) and its sound:
+          // any other microphone is added on demand (the user's choice, ADR 0067).
+          micros_precedents: false,
         });
         setStartError(null);
         window.location.hash = "#/enregistrement";
