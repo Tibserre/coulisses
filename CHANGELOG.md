@@ -10,17 +10,50 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
+- une seule liste des micros, les actifs puis ceux du Mac (enregistrement)
+- chaque micro de la liste se coupe comme celui de la barre (enregistrement)
+- retirer un micro ajouté, aux heures mesurées par le service (enregistrement)
+- retire un micro ajouté en cours, son fichier gardé (enregistrement)
+- la liste des micros sous tout le bouton, et chaque clic se voit aussitôt (enregistrement)
+- Nouvelle note démarre avec le seul micro en service et le son du Mac (enregistrement)
+- les micros comme le son de l'ordinateur, le chevron ou « + » à côté (enregistrement)
+- les micros dans la barre, à couper un par un ou tous, et à ajouter en cours (enregistrement)
+- couper les micros, en ajouter un en cours, reprendre ceux de la dernière fois (enregistrement)
+- les disques du traitement au-dessus du texte pendant une relance (relecture)
+- tout relancer d'un coup, le texte et les voix (relance)
+- refaire tout le traitement ou une partie, en tuiles (relecture)
+- monte le moteur en v1.13.0 et donne le rang de la phase (traitement)
+- l'anneau avance phase par phase, comme le moteur le dit (traitement)
 - garde l'identifiant du code dans la provenance des générations (resumes)
 - montre l'identifiant du code en mode développeur (reglages)
 - donne l'identifiant du code qui tourne (app_build) (etat)
+- la carte de nommage, la réplique en grand et une frise qu'on parcourt (relecture)
+- nommer sous un voile, avec les seules répliques de la voix (relecture)
+- nommer les voix, guidé, et chaque détail à sa place (relecture)
+- les chapitres s'affichent au fil de leur écriture (chapitres)
 - montre l'avancement et les chapitres provisoires pendant leur détection (chapitres)
+- une lecture à la fois, les résumés en onglets, le traitement en deux disques (relecture)
+- une grande icône pour la pause et l'arrêt, moins de mots (enregistrement)
+- la pause et l'arrêt dits à toute la pièce (enregistrement)
+- arrêter sans confirmation, la relecture qui se construit (seance)
 - reconnaît les voix d'une séance à l'autre (voix)
+- lance une note en un geste, le déroulé au centre (enregistrement)
 - rappelle qu'un enregistrement tourne (enregistrement)
 - montre l'enregistrement en cours dans la barre des menus, avec ses rappels (lanceur)
 
 ### Corrections
 
+- « Micros coupés » quand le dernier les coupe tous, des noms entiers (enregistrement)
+- l'anneau de relance attend la fin pour se fermer (relecture)
+- la fenêtre de relance repart de « Tout » à chaque ouverture (relecture)
+- l'anneau ne recule plus, et ne se ferme qu'à la fin de l'étape (traitement)
+- centre l'icône dans son disque (traitement)
 - un ffmpeg sans PCM 24 bits garde les pistes en WAV (conversion)
+- une largeur fixe pour la barre de nommage (relecture)
+- la barre de nommage reste en place, le texte vient à elle (relecture)
+- le voile prend le focus, sans anneau sur Reprendre (enregistrement)
+- le même disque pour la pause et l'arrêt (enregistrement)
+- un bouton icône pour le son de l'ordinateur, le temps à largeur fixe (enregistrement)
 
 ## v0.34.0 — 2026-10-20
 
