@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
+- montre l'identifiant du code en mode développeur (reglages)
 - donne l'identifiant du code qui tourne (app_build) (etat)
 - montre l'avancement et les chapitres provisoires pendant leur détection (chapitres)
 - reconnaît les voix d'une séance à l'autre (voix)
