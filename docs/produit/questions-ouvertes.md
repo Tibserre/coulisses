@@ -24,4 +24,4 @@
 - **Réverbération des salles de répétition** : la plus grosse inconnue sur la qualité.
 - **Veille pendant la nuit** : Mac sur batterie, capot fermé → la nuit est perdue. L'app doit le signaler. L'app Coulisses doit rester ouverte pendant le traitement de nuit (la quitter l'interrompt ; il reprend au lancement suivant, ADR 0034).
 - **Maturité d'Astryx** (bêta).
-- **Dette de l'interface** : transcript non virtualisé (ne tiendra pas 2 h), pas encore de raccourcis clavier de relecture (`rules/web.md`). À traiter avant la relecture de vraies séances.
+- **Dette de l'interface** : pas encore de raccourcis clavier de relecture (le transcript est virtualisé ; une séance de 2 h vérifiée le 2026-10-28 : ouverture en 0,5 s, sauts en 25 ms) (`rules/web.md`). À traiter avant la relecture de vraies séances.
