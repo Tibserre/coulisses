@@ -26,3 +26,9 @@ export function folderName(path: string): string {
   const parts = path.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? path;
 }
+
+/** Which code runs (ADR 0064), when it is not the published version itself:
+ *  `v0.34.0-36-gcac1f05` between two versions, null on `v` + the version. */
+export function buildShown(version: string, build: string): string | null {
+  return build === `v${version}` ? null : build;
+}
