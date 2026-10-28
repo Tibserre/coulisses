@@ -8,52 +8,18 @@ la publication lit celle de `main`.
 
 ## v0.35.0 — 2026-10-28
 
-### Nouveautés
+### Nouveautés depuis la 0.34.0
 
-- une seule liste des micros, les actifs puis ceux du Mac (enregistrement)
-- chaque micro de la liste se coupe comme celui de la barre (enregistrement)
-- retirer un micro ajouté, aux heures mesurées par le service (enregistrement)
-- retire un micro ajouté en cours, son fichier gardé (enregistrement)
-- la liste des micros sous tout le bouton, et chaque clic se voit aussitôt (enregistrement)
-- Nouvelle note démarre avec le seul micro en service et le son du Mac (enregistrement)
-- les micros comme le son de l'ordinateur, le chevron ou « + » à côté (enregistrement)
-- les micros dans la barre, à couper un par un ou tous, et à ajouter en cours (enregistrement)
-- couper les micros, en ajouter un en cours, reprendre ceux de la dernière fois (enregistrement)
-- les disques du traitement au-dessus du texte pendant une relance (relecture)
-- tout relancer d'un coup, le texte et les voix (relance)
-- refaire tout le traitement ou une partie, en tuiles (relecture)
-- monte le moteur en v1.13.0 et donne le rang de la phase (traitement)
-- l'anneau avance phase par phase, comme le moteur le dit (traitement)
-- garde l'identifiant du code dans la provenance des générations (resumes)
-- montre l'identifiant du code en mode développeur (reglages)
-- donne l'identifiant du code qui tourne (app_build) (etat)
-- la carte de nommage, la réplique en grand et une frise qu'on parcourt (relecture)
-- nommer sous un voile, avec les seules répliques de la voix (relecture)
-- nommer les voix, guidé, et chaque détail à sa place (relecture)
-- les chapitres s'affichent au fil de leur écriture (chapitres)
-- montre l'avancement et les chapitres provisoires pendant leur détection (chapitres)
-- une lecture à la fois, les résumés en onglets, le traitement en deux disques (relecture)
-- une grande icône pour la pause et l'arrêt, moins de mots (enregistrement)
-- la pause et l'arrêt dits à toute la pièce (enregistrement)
-- arrêter sans confirmation, la relecture qui se construit (seance)
-- reconnaît les voix d'une séance à l'autre (voix)
-- lance une note en un geste, le déroulé au centre (enregistrement)
-- rappelle qu'un enregistrement tourne (enregistrement)
-- montre l'enregistrement en cours dans la barre des menus, avec ses rappels (lanceur)
-
-### Corrections
-
-- « Micros coupés » quand le dernier les coupe tous, des noms entiers (enregistrement)
-- l'anneau de relance attend la fin pour se fermer (relecture)
-- la fenêtre de relance repart de « Tout » à chaque ouverture (relecture)
-- l'anneau ne recule plus, et ne se ferme qu'à la fin de l'étape (traitement)
-- centre l'icône dans son disque (traitement)
-- un ffmpeg sans PCM 24 bits garde les pistes en WAV (conversion)
-- une largeur fixe pour la barre de nommage (relecture)
-- la barre de nommage reste en place, le texte vient à elle (relecture)
-- le voile prend le focus, sans anneau sur Reprendre (enregistrement)
-- le même disque pour la pause et l'arrêt (enregistrement)
-- un bouton icône pour le son de l'ordinateur, le temps à largeur fixe (enregistrement)
+- Enregistrer en un geste. « Nouvelle note » (⌘N) démarre l'enregistrement aussitôt, avec le micro du Mac et le son de l'ordinateur, dans l'espace où vous êtes. L'espace, le projet et les présents se corrigent pendant qu'on enregistre. Au centre, le déroulé de la séance : vos annotations, les moments marqués d'une ★ et les passages du jeu à la discussion, à leur heure.
+- Les micros pendant l'enregistrement. Coupez un micro, tous les micros ou le son de l'ordinateur à tout moment : du silence est enregistré à sa place, sans décaler le reste. Ajoutez un micro en cours de route, ou retirez celui que vous aviez ajouté (ce qu'il a déjà enregistré est gardé). Chaque nouvelle note repart du micro du Mac et du son de l'ordinateur ; un autre micro s'ajoute à la demande.
+- Pause et arrêt plus clairs. Une grande icône, au premier plan. « Arrêter » ne demande plus de confirmation : vous avez 3 secondes pour reprendre (Espace ou Échap).
+- Un enregistrement oublié ne passe plus inaperçu. Pendant un enregistrement, la barre des menus montre « ● » et sa durée, avec Pause, Arrêter et Ouvrir Coulisses, même fenêtre fermée. Après un long silence (5 minutes par défaut) ou une longue durée (1 h 30 par défaut), une notification demande s'il faut arrêter : « Arrêter » ou « Continuer ». Coulisses n'arrête jamais un enregistrement de lui-même. Les deux délais se règlent dans Réglages > Séances. macOS demande l'autorisation des notifications au premier enregistrement ; si vous la refusez, le rappel reste visible dans la barre des menus.
+- Le traitement se suit. Deux disques, « Le texte » et « Les voix », avancent étape par étape, sans jamais reculer. Le texte apparaît dès qu'il est transcrit, puis les noms se posent. S'il y a moins de voix que de présents cochés, Coulisses le dit et propose de relancer avec le bon nombre.
+- Une lecture à la fois. La transcription ou les résumés, en une colonne. Les résumés sont en onglets ; « Refaire » utilise le modèle choisi dans Réglages > Rédaction, et « Revenir à la version d'avant » annule le dernier. Votre note d'après séance est dans l'onglet « Ma note ».
+- Nommer les voix, guidé. « N voix à nommer », sous le titre, passe d'une voix à l'autre : on écoute ses seules répliques, à la suite, et on choisit qui c'est. Les participants s'affichent sous le titre avec leur temps de parole ; un clic n'affiche que leurs répliques.
+- Coulisses reconnaît les voix d'une séance à l'autre. Une voix pas encore nommée qui ressemble à celle d'une personne de l'espace est proposée : « C'est Marie ? ». Une coche confirme, une croix refuse (et s'annule par Cmd-Z) ; rien n'est jamais nommé sans vous. À activer dans les réglages de chaque espace (« Reconnaître les voix d'une séance à l'autre », désactivé par défaut). Les voix des séances traitées avant cette version ne comptent que si vous refaites leur séparation des voix.
+- Refaire le traitement, depuis « ⋯ › Refaire le traitement… » : tout, le texte seul ou les voix seules. La version affichée reste lisible pendant ce temps, et vos corrections sont reportées sur la nouvelle.
+- Les chapitres apparaissent au fur et à mesure. Pendant leur détection, Coulisses montre les premiers chapitres trouvés, sans attendre la fin. Ils peuvent encore évoluer et ne se modifient qu'une fois définitifs.
 
 ## v0.34.0 — 2026-10-20
 
