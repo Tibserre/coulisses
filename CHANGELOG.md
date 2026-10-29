@@ -8,9 +8,9 @@ la publication lit celle de `main`.
 
 ## v0.37.0 — 2026-10-29
 
-### Nouveautés
+### Nouveautés depuis la 0.36.0
 
-- permet de télécharger la transcription en Markdown depuis le menu de la séance (export)
+- Télécharger la transcription. Dans le menu « ⋯ » d'une séance, « Télécharger la transcription (.md) » enregistre la transcription corrigée dans un fichier Markdown, dès qu'elle existe, même sans résumé.
 
 ## v0.36.0 — 2026-10-29
 
