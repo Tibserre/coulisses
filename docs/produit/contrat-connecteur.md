@@ -9,6 +9,7 @@ Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n
 ### Erreurs communes
 | Cas | Code | `detail` |
 |---|---|---|
+| Requête venue d'une page web (en-tête `Origin`, ou `Sec-Fetch-Site` autre que `none`) | 403 | « Le connecteur ne se lit que par son pont. » |
 | Connecteur coupé (Réglages) | 403 | « Le connecteur de Coulisses est coupé. Ouvrez-le dans Coulisses › Réglages › Connecteur. » |
 | Séance inconnue, ou dans un espace fermé au connecteur | 404 | « Séance introuvable, ou dans un espace fermé au connecteur. » (les deux cas ne se distinguent pas) |
 | Résumé inconnu de cette séance | 404 | « Résumé introuvable. » |
@@ -17,7 +18,7 @@ Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n
 | Les résultats ont changé entre deux pages d'une recherche | 409 | « La recherche a changé depuis la page précédente : relancez-la. » |
 | Paramètre invalide | 422 | la raison, en français |
 
-Le connecteur coupé est vérifié **avant tout autre contrôle** (404, 409, 422) : coupé, tout répond 403. Aucune réponse ne nomme un espace fermé, ne compte ses séances ni ne cite son texte ; `more` et `next` ne tiennent compte que des espaces accessibles.
+Le connecteur coupé est vérifié **avant tout autre contrôle** (404, 409, 422, types des paramètres compris) : coupé, tout répond 403. Aucune réponse ne nomme un espace fermé, ne compte ses séances ni ne cite son texte ; `more` et `next` ne tiennent compte que des espaces accessibles.
 
 ### Masquage des noms
 Dans un espace dont l'option **Transmettre les noms** est fermée, chaque nom connu de l'espace devient « Personne A », « Personne B »… : présents, voix nommées, personnes de l'espace (membres et invités, archivés compris), noms propres de son glossaire et leurs variantes. Une lettre par personne (ou par terme), la même dans toute la séance ; l'ordre : première apparition dans le transcript, puis les autres dans leur ordre de création (jamais l'ordre alphabétique, qui dirait quelque chose des noms). Le masquage vaut **partout**, dans tout texte rendu : titre, nom de l'espace et du projet, présents, voix, chapitres, annotations, note, résumés, transcript, extraits de recherche. Il est fait au mieux (mots entiers, accents et casse ignorés) : un surnom, un diminutif ou une faute de transcription passe. Chaque réponse qui porte du texte d'une séance dit `names_shared` (vrai : rien n'est masqué).
@@ -46,10 +47,10 @@ Paramètres : `espace` (son nom tel que l'assistant le voit, masqué compris ; f
       "generations": [{"id": 41, "action": "Résumé Impro", "created_at": "2026-10-12T19:40:02Z"}]
     }
   ],
-  "next": "20261005-201000-c3d4"
+  "next": "2026-10-05T18:10:00Z|20261005-201000-c3d4"
 }
 ```
-Du plus récent au plus ancien, seulement les espaces accessibles ; `espace` qui désigne un espace fermé ou inconnu donne une liste vide, sans le distinguer. `next` : à passer en `apres` pour la suite ; `null` s'il n'y a plus rien. `title` : `null` pour une séance sans titre ; `project` : `null` hors projet. `generations` : la version affichée de chaque résumé réussi.
+Du plus récent au plus ancien, seulement les espaces accessibles ; `espace` qui désigne un espace fermé ou inconnu donne une liste vide, sans le distinguer. `next` : opaque, à passer en `apres` pour la suite (les séances d'avant la dernière rendue, par date puis id : une séance supprimée n'interrompt pas la lecture et aucune n'est rendue deux fois ; une séance dont la date est corrigée pendant la lecture peut changer de place) ; `null` s'il n'y a plus rien. `title` : `null` pour une séance sans titre ; `project` : `null` hors projet. `generations` : la version affichée de chaque résumé ; un résumé échoué, pas fini ou illisible répond 409 à sa lecture, avec la raison.
 
 ### `GET /api/connecteur/recherche` — outil `chercher`
 Paramètres : `q` (1 à 200 caractères), `espace`, `depuis`, `jusqu_a` (comme pour la liste), `limite` (1 à 30 séances, 10 par défaut), `apres` (le `next` d'une réponse précédente, avec les mêmes `q` et filtres). La recherche plein texte de Coulisses (§7.11), dans les seuls espaces accessibles, sur le texte **tel que l'assistant le verrait** : un nom masqué ne trouve rien dans cet espace, et les extraits sont masqués.
@@ -69,10 +70,11 @@ Paramètres : `q` (1 à 200 caractères), `espace`, `depuis`, `jusqu_a` (comme p
       "more_hits": true
     }
   ],
-  "next": "p2.7c1e"
+  "next": "10.7c1e93a0",
+  "problems": []
 }
 ```
-Les séances, de la plus pertinente à la moins pertinente ; `next` : opaque, à passer en `apres` pour les séances suivantes, `null` s'il n'y en a plus ; il fige le classement de la première page : si les résultats ont changé depuis (séance supprimée, corrigée, espace fermé), 409 « relancez-la », jamais une séance sautée ou rendue deux fois en silence. Dans une séance, 5 passages au plus ; `more_hits` : il y en a d'autres, à lire par `lire_transcript`. `kind` : `title`, `turn` (`ref` : l'indice de la réplique), `timed_note` (`ref` : l'id de l'annotation), `note` (la note d'après séance, `ref` vide), `generation` (`ref` : l'id du résumé). Les mots trouvés sont entre « et ». `at_s` : le temps mesuré de la réplique ou de l'annotation (P2), `null` pour un titre, une note, un résumé ou une réplique sans temps mesuré.
+Les séances, de la plus pertinente à la moins pertinente ; `next` : opaque, à passer en `apres` pour les séances suivantes, `null` s'il n'y en a plus ; il fige le classement de la première page : si les résultats ont changé depuis (séance supprimée, corrigée, espace fermé), 409 « relancez-la », jamais une séance sautée ou rendue deux fois en silence. Dans une séance, 5 passages au plus ; `more_hits` : il y en a d'autres, à lire par `lire_transcript`. `kind` : `title`, `turn` (`ref` : l'indice de la réplique), `timed_note` (`ref` : l'id de l'annotation), `note` (la note d'après séance, `ref` vide), `generation` (`ref` : l'id du résumé). Les mots trouvés sont entre « et ». `problems` : les séances des espaces accessibles qui n'ont pas pu être lues pour la recherche (fichiers illisibles), dites, titres masqués comme le reste. `at_s` : le temps mesuré de la réplique ou de l'annotation (P2), `null` pour un titre, une note, un résumé ou une réplique sans temps mesuré.
 
 ### `GET /api/connecteur/seances/{id}` — outil `lire_seance`
 ```json
@@ -160,7 +162,7 @@ Paramètres : `limite` (1 à 200, 50 par défaut), `avant` (un `id` : les entré
   "next": 790
 }
 ```
-Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` vaut `chercher`, `lister_seances`, `lire_seance`, `lire_resume` ou `lire_transcript`. Une recherche ou une liste note une entrée par séance rendue, ou une seule entrée sans séance si elle n'en rend aucune. `session_title` : le titre actuel, vrai (c'est l'utilisateur qui lit) ; `null` pour une séance supprimée depuis ou sans titre (`session_deleted` le dit). Le texte de la recherche n'est pas noté. Seules les réponses 200 sont notées : une lecture refusée (403, 404, 409, 422) n'a rien transmis.
+Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` vaut `chercher`, `lister_seances`, `lire_seance`, `lire_resume` ou `lire_transcript`. Une recherche ou une liste note une entrée par séance rendue, ou une seule entrée sans séance si elle n'en rend aucune. `names_shared` : `null` pour une entrée sans séance (rien n'a été transmis). `session_title` : le titre actuel, vrai (c'est l'utilisateur qui lit) ; `null` pour une séance supprimée depuis ou sans titre (`session_deleted` le dit). Le texte de la recherche n'est pas noté. Seules les réponses 200 sont notées : une lecture refusée (403, 404, 409, 422) n'a rien transmis.
 
 ## 3. Les deux options d'un espace
 

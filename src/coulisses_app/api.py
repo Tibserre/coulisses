@@ -23,7 +23,7 @@ from coulisses.api import (
     models_dir,
     read_provenance,
 )
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from coulisses_app import (
     actions,
     capture,
+    connector,
     corrections,
     engine_models,
     exports,
@@ -159,10 +160,16 @@ class AttendeesRequest(BaseModel):
     unnamed: int | None = None
 
 
+class ConnectorRequest(BaseModel):
+    open: bool
+
+
 class SpaceRequest(BaseModel):
     name: str | None = None
     voice_recognition: bool | None = None
     archived: bool | None = None
+    connector_access: bool | None = None
+    connector_names: bool | None = None
     template: str = "vide"
     """At creation only: impro, reunion or vide (ADR 0020)."""
 
@@ -389,10 +396,12 @@ def create_app(
     watcher: retention.Watcher | None = None,
     engine_store: engine_models.EngineModels | None = None,
     app_build: str | None = None,
+    dev: bool = False,
 ) -> FastAPI:
     """`processor` is started and stopped with the service; None in tests that drive it.
     `model_client` answers the list of installed models (Ollama by default). `app_build`:
-    which code runs (`bundle.build_identifier` by default)."""
+    which code runs (`bundle.build_identifier` by default). `dev`: Coulisses (dév), whose
+    connector has its own launcher and name (ADR 0065)."""
     app_build = build_identifier() if app_build is None else app_build
     model_client = model_client or (processor.model_client if processor else OllamaClient())
     recorder = recorder or capture.Recorder(data)
@@ -448,6 +457,10 @@ def create_app(
             else 422
         )
         return JSONResponse(status_code=status, content={"detail": str(exc)})
+
+    @app.exception_handler(connector.ConnectorError)
+    async def connector_refused(_: Request, exc: connector.ConnectorError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     problems = recovery_problems or []
 
@@ -1151,6 +1164,8 @@ def create_app(
             name=demande.name,
             voice_recognition=demande.voice_recognition,
             archived=demande.archived,
+            connector_access=demande.connector_access,
+            connector_names=demande.connector_names,
         )
 
     @app.get("/api/espaces/{space_id}/personnes")
@@ -1388,6 +1403,91 @@ def create_app(
                 "un instant. La séance n'est pas supprimée.",
             )
         return Deleted(problems=retention.delete_session(data, session_id))
+
+    # -- the assistants' connector (ADR 0065, docs/produit/contrat-connecteur.md) ------
+    # What the bridge reads: GET only, the rules applied here (closed, spaces, names).
+
+    def connector_gate(request: Request) -> None:
+        """Before anything else, its parameters' types included (contract §1): closed, 403.
+        Read by the bridge only, never by a web page: these reads write the journal, and
+        a page could fill it without reading the answers (ADR 0043)."""
+        fetched = request.headers.get("sec-fetch-site")
+        if "origin" in request.headers or (fetched is not None and fetched != "none"):
+            raise HTTPException(status_code=403, detail="Le connecteur ne se lit que par son pont.")
+        with _db() as conn:
+            connector.check_open(conn)
+
+    @app.get("/api/connecteur/seances", dependencies=[Depends(connector_gate)])
+    def connector_sessions(
+        espace: str | None = None,
+        depuis: str | None = None,
+        jusqu_a: str | None = None,
+        limite: int = 30,
+        apres: str | None = None,
+    ) -> connector.SessionList:
+        return connector.list_sessions(
+            data, space=espace, since=depuis, until=jusqu_a, limit=limite, after=apres
+        )
+
+    @app.get("/api/connecteur/recherche", dependencies=[Depends(connector_gate)])
+    def connector_search(
+        q: str = "",
+        espace: str | None = None,
+        depuis: str | None = None,
+        jusqu_a: str | None = None,
+        limite: int = 10,
+        apres: str | None = None,
+    ) -> connector.SearchResults:
+        return connector.find(
+            data, q, space=espace, since=depuis, until=jusqu_a, limit=limite, after=apres
+        )
+
+    @app.get("/api/connecteur/seances/{session_id}", dependencies=[Depends(connector_gate)])
+    def connector_session(session_id: str) -> connector.SessionRead:
+        return connector.read_session(data, session_id, profile=profile)
+
+    @app.get(
+        "/api/connecteur/seances/{session_id}/transcript", dependencies=[Depends(connector_gate)]
+    )
+    def connector_transcript(
+        session_id: str,
+        chapitre: int | None = None,
+        depuis: int | None = None,
+        nombre: int = connector.DEFAULT_TURNS,
+        vue: str | None = None,
+    ) -> connector.TranscriptPart:
+        return connector.read_transcript(
+            data,
+            session_id,
+            profile=profile,
+            phase=chapitre,
+            since=depuis,
+            count=nombre,
+            view_key=vue,
+        )
+
+    @app.get(
+        "/api/connecteur/seances/{session_id}/resumes/{generation_id}",
+        dependencies=[Depends(connector_gate)],
+    )
+    def connector_generation(session_id: str, generation_id: int) -> connector.GenerationRead:
+        return connector.read_generation(data, session_id, generation_id)
+
+    # The « Connecteur » tab of the settings: answers whether open or closed.
+
+    @app.get("/api/reglages/connecteur")
+    def connector_settings() -> connector.ConnectorSettings:
+        return connector.settings_info(data, dev=dev)
+
+    @app.put("/api/reglages/connecteur")
+    def set_connector(demande: ConnectorRequest) -> connector.ConnectorSettings:
+        with _db() as conn:
+            connector.set_open(conn, demande.open)
+        return connector.settings_info(data, dev=dev)
+
+    @app.get("/api/reglages/connecteur/journal")
+    def connector_journal(limite: int = 50, avant: int | None = None) -> connector.Journal:
+        return connector.journal(data, limit=limite, before=avant)
 
     _mount_interface(app, web_dir)
     return app

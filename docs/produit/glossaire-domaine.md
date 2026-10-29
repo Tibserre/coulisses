@@ -7,6 +7,10 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Espace | `space` | Ce qui regroupe des séances et les gens qui y participent : une troupe d'impro, une équipe, un client (ADR 0020). Possède des membres, des invités, un glossaire, des projets, des réglages. Étanche : une personne n'appartient qu'à un espace. |
 | Modèle de départ | `space_template` | Pré-remplissage des réglages d'un espace à sa création (« Troupe d'impro », « Réunions de travail », « Vide »). Pas un type : tout reste modifiable ensuite. |
 | Reconnaissance des voix | `voice_recognition` | Réglage d'un espace : reconnaître une personne d'une séance à l'autre par sa voix. Désactivé par défaut. |
+| Accessible au connecteur | `connector_access` | Réglage d'un espace : ses séances peuvent être lues par le connecteur des assistants. Fermé par défaut ; fermé, l'espace n'apparaît dans aucune réponse du connecteur (ADR 0065). |
+| Transmettre les noms | `connector_names` | Réglage d'un espace : le connecteur rend les noms tels quels. Fermé par défaut : chaque nom connu de l'espace devient « Personne A », « Personne B »…, au mieux (ADR 0065). |
+| Connecteur | `connector` | Ce qui laisse un assistant (Claude Desktop, Claude Code, un client MCP local) lire Coulisses sans le piloter : le pont `coulisses-mcp` et les routes `/api/connecteur/…`. Coupé par défaut, ouvert dans les Réglages (ADR 0065). |
+| Journal des accès | `connector_access_log` | Chaque lecture réussie du connecteur : date, outil, séance, avec ou sans les noms. Jamais purgé ; sans le texte cherché (ADR 0065). |
 | Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
 | Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |
