@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import sqlite3
@@ -29,11 +30,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
+from coulisses.api import read_provenance
 from pydantic import BaseModel
 
 from coulisses_app.paths import DataDir
 from coulisses_app.spaces import NotFoundError, SpaceError
-from coulisses_app.storage.db import connect, now_iso
+from coulisses_app.storage.db import ISO_FORMAT, connect, now_iso
 
 log = logging.getLogger(__name__)
 
@@ -405,6 +407,74 @@ def _checkpoint(conn: sqlite3.Connection) -> bool:
     return False
 
 
+HELPERS_LIMIT_S = 10 * 60
+"""How long after its run closed a live process group holds back a deletion: a group number
+may be given again later to another program, which would hold it back for ever."""
+
+
+def _helpers_still_running(
+    conn: sqlite3.Connection, data: DataDir, session_id: str
+) -> tuple[str | None, list[str]]:
+    """Why the session's folder may not be deleted yet, if so: a stage the engine closed
+    with `HelpersStillRunning` (a process of it outlived its stop by 10 s, engine v1.13.2)
+    whose process group still has a live process, which may still write in it. Also what
+    the deletion says once `HELPERS_LIMIT_S` is over (it goes on, said, never in silence)."""
+    from coulisses_app.processing import HELPERS_STILL_RUNNING  # it reads the sessions too
+
+    wait = (
+        "Un programme du traitement arrêté de cette séance ne s'est pas encore terminé : "
+        "réessayez dans un instant. La séance n'est pas supprimée."
+    )
+    notes: list[str] = []
+    for row in conn.execute(
+        "SELECT id, finished_at FROM run WHERE session_id = ? AND status = 'failed'",
+        (session_id,),
+    ).fetchall():
+        folder = data.run_dir(session_id, row["id"])
+        try:
+            prov = read_provenance(folder) if folder.is_dir() else None
+        except Exception:
+            log.exception("run %s: provenance unreadable, deletion refused", row["id"])
+            return (
+                "Le compte rendu d'une étape de cette séance est illisible : impossible de "
+                "savoir si elle est bien terminée. La séance n'est pas supprimée.",
+                notes,
+            )
+        if prov is None or prov.error is None or prov.error.type != HELPERS_STILL_RUNNING:
+            continue
+        group = prov.error.details.get("process_group")
+        if not isinstance(group, int):
+            log.warning("run %s: %s without a process group", row["id"], HELPERS_STILL_RUNNING)
+            return wait, notes  # not known to be safe
+        try:
+            os.killpg(group, 0)  # signal 0: sends nothing, only asks whether it lives
+        except ProcessLookupError:
+            continue  # the group is empty now
+        except PermissionError:
+            continue  # macOS: only finished processes left in it (engine v1.13.1)
+        closed = row["finished_at"]
+        age = (
+            (datetime.now(UTC) - datetime.strptime(closed, ISO_FORMAT).replace(tzinfo=UTC))
+            if closed
+            else None
+        )
+        if age is not None and age.total_seconds() > HELPERS_LIMIT_S:
+            log.warning(
+                "run %s: process group %s alive %s after the stop, deleted anyway",
+                row["id"],
+                group,
+                age,
+            )
+            notes.append(
+                "un programme d'une étape arrêtée semblait encore tourner longtemps après "
+                "l'arrêt ; le dossier de la séance a été effacé quand même"
+            )
+            continue
+        log.info("run %s: process group %s still running, deletion refused", row["id"], group)
+        return wait, notes
+    return None, notes
+
+
 def delete_session(data: DataDir, session_id: str) -> list[str]:
     """Delete a session entirely, processed or not: its rows (corrections, notes, summaries
     with them), its folder, and its rows in the backup copies of the database. Securely:
@@ -421,6 +491,9 @@ def delete_session(data: DataDir, session_id: str) -> list[str]:
                 raise NotFoundError("Séance introuvable.")
             if (why := _busy(conn, session_id, waiting_counts=False)) is not None:
                 raise DeletionError(why)
+            why, late = _helpers_still_running(conn, data, session_id)
+            if why is not None:
+                raise DeletionError(why)
             folder = data.session_dir(session_id)
             files = _files(folder)
             log_id = _log(conn, "session_deletion", session_id, None, files, folder)
@@ -435,7 +508,7 @@ def delete_session(data: DataDir, session_id: str) -> list[str]:
         except BaseException:
             conn.rollback()
             raise
-        problems: list[str] = []
+        problems: list[str] = list(late)
         if not _checkpoint(conn):
             problems.append(
                 "le journal de la base n'a pas pu être vidé tout de suite ; il le sera à la "

@@ -106,6 +106,19 @@ def activate(conn: sqlite3.Connection, session_id: str, stage: str, run_id: str)
 STOPPED_CODES = (ErrorCode.INTERRUPTED, ErrorCode.CANCELLED)
 """Codes of a run stopped by its caller rather than failed (engine ADR 0021)."""
 
+HELPERS_STILL_RUNNING = "HelpersStillRunning"
+"""The engine's error when a process of a stage still runs 10 s after its stop (v1.13.2):
+its folder is not safe to delete yet. Its cause is in `details.previous_error`."""
+
+
+def stopped_late(prov: Provenance) -> bool:
+    """Stopped by its caller (cancelled, interrupted), but a process of it outlived the stop."""
+    return (
+        prov.error is not None
+        and prov.error.type == HELPERS_STILL_RUNNING
+        and prov.error.details.get("previous_error") in ("Cancelled", "Interrupted")
+    )
+
 
 class ApplicationStoppingError(RuntimeError):
     """A stage was about to start while the application stops: it is not started."""
@@ -495,8 +508,12 @@ class Processor:
                     conn.close()
                 raise
             with self._stopped_lock:
+                cancelled = folder.name in self._cancel_sent
                 self._cancel_sent.discard(folder.name)
-            if prov.error is not None and prov.error.code in STOPPED_CODES:
+            # Stopped, but a process of it outlived the stop (engine v1.13.2): stopped all
+            # the same; its error stays in the run, and the deletion waits for it.
+            outlived = stopped_late(prov)
+            if prov.error is not None and (prov.error.code in STOPPED_CODES or outlived):
                 interrupted.append(stage.value)
             elif prov.error is not None:
                 failures.append(stage.value)
@@ -504,6 +521,11 @@ class Processor:
             try:
                 with conn:
                     _record_finished(conn, folder.name, prov)
+                if outlived and cancelled:
+                    try:
+                        jobs.record_stopped_run(conn, job.id, folder.name)
+                    except Exception:
+                        log.exception("job %s: %s not recorded as stopped", job.id, folder.name)
             finally:
                 conn.close()
             return prov, used

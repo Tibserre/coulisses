@@ -15,7 +15,13 @@ from pydantic import BaseModel, ValidationError
 
 from coulisses_app.jobs import REDONE, ChainParams
 from coulisses_app.paths import DataDir
-from coulisses_app.processing import STAGE_LABELS, STOPPED_CODES, error_summary, planned_stages
+from coulisses_app.processing import (
+    STAGE_LABELS,
+    STOPPED_CODES,
+    error_summary,
+    planned_stages,
+    stopped_late,
+)
 from coulisses_app.storage.db import connect
 
 SILENCE_LIMIT_S = 15 * 60
@@ -52,7 +58,8 @@ class StageView(BaseModel):
     error_details: dict[str, Any] | None = None
     stopped: bool = False
     """Failed because it was stopped, not by an error: interrupted (the application closed)
-    or cancelled at the user's request, even when the cancelling itself raised. A failure
+    or cancelled at the user's request, even when the cancelling itself raised or a process
+    of it outlived the stop (`HelpersStillRunning`, engine v1.13.2). A failure
     of an earlier attempt, still shown after « Reprendre », stays a failure (P8)."""
     folder_missing: bool = False
     stale: bool = False
@@ -128,7 +135,7 @@ def stage_views(data: DataDir, chain: ChainConfig, session_id: str) -> list[Stag
             view = _run_view(data, session_id, stage.value, label, row)
             view.stale = stale
             view.stopped = view.state == "failed" and (
-                view.error_code in _STOPPED_CODES or row["id"] in stopped_runs
+                view.stopped or view.error_code in _STOPPED_CODES or row["id"] in stopped_runs
             )
             views.append(view)
         return views
@@ -159,6 +166,8 @@ def _run_view(
         view.duration_s = prov.duration_s
         view.max_rss_bytes = prov.max_rss_bytes or None
         view.error = error_summary(prov) or row["error_summary"]
+        # Stopped, but a process of it outlived the stop (engine v1.13.2).
+        view.stopped = stopped_late(prov)
         if prov.error is not None and prov.error.code is not None:
             view.error_code = prov.error.code.value
             view.error_details = dict(prov.error.details)

@@ -4,17 +4,28 @@ engine and kept as it closed them (P5), the stopped job says so, « Reprendre »
 
 from __future__ import annotations
 
+import subprocess
 import threading
 from pathlib import Path
 
 import pytest
-from coulisses.api import Provenance, RunStage, StageConfig
+from coulisses.api import (
+    ErrorCode,
+    Provenance,
+    RunError,
+    RunStage,
+    StageConfig,
+    StageName,
+    execute_stage,
+    read_provenance,
+)
 
-from coulisses_app import jobs, processing
+from coulisses_app import jobs, processing, retention
 from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.status import stage_views
+from coulisses_app.storage.db import connect
 
 from .conftest import FAKE_CHAIN, local_client
 from .test_processing import SLOW_CHAIN, claim, import_, job_state, runs, wait_for
@@ -263,3 +274,157 @@ def test_a_stop_that_cannot_be_recorded_still_closes_the_run_with_its_error(
         assert not any(r["status"] == "running" for r in runs(data, session_id))
     finally:
         processor.stop()
+
+
+def test_a_stage_outliving_its_stop_holds_back_the_deletion(data: DataDir, recording: Path) -> None:
+    """A process of a cancelled stage still runs 10 s after its stop (the engine closes the
+    run with `HelpersStillRunning`, v1.13.2): the stage counts as stopped, and the session
+    is not deleted while that process lives, since it may still write in its folder."""
+    cancelled = threading.Event()
+    helper = subprocess.Popen(["sleep", "60"], start_new_session=True)  # its own group
+
+    def engine_stage(session_id: str, models: Path | None) -> RunStage:
+        real = execute_stage(session_id, models)
+
+        def run(
+            stage: StageName, cfg: StageConfig, inputs: object, folder: Path, up: tuple[str, ...]
+        ) -> tuple[Provenance, Path]:
+            if stage != StageName.TRANSCRIBE:
+                return real(stage, cfg, inputs, folder, up)  # type: ignore[arg-type]
+            assert cancelled.wait(10)
+            prov, used = real(stage, cfg, inputs, folder, up)  # type: ignore[arg-type]
+            late = prov.model_copy(
+                update={
+                    "status": "failed",
+                    "error": RunError(
+                        code=ErrorCode.ENGINE_FAILED,
+                        type="HelpersStillRunning",
+                        message="un processus tourne encore (Cancelled)",
+                        traceback="",
+                        details={"process_group": helper.pid, "previous_error": "Cancelled"},
+                    ),
+                }
+            )
+            (used / "provenance.json").write_text(late.model_dump_json(), encoding="utf-8")
+            return late, used
+
+        return run  # type: ignore[return-value]
+
+    session_id = import_(data, recording)
+    processor = Processor(
+        data, FAKE_CHAIN, engine_stage=engine_stage, engine_cancel=lambda _f: cancelled.set()
+    )
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=processor, web_dir=None)
+    )
+    processor.start()
+    try:
+        wait_for(
+            lambda: any(
+                r["stage"] == "transcribe" and r["status"] == "running"
+                for r in runs(data, session_id)
+            )
+        )
+        refused = client.delete(f"/api/seances/{session_id}")
+        assert refused.status_code == 422 and "réessayez" in refused.json()["detail"]
+        assert data.session_dir(session_id).is_dir()
+        job = job_state(data, session_id)
+        assert (job.state, job.error) == ("failed", jobs.STOPPED)
+        transcribe = next(
+            v for v in stage_views(data, FAKE_CHAIN, session_id) if v.stage == "transcribe"
+        )
+        assert transcribe.stopped and transcribe.error and "HelpersStillRunning" in transcribe.error
+
+        helper.kill()
+        helper.wait()
+        deleted = client.delete(f"/api/seances/{session_id}")
+        assert deleted.status_code == 200, deleted.text
+        assert not data.session_dir(session_id).exists()
+    finally:
+        processor.stop()
+        if helper.poll() is None:
+            helper.kill()
+            helper.wait()
+
+
+def _closed_late(data: DataDir, recording: Path, **details: str | int) -> tuple[str, str]:
+    """A processed session whose transcription the engine closed with `HelpersStillRunning`
+    (as v1.13.2 does), with these details."""
+    session_id = import_(data, recording)
+    assert Processor(data, FAKE_CHAIN).run_job(claim(data)).error is None
+    run = next(r for r in runs(data, session_id) if r["stage"] == "transcribe")
+    folder = data.run_dir(session_id, run["id"])
+    prov = read_provenance(folder)
+    assert prov is not None
+    late = prov.model_copy(
+        update={
+            "status": "failed",
+            "error": RunError(
+                code=ErrorCode.ENGINE_FAILED,
+                type="HelpersStillRunning",
+                message="un processus tourne encore",
+                traceback="",
+                details=dict(details),  # pyright: ignore[reportArgumentType]
+            ),
+        }
+    )
+    (folder / "provenance.json").write_text(late.model_dump_json(), encoding="utf-8")
+    conn = connect(data)
+    with conn:
+        conn.execute("UPDATE run SET status = 'failed' WHERE id = ?", (run["id"],))
+    conn.close()
+    return session_id, run["id"]
+
+
+@pytest.mark.parametrize(
+    ("cause", "stopped"), [("Cancelled", True), ("Interrupted", True), ("MemoryError", False)]
+)
+def test_a_stage_outliving_its_stop_is_stopped_only_if_it_was_stopped(
+    data: DataDir, recording: Path, cause: str, stopped: bool
+) -> None:
+    """Stopped by the user or by the application: « arrêtée ». A real failure whose helpers
+    outlived it stays a failure (P8)."""
+    session_id, run_id = _closed_late(data, recording, process_group=999_999, previous_error=cause)
+    prov = read_provenance(data.run_dir(session_id, run_id))
+    assert prov is not None and processing.stopped_late(prov) is stopped
+    conn = connect(data)
+    with conn:  # the version shown is this run: its view says what it is
+        conn.execute("UPDATE job SET state = 'done'")
+    conn.close()
+    view = next(v for v in stage_views(data, FAKE_CHAIN, session_id) if v.stage == "transcribe")
+    assert view.state == "failed" and view.stopped is stopped
+
+
+def test_a_stage_outliving_its_stop_without_a_group_holds_back_the_deletion(
+    data: DataDir, recording: Path
+) -> None:
+    session_id, _ = _closed_late(data, recording, previous_error="Cancelled")
+    with pytest.raises(retention.DeletionError, match="réessayez"):
+        retention.delete_session(data, session_id)
+    assert data.session_dir(session_id).is_dir()
+
+
+def test_a_group_alive_long_after_the_stop_no_longer_holds_back_the_deletion(
+    data: DataDir, recording: Path
+) -> None:
+    """A group number may be given again to another program: past the limit, the session
+    is deleted, and the deletion says it (P8)."""
+    helper = subprocess.Popen(["sleep", "60"], start_new_session=True)
+    try:
+        session_id, run_id = _closed_late(
+            data, recording, process_group=helper.pid, previous_error="Cancelled"
+        )
+        with pytest.raises(retention.DeletionError):
+            retention.delete_session(data, session_id)
+        conn = connect(data)
+        with conn:
+            conn.execute(
+                "UPDATE run SET finished_at = '2026-01-01T00:00:00Z' WHERE id = ?", (run_id,)
+            )
+        conn.close()
+        problems = retention.delete_session(data, session_id)
+        assert any("effacé quand même" in p for p in problems)
+        assert not data.session_dir(session_id).exists()
+    finally:
+        helper.kill()
+        helper.wait()
