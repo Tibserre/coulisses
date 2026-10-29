@@ -1115,6 +1115,17 @@ export const api = {
     return response.text();
   },
   renameSession: (id: string, title: string) => send<Session>("PATCH", sessionPath(id), { title }),
+  /** Read once before the page goes to it: a refusal is said on the page, never shown in
+   *  place of it (the browser would open the JSON of the error). */
+  checkExport: async (url: string) => {
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch {
+      throw new ServiceError("Le service Coulisses ne répond pas. Est-il lancé ?");
+    }
+    if (!response.ok) throw await readError(response);
+  },
   exportUrl: (id: string, contenu: "resume" | "transcript" | "tout", generationId?: number) =>
     `${sessionPath(id)}/export?contenu=${contenu}${generationId != null ? `&resume=${generationId}` : ""}`,
   updateSpace: (

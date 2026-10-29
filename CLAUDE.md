@@ -22,7 +22,7 @@ App macOS 100 % locale de débrief de séances (répétitions d'impro d'abord, r
 
 ## Principes non négociables
 Ils priment sur la vitesse, la simplicité et le délai. Si une tâche semble exiger d'en violer un, arrête-toi et demande.
-1. **Hors ligne.** Aucun appel réseau à l'exécution. Seules exceptions côté application : le client du LLM (`prompting/`, Ollama sur 127.0.0.1), et les mises à jour par Sparkle dans l'app du Dock (jamais le service Python) : recherche automatique seulement après accord ou sur demande, téléchargement sur clic (ADR 0040). Les modèles se téléchargent par le moteur, sur demande explicite. Pas de télémétrie, pas de CDN.
+1. **Hors ligne.** Aucun appel réseau à l'exécution. Seules exceptions côté application : le client du LLM (`prompting/`, Ollama sur 127.0.0.1), le pont du connecteur (`bridge.py`), vers son service local 127.0.0.1 seulement, en lecture (ADR 0065), et les mises à jour par Sparkle dans l'app du Dock (jamais le service Python) : recherche automatique seulement après accord ou sur demande, téléchargement sur clic (ADR 0040). Les modèles se téléchargent par le moteur, sur demande explicite. Pas de télémétrie, pas de CDN.
 2. **Horodatages mesurés.** Chaque temps de mot vient du moteur, mesuré sur l'audio, ou est absent ; l'application n'en invente jamais (pas d'interpolation, pas de répartition au prorata du texte).
 3. **Sur-segmenter plutôt que fusionner.** Le nombre de présents est un minimum de locuteurs, jamais un maximum.
 4. **Français.** Toute génération LLM passe par l'assemblage unique de `prompting/`, qui ajoute la consigne de langue. Aucun autre chemin vers le LLM.
