@@ -1,6 +1,6 @@
 # 0070 — Arrêter un traitement, ou supprimer sa séance pendant qu'il tourne
 
-Statut : Proposée (2026-10-29 ; le geste est demandé par l'utilisateur à Interface, la façon de le représenter est à accepter). Précise l'ADR 0018 (la file des tâches) et l'ADR 0046.
+Statut : Acceptée (2026-10-29, par l'utilisateur : « Oui, accepte-la », pour un traitement arrêté représenté comme un échec marqué « arrêté », sans changement de schéma ; le geste avait été demandé par l'utilisateur à Interface). Précise l'ADR 0018 (la file des tâches) et l'ADR 0046.
 
 ## Contexte
 Jusqu'ici, une tâche ne s'arrêtait qu'à la fermeture de l'app (`stop_all`, reprise au démarrage) ou par un plantage (`close_interrupted`). L'utilisateur veut arrêter un traitement qu'il ne veut finalement pas faire, et supprimer une séance importée par erreur sans attendre la fin. La table `job` n'accepte que les états `queued`, `running`, `done` et `failed` (CHECK) : un état `cancelled` serait un changement de schéma.
