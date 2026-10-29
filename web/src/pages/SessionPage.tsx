@@ -816,6 +816,7 @@ export function SessionPage({
               )}
               {session && (
                 <SessionMenu
+                  hasTranscript={view != null}
                   request={menuRequest}
                   onRequestRead={menuRequestRead}
                   onVersions={() => openVersions()}

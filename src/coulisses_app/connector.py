@@ -436,6 +436,9 @@ class JournalEntry(BaseModel):
     tool: Tool
     session_id: str | None
     session_title: str | None
+    session_recorded_at: str | None
+    """When it was recorded (« Séance du 29 octobre » for one without a title); None for a
+    session deleted since."""
     session_deleted: bool
     names_shared: bool | None
     """None with no session: nothing passed on."""
@@ -467,7 +470,7 @@ def journal(data: DataDir, *, limit: int = 50, before: int | None = None) -> Jou
     conn = connect(data)
     try:
         rows = conn.execute(
-            "SELECT l.*, s.id AS still, s.title FROM connector_access_log l"
+            "SELECT l.*, s.id AS still, s.title, s.recorded_at FROM connector_access_log l"
             " LEFT JOIN session s ON s.id = l.session_id"
             " WHERE (? IS NULL OR l.id < ?) ORDER BY l.id DESC LIMIT ?",
             (before, before, limit + 1),
@@ -481,6 +484,7 @@ def journal(data: DataDir, *, limit: int = 50, before: int | None = None) -> Jou
             tool=r["tool"],
             session_id=r["session_id"],
             session_title=r["title"],
+            session_recorded_at=r["recorded_at"],
             session_deleted=r["session_id"] is not None and r["still"] is None,
             names_shared=None if r["names_shared"] is None else bool(r["names_shared"]),
         )

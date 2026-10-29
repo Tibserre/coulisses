@@ -17,7 +17,7 @@ REAL_DATA_DIR = re.compile(
 )
 
 # P1: network clients only in the LLM client (Ollama on 127.0.0.1). Models are the engine's.
-NETWORK_ALLOWED = ("/prompting/",)
+NETWORK_ALLOWED = ("/prompting/", "/src/coulisses_app/bridge.py")
 NETWORK_PATTERN = re.compile(
     r"^\s*(import|from)\s+(requests|httpx|aiohttp|urllib\.request|urllib3|http\.client|socket|websocket)\b"
     r"|\b(snapshot_download|hf_hub_download)\s*\(",

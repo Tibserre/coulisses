@@ -6,6 +6,12 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## v0.37.0 — 2026-10-29
+
+### Nouveautés depuis la 0.36.0
+
+- Télécharger la transcription. Dans le menu « ⋯ » d'une séance, « Télécharger la transcription (.md) » enregistre la transcription corrigée dans un fichier Markdown, dès qu'elle existe, même sans résumé.
+
 ## v0.36.0 — 2026-10-29
 
 ### Nouveautés depuis la 0.35.0
