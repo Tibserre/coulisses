@@ -5530,3 +5530,10 @@ button.cl-tree__more:hover {
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
+
+/* « Arrêter le traitement », quiet, under the discs (ADR 0070). */
+.cl-processing__stop {
+  display: flex;
+  justify-content: center;
+  margin-top: calc(-1 * var(--spacing-2));
+}

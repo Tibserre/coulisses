@@ -67,7 +67,7 @@ import {
   RerunDialog,
   VersionsSection,
 } from "../components/VersionsSection.tsx";
-import { SessionMenu } from "../components/SessionMenu.tsx";
+import { SessionMenu, type Asking } from "../components/SessionMenu.tsx";
 import { audioLine } from "../retention.ts";
 import { libraryChanged } from "../library.ts";
 import { RERUN_NAME, attendeesNotTaken } from "../versions.ts";
@@ -157,6 +157,9 @@ export function SessionPage({
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [rerunOpen, setRerunOpen] = useState(false);
+  // A confirmation of « ⋯ » asked from the processing screen (stop it, delete the session).
+  const [menuRequest, setMenuRequest] = useState<Asking>(null);
+  const menuRequestRead = useCallback(() => setMenuRequest(null), []);
   const [rerunFrom, setRerunFrom] = useState<"all" | "diarize">("all");
   const openVersions = (part?: string) => {
     setVersionsOpen(true);
@@ -813,6 +816,8 @@ export function SessionPage({
               )}
               {session && (
                 <SessionMenu
+                  request={menuRequest}
+                  onRequestRead={menuRequestRead}
                   onVersions={() => openVersions()}
                   onRerun={() => {
                     setRerunFrom("all");
@@ -1091,6 +1096,8 @@ export function SessionPage({
             <ProcessingPanel
               detail={detail}
               people={people}
+              onAskStop={() => setMenuRequest("stop")}
+              onAskDelete={() => setMenuRequest("session")}
               onSaveAttendees={async (ids, unnamed) => {
                 try {
                   await api.setAttendees(id, ids, unnamed);
@@ -1517,9 +1524,14 @@ function RerunNotices({
     notices.push(
       <Banner
         key="failed"
-        status="error"
-        title={`La relance de ${RERUN_NAME[rerun]} n'est pas allée au bout`}
-        description={`${why.replace(/\.?$/, ".")} La version affichée n'a pas changé.${error ? ` ${error}` : ""}`}
+        // Stopped by the user (ADR 0070): said apart from an error.
+        status={session.processing_stopped ? "info" : "error"}
+        title={
+          session.processing_stopped
+            ? `Relance de ${RERUN_NAME[rerun]} arrêtée`
+            : `La relance de ${RERUN_NAME[rerun]} n'est pas allée au bout`
+        }
+        description={`${session.processing_stopped ? "Arrêtée à votre demande." : why.replace(/\.?$/, ".")} La version affichée n'a pas changé.${error ? ` ${error}` : ""}`}
         endContent={
           <Button
             size="sm"
@@ -1578,6 +1590,8 @@ function RerunNotices({
 function ProcessingPanel({
   detail,
   people,
+  onAskStop,
+  onAskDelete,
   onSaveAttendees,
   onLaunch,
   transcriptError,
@@ -1587,6 +1601,9 @@ function ProcessingPanel({
 }: {
   detail: SessionDetail;
   people: Person[];
+  /** The confirmations of « ⋯ »: stop the processing (ADR 0070), delete the session. */
+  onAskStop: () => void;
+  onAskDelete: () => void;
   /** An import waiting for its people present (ADR 0069): each change saved, then launched. */
   onSaveAttendees: (ids: number[], unnamed: number | null) => Promise<void>;
   onLaunch: () => Promise<void>;
@@ -1654,6 +1671,37 @@ function ProcessingPanel({
         />
       )}
       {running && <ProcessingOutline detail={detail} />}
+      {running && (
+        <div className="cl-processing__stop">
+          <Button
+            label="Arrêter le traitement"
+            variant="ghost"
+            size="sm"
+            onClick={onAskStop}
+          />
+        </div>
+      )}
+      {failed && !gone && session.processing_stopped && (
+        <section className="cl-ask">
+          <Heading level={3}>Traitement arrêté</Heading>
+          <Text color="secondary">
+            Arrêté à votre demande. Ce qui était fait est gardé : reprendre ne
+            relance que le reste.
+          </Text>
+          <div className="cl-ask__actions">
+            <Button
+              label="Reprendre"
+              variant="primary"
+              clickAction={() => resume()}
+            />
+            <Button
+              label="Supprimer la séance…"
+              variant="ghost"
+              onClick={onAskDelete}
+            />
+          </div>
+        </section>
+      )}
 
       {failed && !gone && tooFew && (
         // Fewer voices than people checked: a question, not a failure (ADR 0058). Voices
@@ -1708,7 +1756,7 @@ function ProcessingPanel({
           )}
         </section>
       )}
-      {failed && !gone && !tooFew && (
+      {failed && !gone && !tooFew && !session.processing_stopped && (
         <section className="cl-ask">
           <Heading level={3}>Le traitement s'est arrêté</Heading>
           <Text color="secondary">

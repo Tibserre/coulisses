@@ -183,7 +183,7 @@ function SessionList({
                 {s.audio.state === "removed" && <Badge variant="neutral" label="Audio supprimé" />}
                 {s.audio.state === "kept" && <Badge variant="neutral" label="Audio gardé" />}
                 {/* « Prête » goes without saying: only what is not. */}
-                {s.id !== recordingId && s.job_state !== "done" && <JobBadge state={s.job_state} />}
+                {s.id !== recordingId && s.job_state !== "done" && <JobBadge state={s.job_state} stopped={s.processing_stopped} />}
               </span>
               <Text type="supporting" className="cl-sessions__when">
                 {formatDate(s.recorded_at)}

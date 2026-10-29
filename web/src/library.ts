@@ -65,10 +65,15 @@ export function visibleSessions<T>(list: T[], limit: number, pinned: (s: T) => b
 export type SessionDot = "recording" | "processing" | "failed" | null;
 
 /** The one mark a session carries in the side column, when something is going on. */
-export function sessionDot(s: Pick<Session, "job_state" | "duration_s">, recording: string | null, id: string): SessionDot {
+export function sessionDot(
+  s: Pick<Session, "job_state" | "duration_s"> & { processing_stopped?: boolean },
+  recording: string | null,
+  id: string,
+): SessionDot {
   if (recording === id) return "recording";
   if (s.job_state === "queued" || s.job_state === "running") return "processing";
-  if (s.job_state === "failed") return "failed";
+  // Stopped by the user (ADR 0070): not an error, no red dot.
+  if (s.job_state === "failed" && !s.processing_stopped) return "failed";
   return null;
 }
 

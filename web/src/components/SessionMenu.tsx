@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { api, ServiceError, type Session } from "../api.ts";
 import { libraryChanged } from "../library.ts";
 import { leaveMessage } from "../retention.ts";
 
-type Asking = "audio" | "session" | "replace" | null;
+export type Asking = "audio" | "session" | "replace" | "stop" | null;
 
 /** The session's own options (spec §7.10): keep its audio, delete its audio, delete it
- *  entirely. Each deletion is confirmed, saying what is lost for good. */
+ *  entirely (its processing stopped first, ADR 0070), stop its processing. Each is
+ *  confirmed, saying what is lost for good. */
 export function SessionMenu({
   session,
   onChanged,
@@ -17,8 +18,14 @@ export function SessionMenu({
   onDone,
   onVersions,
   onRerun,
+  request,
+  onRequestRead,
 }: {
   session: Session;
+  /** A confirmation asked from elsewhere on the page (« Arrêter le traitement »,
+   *  « Supprimer la séance… » under a stopped processing): the same windows. */
+  request?: Asking;
+  onRequestRead?: () => void;
   /** Opens « Refaire le traitement ». */
   onRerun?: () => void;
   /** Opens « Versions » (ADR 0062, 0066). */
@@ -32,6 +39,13 @@ export function SessionMenu({
 }) {
   const [asking, setAsking] = useState<Asking>(null);
   const [working, setWorking] = useState(false);
+  useEffect(() => {
+    if (!request) return;
+    setAsking(request);
+    onRequestRead?.();
+  }, [request, onRequestRead]);
+  const processing =
+    session.job_state === "queued" || session.job_state === "running";
   const removed = session.audio.state === "removed";
   const kept = session.audio.state === "kept";
 
@@ -105,6 +119,9 @@ export function SessionMenu({
             ? [{ label: "Refaire le traitement…", onClick: onRerun }]
             : []),
           ...(onVersions ? [{ label: "Versions…", onClick: onVersions }] : []),
+          ...(processing
+            ? [{ label: "Arrêter le traitement…", onClick: () => setAsking("stop") }]
+            : []),
           { type: "divider" as const },
           {
             label: "Supprimer la séance…",
@@ -134,7 +151,7 @@ export function SessionMenu({
         isOpen={asking === "session"}
         onOpenChange={(open) => !open && setAsking(null)}
         title="Supprimer la séance ?"
-        description="Tout est supprimé définitivement : l'audio, la transcription, vos corrections, les notes, les chapitres et les résumés, y compris dans les sauvegardes de la base. Seule une trace reste dans le journal des suppressions : la date et la taille des fichiers, sans aucun texte."
+        description={`${processing ? "Son traitement est arrêté d'abord. " : ""}Tout est supprimé définitivement : l'audio, la transcription, vos corrections, les notes, les chapitres et les résumés, y compris dans les sauvegardes de la base. Seule une trace reste dans le journal des suppressions : la date et la taille des fichiers, sans aucun texte.`}
         actionLabel="Supprimer la séance"
         cancelLabel="Annuler"
         isActionLoading={working}
@@ -146,6 +163,23 @@ export function SessionMenu({
               `La séance est supprimée de Coulisses, mais pas entièrement du disque : ${problems.join(" ; ")}.`,
             );
           window.location.hash = "#/";
+        })}
+      />
+      <AlertDialog
+        isOpen={asking === "stop"}
+        onOpenChange={(open) => !open && setAsking(null)}
+        title="Arrêter le traitement ?"
+        description="La transcription et la séparation des voix s'arrêtent. Ce qui est déjà fait est gardé : « Reprendre » relancera le reste. Rien n'est supprimé."
+        actionLabel="Arrêter le traitement"
+        cancelLabel="Continuer"
+        isActionLoading={working}
+        onAction={run(async () => {
+          const next = await api.stopProcessing(session.id);
+          onChanged(next);
+          if (next.job_state === "running")
+            onDone?.(
+              "Arrêt en cours : il se fera à la fin de l'étape en cours.",
+            );
         })}
       />
       <AlertDialog

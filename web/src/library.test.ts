@@ -25,6 +25,10 @@ test("a session without a title is named by its day", () => {
 test("the side column marks what is going on", () => {
   assert.equal(sessionDot({ job_state: null, duration_s: null }, "s1", "s1"), "recording");
   assert.equal(sessionDot({ job_state: "running", duration_s: 10 }, null, "s1"), "processing");
+  assert.equal(
+    sessionDot({ job_state: "failed", duration_s: 10, processing_stopped: true }, null, "s1"),
+    null,
+  );
   assert.equal(sessionDot({ job_state: "failed", duration_s: 10 }, null, "s1"), "failed");
   assert.equal(sessionDot({ job_state: "done", duration_s: 10 }, null, "s1"), null);
 });

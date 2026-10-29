@@ -25,6 +25,8 @@ export interface Session {
   /** An import waiting for its people present (ADR 0069): when its processing starts by
    *  itself (UTC); null once launched, or when it waits no more. */
   processing_starts_at: string | null;
+  /** Its processing was stopped by the user (ADR 0070): `job_state` is then `failed`. */
+  processing_stopped: boolean;
   reference_source_id: string;
   duration_s: number | null;
   job_state: JobState | null;
@@ -1053,6 +1055,9 @@ export const api = {
   removeAudio: (id: string) =>
     send<{ session: Session; problems: string[] }>("POST", `${sessionPath(id)}/supprimer-audio`),
   /** `problems`: what stayed on the disk; the session is gone from Coulisses anyway. */
+  /** Stops its processing, queued or running (ADR 0070); still `running` when the stop is
+   *  asked but not done within 30 s. */
+  stopProcessing: (id: string) => send<Session>("POST", `${sessionPath(id)}/arreter`),
   deleteSession: (id: string) => send<{ problems: string[] }>("DELETE", sessionPath(id)),
   showVersion: (id: string, runId: string) =>
     send<Versions>("POST", `${sessionPath(id)}/versions/${encodeURIComponent(runId)}/afficher`),
