@@ -277,12 +277,15 @@ export function RerunDialog({
   duration,
   onClose,
   onAsked,
+  from = "all",
 }: {
   isOpen: boolean;
   sessionId: string;
   duration: number | null;
   onClose: () => void;
   onAsked: () => Promise<void>;
+  /** The tile chosen on opening: « Tout », unless asked from the people present (the voices). */
+  from?: Rerun;
 }) {
   const [facts, setFacts] = useState<RerunFacts | null>(null);
   const [stage, setStage] = useState<Rerun>("all");
@@ -292,8 +295,8 @@ export function RerunDialog({
 
   useEffect(() => {
     if (!isOpen) return;
-    // Each opening starts afresh, from « Tout ».
-    setStage("all");
+    // Each opening starts afresh, from « Tout » (or the tile it was asked for).
+    setStage(from);
     setError(null);
     setVoices(null);
     setFacts(null);
@@ -305,7 +308,7 @@ export function RerunDialog({
       (p) => setBattery(p.on_battery),
       () => setBattery(null), // unknown: nothing said, the rerun is the user's call anyway
     );
-  }, [isOpen, sessionId]);
+  }, [isOpen, sessionId, from]);
 
   const proposed = voices ?? facts?.attendees_now ?? facts?.min_voices ?? 1;
   const time = facts ? rerunMinutes(facts, stage, duration) : null;

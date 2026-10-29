@@ -50,3 +50,20 @@ test("all of it takes as long as the longer of the text and the voices", () => {
   });
   assert.equal(versionOrigin({ origin: "all", min_voices: 3 }), "tout refait");
 });
+
+test("the people present not taken by the processing are said, with the rerun when it can be", async () => {
+  const { attendeesNotTaken } = await import("./versions.ts");
+  const base = { attendees_taken: false, min_voices: null, job_state: "done", audio: { state: "kept" } };
+  assert.equal(attendeesNotTaken({ ...base, attendees_taken: true }), null);
+  assert.equal(attendeesNotTaken({ ...base, attendees_taken: null }), null);
+  assert.deepEqual(attendeesNotTaken(base), {
+    text: "Le traitement a cherché seul le nombre de voix : ces présents serviront si vous refaites les voix.",
+    rerun: true,
+  });
+  const running = attendeesNotTaken({ ...base, min_voices: 4, job_state: "running" });
+  assert.equal(running?.rerun, false);
+  assert.match(running?.text ?? "", /^Le traitement cherche au moins 4 voix .*une fois le traitement fini\.$/);
+  const removed = attendeesNotTaken({ ...base, audio: { state: "removed" } });
+  assert.equal(removed?.rerun, false);
+  assert.match(removed?.text ?? "", /ne se refont plus/);
+});

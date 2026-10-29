@@ -19,6 +19,9 @@ export interface Session {
   unnamed_attendees: number | null;
   /** Minimum of voices asked of the engine by the latest processing (P3). */
   min_voices: number | null;
+  /** Whether the people present now are that minimum (false once checked after its voices
+   *  were being separated, or when another number was chosen); null if never processed. */
+  attendees_taken: boolean | null;
   reference_source_id: string;
   duration_s: number | null;
   job_state: JobState | null;

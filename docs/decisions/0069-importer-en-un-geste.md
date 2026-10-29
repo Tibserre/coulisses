@@ -13,7 +13,7 @@ Depuis l'ADR 0056, enregistrer se fait en un geste. Importer passait encore par 
 - **La fenêtre « Nouvelle note » est supprimée**, et avec elle l'enregistrement « en choisissant tout d'avance » (lieu, micros) : le geste démarre en hybride, le son de l'ordinateur se coupe et les micros s'ajoutent sur l'écran d'enregistrement (ADR 0056, 0067).
 
 ## Conséquences
-- Un import démarre sans présents : le moteur cherche seul le nombre de voix. Les présents cochés pendant le traitement ne changent pas la diarisation déjà prévue ; « Refaire le traitement › Les voix » les prend. Les prendre si la diarisation n'a pas commencé est demandé au Service.
+- Un import démarre sans présents : le moteur cherche seul le nombre de voix. Cochés avant que le premier traitement commence, les présents en deviennent le minimum ; après, la séparation des voix a commencé avec le traitement, et rien ne change (spec §7.1, « Présents » ; fait par le Service, `feat/presents-avant-diarisation`, 2026-10-29). La liste des présents le dit alors, avec « Refaire les voix… », qui ouvre « Refaire le traitement » sur « Les voix ».
 - Le micro principal ne se choisit plus dans Coulisses : c'est le micro par défaut de macOS au départ. Le choisir sur l'écran d'enregistrement serait une suite à décider.
 - La spec (§7.2, §7.11) est mise à jour.
 

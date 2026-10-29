@@ -69,7 +69,7 @@ import {
 import { SessionMenu } from "../components/SessionMenu.tsx";
 import { audioLine } from "../retention.ts";
 import { libraryChanged } from "../library.ts";
-import { RERUN_NAME } from "../versions.ts";
+import { RERUN_NAME, attendeesNotTaken } from "../versions.ts";
 import { extraTracks } from "../tracks.ts";
 import { takeStopProblem } from "../stopNotice.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
@@ -156,6 +156,7 @@ export function SessionPage({
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [rerunOpen, setRerunOpen] = useState(false);
+  const [rerunFrom, setRerunFrom] = useState<"all" | "diarize">("all");
   const openVersions = (part?: string) => {
     setVersionsOpen(true);
     if (part)
@@ -774,6 +775,30 @@ export function SessionPage({
                           await refresh();
                         }}
                       />
+                      {(() => {
+                        const said = attendeesNotTaken(session);
+                        return (
+                          said && (
+                            <div className="cl-pop__aside">
+                              <Text type="supporting">{said.text}</Text>
+                              {said.rerun && (
+                                <div>
+                                  <Button
+                                    label="Refaire les voix…"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setAttendeesOpen(false);
+                                      setRerunFrom("diarize");
+                                      setRerunOpen(true);
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        );
+                      })()}
                     </div>
                   }
                 >
@@ -788,7 +813,10 @@ export function SessionPage({
               {session && (
                 <SessionMenu
                   onVersions={() => openVersions()}
-                  onRerun={() => setRerunOpen(true)}
+                  onRerun={() => {
+                    setRerunFrom("all");
+                    setRerunOpen(true);
+                  }}
                   session={session}
                   onChanged={sessionChanged}
                   onError={setMenuError}
@@ -1197,6 +1225,7 @@ export function SessionPage({
                 )}
                 <RerunDialog
                   isOpen={rerunOpen}
+                  from={rerunFrom}
                   sessionId={id}
                   duration={session.duration_s}
                   onClose={() => setRerunOpen(false)}
@@ -1897,3 +1926,4 @@ function ProjectCrumb({
     </div>
   );
 }
+
