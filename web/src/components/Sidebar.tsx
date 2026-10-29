@@ -47,6 +47,7 @@ export function Sidebar({
   updateReady = false,
   current,
   onNewSession,
+  onImport,
   onNewSpace,
   onChanged,
   onError,
@@ -62,6 +63,8 @@ export function Sidebar({
   /** What the main pane shows: a session, or a space's settings. */
   current: { sessionId: string | null; spaceId: number | null; page: string };
   onNewSession: (spaceId: number, projectId: number | null) => void;
+  /** « Importer un fichier… »: the Finder's window; the file is sent there at once. */
+  onImport: (spaceId: number, projectId: number | null) => void;
   onNewSpace: () => void;
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
@@ -153,6 +156,10 @@ export function Sidebar({
                       alignment="end"
                       items={[
                         {
+                          label: "Importer un fichier…",
+                          onClick: () => onImport(node.space.id, null),
+                        },
+                        {
                           label: "Nouveau projet",
                           onClick: () => setCreatingIn(node.space.id),
                         },
@@ -211,6 +218,10 @@ export function Sidebar({
                           label: "Nouvelle note dans ce projet",
                           onClick: () =>
                             onNewSession(node.space.id, p.project.id),
+                        },
+                        {
+                          label: "Importer un fichier dans ce projet…",
+                          onClick: () => onImport(node.space.id, p.project.id),
                         },
                         {
                           label: "Renommer",

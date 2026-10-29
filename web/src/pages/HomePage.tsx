@@ -5,7 +5,6 @@ import { Text } from "@astryxdesign/core/Text";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Check, ChevronDown, Mic } from "lucide-react";
 import type { AppInfo, Project, RecordingState, Session, Space } from "../api.ts";
-import type { Way } from "../components/NewSessionDialog.tsx";
 import { Badge } from "@astryxdesign/core/Badge";
 import { JobBadge } from "../components/JobBadge.tsx";
 import { PurgeBanner } from "../components/PurgeBanner.tsx";
@@ -26,7 +25,8 @@ export function HomePage({
   info,
   recording,
   error,
-  onNewSession,
+  onRecord,
+  onImport,
 }: {
   sessions: Session[] | null;
   spaces: Space[];
@@ -34,7 +34,9 @@ export function HomePage({
   info: AppInfo | null;
   recording: RecordingState | null;
   error: string | null;
-  onNewSession: (spaceId: number | null, way: Way) => void;
+  onRecord: (spaceId: number | null) => void;
+  /** The Finder's window; the file chosen is sent into this space at once. */
+  onImport: (spaceId: number | null) => void;
 }) {
   // Left by a session page that just deleted its session (what stayed on the disk).
   const [message, setMessage] = useState<string | null>(() => takeMessage());
@@ -98,7 +100,7 @@ export function HomePage({
               type="button"
               className="cl-start__button"
               aria-label="Enregistrer une séance"
-              onClick={() => onNewSession(spaceId, "enregistrer")}
+              onClick={() => onRecord(spaceId)}
             >
               <Mic size={28} strokeWidth={1.75} aria-hidden />
             </button>
@@ -123,7 +125,7 @@ export function HomePage({
             </p>
             <Text type="supporting">
               ⌘N ·{" "}
-              <button type="button" className="cl-linkbtn" onClick={() => onNewSession(spaceId, "importer")}>
+              <button type="button" className="cl-linkbtn" onClick={() => onImport(spaceId)}>
                 ou importer un fichier
               </button>
             </Text>

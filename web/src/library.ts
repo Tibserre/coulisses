@@ -156,3 +156,42 @@ export function startSpace(
     null
   );
 }
+
+/** What the import takes (ADR 0069): audio, or video whose sound alone is processed. */
+export const IMPORT_EXTENSIONS = [
+  "wav", "m4a", "mp3", "flac", "ogg", "opus", "aac", "aif", "aiff", "caf", "mp4", "mov", "mkv", "webm",
+];
+export const IMPORT_ACCEPT = `audio/*,video/*,${IMPORT_EXTENSIONS.map((e) => `.${e}`).join(",")}`;
+
+/** The file dropped (or chosen) to import, or why it is refused: one at a time, audio or
+ *  video only. Nothing is sent for a refusal, and it is said. */
+export function droppedFile<F extends { name: string; type: string }>(
+  files: F[],
+): { file: F } | { refusal: string } {
+  if (files.length === 0) return { refusal: "Aucun fichier déposé." };
+  if (files.length > 1)
+    return { refusal: `${files.length} fichiers déposés : un seul à la fois, déposez-les un par un.` };
+  const file = files[0];
+  const extension = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
+  const media = file.type.startsWith("audio/") || file.type.startsWith("video/");
+  if (!media && !IMPORT_EXTENSIONS.includes(extension))
+    return { refusal: `« ${file.name} » n'est ni un fichier audio ni une vidéo.` };
+  return { file };
+}
+
+/** Where an import goes: the place asked, if its space is open; else where the home page
+ *  would record, with no project. */
+export function importPlace(
+  where: { spaceId: number | null; projectId: number | null },
+  spaces: Pick<Space, "id" | "archived">[],
+  latestFirst: Pick<Session, "space_id">[],
+  chosen: number | null,
+): { spaceId: number | null; projectId: number | null } {
+  if (spaces.some((s) => s.id === where.spaceId && !s.archived)) return where;
+  return { spaceId: startSpace(spaces, latestFirst, chosen), projectId: null };
+}
+
+/** The sessions, the most recently recorded first. */
+export function latestFirst<S extends Pick<Session, "recorded_at">>(sessions: S[]): S[] {
+  return [...sessions].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at));
+}
