@@ -421,3 +421,51 @@ test("an optional model on the disk, never replaced, keeps its row: it is not an
   assert.equal(quiet.old.size, 0);
   assert.deepEqual(quiet.apart.map((r) => r.key), ["asr-grand"]);
 });
+
+test("an aligner for another language is needed only by its own sessions", async () => {
+  const { quietRows } = await import("./models.ts");
+  const aligner = (key: string, language: string): CatalogModel => ({ ...model(key, "align"), language });
+  const intact = (key: string) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: 1_260_000_000,
+    downloaded_at: null,
+    problem: null,
+    required: true,
+    replaced_by: null,
+  });
+  const v: ModelsView = {
+    ...view({ models: [intact("aligneur-fr")] }),
+    catalog: { models: [aligner("aligneur-fr", "fr"), aligner("aligneur-en", "en"), aligner("aligneur-de", "de")] },
+  };
+  v.readiness = { ...v.readiness, language: "fr" };
+  const rows = modelRows(v, []);
+  assert.deepEqual(
+    rows.map((r) => [r.key, r.purpose, r.required]),
+    [
+      ["aligneur-fr", "Alignement des mots", true],
+      ["aligneur-en", "Alignement des mots (anglais)", false],
+      ["aligneur-de", "Alignement des mots (allemand)", false],
+    ],
+  );
+  // Not on the disk, not needed: nothing to say, never « 2,5 Go à télécharger ».
+  const quiet = quietRows(rows, v.inventory);
+  assert.deepEqual(quiet.apart, []);
+  assert.deepEqual(quiet.steps, [{ purpose: "Alignement des mots", size: 1_260_000_000 }]);
+  // Downloaded, it keeps its own line, to be removed: nothing takes space unseen.
+  const withEnglish = { ...v, inventory: { ...v.inventory, models: [intact("aligneur-fr"), intact("aligneur-en")] } };
+  const shown = quietRows(modelRows(withEnglish, []), withEnglish.inventory);
+  assert.deepEqual(
+    shown.apart.map((r) => [r.purpose, r.required]),
+    [["Alignement des mots (anglais)", false]],
+  );
+  assert.equal(shown.old.size, 0);
+  assert.deepEqual(shown.steps, [{ purpose: "Alignement des mots", size: 1_260_000_000 }]);
+  // An older engine says no language: French, as before.
+  const older = modelRows({ ...v, readiness: { ...v.readiness, language: undefined } }, []);
+  assert.equal(older[1].required, false);
+});
