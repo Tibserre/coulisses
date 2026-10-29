@@ -1803,7 +1803,11 @@ function ProcessingPanel({
       {(dev ||
         failed ||
         detail.stages.some((s) => s.state === "stalled" || s.stale)) && (
-        <StageList stages={detail.stages} onShowProvenance={onShowProvenance} />
+        <StageList
+          stages={detail.stages}
+          onShowProvenance={onShowProvenance}
+          stopped={session.processing_stopped}
+        />
       )}
       {session.job_state === "done" && attributed && !transcriptError && (
         <Spinner label="Chargement du transcript" />
