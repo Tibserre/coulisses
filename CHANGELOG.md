@@ -8,24 +8,13 @@ la publication lit celle de `main`.
 
 ## v0.36.0 — 2026-10-29
 
-### Nouveautés
+### Nouveautés depuis la 0.35.0
 
-- dit étape par étape ce que l'arrêt a annulé (traitement)
-- arrête un traitement, ou supprime sa séance pendant qu'il tourne (traitement)
-- permet d'arrêter un traitement et de supprimer sa séance en cours (traitement)
-- demande d'abord le nombre de présents, les noms au choix (import)
-- demande « Qui était là ? » avant le traitement d'un import (import)
-- fait attendre les présents au premier traitement d'un import (import)
-- dit quand les présents ne sont pas ceux du traitement (presents)
-- prend les présents cochés avant le premier traitement (presents)
-- importe en un geste, sans fenêtre (import)
-
-### Corrections
-
-- attend la fin des programmes d'une étape arrêtée avant de supprimer sa séance (traitement)
-- ne dit « arrêtée » que d'une étape que le service dit arrêtée (traitement)
-- dit « arrêtée » pour les étapes d'un traitement arrêté (traitement)
-- garde « arrêté » quand l'annulation du moteur échoue (traitement)
+- Importer en un geste. Glissez un fichier audio ou vidéo n'importe où sur la fenêtre, ou utilisez ⌘O, « Importer un fichier… » dans le menu « ⋯ » d'un espace ou d'un projet, ou « ou importer un fichier » sur l'accueil. Le fichier va dans l'espace (et le projet) où vous l'avez demandé ; pendant que vous le glissez, la fenêtre dit où il ira. La séance s'ouvre aussitôt, et l'espace, le projet et les présents s'y changent au-dessus du titre. La fenêtre « Nouvelle note » disparaît.
+- « Qui était là ? » avant le traitement d'un import. Donnez d'abord le nombre de présents, avec − et + ; leurs noms sont au choix. Puis « Lancer avec N présents » ou « Lancer sans ». Sans réponse, le traitement part seul au bout de 2 minutes, avec ce qui a été donné ; un compte à rebours le dit. Les présents cochés avant le traitement servent de minimum à la séparation des voix ; cochés après, la liste le dit et propose « Refaire les voix… ».
+- Arrêter un traitement. « Arrêter le traitement », sous les disques ou dans « ⋯ », arrête un traitement que vous ne voulez finalement pas faire. Ce qui était déjà fait est gardé, et la séance dit « Traitement arrêté », avec « Reprendre » pour relancer ce qui reste.
+- Supprimer une séance pendant son traitement, par exemple un fichier importé par erreur : Coulisses arrête d'abord le traitement, puis supprime la séance, en un geste. Si un programme du traitement tourne encore, rien n'est supprimé et la séance demande de réessayer un instant plus tard.
+- Le moteur de traitement passe à la v1.13.2 : un traitement arrêté se termine proprement.
 
 ## v0.35.0 — 2026-10-28
 
