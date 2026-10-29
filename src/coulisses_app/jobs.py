@@ -48,6 +48,10 @@ class ChainParams(BaseModel):
     stopped_at: str | None = None
     """When the user stopped it (« Arrêter »): its stages already made are kept, those
     running were cancelled by the engine (their runs stay as it closed them, P5)."""
+    stopped_runs: list[str] = []
+    """Runs cancelled at the user's request that raised an error on the way (the engine's
+    cancelling refused by macOS): stopped, not failed, though their provenance may not say
+    so. The ones the engine closed as Cancelled say it themselves."""
     mix: dict[str, Any] | None = None
     """When the engine heard the microphone mixed with the computer's sound (ADR 0032):
     what the mix was made of (`mixing.MixFacts`), set when the job runs. Kept here, it
@@ -190,6 +194,19 @@ def requeue(conn: sqlite3.Connection, job_id: int) -> None:
         )
 
 
+def record_stopped_run(conn: sqlite3.Connection, job_id: int, run_id: str) -> None:
+    """A run of this job, cancelled at the user's request, raised an error on the way: it
+    was stopped, not failed (`ChainParams.stopped_runs`)."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT params FROM job WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return
+        params = ChainParams.model_validate_json(row["params"])
+        params = params.model_copy(update={"stopped_runs": [*params.stopped_runs, run_id]})
+        conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job_id))
+
+
 def mark_stopped(conn: sqlite3.Connection, job_id: int, *, only_queued: bool = False) -> bool:
     """The user stopped this job: failed with `STOPPED`, and when (`stopped_at`). Returns
     whether it was marked (`only_queued`: not if it was claimed meanwhile)."""
@@ -214,10 +231,19 @@ def mark_stopped(conn: sqlite3.Connection, job_id: int, *, only_queued: bool = F
 
 def record_mix(conn: sqlite3.Connection, job: Job, facts: dict[str, Any]) -> None:
     """What the engine is about to hear, when it is a mix: kept with the job (P7)."""
-    assert isinstance(job.params, ChainParams)
-    params = job.params.model_copy(update={"mix": facts})
+    _update_params(conn, job.id, mix=facts)
+
+
+def _update_params(conn: sqlite3.Connection, job_id: int, **changes: Any) -> None:
+    """Changes some of a chain job's params, read again under the lock: what another
+    writer put there meanwhile (`stopped_runs`…) is kept."""
     with conn:
-        conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job.id))
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT params FROM job WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return
+        params = ChainParams.model_validate_json(row["params"]).model_copy(update=changes)
+        conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job_id))
 
 
 def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> None:
@@ -225,9 +251,14 @@ def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) ->
     refused with `too_few_speakers` (checked by the caller). The former minimum stays in
     that run's provenance (`error.details.expected`): nothing is lost. Who was present is
     not changed: people can be present without speaking."""
-    assert isinstance(job.params, ChainParams)
-    params = job.params.model_copy(update={"attendees": attendees})
     with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT params FROM job WHERE id = ?", (job.id,)).fetchone()
+        if row is None:
+            return
+        params = ChainParams.model_validate_json(row["params"]).model_copy(
+            update={"attendees": attendees}
+        )
         conn.execute(
             "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL, params = ?"
             " WHERE id = ?",
