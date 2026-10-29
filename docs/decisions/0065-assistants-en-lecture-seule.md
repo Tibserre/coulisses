@@ -1,6 +1,6 @@
 # 0065 — Un assistant lit Coulisses par un pont MCP en lecture seule, livré dans l'app
 
-Statut : Proposée (2026-10-27, après exploration avec l'utilisateur, qui a choisi l'onglet « Connecteur », les deux options par espace et le masquage des noms au mieux ; précise 0001, 0034, 0040 et 0043)
+Statut : Acceptée (2026-10-29, schéma validé par l'utilisateur ; exploration du 2026-10-27, où l'utilisateur a choisi l'onglet « Connecteur », les deux options par espace et le masquage des noms au mieux ; précise 0001, 0034, 0040 et 0043)
 
 ## Contexte
 L'utilisateur veut qu'un assistant (Claude Desktop, Claude Code ou un client MCP local sur Ollama) puisse **consommer les données de Coulisses, sans piloter l'app** : chercher et lire les séances. Le même outil doit servir chez les amis (ADR 0040).
@@ -16,9 +16,9 @@ L'utilisateur veut qu'un assistant (Claude Desktop, Claude Code ou un client MCP
 - **Chaque espace a deux options** dans ses paramètres :
   - **Accessible au connecteur** : un espace fermé n'apparaît dans aucune réponse, pas même dans la recherche ;
   - **Transmettre les noms** : sans cette option, chaque nom connu de l'espace devient « Personne A », « Personne B »… Les noms connus sont ceux des présents, des voix nommées, des personnes de l'espace et des noms propres de son glossaire. La même personne garde la même lettre dans toute la séance. Le masquage s'applique **partout** : transcript, notes, titre, titres de chapitres, résumés et extraits de la recherche. Une recherche sur un nom masqué ne trouve rien. Ce masquage est fait **au mieux** : un surnom, un diminutif ou un nom mal transcrit passe. L'option le dit.
-  Les deux options sont fermées par défaut. Elles demandent une migration du schéma.
+  Les deux options sont fermées par défaut : deux colonnes de l'espace, à 0 par défaut (migration).
 - **Le service applique ces règles à la source**, dans des routes réservées au connecteur (`/api/connecteur/…`). Ce que voit la page de Coulisses ne change pas. Le pont ne lit que ces routes et ne filtre rien lui-même. Un connecteur coupé refuse tout.
-- **Un journal des accès** : chaque lecture du connecteur est notée (date, outil, séance, avec ou sans les noms) et se consulte dans l'onglet « Connecteur ». Où le garder se décide avec la migration.
+- **Un journal des accès** : chaque lecture du connecteur est notée (date, outil, séance, avec ou sans les noms) et se consulte dans l'onglet « Connecteur ». Il est gardé dans une table de la base, comme le journal des suppressions, et jamais purgé. L'ouverture du connecteur est un réglage de `app_setting`.
 - **L'onglet « Connecteur » dit aussi** :
   - ce qui est lu part chez le fournisseur de l'assistant et y reste, même si la séance est supprimée dans Coulisses ;
   - ce sont aussi les voix des autres participants : c'est à l'utilisateur de juger s'il peut les transmettre ;
@@ -37,7 +37,8 @@ L'utilisateur veut qu'un assistant (Claude Desktop, Claude Code ou un client MCP
 - **Le connecteur coupé est une barrière pour l'assistant, pas contre un logiciel malveillant** : tout programme local peut déjà lire l'API en GET (ADR 0043). Le connecteur n'élargit pas ce risque, mais il ne le ferme pas. On ne promet rien de plus.
 - Le masquage des noms ne garantit pas l'anonymat ; il évite la plupart des noms connus.
 - Le lanceur fixe vit sous `~/Coulisses/`, hors de `Données/`. Coulisses (dév) a le sien, qui ne retrouve que l'app de dév.
-- Un changement du schéma (deux options par espace, et peut-être le journal) : validation requise avant de construire.
+- Un changement du schéma (deux colonnes de l'espace, une table du journal), validé par l'utilisateur le 2026-10-29.
+- La spec (Réglages, paramètres d'un espace) se met à jour dans les commits qui construisent ces écrans.
 - Il faut une nouvelle dépendance : le SDK `mcp` Python, en pur Python.
 - La spec gagne un sixième onglet de Réglages, « Connecteur », et deux options dans les paramètres d'un espace.
 - Coût estimé de 5 à 6 jours :
