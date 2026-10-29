@@ -18,6 +18,7 @@ import {
 } from "../api.ts";
 import { DayStepper } from "../components/DayStepper.tsx";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
+import { LanguagesSection } from "../components/LanguagesSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
 import { UpdatesSection } from "../components/UpdatesSection.tsx";
 import { WritingModels } from "../components/WritingModels.tsx";
@@ -322,6 +323,7 @@ export function SettingsPage({
 
         {part === "transcription" && (
           <>
+            <LanguagesSection onError={setError} />
             <ModelsSection onReplace={onReplace} />
             <div className="cl-settings__buttons">
               <Button

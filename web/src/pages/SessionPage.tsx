@@ -22,9 +22,11 @@ import {
   ServiceError,
   type EditRequest,
   type CorrectedView,
+  type Language,
   type Person,
   type PhasesStatus,
   type Project,
+  type Rerun,
   type Session,
   type SessionDetail,
   type Speaker,
@@ -56,6 +58,14 @@ import {
 } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
 import { AttendeesAsk } from "../components/AttendeesAsk.tsx";
+import {
+  LanguageDownloadDialog,
+  LanguagePick,
+  LanguageWait,
+  SessionLanguage,
+  useLanguages,
+} from "../components/Languages.tsx";
+import { labelOf, languageWord, languageWorthShowing } from "../languages.ts";
 import {
   GiveToPanel,
   TranscriptView,
@@ -160,7 +170,12 @@ export function SessionPage({
   // A confirmation of « ⋯ » asked from the processing screen (stop it, delete the session).
   const [menuRequest, setMenuRequest] = useState<Asking>(null);
   const menuRequestRead = useCallback(() => setMenuRequest(null), []);
-  const [rerunFrom, setRerunFrom] = useState<"all" | "diarize">("all");
+  const [rerunFrom, setRerunFrom] = useState<Rerun>("all");
+  // The language asked above the title for the new text (ADR 0072), else the shown one's.
+  const [rerunLanguage, setRerunLanguage] = useState<string | null>(null);
+  const { languages, reload: reloadLanguages } = useLanguages(setMenuError);
+  /** A language chosen though not on this Mac: its download offered. */
+  const [toDownload, setToDownload] = useState<Language | null>(null);
   const openVersions = (part?: string) => {
     setVersionsOpen(true);
     if (part)
@@ -738,6 +753,15 @@ export function SessionPage({
         src={audioGone ? undefined : api.audioUrl(id)}
         preload="metadata"
       />
+      <LanguageDownloadDialog
+        language={toDownload}
+        after="La séance l'attend : son traitement partira dès que le modèle sera là, sans bloquer les autres."
+        onClose={() => setToDownload(null)}
+        onStarted={() => {
+          void reloadLanguages();
+          void refresh();
+        }}
+      />
       {/* Read, not yet shown: the session, or the version it has. Its shapes meanwhile, then
           the page at once: nothing comes in pieces (the steps, then the transcript). */}
       {loading ? (
@@ -794,6 +818,7 @@ export function SessionPage({
                                     onClick={() => {
                                       setAttendeesOpen(false);
                                       setRerunFrom("diarize");
+                                      setRerunLanguage(null);
                                       setRerunOpen(true);
                                     }}
                                   />
@@ -814,6 +839,20 @@ export function SessionPage({
                   </button>
                 </Popover>
               )}
+              {session && languages && (
+                <SessionLanguage
+                  session={session}
+                  languages={languages}
+                  onChanged={sessionChanged}
+                  onRedo={(code) => {
+                    setRerunFrom("transcribe");
+                    setRerunLanguage(code);
+                    setRerunOpen(true);
+                  }}
+                  onDownload={setToDownload}
+                  onError={setMenuError}
+                />
+              )}
               {session && (
                 <SessionMenu
                   hasTranscript={view != null}
@@ -822,6 +861,7 @@ export function SessionPage({
                   onVersions={() => openVersions()}
                   onRerun={() => {
                     setRerunFrom("all");
+                    setRerunLanguage(null);
                     setRerunOpen(true);
                   }}
                   session={session}
@@ -1120,6 +1160,10 @@ export function SessionPage({
                 await refresh();
               }}
               onShowProvenance={setProvenanceOf}
+              languages={languages}
+              onSessionChanged={sessionChanged}
+              onDownload={setToDownload}
+              onLanguagesChanged={() => void reloadLanguages()}
             />
           )}
           {detail && model && view && session && (
@@ -1247,6 +1291,7 @@ export function SessionPage({
                 <RerunDialog
                   isOpen={rerunOpen}
                   from={rerunFrom}
+                  language={rerunLanguage}
                   sessionId={id}
                   duration={session.duration_s}
                   onClose={() => setRerunOpen(false)}
@@ -1588,6 +1633,53 @@ function RerunNotices({
   return <div className="cl-review__notice cl-review__notices">{notices}</div>;
 }
 
+/** « En français · Changer », in « Qui était là ? » (ADR 0072): the space's language, changed
+ *  at once, the countdown left as it is. */
+function ImportLanguage({
+  session,
+  languages,
+  onChanged,
+  onDownload,
+}: {
+  session: Session;
+  languages: Language[];
+  onChanged: (session: Session) => void;
+  onDownload: (language: Language) => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const label = labelOf(languages, session.language);
+  return (
+    <div className="cl-ask__language">
+      <Text>{label ? `En ${languageWord(label)}` : "Langue plus prise en charge"}</Text>
+      <LanguagePick
+        languages={languages}
+        value={session.language}
+        title="Langue de la séance"
+        intro="Le compte à rebours continue : changer la langue ne le relance pas."
+        onPick={(l) =>
+          api.setSessionLanguage(session.id, l.language).then(
+            (next) => {
+              setError(null);
+              onChanged(next);
+              if (!l.installed) onDownload(l);
+            },
+            (e: Error) => setError(e.message),
+          )
+        }
+      >
+        <button type="button" className="cl-linkbtn">
+          Changer
+        </button>
+      </LanguagePick>
+      {error && (
+        <Text type="supporting" color="primary">
+          {error}
+        </Text>
+      )}
+    </div>
+  );
+}
+
 function ProcessingPanel({
   detail,
   people,
@@ -1599,6 +1691,10 @@ function ProcessingPanel({
   onResume,
   onShowProvenance,
   onProcess,
+  languages,
+  onSessionChanged,
+  onDownload,
+  onLanguagesChanged,
 }: {
   detail: SessionDetail;
   people: Person[];
@@ -1612,6 +1708,11 @@ function ProcessingPanel({
   onResume: (attendees?: number) => Promise<void>;
   onProcess: () => Promise<void>;
   onShowProvenance: (s: StageView) => void;
+  /** The languages of the chain (ADR 0072); null while read. */
+  languages: Language[] | null;
+  onSessionChanged: (session: Session) => void;
+  onDownload: (language: Language) => void;
+  onLanguagesChanged: () => void;
 }) {
   const { session } = detail;
   const dev = useDevMode();
@@ -1669,9 +1770,30 @@ function ProcessingPanel({
           startsAt={session.processing_starts_at}
           onSave={onSaveAttendees}
           onLaunch={onLaunch}
+          language={
+            languages &&
+            languageWorthShowing(languages, session.language) && (
+              <ImportLanguage
+                session={session}
+                languages={languages}
+                onChanged={onSessionChanged}
+                onDownload={onDownload}
+              />
+            )
+          }
         />
       )}
-      {running && <ProcessingOutline detail={detail} />}
+      {running && session.processing_waits_for && (
+        <LanguageWait
+          session={session}
+          wait={session.processing_waits_for}
+          languages={languages}
+          onChanged={onSessionChanged}
+          onDownload={onDownload}
+          onStopped={onLanguagesChanged}
+        />
+      )}
+      {running && !session.processing_waits_for && <ProcessingOutline detail={detail} />}
       {running && (
         <div className="cl-processing__stop">
           <Button

@@ -456,15 +456,21 @@ test("an aligner for another language is needed only by its own sessions", async
   const quiet = quietRows(rows, v.inventory);
   assert.deepEqual(quiet.apart, []);
   assert.deepEqual(quiet.steps, [{ purpose: "Alignement des mots", size: 1_260_000_000 }]);
-  // Downloaded, it keeps its own line, to be removed: nothing takes space unseen.
+  // Downloaded, it is said in « Langues », with its size and « Supprimer » (ADR 0072).
   const withEnglish = { ...v, inventory: { ...v.inventory, models: [intact("aligneur-fr"), intact("aligneur-en")] } };
   const shown = quietRows(modelRows(withEnglish, []), withEnglish.inventory);
-  assert.deepEqual(
-    shown.apart.map((r) => [r.purpose, r.required]),
-    [["Alignement des mots (anglais)", false]],
-  );
+  assert.deepEqual(shown.apart, []);
   assert.equal(shown.old.size, 0);
   assert.deepEqual(shown.steps, [{ purpose: "Alignement des mots", size: 1_260_000_000 }]);
+  // Damaged, it keeps its row here, to be removed.
+  const damaged = {
+    ...v,
+    inventory: { ...v.inventory, models: [intact("aligneur-fr"), { ...intact("aligneur-en"), state: "altered" as const }] },
+  };
+  assert.deepEqual(
+    quietRows(modelRows(damaged, []), damaged.inventory).apart.map((r) => r.purpose),
+    ["Alignement des mots (anglais)"],
+  );
   // An older engine says no language: French, as before.
   const older = modelRows({ ...v, readiness: { ...v.readiness, language: undefined } }, []);
   assert.equal(older[1].required, false);

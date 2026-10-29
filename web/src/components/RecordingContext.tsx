@@ -3,16 +3,20 @@ import { Popover } from "@astryxdesign/core/Popover";
 import { Check, ChevronDown } from "lucide-react";
 import {
   api,
+  type Language,
   type Person,
   type Project,
   type Session,
   type Space,
 } from "../api.ts";
+import { inLanguage, languageWorthShowing } from "../languages.ts";
+import { LanguageDownloadDialog, LanguagePick, useLanguages } from "./Languages.tsx";
 
 /** Where a recording goes and who is there, changed while it runs (spec §7.2, ADR 0056):
  *  the space, the project, the people checked. A recording starts in one gesture, in the
  *  space selected; this is where it is put right. Each one is a quiet label that opens its
- *  list, floating under it: nothing moves. */
+ *  list, floating under it: nothing moves. Its language too (ADR 0072), when it has
+ *  something to say: the processing starts at the stop, in the language of the moment. */
 export function RecordingContext({
   session,
   spaces,
@@ -37,11 +41,17 @@ export function RecordingContext({
     );
   }, [session.space_id, onError]);
 
+  const { languages, reload } = useLanguages(onError);
+  const [toDownload, setToDownload] = useState<Language | null>(null);
+
+  /** Done (true), or refused and said. */
   const run = async (step: () => Promise<Session>) => {
     try {
       onChanged(await step());
+      return true;
     } catch (e) {
       onError((e as Error).message);
+      return false;
     }
   };
 
@@ -154,6 +164,34 @@ export function RecordingContext({
                 ))
         }
       </ChipMenu>
+      {languages && languageWorthShowing(languages, session.language) && (
+        <LanguagePick
+          languages={languages}
+          value={session.language}
+          title="Langue de la séance"
+          intro="Le traitement partira à l'arrêt, dans cette langue."
+          onPick={(l) =>
+            void run(() => api.setSessionLanguage(session.id, l.language)).then((done) => {
+              if (done && !l.installed) setToDownload(l);
+            })
+          }
+        >
+          <button
+            type="button"
+            className="cl-chip"
+            aria-label={`Langue de la séance : ${inLanguage(languages, session.language)}. Changer`}
+          >
+            {inLanguage(languages, session.language)}
+            <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
+          </button>
+        </LanguagePick>
+      )}
+      <LanguageDownloadDialog
+        language={toDownload}
+        after="Le traitement partira à l'arrêt, dès que le modèle sera là."
+        onClose={() => setToDownload(null)}
+        onStarted={() => void reload()}
+      />
       {unchecked.length > 0 && (
         <span className="cl-rec__said" role="status">
           Décochés en changeant d'espace : {unchecked.join(", ")}.

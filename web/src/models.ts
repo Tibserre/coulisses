@@ -41,6 +41,9 @@ export interface ModelRow {
   purpose: string;
   /** Needed by the chain that processes the sessions. */
   required: boolean;
+  /** For the sessions of another language only (its code): the section « Langues » says
+   *  it, outside developer mode (ADR 0072). */
+  otherLanguage: string | null;
   state: ModelState;
   /** The last download, finished or stopped, with what it said. */
   last: ModelAction | null;
@@ -100,6 +103,7 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
       purpose: forLanguage(model, readiness),
       // A model for one language is needed only by the sessions of that language.
       required: model.required_by.includes(readiness.profile) && !otherLanguage(model, readiness),
+      otherLanguage: otherLanguage(model, readiness) ? (model.language ?? null) : null,
       state: stateOf(model.key, inventory, action, model),
       last: action && action.state !== "running" ? action : null,
     };
@@ -115,6 +119,7 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
       model: null,
       purpose: "Hors catalogue",
       required: false,
+      otherLanguage: null,
       state: stateOf(key, inventory, action, null),
       last: action && action.state !== "running" ? action : null,
     });
@@ -222,7 +227,8 @@ export interface StepLine {
  *  is said in developer mode (the user's choice). A model the processing does not use is not shown while it is not on
  *  the disk; installed, it is said with its step (`old`), to be removed or replaced. Anything
  *  else keeps its own row, with its action: missing, downloading, interrupted, damaged,
- *  outside the catalog, an older or interrupted environment. Where an environment's Python
+ *  outside the catalog, an older or interrupted environment. Another language's models are
+ *  said in the section « Langues » (ADR 0072), unless damaged or interrupted. Where an environment's Python
  *  lives is said in developer mode. */
 export function quietRows(
   rows: ModelRow[],
@@ -247,6 +253,9 @@ export function quietRows(
   // A step folds only when every model it needs is sound: never two lines of one name.
   const unsoundStep = new Set(rows.filter((r) => r.required && !sound(r)).map((r) => r.purpose));
   for (const row of rows) {
+    // Another language's model is said in « Langues » (installed, downloading, to add);
+    // damaged or interrupted, it keeps its row here, with the space it takes.
+    if (row.otherLanguage !== null && row.state.kind !== "altered" && row.state.kind !== "partial") continue;
     if (!row.required && row.last === null) {
       if (row.state.kind === "missing") continue; // not on the disk: nothing to say
       // Replaced by another (engine v1.10.0): an old one. An optional one keeps its row.
