@@ -9,6 +9,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { api, type Language } from "../api.ts";
 import { gigabytes } from "../models.ts";
 import {
+  canRemoveLanguage,
   downloadPercent,
   languageState,
   languageUses,
@@ -90,7 +91,7 @@ export function LanguagesSection({
                   <span />
                 )}
                 <div className="cl-models__actions">
-                  {state.kind === "installed" && l.own_models.length > 0 && (
+                  {canRemoveLanguage(l) && (
                     <Button
                       label="Supprimer"
                       size="sm"

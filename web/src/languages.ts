@@ -68,6 +68,16 @@ export function languageState(language: Language): LanguageState {
   return { kind: "missing", bytes: language.download_bytes };
 }
 
+/** Whether « Supprimer » is offered: installed, with models of its own, and not French,
+ *  which is included (ADR 0072). */
+export function canRemoveLanguage(language: Language): boolean {
+  return (
+    language.language !== FRENCH &&
+    language.installed &&
+    language.own_models.length > 0
+  );
+}
+
 /** The share downloaded, 0 to 100. */
 export function downloadPercent(done: number, total: number): number {
   return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;

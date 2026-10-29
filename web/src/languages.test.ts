@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Language, ModelAction, ProcessingWait } from "./api.ts";
 import {
+  canRemoveLanguage,
   inLanguage,
   languageNote,
   languageState,
@@ -172,4 +173,13 @@ test("a version in a language no longer offered says so; a failed download shows
     languageWorthShowing([french, language({ downloads: [action({ state: "failed", error: "Réseau coupé." })] })], "fr"),
     false,
   );
+});
+
+test("French is included: never removed, whatever its models", () => {
+  assert.equal(
+    canRemoveLanguage({ ...french, own_models: ["wav2vec2-ctc-french"] }),
+    false,
+  );
+  assert.equal(canRemoveLanguage(language({ installed: true })), true);
+  assert.equal(canRemoveLanguage(language({})), false);
 });
