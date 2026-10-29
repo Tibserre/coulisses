@@ -153,6 +153,8 @@ class Processor:
         self._stopped_by_user: set[int] = set()
         """Jobs the user stopped: no stage of theirs starts any more."""
         self._stopped_lock = threading.Lock()
+        self._cancel_sent: set[str] = set()
+        """Runs the engine was asked to cancel: an error they raise is the stop's."""
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
@@ -235,6 +237,8 @@ class Processor:
                 for row in conn.execute(
                     "SELECT id FROM run WHERE job_id = ? AND status = 'running'", (job.id,)
                 ).fetchall():
+                    with self._stopped_lock:
+                        self._cancel_sent.add(row["id"])
                     try:
                         self._engine_cancel(self.data.run_dir(session_id, row["id"]))
                     # Not running in this process yet, or no longer (just ended): the next
@@ -455,8 +459,22 @@ class Processor:
             try:
                 prov, used = engine_run(stage, cfg, inputs, folder, upstream)  # type: ignore[arg-type]
             except BaseException as exc:
-                if self._stopping.is_set():
+                with self._stopped_lock:
+                    cancelled = folder.name in self._cancel_sent
+                    self._cancel_sent.discard(folder.name)
+                # Stopped by the application, or cancelled at the user's request: what the
+                # stop made of the stage (its cancelling failed on the way: an engine error)
+                # is not a failure of the recording. Its error stays in the run, and is said
+                # here. A stage not yet cancelled that raises: a failure, said as one.
+                if self._stopping.is_set() or cancelled:
                     interrupted.append(stage.value)
+                    if cancelled:
+                        log.warning(
+                            "job %s: %s raised while being cancelled, counted as stopped: %s",
+                            job.id,
+                            stage.value,
+                            exc,
+                        )
                 else:
                     failures.append(stage.value)
                 conn = connect(self.data)
@@ -470,6 +488,8 @@ class Processor:
                 finally:
                     conn.close()
                 raise
+            with self._stopped_lock:
+                self._cancel_sent.discard(folder.name)
             if prov.error is not None and prov.error.code in _STOPPED:
                 interrupted.append(stage.value)
             elif prov.error is not None:
