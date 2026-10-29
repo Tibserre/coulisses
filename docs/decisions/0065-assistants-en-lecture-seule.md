@@ -28,29 +28,34 @@ L'utilisateur veut qu'un assistant (Claude Desktop, Claude Code ou un client MCP
 - **Pendant une mise à jour par Sparkle**, le pont s'arrête proprement et le client le relance.
 - **Aucune perte silencieuse** : un transcript long se lit par morceaux (par chapitre ou par tranche), et chaque réponse dit s'il reste une suite. Une app qui ne démarre pas, un connecteur coupé, un espace fermé ou une séance introuvable donnent un message en français.
 - **Provenance** : un transcript ou un résumé lu porte sa provenance (version du moteur, modèle de rédaction, date).
-- **L'accord pour chaque appel** est demandé par le client MCP. Coulisses n'écrit jamais lui-même dans la configuration d'un autre outil. Les Réglages donnent :
-  - la ligne `claude mcp add` à copier, pour Claude Code ;
-  - une extension `.mcpb` à ouvrir, pour Claude Desktop.
+- **Un lanceur fixe, `~/Coulisses/Connecteur/coulisses-mcp`**, est le seul chemin noté dans la configuration d'un assistant. L'app l'écrit à son lancement. Il retrouve l'app par son identifiant, où qu'elle soit, puis lance le pont qu'elle contient. Déplacer l'app ne casse donc rien. Si l'app est introuvable, il le dit en français.
+- **L'accord pour chaque appel** est demandé par le client MCP. Coulisses n'écrit jamais lui-même dans la configuration d'un autre outil. Les Réglages donnent, toutes deux vers le lanceur fixe, la ligne `claude mcp add` à copier pour Claude Code et une extension `.mcpb` à ouvrir pour Claude Desktop.
 - **P1 précisé** : le service et le pont n'ouvrent rien au réseau. Si des données sortent, c'est par le client que l'utilisateur a choisi d'y brancher, après qu'il a ouvert l'accès en connaissance de cause.
 
 ## Conséquences
 - Un appel avec l'app fermée prend le temps de son démarrage. Si le connecteur est coupé, l'app aura été réveillée pour rien : c'est accepté plutôt que de recopier le réglage hors de la base.
 - **Le connecteur coupé est une barrière pour l'assistant, pas contre un logiciel malveillant** : tout programme local peut déjà lire l'API en GET (ADR 0043). Le connecteur n'élargit pas ce risque, mais il ne le ferme pas. On ne promet rien de plus.
 - Le masquage des noms ne garantit pas l'anonymat ; il évite la plupart des noms connus.
-- L'extension `.mcpb` pointe vers `/Applications/Coulisses.app` : si l'app est déplacée, il faut la réinstaller.
+- Le lanceur fixe vit sous `~/Coulisses/`, hors de `Données/`. Coulisses (dév) a le sien, qui ne retrouve que l'app de dév.
 - Un changement du schéma (deux options par espace, et peut-être le journal) : validation requise avant de construire.
 - Il faut une nouvelle dépendance : le SDK `mcp` Python, en pur Python.
 - La spec gagne un sixième onglet de Réglages, « Connecteur », et deux options dans les paramètres d'un espace.
 - Coût estimé de 5 à 6 jours :
   - Service : la migration, les routes du connecteur avec le filtrage par espace et le masquage des noms (recherche comprise), le journal, le pont et son réveil de l'app sans fenêtre, ses tests, un transcript paginé (2 à 3 j) ;
   - Interface : l'onglet « Connecteur » avec ses avertissements et son journal, les deux options d'un espace (1 j) ;
-  - Distribution : le pont dans le `.app`, le `.mcpb`, `essai-paquet.py` (le pont démarre, liste ses outils et refuse quand l'accès est coupé), la doc pour les amis (1 j) ;
+  - Distribution : le pont dans le `.app`, le lanceur fixe, le `.mcpb`, `essai-paquet.py` (le pont démarre, liste ses outils et refuse quand l'accès est coupé), la doc pour les amis (1 j) ;
   - Rédaction n'est pas concernée.
 - Un transcript est du texte non sûr pour l'assistant (injection de consignes). La lecture seule borne le risque pour Coulisses, pas pour les autres outils de l'assistant.
 - Pour essayer l'usage avant de construire, sans rien développer : un serveur MCP « fichiers » standard peut lire le dossier d'export Markdown. Il n'y a alors ni recherche ni masquage, et on n'y met que ce qu'on exporte.
 
 ## Alternatives écartées
-- **MCP dans le service, en HTTP local** : Claude Desktop ne le voit pas sans un pont Node à installer chez les amis. Le MCP en HTTP passe par des POST, donc une nouvelle porte en écriture à défendre dans 0043. Et le service prendrait un rôle qui n'est pas le sien.
+- **MCP exposé sur un port local (`http://127.0.0.1:8765/mcp`, transport « Streamable HTTP »)**, dans le service :
+  - Claude Desktop ne le voit pas sans `mcp-remote`, un pont Node à installer chez chaque ami. Ses connecteurs par adresse passent par les serveurs d'Anthropic, qui n'atteignent pas 127.0.0.1 ;
+  - app fermée, personne n'écoute : pas de réveil possible ;
+  - le MCP en HTTP passe par des POST, ouverts à toute page web et à tout programme local. C'est une nouvelle porte à défendre dans 0043, sans doute avec un jeton ;
+  - le service prendrait un rôle qui n'est pas le sien.
+  À reconsidérer, en plus du stdio, si un client utile ne parle que HTTP.
+- **Le chemin du pont dans `/Applications/Coulisses.app` noté tel quel dans la configuration** : il casse dès que l'app est déplacée ou lancée d'ailleurs.
 - **Lecteur autonome de `~/Coulisses/Données/`** : il ferait des écritures concurrentes à celles du service, devrait suivre les migrations et referait la logique des corrections, avec un risque pour la base réelle.
 - **Un service lancé par le pont, sans l'app du Dock** : un second propriétaire du service, à arrêter et à mettre à jour hors de Sparkle.
 - **Sans les noms, ne transmettre que le transcript masqué (ni titres ni résumés)** : plus sûr, mais l'assistant perd l'essentiel. L'utilisateur préfère le masquage au mieux, partout.
