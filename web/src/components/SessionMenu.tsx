@@ -20,8 +20,11 @@ export function SessionMenu({
   onRerun,
   request,
   onRequestRead,
+  hasTranscript = false,
 }: {
   session: Session;
+  /** Its corrected transcript can be read: it can be downloaded. */
+  hasTranscript?: boolean;
   /** A confirmation asked from elsewhere on the page (« Arrêter le traitement »,
    *  « Supprimer la séance… » under a stopped processing): the same windows. */
   request?: Asking;
@@ -111,6 +114,20 @@ export function SessionMenu({
                   onClick: () => setAsking("audio"),
                 },
               ]),
+          ...(hasTranscript
+            ? [
+                {
+                  // The browser (or the Dock app's save window) takes the attachment.
+                  label: "Télécharger la transcription (.md)",
+                  onClick: () =>
+                    void run(async () => {
+                      const url = api.exportUrl(session.id, "transcript");
+                      await api.checkExport(url);
+                      window.location.href = url;
+                    })(),
+                },
+              ]
+            : []),
           {
             label: "Exporter vers le dossier",
             onClick: () => void exportNow(false),
