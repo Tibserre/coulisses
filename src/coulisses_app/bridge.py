@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -26,6 +27,8 @@ from urllib.parse import quote, urlencode
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 HOST = "127.0.0.1"
+BUNDLE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]*")
+"""An app's identifier, as `open -b` reads it: never an option nor empty."""
 WAKE_WAIT_S = 60.0
 WAKE_POLL_S = 0.5
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
@@ -378,9 +381,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dev", action="store_true", help="Coulisses (dév) : port 8766, jamais les données réelles"
     )
+    parser.add_argument(
+        "--identifiant",
+        metavar="BUNDLE_ID",
+        help="l'identifiant de l'app à ouvrir (celle qui a écrit le lanceur fixe) : l'app"
+        " publiée n'a pas celui de l'app installée depuis le dépôt",
+    )
     args = parser.parse_args(argv)
-    service = Service(DEVELOPMENT if args.dev else PUBLISHED)
-    return serve(service, sys.stdin, sys.stdout)
+    if args.identifiant is not None and not BUNDLE_ID.fullmatch(args.identifiant):
+        parser.error(
+            f"« --identifiant {args.identifiant} » n'est pas un identifiant d'app"
+            " (lettres, chiffres, points et tirets, comme io.github.tibserre.coulisses)."
+        )
+    return serve(Service(variant_of(args.dev, args.identifiant)), sys.stdin, sys.stdout)
+
+
+def variant_of(dev: bool, bundle_id: str | None) -> Variant:
+    """Its port and name from `dev`; the app to open, the one given by the launcher."""
+    variant = DEVELOPMENT if dev else PUBLISHED
+    if bundle_id is None:
+        return variant
+    return Variant(variant.name, variant.port, bundle_id, variant.app)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -296,3 +296,45 @@ def test_no_proxy_and_no_redirection_whatever_the_environment(
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_the_launcher_gives_the_app_to_open() -> None:
+    """The published app is not the one installed from the repository: the fixed launcher
+    passes the identifier of the app that wrote it, port and name kept."""
+    given = bridge.variant_of(False, "io.github.tibserre.coulisses")
+    assert (given.bundle_id, given.port, given.name) == (
+        "io.github.tibserre.coulisses",
+        8765,
+        "coulisses",
+    )
+    dev = bridge.variant_of(True, "io.github.tibserre.coulisses.dev")
+    assert (dev.bundle_id, dev.port, dev.name) == (
+        "io.github.tibserre.coulisses.dev",
+        8766,
+        "coulisses-dev",
+    )
+    assert bridge.variant_of(False, None) == PUBLISHED
+    opened: list[list[str]] = []
+
+    def opener(args: list[str]) -> int:
+        opened.append(args)
+        return 1
+
+    service = Service(
+        given, fetch=lambda _r, _t: (_ for _ in ()).throw(URLError("fermée")), opener=opener
+    )
+    with pytest.raises(BridgeError):
+        service.get("/api/connecteur/seances")
+    assert opened == [
+        ["open", "-g", "-b", "io.github.tibserre.coulisses", "--args", "--connecteur"]
+    ]
+
+
+@pytest.mark.parametrize("given", ["", "-a Terminal", "io.github/coulisses"])
+def test_an_identifier_that_is_not_one_is_refused(
+    given: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as refused:
+        bridge.main(["--identifiant", given])
+    assert refused.value.code == 2
+    assert "n'est pas un identifiant d'app" in capsys.readouterr().err
