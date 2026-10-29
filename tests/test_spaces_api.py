@@ -196,11 +196,85 @@ def test_attendees_can_be_checked_after_the_fact(
     ana = client.post(f"/api/espaces/{space_id}/personnes", json={"name": "Ana"}).json()
     session_id = processed_session(client, data, recording, non_nommes="2")
     session = client.put(
-        f"/api/seances/{session_id}/presents", json={"person_ids": [ana["id"]], "unnamed": 1}
+        f"/api/seances/{session_id}/presents", json={"person_ids": [ana["id"]], "unnamed": 2}
     ).json()
     assert session["attendee_ids"] == [ana["id"]]
-    assert session["unnamed_attendees"] == 1
+    assert session["unnamed_attendees"] == 2
     assert session["min_voices"] == 2  # the processing already done keeps its minimum
+    assert session["attendees_taken"] is False
+
+
+def test_attendees_checked_before_the_processing_began_are_its_minimum_of_voices(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    """An import in one gesture queues it with nobody present: checked meanwhile, the
+    people are what the engine is asked for (P3), and the page knows it."""
+    space_id = client.get("/api/espaces").json()[0]["id"]
+    ana = client.post(f"/api/espaces/{space_id}/personnes", json={"name": "Ana"}).json()
+    with recording.open("rb") as f:
+        created = client.post("/api/seances", files={"fichier": ("a.wav", f, "audio/wav")})
+    session_id = created.json()["id"]
+    session = client.put(
+        f"/api/seances/{session_id}/presents", json={"person_ids": [ana["id"]], "unnamed": 2}
+    ).json()
+    assert (session["min_voices"], session["attendees_taken"]) == (3, True)
+    conn = connect(data)
+    try:
+        job = jobs.claim_next(conn)
+    finally:
+        conn.close()
+    assert job is not None and isinstance(job.params, jobs.ChainParams)
+    assert job.params.attendees == 3
+    Processor(data, FAKE_CHAIN).run_job(job)
+    # Begun: checking more changes nothing, and is said.
+    session = client.put(
+        f"/api/seances/{session_id}/presents", json={"person_ids": [ana["id"]], "unnamed": 4}
+    ).json()
+    assert (session["min_voices"], session["attendees_taken"]) == (3, False)
+    # Unchecked before it begins: the engine finds the number alone.
+    with recording.open("rb") as f:
+        other = client.post(
+            "/api/seances", files={"fichier": ("b.wav", f, "audio/wav")}, data={"non_nommes": "2"}
+        ).json()["id"]
+    session = client.put(f"/api/seances/{other}/presents", json={"unnamed": None}).json()
+    assert (session["min_voices"], session["attendees_taken"]) == (None, True)
+
+
+def test_a_job_resumed_after_a_crash_keeps_its_minimum(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    with recording.open("rb") as f:
+        session_id = client.post(
+            "/api/seances", files={"fichier": ("a.wav", f, "audio/wav")}, data={"non_nommes": "2"}
+        ).json()["id"]
+    conn = connect(data)
+    try:
+        job = jobs.claim_next(conn)
+        assert job is not None
+        # Back in the queue after a crash, with its runs made from the former minimum.
+        conn.execute(
+            "INSERT INTO run (id, session_id, job_id, stage, status, producer, created_at)"
+            " VALUES ('diarize-1', ?, ?, 'diarize', 'succeeded', 'engine', 'x')",
+            (session_id, job.id),
+        )
+        conn.commit()
+        jobs.requeue(conn, job.id)
+    finally:
+        conn.close()
+    session = client.put(f"/api/seances/{session_id}/presents", json={"unnamed": 5}).json()
+    assert (session["min_voices"], session["attendees_taken"]) == (2, False)
+
+
+def test_a_rerun_waiting_in_the_queue_keeps_the_number_chosen_for_it(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = processed_session(client, data, recording, non_nommes="2")
+    asked = client.post(
+        f"/api/seances/{session_id}/relancer", json={"etape": "diarize", "presents": 4}
+    )
+    assert asked.status_code == 202, asked.text
+    session = client.put(f"/api/seances/{session_id}/presents", json={"unnamed": 5}).json()
+    assert (session["min_voices"], session["attendees_taken"]) == (4, False)
 
 
 def test_a_step_1_database_is_migrated_without_losing_anything(tmp_path: Path) -> None:

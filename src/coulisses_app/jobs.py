@@ -21,7 +21,8 @@ REDONE: dict[str, tuple[str, ...]] = {
 
 
 class ChainParams(BaseModel):
-    """What a chain job was asked to do, frozen when queued."""
+    """What a chain job was asked to do, fixed when claimed: before that, only
+    `take_attendees` changes `attendees`; `mix` is set when the job runs."""
 
     v: int = 1
     profile: str
@@ -181,6 +182,32 @@ def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) ->
             " WHERE id = ?",
             (params.model_dump_json(), job.id),
         )
+
+
+def take_attendees(conn: sqlite3.Connection, session_id: str, attendees: int | None) -> bool:
+    """The people checked after a session was queued, before its processing began: its first
+    processing takes them as its minimum of voices (P3). The engine diarizes from the start
+    of the job, alongside the transcription: once it has begun, or for a rerun or a job
+    resumed (its runs already made with the former minimum), nothing changes. Returns
+    whether it was taken. Within the caller's transaction."""
+    row = conn.execute(
+        "SELECT * FROM job j WHERE session_id = ? AND kind = 'chain' AND state = 'queued'"
+        " AND NOT EXISTS (SELECT 1 FROM run r WHERE r.job_id = j.id)"
+        " ORDER BY id DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    if row is None:
+        return False
+    job = _job(row)
+    assert isinstance(job.params, ChainParams)
+    if job.params.rerun is not None:
+        return False
+    params = job.params.model_copy(update={"attendees": attendees})
+    conn.execute(
+        "UPDATE job SET params = ? WHERE id = ? AND state = 'queued'",
+        (params.model_dump_json(), job.id),
+    )
+    return True
 
 
 def latest_job(conn: sqlite3.Connection, session_id: str, kind: str = "chain") -> Job | None:

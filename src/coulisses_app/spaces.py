@@ -12,6 +12,7 @@ from collections import Counter
 
 from pydantic import BaseModel
 
+from coulisses_app import jobs
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect, now_iso
 
@@ -399,11 +400,17 @@ def check_attendees(conn: sqlite3.Connection, space_id: int, person_ids: list[in
             raise SpaceError(f"{person.name} n'appartient pas à l'espace de cette séance.")
 
 
+def attendee_minimum(checked: int, unnamed: int | None) -> int | None:
+    """The minimum of voices the people present give (P3): none if nobody is said."""
+    return checked + (unnamed or 0) or None
+
+
 def set_attendees(
     data: DataDir, session_id: str, person_ids: list[int], unnamed: int | None
 ) -> None:
-    """Who was there, checked after the fact. It does not reprocess anything: the minimum
-    of voices given to the engine stays the one of the processing already done."""
+    """Who was there, checked after the fact. Before its first processing has begun, it
+    becomes the minimum of voices given to the engine (`jobs.take_attendees`); after, it
+    reprocesses nothing: the minimum stays the one of the processing already done."""
     if unnamed is not None and unnamed < 1:
         raise SpaceError("Le nombre de présents non nommés doit être au moins 1.")
     conn = connect(data)
@@ -412,15 +419,19 @@ def set_attendees(
         if row is None:
             raise NotFoundError("Séance introuvable.")
         check_attendees(conn, row["space_id"], person_ids)
+        present = list(dict.fromkeys(person_ids))
         with conn:
+            # Against the job being claimed meanwhile: taken, or begun with the former.
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute("DELETE FROM attendee WHERE session_id = ?", (session_id,))
             conn.executemany(
                 "INSERT INTO attendee (session_id, person_id) VALUES (?, ?)",
-                [(session_id, p) for p in dict.fromkeys(person_ids)],
+                [(session_id, p) for p in present],
             )
             conn.execute(
                 "UPDATE session SET unnamed_attendees = ? WHERE id = ?", (unnamed, session_id)
             )
+            jobs.take_attendees(conn, session_id, attendee_minimum(len(present), unnamed))
     finally:
         conn.close()
 
