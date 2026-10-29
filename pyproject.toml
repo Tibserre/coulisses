@@ -52,6 +52,9 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: uses the real models of the retained chain (minutes, needs ~/Coulisses/Modèles)"]
-addopts = "-m 'not slow'"
+markers = [
+    "slow: uses the real models of the retained chain (minutes, needs ~/Coulisses/Modèles)",
+    "materiel: uses this Mac's microphone and the computer's sound (asks the permission)",
+]
+addopts = "-m 'not slow and not materiel'"
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning"]
