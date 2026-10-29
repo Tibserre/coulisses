@@ -5510,3 +5510,9 @@ button.cl-tree__more:hover {
     animation: none;
   }
 }
+
+/* « Qui était là ? » above the discs of an import waiting for its people present. */
+.cl-attendeesask {
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-6);
+}

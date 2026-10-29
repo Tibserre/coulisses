@@ -22,6 +22,9 @@ export interface Session {
   /** Whether the people present now are that minimum (false once checked after its voices
    *  were being separated, or when another number was chosen); null if never processed. */
   attendees_taken: boolean | null;
+  /** An import waiting for its people present (ADR 0069): when its processing starts by
+   *  itself (UTC); null once launched, or when it waits no more. */
+  processing_starts_at: string | null;
   reference_source_id: string;
   duration_s: number | null;
   job_state: JobState | null;
@@ -1055,6 +1058,9 @@ export const api = {
     send<Versions>("POST", `${sessionPath(id)}/versions/${encodeURIComponent(runId)}/afficher`),
   rerun: (id: string, stage: Rerun, attendees: number | null) =>
     send<Session>("POST", `${sessionPath(id)}/relancer`, { etape: stage, presents: attendees }),
+  /** An import waiting for its people present: processed now (after PUT /presents, or
+   *  without anybody). */
+  launch: (id: string) => send<Session>("POST", `${sessionPath(id)}/lancer`),
   resume: (id: string, attendees?: number) =>
     send<Session>(
       "POST",
@@ -1139,6 +1145,8 @@ export const api = {
       projectId: number | null;
       personIds: number[];
       unnamed: number | null;
+      /** The processing waits for the people present, 2 minutes at most (ADR 0069). */
+      waitForAttendees?: boolean;
     },
     onProgress: (fraction: number) => void,
   ): Promise<{ id: string }> {
@@ -1149,6 +1157,7 @@ export const api = {
       if (who.projectId != null) form.append("projet", String(who.projectId));
       for (const id of who.personIds) form.append("presents", String(id));
       if (who.unnamed != null) form.append("non_nommes", String(who.unnamed));
+      if (who.waitForAttendees) form.append("attendre_presents", "true");
       form.append("date_fichier_ms", String(file.lastModified));
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/seances");

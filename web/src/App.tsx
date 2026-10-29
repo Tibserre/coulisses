@@ -282,7 +282,7 @@ function Shell({ route }: { route: Route }) {
       try {
         const { id } = await api.importRecording(
           file,
-          { ...place, personIds: [], unnamed: null },
+          { ...place, personIds: [], unnamed: null, waitForAttendees: true },
           (fraction) => setSending({ name: file.name, fraction }),
         );
         void refresh();

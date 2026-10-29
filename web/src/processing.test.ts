@@ -161,3 +161,15 @@ test("a rerun waiting: what is to redo is empty, what is kept is full", () => {
   assert.equal(d.voices, 1);
   assert.equal(d.joining, false);
 });
+
+test("the wait for the people present is counted down, never below zero", async () => {
+  const { secondsLeft, waitLeft } = await import("./processing.ts");
+  const now = Date.parse("2026-10-29T10:00:00Z");
+  assert.equal(secondsLeft("2026-10-29T10:01:40Z", now), 100);
+  assert.equal(secondsLeft("2026-10-29T09:59:00Z", now), 0);
+  assert.equal(secondsLeft("pas une date", now), 0);
+  assert.equal(waitLeft(100, 0), "Le traitement démarre seul dans 1 min 40, sans présents.");
+  assert.equal(waitLeft(120, 1), "Le traitement démarre seul dans 2 min, avec 1 présent.");
+  assert.equal(waitLeft(9, 3), "Le traitement démarre seul dans 9 s, avec 3 présents.");
+  assert.equal(waitLeft(0, 3), "Le traitement démarre.");
+});

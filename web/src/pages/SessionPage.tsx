@@ -55,6 +55,7 @@ import {
   RerunRunning,
 } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
+import { AttendeesAsk } from "../components/AttendeesAsk.tsx";
 import {
   GiveToPanel,
   TranscriptView,
@@ -1089,6 +1090,18 @@ export function SessionPage({
           {detail && !model && (
             <ProcessingPanel
               detail={detail}
+              people={people}
+              onSaveAttendees={async (ids, unnamed) => {
+                try {
+                  await api.setAttendees(id, ids, unnamed);
+                } finally {
+                  await refresh();
+                }
+              }}
+              onLaunch={async () => {
+                await api.launch(id);
+                await refresh();
+              }}
               transcriptError={transcriptError}
               onResume={async (attendees) => {
                 await api.resume(id, attendees);
@@ -1564,12 +1577,19 @@ function RerunNotices({
 
 function ProcessingPanel({
   detail,
+  people,
+  onSaveAttendees,
+  onLaunch,
   transcriptError,
   onResume,
   onShowProvenance,
   onProcess,
 }: {
   detail: SessionDetail;
+  people: Person[];
+  /** An import waiting for its people present (ADR 0069): each change saved, then launched. */
+  onSaveAttendees: (ids: number[], unnamed: number | null) => Promise<void>;
+  onLaunch: () => Promise<void>;
   transcriptError: string | null;
   onResume: (attendees?: number) => Promise<void>;
   onProcess: () => Promise<void>;
@@ -1623,6 +1643,15 @@ function ProcessingPanel({
       )}
       {!gone && session.job_state === null && (
         <NotProcessed detail={detail} onProcess={onProcess} />
+      )}
+      {running && session.processing_starts_at && (
+        <AttendeesAsk
+          session={session}
+          people={people}
+          startsAt={session.processing_starts_at}
+          onSave={onSaveAttendees}
+          onLaunch={onLaunch}
+        />
       )}
       {running && <ProcessingOutline detail={detail} />}
 
