@@ -4,10 +4,11 @@ engine and kept as it closed them (P5), the stopped job says so, « Reprendre »
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
-from coulisses.api import StageConfig
+from coulisses.api import Provenance, RunStage, StageConfig
 
 from coulisses_app import jobs, processing
 from coulisses_app.api import create_app
@@ -158,3 +159,55 @@ def test_a_stop_that_takes_too_long_is_said_and_the_session_is_not_deleted(
         assert data.session_dir(session_id).is_dir()
     finally:
         processor.stop()
+
+
+def test_a_stage_whose_cancelling_fails_is_still_a_stop(data: DataDir, recording: Path) -> None:
+    """The engine's cancelling may itself fail (macOS refusing to kill the stage's group:
+    PermissionError): the user asked for the stop, the session says « arrêté »."""
+    cancelled = threading.Event()
+
+    def engine_stage(_session_id: str, _models: Path | None) -> RunStage:
+        def run(*_args: object) -> tuple[Provenance, Path]:
+            assert cancelled.wait(10)
+            raise PermissionError(1, "Operation not permitted")
+
+        return run  # type: ignore[return-value]
+
+    session_id = import_(data, recording)
+    processor = Processor(
+        data, FAKE_CHAIN, engine_stage=engine_stage, engine_cancel=lambda _f: cancelled.set()
+    )
+    processor.start()
+    try:
+        wait_for(lambda: any(r["status"] == "running" for r in runs(data, session_id)))
+        assert processor.stop_processing(session_id) == "stopped"
+        job = job_state(data, session_id)
+        assert (job.state, job.error) == ("failed", jobs.STOPPED)
+        failed = [r for r in runs(data, session_id) if r["status"] == "failed"]
+        assert failed and all("PermissionError" in r["error_summary"] for r in failed)
+    finally:
+        processor.stop()
+
+
+def test_a_stage_crashing_before_it_was_cancelled_is_a_failure(
+    data: DataDir, recording: Path
+) -> None:
+    """Stopped a moment after a stage crashed for another reason: that crash is what the
+    session says, not « arrêté » (P8)."""
+    holder: list[Processor] = []
+
+    def engine_stage(_session_id: str, _models: Path | None) -> RunStage:
+        def run(*_args: object) -> tuple[Provenance, Path]:
+            # The user stops it now, as it crashes: no cancelling was sent yet.
+            holder[0]._stopped_by_user.add(job_state(data, session_id).id)  # pyright: ignore[reportPrivateUsage]
+            raise MemoryError("plus de mémoire")
+
+        return run  # type: ignore[return-value]
+
+    session_id = import_(data, recording)
+    processor = Processor(data, FAKE_CHAIN, engine_stage=engine_stage)
+    holder.append(processor)
+    result = processor.run_job(claim(data))
+    assert result.error is not None and "MemoryError" in result.error
+    job = job_state(data, session_id)
+    assert job.state == "failed" and job.error != jobs.STOPPED

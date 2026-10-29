@@ -12,7 +12,7 @@ Jusqu'ici, une tâche ne s'arrêtait qu'à la fermeture de l'app (`stop_all`, re
   - L'appel attend la fin, 30 s au plus. Au-delà, il répond 202 : l'arrêt est demandé et se fera quand l'étape en cours finira.
 - **Une tâche arrêtée** est `failed`, avec `error` = « Traitement arrêté à votre demande. » et `stopped_at` dans ses paramètres. Pas de nouvel état, pas de migration. La séance le dit (`processing_stopped`), distinct d'un échec.
   - « Reprendre » relance ce qui reste, comme après un échec, et efface `stopped_at`.
-- **Un vrai échec reste dit.** Si une étape a échoué pour de bon (diarisation refusée, modèle absent…), la tâche garde cet échec et ce qu'il faut faire, même si l'utilisateur arrête le reste (P8). Si tout avait déjà réussi, l'arrêt arrive trop tard : la tâche est faite, sa version en place.
+- **Un vrai échec reste dit.** Si une étape a échoué pour de bon (diarisation refusée, modèle absent…), la tâche garde cet échec et ce qu'il faut faire, même si l'utilisateur arrête le reste (P8). Si tout avait déjà réussi, l'arrêt arrive trop tard : la tâche est faite, sa version en place. Une étape que le moteur a été prié d'annuler et qui lève une erreur en route (l'annulation refusée par macOS, par exemple) compte comme arrêtée : son erreur reste dans l'exécution et le journal. Une étape pas encore annulée qui plante reste un échec.
 - **Supprimer une séance pendant son traitement** (`DELETE /api/seances/{id}`, après confirmation dans l'interface) l'arrête d'abord, puis supprime, en un appel. Si l'arrêt n'a pas abouti dans le délai, rien n'est supprimé, et l'erreur demande de réessayer. Le dossier n'est jamais effacé pendant qu'une étape y écrit.
 
 ## Conséquences
