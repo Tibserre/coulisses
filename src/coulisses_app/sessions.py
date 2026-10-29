@@ -65,6 +65,9 @@ class Session(BaseModel):
     """People present whom nobody named, in addition to the checked ones."""
     min_voices: int | None
     """Minimum of voices asked of the engine by the latest processing (P3)."""
+    processing_stopped: bool = False
+    """Its latest processing was stopped by the user (`job_state` failed, `job_error` says
+    so): « Reprendre » goes on with what is left."""
     processing_starts_at: str | None = None
     """Its first processing waits for the people present until then (UTC), unless started
     at once; None when it does not wait, or no longer (its time passed: it starts as soon as
@@ -229,6 +232,9 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
         attendee_ids=attendee_ids,
         unnamed_attendees=row["unnamed_attendees"],
         min_voices=min_voices,
+        processing_stopped=bool(
+            chain and chain.stopped_at is not None and row["job_state"] == "failed"
+        ),
         processing_starts_at=(
             chain.starts_at
             if chain
