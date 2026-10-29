@@ -23,6 +23,20 @@ Les versions sont sur la page [Releases](https://github.com/Tibserre/coulisses/r
 
 Coulisses n'utilise internet que dans deux cas : pour télécharger ses modèles, quand tu le demandes, et pour chercher ses mises à jour sur la page des versions. Au deuxième lancement, l'app te demande si elle peut les chercher seule, une fois par jour ; tu peux changer d'avis dans **Réglages > Données**. Une mise à jour ne s'installe jamais sans ton clic, ni pendant un enregistrement ou un traitement.
 
+## Brancher un assistant (facultatif)
+
+Un assistant comme Claude Desktop ou Claude Code peut **lire** tes séances : chercher, lister, lire une séance, son résumé et sa transcription. Il ne peut rien enregistrer, modifier ni supprimer. Le connecteur est **coupé** tant que tu ne l'ouvres pas.
+
+**Attention.** Un assistant en ligne envoie ce qu'il lit à son fournisseur, où ça reste, même si tu supprimes la séance dans Coulisses. Ce sont aussi les voix des autres. L'onglet **Réglages > Connecteur** le rappelle avant que tu l'ouvres.
+
+1. Dans **Réglages > Connecteur**, ouvre le connecteur.
+2. Dans les réglages de chaque espace que l'assistant peut lire, coche **Accessible au connecteur**. Sans **Transmettre les noms**, les personnes deviennent « Personne A », « Personne B »… au mieux : un surnom ou un nom mal transcrit peut passer.
+3. Branche l'assistant depuis le même onglet :
+   - **Claude Desktop** : ouvre l'extension proposée et accepte son installation ;
+   - **Claude Code** : copie la commande proposée et colle-la dans le Terminal.
+
+L'assistant demande ton accord pour chaque lecture. Si Coulisses est fermée, il l'ouvre en arrière-plan, sans fenêtre : elle apparaît dans le Dock. Chaque lecture est notée dans le journal de l'onglet **Connecteur**.
+
 ## Vérifier le fichier
 
 Chaque version donne l'empreinte SHA-256 de son DMG ; je te l'envoie aussi par un autre moyen. Pour la comparer, dans le Terminal :

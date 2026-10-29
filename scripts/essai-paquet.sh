@@ -8,6 +8,8 @@
 #     reads every format of ADR 0041;
 #   - a recording imported in the app is processed to the end by the engine (real models,
 #     read from ~/Coulisses/Modèles);
+#   - the connector's bridge starts, lists its five tools, and is refused while the connector
+#     is closed (ADR 0065);
 #   - nothing was written into the .app.
 # Voices made by `say`; the sample files are made by Homebrew's ffmpeg (test tooling only).
 # Nothing is written in ~/Coulisses/Données.
@@ -228,9 +230,38 @@ turns = view["turns"]
 assert turns, "aucun tour"
 print("   traitée :", len(turns), "tours")' || fail "transcription vide"
 
+print "5. Le pont du connecteur (ADR 0065) : il démarre, liste ses outils, et le connecteur coupé refuse…"
+# The .app's bridge, run as the launcher runs it (its Python, env -i, network cut), pointed
+# at this test's service: its port is fixed (8765), so the variant is replaced, nothing else.
+# The connector is closed by default: every read is refused, in French.
+cat > $WORK/pont.jsonl <<'JSONL'
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"essai-paquet","version":"1"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lister_seances","arguments":{}}}
+JSONL
+(cd $HOME && exec env -i HOME=$HOME TMPDIR=$TMPDIR USER=$USER LANG=fr_FR.UTF-8 \
+  PATH=/usr/bin:/bin:/usr/sbin:/sbin PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  sandbox-exec -f $WORK/reseau.sb \
+  $RES/python/bin/python3 -I -B -c "
+import coulisses_app.bridge as bridge
+bridge.PUBLISHED = bridge.Variant('coulisses', $PORT, 'essai.paquet.introuvable', 'Coulisses')
+raise SystemExit(bridge.main([]))" < $WORK/pont.jsonl > $WORK/pont-reponses.jsonl 2> $WORK/pont.log) ||
+  fail "le pont s'est arrêté en erreur : $(tail -3 $WORK/pont.log)"
+python3 - $WORK/pont-reponses.jsonl <<'PY' || fail "le pont ne répond pas ce qu'il faut : $(head -c 600 $WORK/pont-reponses.jsonl)"
+import json, sys
+answers = {m.get("id"): m for m in map(json.loads, open(sys.argv[1]))}
+assert answers[1]["result"]["serverInfo"]["name"] == "coulisses", answers[1]
+tools = sorted(t["name"] for t in answers[2]["result"]["tools"])
+assert tools == ["chercher", "lire_resume", "lire_seance", "lire_transcript", "lister_seances"], tools
+refused = answers[3]["result"]
+assert refused["isError"] and "coupé" in refused["content"][0]["text"], refused
+print("   outils :", ", ".join(tools), "; connecteur coupé : refusé")
+PY
+
 kill -INT $SERVICE; wait $SERVICE 2>/dev/null || true; SERVICE=""
 
-print "5. L'app elle-même, lancée sans accord : rien ne sort du Mac…"
+print "6. L'app elle-même, lancée sans accord : rien ne sort du Mac…"
 # ADR 0040: Sparkle looks for updates only after consent. The app is launched for real (its
 # window opens), on a throwaway data folder, as a friend's app at its second launch, never
 # answered: Sparkle asks its question then, and must not look for anything before an answer.
@@ -285,7 +316,7 @@ print "   une fenêtre Coulisses s'ouvre 30 s et pose une question sur les mises
 restore_preferences
 print "   aucune connexion hors de 127.0.0.1 en 30 s, au deuxième lancement, sans réponse à Sparkle ; préférences de l'app remises telles quelles"
 
-print "6. Rien d'écrit dans l'app…"
+print "7. Rien d'écrit dans l'app…"
 snapshot > $WORK/apres.txt
 diff $WORK/avant.txt $WORK/apres.txt > $WORK/ecrit.txt || fail "l'app a changé pendant l'essai : $(head -5 $WORK/ecrit.txt)"
 codesign --verify --deep --strict $APP || fail "signature invalide après l'essai"
