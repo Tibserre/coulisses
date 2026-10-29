@@ -27,10 +27,11 @@ Les langues que la chaîne transcrit, le français d'abord, puis les autres dans
 ]
 ```
 
+- Une langue que la chaîne ne transcrit ou n'aligne pas (`transcribed` ou `aligned` faux pour le moteur) n'est pas proposée : elle est traitée comme inconnue.
 - `installed` : rien ne manque pour traiter une séance dans cette langue.
 - `missing_models` et `download_bytes` : ce qu'il faut télécharger, et sa taille.
 - `models` : tous les modèles dont la langue a besoin.
-- `own_models` : ceux qui ne servent qu'à elle. Ce sont eux qu'on supprime pour « Supprimer » une langue ; le modèle de transcription, commun à toutes, n'y est jamais.
+- `own_models` : ceux qui ne servent qu'à elle. Ce sont eux qu'on supprime pour « Supprimer » une langue ; le modèle de transcription, commun à toutes, n'y est jamais. Un modèle partagé par quelques langues, sans l'être par toutes, n'est le propre d'aucune ; sa suppression est refusée tant que l'une d'elles sert.
 - `downloads` : les téléchargements de ses modèles, en cours ou juste finis, sous la forme de `GET /api/moteur/telechargements` (`ModelAction`, champs complets).
 - `used_by` : les espaces qui ont cette langue par défaut (archivés compris) et les séances dont le traitement attend dans cette langue. Tant que l'un des deux n'est pas vide, la suppression de ses `own_models` est refusée.
 
@@ -104,7 +105,7 @@ Les corrections suivent la règle du report (ADR 0028) : les noms des voix suive
 
 Chaque `Version` gagne **`language`** : la langue de sa transcription, lue dans la provenance du moteur (P7). Une transcription d'un moteur antérieur à la v1.14.0 est en français. `null` si la provenance ne le dit pas alors qu'elle le devrait : l'interface dit « langue inconnue », jamais « français ».
 
-Afficher une autre version (`POST …/versions/{run_id}/afficher`) donne à la séance la langue de cette version.
+Afficher une autre version (`POST …/versions/{run_id}/afficher`) donne à la séance la langue de cette version. Si la provenance de cette version ne dit pas sa langue (`language` à `null`), la séance garde la sienne : `Session.language` peut alors différer de la version affichée, et c'est `Version.language` qui fait foi.
 
 ## Un échec sur la langue
 Si le moteur refuse quand même (`model_missing` après la vérification, `language_unsupported`), le traitement échoue avec un `job_error` en français qui dit quoi télécharger, ou quelles langues sont possibles. « Reprendre » vérifie d'abord les modèles : il remet la tâche en attente du modèle plutôt que de la relancer pour échouer de la même façon.
