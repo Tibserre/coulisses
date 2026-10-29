@@ -15,10 +15,11 @@ from pydantic import BaseModel, ValidationError
 
 from coulisses_app.jobs import REDONE, ChainParams
 from coulisses_app.paths import DataDir
-from coulisses_app.processing import STAGE_LABELS, error_summary, planned_stages
+from coulisses_app.processing import STAGE_LABELS, STOPPED_CODES, error_summary, planned_stages
 from coulisses_app.storage.db import connect
 
 SILENCE_LIMIT_S = 15 * 60
+_STOPPED_CODES = tuple(code.value for code in STOPPED_CODES)
 
 
 class ProgressView(BaseModel):
@@ -49,6 +50,10 @@ class StageView(BaseModel):
     """The engine's closed list (`ErrorCode`, engine ADR 0021); None for an error of the
     application itself or a run closed before engine v1.3.0."""
     error_details: dict[str, Any] | None = None
+    stopped: bool = False
+    """Failed because it was stopped, not by an error: interrupted (the application closed)
+    or cancelled at the user's request, even when the cancelling itself raised. A failure
+    of an earlier attempt, still shown after « Reprendre », stays a failure (P8)."""
     folder_missing: bool = False
     stale: bool = False
     """The run of the version shown, which a rerun under way (or stopped) is making again
@@ -91,9 +96,12 @@ def stage_views(data: DataDir, chain: ChainConfig, session_id: str) -> list[Stag
             (session_id,),
         ).fetchone()
         redone: tuple[str, ...] = ()
-        if job is not None and job["state"] != "done":
-            rerun = ChainParams.model_validate_json(job["params"]).rerun
-            redone = REDONE[rerun] if rerun else ()
+        stopped_runs: set[str] = set()
+        if job is not None:
+            params = ChainParams.model_validate_json(job["params"])
+            stopped_runs = set(params.stopped_runs)
+            if job["state"] != "done":
+                redone = REDONE[params.rerun] if params.rerun else ()
         views: list[StageView] = []
         for stage in planned_stages(chain):
             row = None
@@ -119,6 +127,9 @@ def stage_views(data: DataDir, chain: ChainConfig, session_id: str) -> list[Stag
                 continue
             view = _run_view(data, session_id, stage.value, label, row)
             view.stale = stale
+            view.stopped = view.state == "failed" and (
+                view.error_code in _STOPPED_CODES or row["id"] in stopped_runs
+            )
             views.append(view)
         return views
     finally:

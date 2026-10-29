@@ -103,7 +103,7 @@ def activate(conn: sqlite3.Connection, session_id: str, stage: str, run_id: str)
     )
 
 
-_STOPPED = (ErrorCode.INTERRUPTED, ErrorCode.CANCELLED)
+STOPPED_CODES = (ErrorCode.INTERRUPTED, ErrorCode.CANCELLED)
 """Codes of a run stopped by its caller rather than failed (engine ADR 0021)."""
 
 
@@ -485,12 +485,18 @@ class Processor:
                             " error_summary = ? WHERE id = ?",
                             (now_iso(), f"{type(exc).__name__} : {exc}", folder.name),
                         )
+                    if cancelled:
+                        # After the run is closed with its error: failing here loses neither.
+                        try:
+                            jobs.record_stopped_run(conn, job.id, folder.name)
+                        except Exception:
+                            log.exception("job %s: %s not recorded as stopped", job.id, folder.name)
                 finally:
                     conn.close()
                 raise
             with self._stopped_lock:
                 self._cancel_sent.discard(folder.name)
-            if prov.error is not None and prov.error.code in _STOPPED:
+            if prov.error is not None and prov.error.code in STOPPED_CODES:
                 interrupted.append(stage.value)
             elif prov.error is not None:
                 failures.append(stage.value)
