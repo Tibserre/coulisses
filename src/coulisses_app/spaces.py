@@ -33,6 +33,10 @@ class Space(BaseModel):
     name: str
     voice_recognition: bool
     archived: bool
+    connector_access: bool = False
+    """Read by the assistants' connector (ADR 0065); closed: in no answer of it."""
+    connector_names: bool = False
+    """The connector passes the names on; closed: « Personne A »… instead, at best."""
 
 
 class Person(BaseModel):
@@ -69,6 +73,8 @@ def _space(row: sqlite3.Row) -> Space:
         name=row["name"],
         voice_recognition=bool(row["voice_recognition"]),
         archived=row["archived_at"] is not None,
+        connector_access=bool(row["connector_access"]),
+        connector_names=bool(row["connector_names"]),
     )
 
 
@@ -157,6 +163,8 @@ def update_space(
     name: str | None = None,
     voice_recognition: bool | None = None,
     archived: bool | None = None,
+    connector_access: bool | None = None,
+    connector_names: bool | None = None,
 ) -> Space:
     conn = connect(data)
     try:
@@ -177,6 +185,14 @@ def update_space(
                     "UPDATE space SET archived_at = ? WHERE id = ?",
                     (now_iso() if archived else None, space_id),
                 )
+            for column, value in (
+                ("connector_access", connector_access),
+                ("connector_names", connector_names),
+            ):
+                if value is not None:
+                    conn.execute(
+                        f"UPDATE space SET {column} = ? WHERE id = ?", (int(value), space_id)
+                    )
         return get_space(conn, space_id)
     finally:
         conn.close()

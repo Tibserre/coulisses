@@ -39,7 +39,7 @@ L'utilisateur veut qu'un assistant (Claude Desktop, Claude Code ou un client MCP
 - Le lanceur fixe vit sous `~/Coulisses/`, hors de `Données/`. Coulisses (dév) a le sien, qui ne retrouve que l'app de dév.
 - Un changement du schéma (deux colonnes de l'espace, une table du journal), validé par l'utilisateur le 2026-10-29.
 - La spec (Réglages, paramètres d'un espace) se met à jour dans les commits qui construisent ces écrans.
-- Il faut une nouvelle dépendance : le SDK `mcp` Python, en pur Python.
+- Aucune nouvelle dépendance : le pont parle MCP (JSON-RPC sur stdin et stdout : `initialize`, `tools/list`, `tools/call`, `ping`) avec la bibliothèque standard. Le SDK `mcp` Python, envisagé d'abord, n'est pas pur Python : il ajoute huit paquets, dont deux natifs (`cryptography`, `rpds-py`). L'utilisateur a choisi de s'en passer le 2026-10-29.
 - La spec gagne un sixième onglet de Réglages, « Connecteur », et deux options dans les paramètres d'un espace.
 - Coût estimé de 5 à 6 jours :
   - Service : la migration, les routes du connecteur avec le filtrage par espace et le masquage des noms (recherche comprise), le journal, le pont et son réveil de l'app sans fenêtre, ses tests, un transcript paginé (2 à 3 j) ;
