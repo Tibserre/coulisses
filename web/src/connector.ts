@@ -3,6 +3,7 @@ import type {
   ConnectorSettings,
   ConnectorTool,
 } from "./api.ts";
+import { formatDate } from "./format.ts";
 
 /** What an assistant did, said with the words of the interface (ADR 0065). */
 export const TOOL_LABEL: Record<ConnectorTool, string> = {
@@ -19,7 +20,9 @@ export function accessSubject(entry: ConnectorAccess): string | null {
   if (entry.session_deleted) return "une séance supprimée depuis";
   return entry.session_title
     ? `« ${entry.session_title} »`
-    : "une séance sans titre";
+    : entry.session_recorded_at
+      ? `« Séance du ${formatDate(entry.session_recorded_at).toLowerCase()} »`
+      : "une séance sans titre";
 }
 
 /** How a space is read by the connector, in a few words. */

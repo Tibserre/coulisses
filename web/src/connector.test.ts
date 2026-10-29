@@ -17,6 +17,7 @@ const entry = (over: Partial<ConnectorAccess>): ConnectorAccess => ({
   session_id: "20261012-201500-a1b2",
   session_title: "Répétition du 12 octobre",
   session_deleted: false,
+  session_recorded_at: "2026-10-12T18:15:00Z",
   names_shared: false,
   ...over,
 });
@@ -29,6 +30,10 @@ test("a read names its session by its title now, or says why it cannot", () => {
   );
   assert.equal(
     accessSubject(entry({ session_title: null })),
+    "« Séance du lundi 12 octobre 2026 »",
+  );
+  assert.equal(
+    accessSubject(entry({ session_title: null, session_recorded_at: null })),
     "une séance sans titre",
   );
   assert.equal(

@@ -319,6 +319,8 @@ export interface ConnectorAccess {
   /** Its title now; null when deleted since, or untitled (`session_deleted` says which). */
   session_title: string | null;
   session_deleted: boolean;
+  /** When it was recorded, to name an untitled one; null for one deleted since. */
+  session_recorded_at: string | null;
   /** Null for a read that gave no session. */
   names_shared: boolean | null;
 }
