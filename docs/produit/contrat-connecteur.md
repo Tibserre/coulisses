@@ -145,12 +145,21 @@ Lus par la page de Coulisses, pas par le pont ; ils répondent que le connecteur
   "open": false,
   "launcher": "/Users/…/Coulisses/Connecteur/coulisses-mcp",
   "launcher_ready": true,
+  "launcher_problem": null,
   "claude_code_command": "claude mcp add coulisses -- /Users/…/Coulisses/Connecteur/coulisses-mcp",
   "mcpb": "/Users/…/Coulisses/Connecteur/Coulisses.mcpb",
-  "spaces": [{"id": 1, "name": "Troupe", "connector_access": true, "connector_names": false}]
+  "spaces": [{"id": 1, "name": "Troupe", "connector_access": true, "connector_names": false, "archived": false}]
 }
 ```
-Coupé par défaut (réglage `connector_open` de `app_setting`). `launcher` : le lanceur fixe (`coulisses-mcp`, ou `coulisses-mcp-dev` pour Coulisses (dév)), écrit par l'app du Dock ; `launcher_ready` : il existe et s'exécute. `mcpb` : l'extension pour Claude Desktop, `null` tant qu'elle n'existe pas. `spaces` : les espaces non archivés et leurs deux options, pour un résumé dans l'onglet. Le nom du serveur est `coulisses` (`coulisses-dev` pour Coulisses (dév)).
+Coupé par défaut (réglage `connector_open` de `app_setting`). `launcher` : le lanceur fixe (`coulisses-mcp`, ou `coulisses-mcp-dev` pour Coulisses (dév)), écrit par l'app du Dock ; `launcher_ready` : il existe et s'exécute ; sinon `launcher_problem` dit ce que voit le service (« Le lanceur n'a pas encore été écrit : ouvrez Coulisses depuis le Dock. », ou « Le lanceur n'est pas exécutable. Rouvrez Coulisses depuis le Dock. »), `null` quand il est prêt. Il ne contient jamais de chemin ni de nom brut : il se montre tel quel hors mode développeur (ADR 0051). `mcpb` : l'extension pour Claude Desktop, `null` tant qu'elle n'existe pas. `spaces` : les espaces et leurs deux options, pour un résumé dans l'onglet ; les archivés après les autres (`archived`) : un espace archivé resté accessible est lu comme les autres, ses séances existant toujours. Le nom du serveur est `coulisses` (`coulisses-dev` pour Coulisses (dév)).
+
+### `POST /api/reglages/connecteur/extension/ouvrir`
+Ouvre l'extension pour Claude Desktop (`mcpb`) par son application par défaut. Aucun paramètre : seulement le fichier que le service connaît. Comme tout POST, elle passe le contrôle d'`Origin` de l'ADR 0043.
+| Cas | Code | `detail` |
+|---|---|---|
+| Ouverte | 204 | — |
+| `mcpb` absent | 404 | « L'extension pour Claude Desktop n'est pas encore là. » |
+| `open` échoue | 422 | « Claude Desktop n'a pas pu ouvrir l'extension : est-il installé ? » |
 
 ### `GET /api/reglages/connecteur/journal`
 Paramètres : `limite` (1 à 200, 50 par défaut), `avant` (un `id` : les entrées plus anciennes).

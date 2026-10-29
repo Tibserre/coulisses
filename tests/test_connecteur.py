@@ -5,13 +5,24 @@ a space masked everywhere unless passed on; each successful read in the journal.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import corrections, jobs, marks, notes, sessions, spaces, summaries
+from coulisses_app import (
+    api,
+    connector,
+    corrections,
+    jobs,
+    marks,
+    notes,
+    sessions,
+    spaces,
+    summaries,
+)
 from coulisses_app.api import create_app
 from coulisses_app.connector import Masker
 from coulisses_app.paths import DataDir
@@ -394,3 +405,65 @@ def test_a_damaged_session_does_not_stop_the_others(data: DataDir, recording: Pa
     assert listed[0]["transcript_ready"] is False
     read = client.get(f"/api/connecteur/seances/{session_id}/transcript")
     assert read.status_code == 409 and "illisible" in read.json()["detail"]
+
+
+def test_the_tab_says_what_is_missing_and_opens_the_extension(
+    data: DataDir, recording: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(connector, "CONNECTOR_DIR", tmp_path / "Connecteur")
+    client, _, space_id = _prepared(data, recording)
+    opened: list[str] = []
+    monkeypatch.setattr(api, "_open_file", opened.append)
+    settings = client.get("/api/reglages/connecteur").json()
+    assert (
+        settings["launcher_ready"] is False
+        and "pas encore été écrit" in settings["launcher_problem"]
+    )
+    assert settings["mcpb"] is None
+    refused = client.post("/api/reglages/connecteur/extension/ouvrir")
+    assert refused.status_code == 404 and opened == []
+    folder = tmp_path / "Connecteur"
+    folder.mkdir()
+    launcher = folder / "coulisses-mcp"
+    launcher.write_text("#!/bin/sh\n")
+    assert "pas exécutable" in client.get("/api/reglages/connecteur").json()["launcher_problem"]
+    launcher.chmod(0o755)
+    (folder / "Coulisses.mcpb").write_bytes(b"")
+    settings = client.get("/api/reglages/connecteur").json()
+    assert (settings["launcher_ready"], settings["launcher_problem"]) == (True, None)
+    assert client.post("/api/reglages/connecteur/extension/ouvrir").status_code == 204
+    assert opened == [str(folder / "Coulisses.mcpb")]
+
+    def fails(_path: str) -> None:
+        raise subprocess.CalledProcessError(1, "open")
+
+    monkeypatch.setattr(api, "_open_file", fails)
+    failed = client.post("/api/reglages/connecteur/extension/ouvrir")
+    assert failed.status_code == 422 and "est-il installé" in failed.json()["detail"]
+    # An archived space still accessible is read: listed, after the others.
+    client.patch(f"/api/espaces/{space_id}", json={"archived": True, "connector_access": True})
+    listed = client.get("/api/reglages/connecteur").json()["spaces"]
+    assert next(s for s in listed if s["id"] == space_id)["archived"] is True
+    other = spaces.create_space(data, "Zèbres")
+    listed = client.get("/api/reglages/connecteur").json()["spaces"]
+    assert [s["id"] for s in listed] == [other.id, space_id]  # the archived ones last
+
+
+def test_the_view_is_keyed_by_a_secret_of_this_mac(data: DataDir, recording: Path) -> None:
+    """The « view » covers the masked names: keyed, so that they cannot be guessed from it
+    by trying names."""
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+    path = f"/api/connecteur/seances/{session_id}/transcript"
+    first = client.get(path).json()["view"]
+    assert client.get(path).json()["view"] == first  # the secret made once, kept
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE app_setting SET value = ? WHERE key = ?",
+                ("00" * 32, connector.SECRET_KEY),
+            )
+    finally:
+        conn.close()
+    assert client.get(path).json()["view"] != first

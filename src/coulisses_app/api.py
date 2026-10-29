@@ -1485,12 +1485,33 @@ def create_app(
             connector.set_open(conn, demande.open)
         return connector.settings_info(data, dev=dev)
 
+    @app.post("/api/reglages/connecteur/extension/ouvrir", status_code=204)
+    def open_extension() -> None:
+        """The extension for Claude Desktop opened by its default application: only the
+        file the service knows, never a path given."""
+        mcpb = connector.settings_info(data, dev=dev).mcpb
+        if mcpb is None:
+            raise _not_found("L'extension pour Claude Desktop n'est pas encore là.")
+        try:
+            _open_file(mcpb)
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("opening %s: %s", mcpb, exc)
+            raise HTTPException(
+                status_code=422,
+                detail="Claude Desktop n'a pas pu ouvrir l'extension : est-il installé ?",
+            ) from exc
+
     @app.get("/api/reglages/connecteur/journal")
     def connector_journal(limite: int = 50, avant: int | None = None) -> connector.Journal:
         return connector.journal(data, limit=limite, before=avant)
 
     _mount_interface(app, web_dir)
     return app
+
+
+def _open_file(path: str) -> None:
+    """A file opened by its default application (the extension: Claude Desktop)."""
+    subprocess.run(["open", path], check=True, timeout=10, capture_output=True)
 
 
 def _check_action(data: DataDir, ref: str) -> None:

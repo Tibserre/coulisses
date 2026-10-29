@@ -11,10 +11,12 @@ journal of accesses, never purged.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import os
 import re
+import secrets
 import shlex
 import sqlite3
 import unicodedata
@@ -36,6 +38,7 @@ log = logging.getLogger(__name__)
 
 Tool = Literal["chercher", "lister_seances", "lire_seance", "lire_resume", "lire_transcript"]
 
+SECRET_KEY = "connector_view_secret"
 OPEN_KEY = "connector_open"
 """Key of `app_setting`: "1" when the user opened the connector; absent or else, closed."""
 
@@ -748,7 +751,22 @@ def _phases(seen: _Seen) -> list[PhaseItem]:
     ]
 
 
-def _view_key(seen: _Seen) -> str:
+def _secret(conn: sqlite3.Connection) -> bytes:
+    """A random key of this Mac, made once: the « view » given to the assistant is keyed by
+    it, so that the masked names it covers cannot be guessed from it by trying names."""
+    row = conn.execute("SELECT value FROM app_setting WHERE key = ?", (SECRET_KEY,)).fetchone()
+    if row is not None:
+        return bytes.fromhex(row["value"])
+    with conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO app_setting (key, value) VALUES (?, ?)",
+            (SECRET_KEY, secrets.token_hex(32)),
+        )
+    row = conn.execute("SELECT value FROM app_setting WHERE key = ?", (SECRET_KEY,)).fetchone()
+    return bytes.fromhex(row["value"])
+
+
+def _view_key(conn: sqlite3.Connection, seen: _Seen) -> str:
     """What a reading in parts reads: the version shown, its corrections, its chapters, and
     the names masked with their letters (a person added: another one may get « B »)."""
     view = seen.view
@@ -756,7 +774,7 @@ def _view_key(seen: _Seen) -> str:
     live = sorted(e.id for e in view.edits if not e.reverted)
     letters = sorted(seen.masker.names.items()) if seen.masker is not None else None
     raw = f"{view.run_id}|{live}|{view.phases_run_id}|{letters}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return hmac.new(_secret(conn), raw.encode(), hashlib.sha256).hexdigest()[:16]
 
 
 def read_transcript(
@@ -799,7 +817,7 @@ def read_transcript(
             p = view.phases[phase - 1]
             chosen = PhaseRef(number=phase, title=seen.m(p.title))
             turns = [t for t in turns if p.turn <= t.index < p.end_turn]
-        key = _view_key(seen)
+        key = _view_key(conn, seen)
         start = turns[0].index if turns else 0
         if since is not None and since > start and view_key is None:
             raise ConnectorError(422, "Passez la « view » du morceau précédent en « vue ».")
@@ -1055,6 +1073,8 @@ class SpaceOptions(BaseModel):
     name: str
     connector_access: bool
     connector_names: bool
+    archived: bool
+    """Archived and still accessible, it is read all the same: its sessions are there."""
 
 
 class ConnectorSettings(BaseModel):
@@ -1062,6 +1082,8 @@ class ConnectorSettings(BaseModel):
     launcher: str
     launcher_ready: bool
     """The launcher exists and runs: written by the app in the Dock at its start."""
+    launcher_problem: str | None
+    """What the service sees when it is not ready, in French; None when it is."""
     claude_code_command: str
     mcpb: str | None
     """The extension for Claude Desktop, None as long as it does not exist."""
@@ -1088,18 +1110,28 @@ def settings_info(data: DataDir, *, dev: bool) -> ConnectorSettings:
                 name=r["name"],
                 connector_access=bool(r["connector_access"]),
                 connector_names=bool(r["connector_names"]),
+                archived=r["archived_at"] is not None,
             )
             for r in conn.execute(
-                "SELECT * FROM space WHERE archived_at IS NULL ORDER BY name COLLATE NOCASE"
+                "SELECT * FROM space ORDER BY archived_at IS NOT NULL, name COLLATE NOCASE"
             )
         ]
         opened = is_open(conn)
     finally:
         conn.close()
+    if not path.is_file():
+        problem: str | None = (
+            "Le lanceur n'a pas encore été écrit : ouvrez Coulisses depuis le Dock."
+        )
+    elif not os.access(path, os.X_OK):
+        problem = "Le lanceur n'est pas exécutable. Rouvrez Coulisses depuis le Dock."
+    else:
+        problem = None
     return ConnectorSettings(
         open=opened,
         launcher=str(path),
-        launcher_ready=path.is_file() and os.access(path, os.X_OK),
+        launcher_ready=problem is None,
+        launcher_problem=problem,
         claude_code_command=f"claude mcp add {server_name(dev)} -- {shlex.quote(str(path))}",
         mcpb=str(mcpb) if mcpb.is_file() else None,
         spaces=spaces,
