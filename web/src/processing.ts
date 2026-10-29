@@ -97,3 +97,14 @@ export function waitLeft(seconds: number, present: number): string {
   const whom = present ? `avec ${present} ${present > 1 ? "présents" : "présent"}` : "sans présents";
   return `Le traitement démarre seul dans ${when}, ${whom}.`;
 }
+
+/** The people present from how many there were and those named (ADR 0069): the named ones
+ *  count, the rest are unnamed; naming more than the count raises it. */
+export function attendeesOf(
+  count: number,
+  ids: number[],
+): { ids: number[]; count: number; unnamed: number | null } {
+  const total = Math.max(count, ids.length, 0);
+  const unnamed = total - ids.length;
+  return { ids, count: total, unnamed: unnamed > 0 ? unnamed : null };
+}

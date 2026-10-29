@@ -173,3 +173,12 @@ test("the wait for the people present is counted down, never below zero", async 
   assert.equal(waitLeft(9, 3), "Le traitement démarre seul dans 9 s, avec 3 présents.");
   assert.equal(waitLeft(0, 3), "Le traitement démarre.");
 });
+
+test("the people present are a number first, some of them named if wanted", async () => {
+  const { attendeesOf } = await import("./processing.ts");
+  assert.deepEqual(attendeesOf(5, []), { ids: [], count: 5, unnamed: 5 });
+  assert.deepEqual(attendeesOf(5, [1, 2]), { ids: [1, 2], count: 5, unnamed: 3 });
+  assert.deepEqual(attendeesOf(2, [1, 2, 3]), { ids: [1, 2, 3], count: 3, unnamed: null });
+  assert.deepEqual(attendeesOf(0, []), { ids: [], count: 0, unnamed: null });
+  assert.deepEqual(attendeesOf(-1, []), { ids: [], count: 0, unnamed: null });
+});
