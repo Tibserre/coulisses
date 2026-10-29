@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 from coulisses_app.storage.db import ISO_FORMAT, now_iso
 
+STOPPED = "Traitement arrêté à votre demande."
+"""The error of a job the user stopped: failed, not by an error; resumed like a failure."""
+
 WAIT_FOR_ATTENDEES_S = 120.0
 """How long an import in one gesture waits for the people present before its first
 processing starts without them (ADR 0069)."""
@@ -42,6 +45,9 @@ class ChainParams(BaseModel):
     """A first processing waiting for the people present (an import in one gesture): not
     claimed before this time (UTC), unless started at once (`start_now`). Set as a time, it
     holds across a restart: past due, it starts with the service."""
+    stopped_at: str | None = None
+    """When the user stopped it (« Arrêter »): its stages already made are kept, those
+    running were cancelled by the engine (their runs stay as it closed them, P5)."""
     mix: dict[str, Any] | None = None
     """When the engine heard the microphone mixed with the computer's sound (ADR 0032):
     what the mix was made of (`mixing.MixFacts`), set when the job runs. Kept here, it
@@ -174,12 +180,36 @@ def finish(conn: sqlite3.Connection, job_id: int, *, error: str | None) -> None:
 
 
 def requeue(conn: sqlite3.Connection, job_id: int) -> None:
-    """Put a job back in the queue: it resumes, reusing the runs that succeeded."""
+    """Put a job back in the queue: it resumes, reusing the runs that succeeded. Stopped by
+    the user, it is no longer said so."""
     with conn:
         conn.execute(
-            "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL WHERE id = ?",
+            "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL,"
+            " params = json_remove(params, '$.stopped_at') WHERE id = ?",
             (job_id,),
         )
+
+
+def mark_stopped(conn: sqlite3.Connection, job_id: int, *, only_queued: bool = False) -> bool:
+    """The user stopped this job: failed with `STOPPED`, and when (`stopped_at`). Returns
+    whether it was marked (`only_queued`: not if it was claimed meanwhile)."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM job WHERE id = ?", (job_id,)).fetchone()
+        if row is None or (only_queued and row["state"] != "queued"):
+            return False
+        job = _job(row)
+        stamp = now_iso()
+        params = (
+            job.params.model_copy(update={"stopped_at": stamp})
+            if isinstance(job.params, ChainParams)
+            else job.params
+        )
+        conn.execute(
+            "UPDATE job SET state = 'failed', finished_at = ?, error = ?, params = ? WHERE id = ?",
+            (stamp, STOPPED, params.model_dump_json(), job_id),
+        )
+    return True
 
 
 def record_mix(conn: sqlite3.Connection, job: Job, facts: dict[str, Any]) -> None:

@@ -655,6 +655,35 @@ def create_app(
         assert session is not None
         return session
 
+    @app.post("/api/seances/{session_id}/arreter")
+    def stop_processing(session_id: str, response: Response) -> sessions.Session:
+        """The user stops the session's processing, waiting or running (« si en fait je ne
+        veux pas la faire »): the stages made are kept, « Reprendre » goes on with the rest.
+        The session says it (`processing_stopped`). 202: asked, not over yet (its running
+        stage ends first; `job_state` still running)."""
+        if sessions.get_session(data, session_id) is None:
+            raise _not_found("Séance introuvable.")
+        if processor is not None:
+            outcome = processor.stop_processing(session_id)
+        else:
+            # No processing here (tests): only one waiting in the queue can be stopped.
+            conn = connect(data)
+            try:
+                job = jobs.latest_job(conn, session_id)
+                marked = job is not None and jobs.mark_stopped(conn, job.id, only_queued=True)
+            finally:
+                conn.close()
+            outcome = "stopped" if marked else "nothing"
+        if outcome == "stopping":
+            response.status_code = 202
+        if outcome == "nothing":
+            raise HTTPException(
+                status_code=409, detail="Aucun traitement de cette séance n'est en cours."
+            )
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
+
     @app.post("/api/seances/{session_id}/reprendre")
     def resume(session_id: str, demande: ResumeRequest | None = None) -> sessions.Session:
         """Put the latest failed job back in the queue: the stages that succeeded are kept.
@@ -1350,6 +1379,14 @@ def create_app(
 
     @app.delete("/api/seances/{session_id}")
     def delete_session(session_id: str) -> Deleted:
+        """Its processing, if any, is stopped first (a file imported by mistake): the
+        interface asks before."""
+        if processor is not None and processor.stop_processing(session_id) == "stopping":
+            raise HTTPException(
+                status_code=409,
+                detail="L'arrêt du traitement prend plus de temps que prévu : réessayez dans "
+                "un instant. La séance n'est pas supprimée.",
+            )
         return Deleted(problems=retention.delete_session(data, session_id))
 
     _mount_interface(app, web_dir)
