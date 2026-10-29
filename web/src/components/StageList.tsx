@@ -36,38 +36,42 @@ function progressText(p: NonNullable<StageView["progress"]>, dev: boolean): stri
   return `${p.phase} · ${amount}`;
 }
 
-/** Stopped by the user (ADR 0070): its stages that did not end, said as stopped. */
+/** A stage the service says was stopped (ADR 0070): by the user's stop, or interrupted
+ *  (the app closed, or after a crash). */
 const STOPPED_TEXT = "Arrêtée à votre demande";
+const INTERRUPTED_TEXT = "Interrompue";
 
 /** Every stage of the chain, with its state, progress and error (P8). Computing time,
  *  memory and provenance (P7) are shown in developer mode. */
 export function StageList({
   stages,
   onShowProvenance,
-  stopped = false,
+  stoppedByUser = false,
 }: {
   stages: StageView[];
   onShowProvenance: (stage: StageView) => void;
-  /** The processing was stopped by the user: the service counts every stage it cancelled as
-   *  stopped, whatever its error on the way; that error stays in developer mode. */
-  stopped?: boolean;
+  /** The session's processing was stopped by the user: its stopped stages say so. */
+  stoppedByUser?: boolean;
 }) {
+  const haltedText = stoppedByUser ? STOPPED_TEXT : INTERRUPTED_TEXT;
   const dev = useDevMode();
-  const halted = (s: StageView) => stopped && s.state === "failed";
+  // Cancelled by a stop the user asked (the service says so, stage by stage): said as
+  // stopped, its error in developer mode. A real failure, even of an earlier try, stays one.
+  const halted = (s: StageView) => s.state === "failed" && s.stopped;
   return (
     <ol className="cl-stages">
       {stages.map((s) => (
         <li key={s.stage} className="cl-stages__item" data-state={s.state} data-stale={s.stale || undefined}>
           <StatusDot
             variant={s.stale || halted(s) ? "neutral" : DOT[s.state]}
-            label={s.stale ? STALE_TEXT : halted(s) ? STOPPED_TEXT : STATE_TEXT[s.state]}
+            label={s.stale ? STALE_TEXT : halted(s) ? haltedText : STATE_TEXT[s.state]}
             isPulsing={s.state === "running"}
           />
           <div className="cl-stages__body">
             <div className="cl-stages__head">
               <Text weight="medium">{s.label}</Text>
               <Text type="supporting">
-                {s.stale ? STALE_TEXT : halted(s) ? STOPPED_TEXT : STATE_TEXT[s.state]}
+                {s.stale ? STALE_TEXT : halted(s) ? haltedText : STATE_TEXT[s.state]}
                 {dev && s.duration_s != null && ` · ${formatDuration(s.duration_s)} de calcul`}
                 {dev &&
                   s.max_rss_bytes != null &&

@@ -463,6 +463,8 @@ export interface StageView {
   stage: string;
   label: string;
   state: StageState;
+  /** Failed because a stop the user asked cancelled it (ADR 0070), not a real failure. */
+  stopped: boolean;
   run_id: string | null;
   progress: {
     phase: string;

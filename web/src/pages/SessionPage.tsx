@@ -1806,7 +1806,7 @@ function ProcessingPanel({
         <StageList
           stages={detail.stages}
           onShowProvenance={onShowProvenance}
-          stopped={session.processing_stopped}
+          stoppedByUser={session.processing_stopped}
         />
       )}
       {session.job_state === "done" && attributed && !transcriptError && (
