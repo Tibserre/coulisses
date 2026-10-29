@@ -7,8 +7,10 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { Text } from "@astryxdesign/core/Text";
 import { api, type ConnectorAccess, type ConnectorSettings } from "../api.ts";
 import {
+  accessNames,
   accessSubject,
   connectorReach,
+  launcherProblem,
   spaceReading,
   TOOL_LABEL,
 } from "../connector.ts";
@@ -151,6 +153,7 @@ export function ConnectorSection({
               <li key={s.id}>
                 <span className="cl-settings__text">
                   <a href={`#/espaces/${s.id}`}>{s.name}</a>
+                  {s.archived && <Text type="supporting">archivé</Text>}
                 </span>
                 <Text color="secondary">{spaceReading(s)}</Text>
               </li>
@@ -166,11 +169,11 @@ export function ConnectorSection({
           c'est vous qui branchez l'assistant, et il vous demande votre accord à
           chaque lecture.
         </Text>
-        {settings && !settings.launcher_ready && (
+        {settings && launcherProblem(settings) !== null && (
           <Banner
             status="warning"
             title="Le connecteur n'a pas pu être préparé"
-            description="Coulisses n'a pas pu préparer le programme que lancent les assistants : on ne peut pas en brancher un pour l'instant. Le détail est dans le journal technique (Réglages › Avancé)."
+            description={`${launcherProblem(settings)} On ne peut pas encore brancher d'assistant.`}
           />
         )}
         {settings && (
@@ -265,8 +268,8 @@ export function ConnectorSection({
                       )}
                     </Text>
                     <Text type="supporting">
-                      {formatDateTime(e.at)} ·{" "}
-                      {e.names_shared ? "avec les noms" : "noms masqués"}
+                      {formatDateTime(e.at)}
+                      {accessNames(e) !== null && ` · ${accessNames(e)}`}
                     </Text>
                   </span>
                 </li>

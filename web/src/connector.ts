@@ -39,3 +39,19 @@ export function connectorReach(
   if (!settings.open) return "closed";
   return settings.spaces.some((s) => s.connector_access) ? "reads" : "no-space";
 }
+
+/** Whether a read gave the names: null for one that gave no session. */
+export function accessNames(entry: ConnectorAccess): string | null {
+  if (entry.names_shared === null) return null;
+  return entry.names_shared ? "avec les noms" : "noms masqués";
+}
+
+/** Why the program the assistants launch is not ready: the service's words, else a
+ *  sentence that still says where to look. */
+export function launcherProblem(settings: ConnectorSettings): string | null {
+  if (settings.launcher_ready) return null;
+  return (
+    settings.launcher_problem ??
+    "Coulisses n'a pas pu préparer le programme que lancent les assistants ; le détail est dans le journal technique (Réglages › Avancé)."
+  );
+}

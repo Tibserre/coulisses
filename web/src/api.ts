@@ -288,10 +288,19 @@ export interface ConnectorSettings {
   /** The fixed launcher every assistant's configuration points to. */
   launcher: string;
   launcher_ready: boolean;
+  /** Why it is not ready, in French; null when ready. */
+  launcher_problem: string | null;
   claude_code_command: string;
   /** The extension for Claude Desktop, null until it exists. */
   mcpb: string | null;
-  spaces: { id: number; name: string; connector_access: boolean; connector_names: boolean }[];
+  /** Every space, the archived ones last: an archived space left accessible is read. */
+  spaces: {
+    id: number;
+    name: string;
+    archived: boolean;
+    connector_access: boolean;
+    connector_names: boolean;
+  }[];
 }
 
 export type ConnectorTool =
@@ -310,7 +319,8 @@ export interface ConnectorAccess {
   /** Its title now; null when deleted since, or untitled (`session_deleted` says which). */
   session_title: string | null;
   session_deleted: boolean;
-  names_shared: boolean;
+  /** Null for a read that gave no session. */
+  names_shared: boolean | null;
 }
 
 export interface ConnectorJournal {

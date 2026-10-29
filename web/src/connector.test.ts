@@ -2,7 +2,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ConnectorAccess, ConnectorSettings } from "./api.ts";
-import { accessSubject, connectorReach, spaceReading } from "./connector.ts";
+import {
+  accessNames,
+  accessSubject,
+  connectorReach,
+  launcherProblem,
+  spaceReading,
+} from "./connector.ts";
 
 const entry = (over: Partial<ConnectorAccess>): ConnectorAccess => ({
   id: 1,
@@ -36,6 +42,7 @@ test("a read names its session by its title now, or says why it cannot", () => {
 const space = (access: boolean, names: boolean) => ({
   id: 1,
   name: "Troupe",
+  archived: false,
   connector_access: access,
   connector_names: names,
 });
@@ -54,6 +61,7 @@ test("an open connector reads nothing while no space is open to it", () => {
     open,
     launcher: "/x/coulisses-mcp",
     launcher_ready: true,
+    launcher_problem: null,
     claude_code_command: "claude mcp add coulisses -- /x/coulisses-mcp",
     mcpb: null,
     spaces,
@@ -66,6 +74,38 @@ test("an open connector reads nothing while no space is open to it", () => {
   assert.equal(connectorReach(settings(true, [])), "no-space");
   assert.equal(
     connectorReach(settings(true, [space(false, false), space(true, false)])),
+    "reads",
+  );
+});
+
+test("a read without a session says nothing of the names", () => {
+  assert.equal(accessNames(entry({})), "noms masqués");
+  assert.equal(accessNames(entry({ names_shared: true })), "avec les noms");
+  assert.equal(accessNames(entry({ session_id: null, names_shared: null })), null);
+});
+
+const base: ConnectorSettings = {
+  open: true,
+  launcher: "/x/coulisses-mcp",
+  launcher_ready: true,
+  launcher_problem: null,
+  claude_code_command: "claude mcp add coulisses -- /x/coulisses-mcp",
+  mcpb: null,
+  spaces: [],
+};
+
+test("a launcher not ready says why, in the service's words when it has them", () => {
+  assert.equal(launcherProblem(base), null);
+  assert.equal(
+    launcherProblem({ ...base, launcher_ready: false, launcher_problem: "Le lanceur n'est pas exécutable." }),
+    "Le lanceur n'est pas exécutable.",
+  );
+  assert.match(launcherProblem({ ...base, launcher_ready: false }) ?? "", /journal technique/);
+});
+
+test("an archived space left accessible is read", () => {
+  assert.equal(
+    connectorReach({ ...base, spaces: [{ ...space(true, false), archived: true }] }),
     "reads",
   );
 });
