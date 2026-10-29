@@ -276,6 +276,47 @@ export interface Space {
   name: string;
   voice_recognition: boolean;
   archived: boolean;
+  /** Read by an assistant through the connector (ADR 0065); closed by default. */
+  connector_access: boolean;
+  /** Its names given to the assistant; closed, each becomes « Personne A »… */
+  connector_names: boolean;
+}
+
+/** The connector of the assistants (ADR 0065, contrat-connecteur.md §2). */
+export interface ConnectorSettings {
+  open: boolean;
+  /** The fixed launcher every assistant's configuration points to. */
+  launcher: string;
+  launcher_ready: boolean;
+  claude_code_command: string;
+  /** The extension for Claude Desktop, null until it exists. */
+  mcpb: string | null;
+  spaces: { id: number; name: string; connector_access: boolean; connector_names: boolean }[];
+}
+
+export type ConnectorTool =
+  | "chercher"
+  | "lister_seances"
+  | "lire_seance"
+  | "lire_resume"
+  | "lire_transcript";
+
+/** One read by the connector, never purged. */
+export interface ConnectorAccess {
+  id: number;
+  at: string;
+  tool: ConnectorTool;
+  session_id: string | null;
+  /** Its title now; null when deleted since, or untitled (`session_deleted` says which). */
+  session_title: string | null;
+  session_deleted: boolean;
+  names_shared: boolean;
+}
+
+export interface ConnectorJournal {
+  entries: ConnectorAccess[];
+  /** The `id` to pass as `avant` for older entries; null at the end. */
+  next: number | null;
 }
 
 export interface Person {
@@ -1006,6 +1047,16 @@ export const api = {
   setReminders: (reminders: Reminders) =>
     send<Reminders>("PUT", "/api/reglages/rappels", reminders),
   folders: () => getJson<Folders>("/api/dossiers"),
+  connector: () => getJson<ConnectorSettings>("/api/reglages/connecteur"),
+  setConnectorOpen: (open: boolean) =>
+    send<ConnectorSettings>("PUT", "/api/reglages/connecteur", { open }),
+  connectorJournal: (before?: number) =>
+    getJson<ConnectorJournal>(
+      `/api/reglages/connecteur/journal${before != null ? `?avant=${before}` : ""}`,
+    ),
+  /** The extension opened by its own app (Claude Desktop). */
+  openConnectorExtension: () =>
+    send<void>("POST", "/api/reglages/connecteur/extension/ouvrir"),
   engineModels: () => getJson<ModelsView>("/api/moteur/modeles"),
   modelActions: () => getJson<ModelAction[]>("/api/moteur/telechargements"),
   downloadModel: (key: string) =>
@@ -1119,7 +1170,12 @@ export const api = {
     `${sessionPath(id)}/export?contenu=${contenu}${generationId != null ? `&resume=${generationId}` : ""}`,
   updateSpace: (
     id: number,
-    changes: Partial<Pick<Space, "name" | "voice_recognition" | "archived">>,
+    changes: Partial<
+      Pick<
+        Space,
+        "name" | "voice_recognition" | "archived" | "connector_access" | "connector_names"
+      >
+    >,
   ) => send<Space>("PATCH", `/api/espaces/${id}`, changes),
   people: (spaceId: number) =>
     getJson<Person[]>(`/api/espaces/${spaceId}/personnes`),

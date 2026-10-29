@@ -3304,6 +3304,17 @@ a.cl-iconbtn {
   font-variant-numeric: tabular-nums;
 }
 
+/* What opening the connector implies (ADR 0065): said before its switch, in a quiet box. */
+.cl-connector__warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container);
+  background: var(--color-background-muted);
+}
+
 .cl-settings__list {
   list-style: none;
   margin: 0;

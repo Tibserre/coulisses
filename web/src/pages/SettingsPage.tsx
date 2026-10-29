@@ -16,6 +16,7 @@ import {
   type Reminders,
   type RetentionInfo,
 } from "../api.ts";
+import { ConnectorSection } from "../components/ConnectorSection.tsx";
 import { DayStepper } from "../components/DayStepper.tsx";
 import { ExportFolderSection } from "../components/ExportFolderSection.tsx";
 import { ModelsSection } from "../components/ModelsSection.tsx";
@@ -38,8 +39,9 @@ const JOURNAL_LIMIT = 200;
 
 /** Settings (spec §7.12, ADR 0051), sorted by what one comes to do: the sessions (how long
  *  their audio is kept, what is about to go and what went, where reports are exported), the
- *  writing (the language model of each), the transcription (what the processing needs), and
- *  the rest (updates, folders, the technical log, developer mode). */
+ *  writing (the language model of each), the transcription (what the processing needs), the
+ *  connector an assistant reads Coulisses through (ADR 0065), and the rest (updates,
+ *  folders, the technical log, developer mode). */
 export function SettingsPage({
   info: about,
   part: asked = null,
@@ -333,6 +335,8 @@ export function SettingsPage({
             </div>
           </>
         )}
+
+        {part === "connecteur" && <ConnectorSection onError={setError} />}
 
         {part === "avance" && (
           <>

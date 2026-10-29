@@ -7,6 +7,10 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Espace | `space` | Ce qui regroupe des séances et les gens qui y participent : une troupe d'impro, une équipe, un client (ADR 0020). Possède des membres, des invités, un glossaire, des projets, des réglages. Étanche : une personne n'appartient qu'à un espace. |
 | Modèle de départ | `space_template` | Pré-remplissage des réglages d'un espace à sa création (« Troupe d'impro », « Réunions de travail », « Vide »). Pas un type : tout reste modifiable ensuite. |
 | Reconnaissance des voix | `voice_recognition` | Réglage d'un espace : reconnaître une personne d'une séance à l'autre par sa voix. Désactivé par défaut. |
+| Connecteur des assistants | `connector` | Ce par quoi un assistant (Claude Desktop, Claude Code, un client MCP local) lit Coulisses, sans jamais le piloter (ADR 0065). Coupé par défaut, dans Réglages › Connecteur. |
+| Accessible au connecteur | `connector_access` | Option d'un espace : le connecteur peut le lire. Fermée par défaut ; fermé, l'espace n'apparaît dans aucune réponse. |
+| Transmettre les noms | `connector_names` | Option d'un espace accessible au connecteur : ses noms connus sont donnés tels quels. Fermée par défaut : chacun devient « Personne A », « Personne B »… |
+| Journal des accès | `connector access log` (`ConnectorAccess`) | Chaque lecture du connecteur (date, outil, séance, avec ou sans les noms), jamais purgé. |
 | Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
 | Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |

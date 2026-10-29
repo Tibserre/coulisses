@@ -1,9 +1,10 @@
 /** The tabs of the Settings (ADR 0051), sorted by what one comes to do. */
-export type Part = "seances" | "redaction" | "transcription" | "avance";
+export type Part = "seances" | "redaction" | "transcription" | "connecteur" | "avance";
 export const PARTS: [Part, string][] = [
   ["seances", "Séances"],
   ["redaction", "Rédaction"],
   ["transcription", "Transcription"],
+  ["connecteur", "Connecteur"],
   ["avance", "Avancé"],
 ];
 /** Tabs of earlier versions, still in links and in older messages. */

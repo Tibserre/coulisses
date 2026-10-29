@@ -5,6 +5,7 @@ import { buildShown, folderName, partOf } from "./settingsParts.ts";
 
 test("the tab asked opens, else the first", () => {
   assert.equal(partOf("transcription"), "transcription");
+  assert.equal(partOf("connecteur"), "connecteur");
   assert.equal(partOf(null), "seances");
   assert.equal(partOf("inconnu"), "seances");
   assert.equal(partOf("toString"), "seances");
