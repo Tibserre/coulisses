@@ -25,6 +25,10 @@ test("a session without a title is named by its day", () => {
 test("the side column marks what is going on", () => {
   assert.equal(sessionDot({ job_state: null, duration_s: null }, "s1", "s1"), "recording");
   assert.equal(sessionDot({ job_state: "running", duration_s: 10 }, null, "s1"), "processing");
+  assert.equal(
+    sessionDot({ job_state: "failed", duration_s: 10, processing_stopped: true }, null, "s1"),
+    null,
+  );
   assert.equal(sessionDot({ job_state: "failed", duration_s: 10 }, null, "s1"), "failed");
   assert.equal(sessionDot({ job_state: "done", duration_s: 10 }, null, "s1"), null);
 });
@@ -86,4 +90,42 @@ test("the home page records where it was chosen, else where the latest session w
   assert.equal(startSpace(spaces, latest, 3), 2); // archived since: no session starts there
   assert.equal(startSpace(spaces, [], 9), 1);
   assert.equal(startSpace([], [], null), null);
+});
+
+test("an import takes one audio or video file, and says why it refuses", async () => {
+  const { droppedFile } = await import("./library.ts");
+  const file = (name: string, type = "") => ({ name, type });
+  assert.deepEqual(droppedFile([file("repetition.MP4")]), { file: file("repetition.MP4") });
+  assert.deepEqual(droppedFile([file("note", "audio/x-m4a")]), { file: file("note", "audio/x-m4a") });
+  assert.match(
+    (droppedFile([file("a.m4a"), file("b.m4a")]) as { refusal: string }).refusal,
+    /2 fichiers déposés/,
+  );
+  assert.match(
+    (droppedFile([file("programme.pdf", "application/pdf")]) as { refusal: string }).refusal,
+    /ni un fichier audio ni une vidéo/,
+  );
+  assert.ok("refusal" in droppedFile([]));
+});
+
+test("an import goes where it was asked, unless that space is archived", async () => {
+  const { importPlace } = await import("./library.ts");
+  const spaces = [
+    { id: 1, archived: false },
+    { id: 2, archived: true },
+    { id: 3, archived: false },
+  ];
+  const latest = [{ space_id: 3 }];
+  assert.deepEqual(importPlace({ spaceId: 1, projectId: 7 }, spaces, latest, null), {
+    spaceId: 1,
+    projectId: 7,
+  });
+  assert.deepEqual(importPlace({ spaceId: 2, projectId: 7 }, spaces, latest, null), {
+    spaceId: 3,
+    projectId: null,
+  });
+  assert.deepEqual(importPlace({ spaceId: null, projectId: null }, spaces, latest, 1), {
+    spaceId: 1,
+    projectId: null,
+  });
 });

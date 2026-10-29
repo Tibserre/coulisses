@@ -546,6 +546,14 @@ body {
   overflow-y: auto;
 }
 
+.cl-pop__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--color-border);
+}
+
 .cl-pop section {
   display: flex;
   flex-direction: column;
@@ -4296,130 +4304,8 @@ button.cl-tree__more:hover {
   color: var(--color-text-primary);
 }
 
-/* -- new session, new space -- */
+/* -- new space -- */
 
-/* « Nouvelle note » (the window): the choices scroll, the actions stay in view at the bottom. */
-.cl-newsession {
-  display: flex;
-  flex-direction: column;
-  /* What the dialog leaves under its title. */
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.cl-newsession__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-5);
-  overflow-y: auto;
-  padding: var(--spacing-2) var(--spacing-5) var(--spacing-5);
-}
-
-.cl-newsession__where {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-4);
-}
-
-.cl-newsession__section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-  padding-top: var(--spacing-4);
-  border-top: 1px solid var(--color-border);
-}
-
-.cl-newsession__footer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-  padding: var(--spacing-4) var(--spacing-5);
-  border-top: 1px solid var(--color-border);
-}
-
-.cl-newsession__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
-}
-
-/* What is recorded: one row per microphone, then the computer's sound. */
-.cl-sources {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.cl-sources__row {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--spacing-3);
-  min-height: 44px;
-  padding: var(--spacing-1) 0;
-  color: var(--color-text-secondary);
-  animation: cl-source-in 400ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cl-sources__row + .cl-sources__row {
-  border-top: 1px solid var(--color-border);
-}
-
-.cl-sources__row select {
-  font: inherit;
-  font-size: var(--font-size-base);
-  padding: var(--spacing-1-5, 6px) var(--spacing-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-element);
-  background: var(--color-background-surface);
-  color: var(--color-text-primary);
-  min-width: 0;
-}
-
-.cl-sources__fixed {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-base);
-  padding-left: var(--spacing-2);
-}
-
-.cl-sources__note {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-@keyframes cl-source-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cl-sources__row {
-    animation: none;
-  }
-}
-
-.cl-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-6) var(--spacing-4);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-container, 10px);
-  color: var(--color-text-secondary);
-  text-align: center;
-  transition: background 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cl-dropzone[data-dragging] {
-  background: var(--color-background-muted);
-}
-
-.cl-newsession__buttons,
 .cl-settings__buttons,
 .cl-newspace__actions {
   display: flex;
@@ -4447,10 +4333,6 @@ button.cl-tree__more:hover {
 @media (max-width: 900px) {
   .cl-shell__body {
     grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .cl-newsession__where {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -5582,4 +5464,76 @@ button.cl-tree__more:hover {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* A file dragged from the Finder over the window: dropped, it is sent (ADR 0069). */
+.cl-filedrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-6);
+  background: color-mix(in srgb, var(--color-background-body) 72%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  animation: cl-filedrop-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cl-filedrop__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: min(420px, 100%);
+  padding: var(--spacing-8) var(--spacing-6);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.cl-filedrop__note {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 13px);
+}
+
+@keyframes cl-filedrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-filedrop {
+    animation: none;
+  }
+}
+
+/* « Qui était là ? » above the discs of an import waiting for its people present. */
+.cl-attendeesask {
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-6);
+}
+
+.cl-stepper {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.cl-stepper__value {
+  min-width: 8ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* « Arrêter le traitement », quiet, under the discs (ADR 0070). */
+.cl-processing__stop {
+  display: flex;
+  justify-content: center;
+  margin-top: calc(-1 * var(--spacing-2));
 }

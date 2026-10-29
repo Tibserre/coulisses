@@ -19,6 +19,14 @@ export interface Session {
   unnamed_attendees: number | null;
   /** Minimum of voices asked of the engine by the latest processing (P3). */
   min_voices: number | null;
+  /** Whether the people present now are that minimum (false once checked after its voices
+   *  were being separated, or when another number was chosen); null if never processed. */
+  attendees_taken: boolean | null;
+  /** An import waiting for its people present (ADR 0069): when its processing starts by
+   *  itself (UTC); null once launched, or when it waits no more. */
+  processing_starts_at: string | null;
+  /** Its processing was stopped by the user (ADR 0070): `job_state` is then `failed`. */
+  processing_stopped: boolean;
   reference_source_id: string;
   duration_s: number | null;
   job_state: JobState | null;
@@ -455,6 +463,8 @@ export interface StageView {
   stage: string;
   label: string;
   state: StageState;
+  /** Failed because a stop the user asked cancelled it (ADR 0070), not a real failure. */
+  stopped: boolean;
   run_id: string | null;
   progress: {
     phase: string;
@@ -1047,11 +1057,17 @@ export const api = {
   removeAudio: (id: string) =>
     send<{ session: Session; problems: string[] }>("POST", `${sessionPath(id)}/supprimer-audio`),
   /** `problems`: what stayed on the disk; the session is gone from Coulisses anyway. */
+  /** Stops its processing, queued or running (ADR 0070); still `running` when the stop is
+   *  asked but not done within 30 s. */
+  stopProcessing: (id: string) => send<Session>("POST", `${sessionPath(id)}/arreter`),
   deleteSession: (id: string) => send<{ problems: string[] }>("DELETE", sessionPath(id)),
   showVersion: (id: string, runId: string) =>
     send<Versions>("POST", `${sessionPath(id)}/versions/${encodeURIComponent(runId)}/afficher`),
   rerun: (id: string, stage: Rerun, attendees: number | null) =>
     send<Session>("POST", `${sessionPath(id)}/relancer`, { etape: stage, presents: attendees }),
+  /** An import waiting for its people present: processed now (after PUT /presents, or
+   *  without anybody). */
+  launch: (id: string) => send<Session>("POST", `${sessionPath(id)}/lancer`),
   resume: (id: string, attendees?: number) =>
     send<Session>(
       "POST",
@@ -1136,6 +1152,8 @@ export const api = {
       projectId: number | null;
       personIds: number[];
       unnamed: number | null;
+      /** The processing waits for the people present, 2 minutes at most (ADR 0069). */
+      waitForAttendees?: boolean;
     },
     onProgress: (fraction: number) => void,
   ): Promise<{ id: string }> {
@@ -1146,6 +1164,7 @@ export const api = {
       if (who.projectId != null) form.append("projet", String(who.projectId));
       for (const id of who.personIds) form.append("presents", String(id));
       if (who.unnamed != null) form.append("non_nommes", String(who.unnamed));
+      if (who.waitForAttendees) form.append("attendre_presents", "true");
       form.append("date_fichier_ms", String(file.lastModified));
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/seances");

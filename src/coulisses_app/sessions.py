@@ -65,6 +65,18 @@ class Session(BaseModel):
     """People present whom nobody named, in addition to the checked ones."""
     min_voices: int | None
     """Minimum of voices asked of the engine by the latest processing (P3)."""
+    processing_stopped: bool = False
+    """Its latest processing was stopped by the user (`job_state` failed, `job_error` says
+    so): « Reprendre » goes on with what is left."""
+    processing_starts_at: str | None = None
+    """Its first processing waits for the people present until then (UTC), unless started
+    at once; None when it does not wait, or no longer (its time passed: it starts as soon as
+    the sessions ahead of it are processed)."""
+    attendees_taken: bool | None = None
+    """Whether the people present now are that minimum: false once checked after its
+    diarization began (a rerun of the voices takes them), or when another
+    number was chosen (after « too few voices », or for a rerun); None if never processed.
+    Like `min_voices`, it is the latest processing's, not the version shown's."""
     reference_source_id: str
     duration_s: float | None
     job_state: str | None
@@ -91,8 +103,11 @@ def import_recording(
     unnamed_attendees: int | None = None,
     recorded_at: datetime | None,
     profile: str,
+    wait_for_attendees: bool = False,
 ) -> str:
     """Keep the file exactly as received, make it a session and queue its processing.
+    `wait_for_attendees`: an import in one gesture, made with nobody present; its processing
+    waits for them (`jobs.WAIT_FOR_ATTENDEES_S`, ADR 0069).
 
     The file is first received in `imports-en-cours/`; if ffmpeg cannot read it, that copy
     is removed and `UnreadableAudioError` says why (the user's original is untouched)."""
@@ -108,7 +123,7 @@ def import_recording(
         glossary = spaces.glossary_terms(conn, space)
     finally:
         conn.close()
-    minimum = len(present) + (unnamed_attendees or 0) or None
+    minimum = spaces.attendee_minimum(len(present), unnamed_attendees)
     data.incoming.mkdir(parents=True, exist_ok=True)
     suffix = Path(original_name).suffix.lower()
     received = data.incoming / f"{secrets.token_hex(8)}{suffix}"
@@ -173,7 +188,14 @@ def import_recording(
                 stamp,
             ),
         )
-        jobs.enqueue_chain(conn, session_id, profile=profile, attendees=minimum, glossary=glossary)
+        jobs.enqueue_chain(
+            conn,
+            session_id,
+            profile=profile,
+            attendees=minimum,
+            glossary=glossary,
+            wait_s=jobs.WAIT_FOR_ATTENDEES_S if wait_for_attendees else None,
+        )
         sources.mkdir(parents=True)
         shutil.move(received, stored)
         moved = True
@@ -195,6 +217,9 @@ def import_recording(
 
 def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
     params = row["job_params"]
+    attendee_ids = spaces.attendee_ids(conn, row["id"])
+    chain = jobs.ChainParams.model_validate_json(params) if params else None
+    min_voices = chain.attendees if chain else None
     return Session(
         id=row["id"],
         title=row["title"],
@@ -204,9 +229,25 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
         space_id=row["space_id"],
         space_name=row["space_name"],
         project_id=row["project_id"],
-        attendee_ids=spaces.attendee_ids(conn, row["id"]),
+        attendee_ids=attendee_ids,
         unnamed_attendees=row["unnamed_attendees"],
-        min_voices=jobs.ChainParams.model_validate_json(params).attendees if params else None,
+        min_voices=min_voices,
+        processing_stopped=bool(
+            chain and chain.stopped_at is not None and row["job_state"] == "failed"
+        ),
+        processing_starts_at=(
+            chain.starts_at
+            if chain
+            and chain.starts_at is not None
+            and row["job_state"] == "queued"
+            and chain.starts_at > now_iso()
+            else None
+        ),
+        attendees_taken=(
+            min_voices == spaces.attendee_minimum(len(attendee_ids), row["unnamed_attendees"])
+            if params
+            else None
+        ),
         reference_source_id=row["reference_source_id"],
         duration_s=row["duration_s"],
         job_state=row["job_state"],
@@ -663,7 +704,7 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
         ).fetchone():
             raise AlreadyProcessedError("Le traitement de cette séance est déjà demandé.")
         present = spaces.attendee_ids(conn, session_id)
-        minimum = len(present) + (row["unnamed_attendees"] or 0) or None
+        minimum = spaces.attendee_minimum(len(present), row["unnamed_attendees"])
         with conn:
             jobs.enqueue_chain(
                 conn,

@@ -558,9 +558,12 @@ def create_app(
         presents: Annotated[list[int] | None, Form()] = None,
         non_nommes: Annotated[int | None, Form()] = None,
         date_fichier_ms: Annotated[int | None, Form()] = None,
+        attendre_presents: Annotated[bool, Form()] = False,
     ) -> Imported:
         """`presents`: the people checked (repeated field); `non_nommes`: people present
-        whom nobody names, added to them as a minimum of voices (P3)."""
+        whom nobody names, added to them as a minimum of voices (P3). `attendre_presents`:
+        an import in one gesture; its processing waits for the people present (ADR 0069)
+        until `/lancer`, or for `jobs.WAIT_FOR_ATTENDEES_S`."""
         recorded_at = (
             datetime.fromtimestamp(date_fichier_ms / 1000, tz=UTC) if date_fichier_ms else None
         )
@@ -575,12 +578,30 @@ def create_app(
                 unnamed_attendees=non_nommes,
                 recorded_at=recorded_at,
                 profile=profile,
+                wait_for_attendees=attendre_presents,
             )
         except (UnreadableAudioError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if processor is not None:
             processor.wake()
         return Imported(id=session_id)
+
+    @app.post("/api/seances/{session_id}/lancer")
+    def start_processing(session_id: str) -> sessions.Session:
+        """The processing waiting for the people present starts now: with those checked
+        (`/presents` first), or without. Nothing waiting (started already): it changes
+        nothing."""
+        conn = connect(data)
+        try:
+            jobs.start_now(conn, session_id)
+        finally:
+            conn.close()
+        session = sessions.get_session(data, session_id)
+        if session is None:
+            raise _not_found("Séance introuvable.")
+        if processor is not None:
+            processor.wake()
+        return session
 
     @app.get("/api/seances/{session_id}")
     def session_detail(session_id: str) -> SessionDetail:
@@ -630,6 +651,35 @@ def create_app(
         )
         if processor is not None:
             processor.wake()
+        session = sessions.get_session(data, session_id)
+        assert session is not None
+        return session
+
+    @app.post("/api/seances/{session_id}/arreter")
+    def stop_processing(session_id: str, response: Response) -> sessions.Session:
+        """The user stops the session's processing, waiting or running (« si en fait je ne
+        veux pas la faire »): the stages made are kept, « Reprendre » goes on with the rest.
+        The session says it (`processing_stopped`). 202: asked, not over yet (its running
+        stage ends first; `job_state` still running)."""
+        if sessions.get_session(data, session_id) is None:
+            raise _not_found("Séance introuvable.")
+        if processor is not None:
+            outcome = processor.stop_processing(session_id)
+        else:
+            # No processing here (tests): only one waiting in the queue can be stopped.
+            conn = connect(data)
+            try:
+                job = jobs.latest_job(conn, session_id)
+                marked = job is not None and jobs.mark_stopped(conn, job.id, only_queued=True)
+            finally:
+                conn.close()
+            outcome = "stopped" if marked else "nothing"
+        if outcome == "stopping":
+            response.status_code = 202
+        if outcome == "nothing":
+            raise HTTPException(
+                status_code=409, detail="Aucun traitement de cette séance n'est en cours."
+            )
         session = sessions.get_session(data, session_id)
         assert session is not None
         return session
@@ -1329,6 +1379,14 @@ def create_app(
 
     @app.delete("/api/seances/{session_id}")
     def delete_session(session_id: str) -> Deleted:
+        """Its processing, if any, is stopped first (a file imported by mistake): the
+        interface asks before."""
+        if processor is not None and processor.stop_processing(session_id) == "stopping":
+            raise HTTPException(
+                status_code=409,
+                detail="L'arrêt du traitement prend plus de temps que prévu : réessayez dans "
+                "un instant. La séance n'est pas supprimée.",
+            )
         return Deleted(problems=retention.delete_session(data, session_id))
 
     _mount_interface(app, web_dir)

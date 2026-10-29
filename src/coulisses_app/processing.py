@@ -17,9 +17,11 @@ import logging
 import secrets
 import sqlite3
 import threading
+import time
 from collections.abc import Callable
 from importlib.metadata import version
 from pathlib import Path
+from typing import Literal
 
 from coulisses.api import (
     ChainConfig,
@@ -27,10 +29,12 @@ from coulisses.api import (
     ChainRuns,
     ErrorCode,
     Provenance,
+    RunNotRunningHereError,
     RunStage,
     RunStillRunningError,
     StageConfig,
     StageName,
+    cancel,
     close_interrupted,
     execute_stage,
     read_provenance,
@@ -99,12 +103,34 @@ def activate(conn: sqlite3.Connection, session_id: str, stage: str, run_id: str)
     )
 
 
-_STOPPED = (ErrorCode.INTERRUPTED, ErrorCode.CANCELLED)
+STOPPED_CODES = (ErrorCode.INTERRUPTED, ErrorCode.CANCELLED)
 """Codes of a run stopped by its caller rather than failed (engine ADR 0021)."""
+
+HELPERS_STILL_RUNNING = "HelpersStillRunning"
+"""The engine's error when a process of a stage still runs 10 s after its stop (v1.13.2):
+its folder is not safe to delete yet. Its cause is in `details.previous_error`."""
+
+
+def stopped_late(prov: Provenance) -> bool:
+    """Stopped by its caller (cancelled, interrupted), but a process of it outlived the stop."""
+    return (
+        prov.error is not None
+        and prov.error.type == HELPERS_STILL_RUNNING
+        and prov.error.details.get("previous_error") in ("Cancelled", "Interrupted")
+    )
 
 
 class ApplicationStoppingError(RuntimeError):
     """A stage was about to start while the application stops: it is not started."""
+
+
+class StoppedByUserError(RuntimeError):
+    """A stage was about to start in a job the user stopped: it is not started."""
+
+
+STOP_WAIT_S = 30.0
+"""How long stopping a processing waits for its running stages to end."""
+STOP_POLL_S = 0.2
 
 
 class ChainJobResult(BaseModel):
@@ -122,6 +148,7 @@ class Processor:
         *,
         models: Path | None = None,
         engine_stage: Callable[[str, Path | None], RunStage] = execute_stage,
+        engine_cancel: Callable[[Path], None] = cancel,
         model_client: ModelClient | None = None,
         keep_awake: KeepAwake | None = None,
         after_chain: Callable[[str], None] | None = None,
@@ -135,6 +162,12 @@ class Processor:
         self.chain = chain
         self.models = models
         self._engine_stage = engine_stage
+        self._engine_cancel = engine_cancel
+        self._stopped_by_user: set[int] = set()
+        """Jobs the user stopped: no stage of theirs starts any more."""
+        self._stopped_lock = threading.Lock()
+        self._cancel_sent: set[str] = set()
+        """Runs the engine was asked to cancel: an error they raise is the stop's."""
         self._wake = threading.Event()
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
@@ -182,6 +215,55 @@ class Processor:
         finally:
             conn.close()
 
+    def stop_processing(
+        self, session_id: str, *, wait_s: float | None = None
+    ) -> Literal["stopped", "stopping", "nothing"]:
+        """The user stops the session's processing (« Arrêter »), waiting or running: no
+        stage of it starts any more, and those running are cancelled by the engine (their
+        runs stay as it closed them, P5); the stages made are kept, « Reprendre » goes on.
+        Returns once it is no longer running (stopped), or after `wait_s` (`STOP_WAIT_S`;
+        stopping: it ends when its running stages do); nothing: nothing to stop."""
+        conn = connect(self.data)
+        try:
+            job = jobs.latest_job(conn, session_id)
+            if job is None or job.state not in ("queued", "running"):
+                return "nothing"
+            if job.state == "queued" and jobs.mark_stopped(conn, job.id, only_queued=True):
+                log.info("job %s stopped by the user before it started", job.id)
+                return "stopped"
+            # Running, or claimed a moment ago: stopped where it runs.
+            with self._stopped_lock:
+                self._stopped_by_user.add(job.id)
+            wait_s = STOP_WAIT_S if wait_s is None else wait_s
+            deadline = time.monotonic() + wait_s
+            while True:
+                state = conn.execute("SELECT state FROM job WHERE id = ?", (job.id,)).fetchone()
+                if state is None or state["state"] != "running":
+                    # Ended: it read the stop already, or finished before it.
+                    with self._stopped_lock:
+                        self._stopped_by_user.discard(job.id)
+                    return "stopped"
+                if time.monotonic() > deadline:
+                    log.warning("job %s: still running %.0f s after being stopped", job.id, wait_s)
+                    return "stopping"
+                # Again each time: a stage may have started between two looks.
+                for row in conn.execute(
+                    "SELECT id FROM run WHERE job_id = ? AND status = 'running'", (job.id,)
+                ).fetchall():
+                    with self._stopped_lock:
+                        self._cancel_sent.add(row["id"])
+                    try:
+                        self._engine_cancel(self.data.run_dir(session_id, row["id"]))
+                    # Not running in this process yet, or no longer (just ended): the next
+                    # look tells. Expected, every 0.2 s: not a trace each time.
+                    except RunNotRunningHereError:
+                        log.debug("job %s: %s not running here", job.id, row["id"])
+                    except Exception:
+                        log.exception("job %s: cancelling %s", job.id, row["id"])
+                time.sleep(STOP_POLL_S)
+        finally:
+            conn.close()
+
     # -- one job ------------------------------------------------------------------------
 
     def run_job(self, job: jobs.Job) -> ChainJobResult:
@@ -198,15 +280,28 @@ class Processor:
             return self._run_generation_job(job, job.params)
         log.info("job %s: chain for session %s", job.id, job.session_id)
         interrupted: list[str] = []
+        failures: list[str] = []
         try:
-            result = self._run_chain_job(job, interrupted)
+            result = self._run_chain_job(job, interrupted, failures)
         # A job never takes the processing down: its error is recorded and shown (P8).
         except Exception as exc:
             log.exception("job %s failed", job.id)
             result = ChainJobResult(error=f"{type(exc).__name__} : {exc}")
+        with self._stopped_lock:
+            stopped = job.id in self._stopped_by_user
+            self._stopped_by_user.discard(job.id)
         conn = connect(self.data)
         try:
-            if self._stopping.is_set() and interrupted:
+            if stopped and result.error is not None and interrupted and not failures:
+                # The user's choice, not a failure: its runs are kept as they ended. Its
+                # tracks stay in WAV until it is resumed and ends (`after_chain`, ADR 0046):
+                # converting them now would hold back a deletion asked with the stop.
+                # (Stopped once every stage had succeeded: done, its version in place. A
+                # stage that failed for real: that failure is what the session says, P8.)
+                jobs.mark_stopped(conn, job.id)
+                log.info("job %s stopped by the user (%s)", job.id, result.error)
+                result = ChainJobResult(error=jobs.STOPPED)
+            elif self._stopping.is_set() and interrupted:
                 # Stopped by the application, not failed: it resumes at next start. Its
                 # interrupted runs keep their provenance (Interrupted).
                 jobs.requeue(conn, job.id)
@@ -258,7 +353,11 @@ class Processor:
             conn.close()
         return result
 
-    def _run_chain_job(self, job: jobs.Job, interrupted: list[str]) -> ChainJobResult:
+    def _run_chain_job(
+        self, job: jobs.Job, interrupted: list[str], failures: list[str]
+    ) -> ChainJobResult:
+        """`interrupted`: the stages stopped (by the application or the user), not run or
+        cancelled; `failures`: those that failed for real."""
         conn = connect(self.data)
         try:
             removed = conn.execute(
@@ -352,6 +451,10 @@ class Processor:
             if self._stopping.is_set():
                 interrupted.append(stage.value)
                 raise ApplicationStoppingError(f"{stage.value} non lancée : l'application s'arrête")
+            with self._stopped_lock:
+                if job.id in self._stopped_by_user:
+                    interrupted.append(stage.value)
+                    raise StoppedByUserError(f"{stage.value} non lancée : traitement arrêté")
             conn = connect(self.data)
             try:
                 with conn:
@@ -369,8 +472,24 @@ class Processor:
             try:
                 prov, used = engine_run(stage, cfg, inputs, folder, upstream)  # type: ignore[arg-type]
             except BaseException as exc:
-                if self._stopping.is_set():
+                with self._stopped_lock:
+                    cancelled = folder.name in self._cancel_sent
+                    self._cancel_sent.discard(folder.name)
+                # Stopped by the application, or cancelled at the user's request: what the
+                # stop made of the stage (its cancelling failed on the way: an engine error)
+                # is not a failure of the recording. Its error stays in the run, and is said
+                # here. A stage not yet cancelled that raises: a failure, said as one.
+                if self._stopping.is_set() or cancelled:
                     interrupted.append(stage.value)
+                    if cancelled:
+                        log.warning(
+                            "job %s: %s raised while being cancelled, counted as stopped: %s",
+                            job.id,
+                            stage.value,
+                            exc,
+                        )
+                else:
+                    failures.append(stage.value)
                 conn = connect(self.data)
                 try:
                     with conn:
@@ -379,15 +498,34 @@ class Processor:
                             " error_summary = ? WHERE id = ?",
                             (now_iso(), f"{type(exc).__name__} : {exc}", folder.name),
                         )
+                    if cancelled:
+                        # After the run is closed with its error: failing here loses neither.
+                        try:
+                            jobs.record_stopped_run(conn, job.id, folder.name)
+                        except Exception:
+                            log.exception("job %s: %s not recorded as stopped", job.id, folder.name)
                 finally:
                     conn.close()
                 raise
-            if prov.error is not None and prov.error.code in _STOPPED:
+            with self._stopped_lock:
+                cancelled = folder.name in self._cancel_sent
+                self._cancel_sent.discard(folder.name)
+            # Stopped, but a process of it outlived the stop (engine v1.13.2): stopped all
+            # the same; its error stays in the run, and the deletion waits for it.
+            outlived = stopped_late(prov)
+            if prov.error is not None and (prov.error.code in STOPPED_CODES or outlived):
                 interrupted.append(stage.value)
+            elif prov.error is not None:
+                failures.append(stage.value)
             conn = connect(self.data)
             try:
                 with conn:
                     _record_finished(conn, folder.name, prov)
+                if outlived and cancelled:
+                    try:
+                        jobs.record_stopped_run(conn, job.id, folder.name)
+                    except Exception:
+                        log.exception("job %s: %s not recorded as stopped", job.id, folder.name)
             finally:
                 conn.close()
             return prov, used

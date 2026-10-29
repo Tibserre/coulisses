@@ -77,3 +77,34 @@ export function processingDiscs(
     minutesLeft: hours > 0 ? Math.max(1, Math.round(hours * 10 * left)) : null,
   };
 }
+
+/** Whole seconds until a time the service measured (ISO), never below zero. */
+export function secondsLeft(at: string, now: number): number {
+  const target = Date.parse(at);
+  return Number.isFinite(target) ? Math.max(0, Math.ceil((target - now) / 1000)) : 0;
+}
+
+/** What is left of the wait for the people present (ADR 0069), said plainly, with whom it
+ *  will start by itself (those checked are saved at once). */
+export function waitLeft(seconds: number, present: number): string {
+  if (seconds <= 0) return "Le traitement démarre.";
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  const when =
+    seconds < 60
+      ? `${seconds} s`
+      : `${minutes} min${rest ? ` ${String(rest).padStart(2, "0")}` : ""}`;
+  const whom = present ? `avec ${present} ${present > 1 ? "présents" : "présent"}` : "sans présents";
+  return `Le traitement démarre seul dans ${when}, ${whom}.`;
+}
+
+/** The people present from how many there were and those named (ADR 0069): the named ones
+ *  count, the rest are unnamed; naming more than the count raises it. */
+export function attendeesOf(
+  count: number,
+  ids: number[],
+): { ids: number[]; count: number; unnamed: number | null } {
+  const total = Math.max(count, ids.length, 0);
+  const unnamed = total - ids.length;
+  return { ids, count: total, unnamed: unnamed > 0 ? unnamed : null };
+}

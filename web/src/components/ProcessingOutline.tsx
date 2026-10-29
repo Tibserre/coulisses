@@ -93,15 +93,17 @@ function ProcessingDiscs({
         />
       </div>
       <Text type="supporting">
-        {queued
-          ? "En file : un autre traitement passe d'abord."
-          : discs.stalled
-            ? `Une étape ne donne plus de nouvelles depuis un moment : elle s'est peut-être arrêtée. Le détail des étapes est ${rerun ? "dans « ⋯ › Versions… »" : "ci-dessous"}.`
-            : discs.joining
-              ? "Qui a dit quoi · quelques secondes"
-              : rerun
-                ? `${left}la version affichée reste en place, vos corrections seront reportées`
-                : `${left}vous pouvez fermer Coulisses`}
+        {detail.session.processing_starts_at
+          ? "Il attend les présents, juste au-dessus."
+          : queued
+            ? "En file : un autre traitement passe d'abord."
+            : discs.stalled
+              ? `Une étape ne donne plus de nouvelles depuis un moment : elle s'est peut-être arrêtée. Le détail des étapes est ${rerun ? "dans « ⋯ › Versions… »" : "ci-dessous"}.`
+              : discs.joining
+                ? "Qui a dit quoi · quelques secondes"
+                : rerun
+                  ? `${left}la version affichée reste en place, vos corrections seront reportées`
+                  : `${left}vous pouvez fermer Coulisses`}
       </Text>
     </div>
   );

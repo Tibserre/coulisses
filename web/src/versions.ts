@@ -86,3 +86,29 @@ export const RERUN_DOING: Record<Rerun, string> = {
   diarize: "Les voix sont refaites",
   all: "Le texte et les voix sont refaits",
 };
+
+/** Said under the people present when the processing did not take them (spec §7.1): the
+ *  voices are separated from its start, so those checked later serve a rerun of the voices,
+ *  offered once it is done and while the audio is there (§7.4). Nothing when they were taken. */
+export function attendeesNotTaken(session: {
+  attendees_taken: boolean | null;
+  min_voices: number | null;
+  job_state: string | null;
+  audio: { state: string };
+}): { text: string; rerun: boolean } | null {
+  if (session.attendees_taken !== false) return null;
+  const running = session.job_state === "queued" || session.job_state === "running";
+  const searched =
+    session.min_voices === null
+      ? running
+        ? "Le traitement cherche seul le nombre de voix"
+        : "Le traitement a cherché seul le nombre de voix"
+      : `${running ? "Le traitement cherche" : "Le traitement a cherché"} au moins ${session.min_voices} voix`;
+  const rerun = session.job_state === "done" && session.audio.state !== "removed";
+  if (session.audio.state === "removed")
+    return { text: `${searched}. L'audio est supprimé : les voix ne se refont plus.`, rerun: false };
+  return {
+    text: `${searched} : ces présents serviront si vous refaites les voix${running ? ", une fois le traitement fini" : ""}.`,
+    rerun,
+  };
+}
