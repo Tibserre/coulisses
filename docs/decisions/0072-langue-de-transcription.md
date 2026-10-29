@@ -1,6 +1,6 @@
 # 0072 — Transcrire une séance dans une autre langue que le français
 
-Statut : Proposée (2026-10-29, phase 1 du multilingue, demande de l'utilisateur : « l'utilisateur veut pouvoir transcrire une séance dans une autre langue que le français », relayée par Interface ; « Lance les phases pour le multilingue »). Changement du schéma : accord de l'utilisateur requis avant tout code. S'appuie sur le moteur v1.14.0 (ADR 0071 du moteur). Précise 0020, 0028, 0036, 0049, 0056, 0066 et 0069.
+Statut : Acceptée (2026-10-29, par l'utilisateur, qui a retenu chaque proposition ; voir « Réponses de l'utilisateur »). Proposée le même jour (phase 1 du multilingue, demande de l'utilisateur : « l'utilisateur veut pouvoir transcrire une séance dans une autre langue que le français », relayée par Interface ; « Lance les phases pour le multilingue »). S'appuie sur le moteur v1.14.0 (ADR 0071 du moteur). Précise 0020, 0028, 0036, 0049, 0056, 0066 et 0069.
 
 ## Contexte
 - **Le moteur v1.14.0** transcrit et aligne six langues avec la chaîne retenue : français, anglais, allemand, espagnol, italien et portugais. La langue est une entrée de la chaîne : `ChainInput(language=…)`, un code ISO 639-1, « fr » par défaut. Elle est écrite dans la provenance de la transcription (`inputs.language`) et dans la transcription elle-même (`Transcript.language`).
@@ -74,13 +74,14 @@ Avis de Rédaction (2026-10-29), repris ici :
 - **Risque connu** : avec un long transcript dans une autre langue, un modèle tend à basculer dans cette langue, le petit modèle des chapitres et du titre plus que le gros. **Aucune langue n'est dite prise en charge pour les rédactions avant une mesure** sur au moins une vraie séance en anglais et une en allemand (`scripts/mesurer-modeles.py` : chapitres, titre, un résumé). Critères : toute la sortie en français, titres de chapitres compris ; noms et vocabulaire gardés ; aucune traduction inventée. Le rapport caractères par token (1,8, mesuré en français) est revérifié sur ces langues, pour qu'aucun prompt ne dépasse `num_ctx`. Il n'y a pas encore de vraie séance étrangère : la mesure attend la première. Jusque-là, la transcription d'une autre langue est disponible, et ses rédactions sont faites, mais l'interface ne promet pas leur qualité.
 - La recherche et le connecteur ne changent pas : ils lisent le texte tel qu'il est.
 
-## Questions pour l'utilisateur
-Avec l'accord sur le schéma (deux colonnes), ces choix lui reviennent :
-1. **Une langue par défaut par espace**, prise par ses nouvelles séances, et une langue par séance qui ne suit jamais l'espace ensuite (proposé).
-2. **Les rédactions d'une séance dans une autre langue, avant toute mesure** : les faire comme les autres, sans en promettre la qualité (proposé), ou ne pas les lancer d'elles-mêmes (chapitres, titre) tant que cette langue n'est pas mesurée.
-3. **Les citations exactes dans un résumé en français** d'une séance en anglais : dans leur langue, entre guillemets (proposition de Rédaction), ou traduites.
-4. **Supprimer une langue** : refusé tant qu'un espace l'a par défaut ou qu'une séance attend dans cette langue (proposé).
-5. **Le parcours d'Interface**, sur maquette.
+## Réponses de l'utilisateur
+Le 2026-10-29, par la session Pilotage, l'utilisateur a retenu chaque proposition :
+0. **Le schéma** : oui, deux colonnes, `space.language` et `session.language`, « fr » par défaut.
+1. **Une langue par défaut par espace** : oui. La séance prend la langue de son espace à sa création, puis ne la suit plus.
+2. **Les rédactions d'une séance dans une autre langue** : elles se font comme les autres, sans en promettre la qualité. La mesure se fera sur la première vraie séance en anglais et en allemand.
+3. **Les citations exactes** dans un résumé en français restent dans leur langue, entre guillemets. C'est à Rédaction de le dire dans `prompting/`.
+4. **Supprimer une langue** est refusé tant qu'un espace l'a par défaut ou qu'une séance attend dans cette langue, et le message dit où.
+5. **Le parcours** : Interface en fait une maquette, que l'utilisateur voit avant que l'écran soit codé.
 
 ## Conséquences
 - Une langue ajoutée coûte 1,26 Go, téléchargé sur demande, une fois.

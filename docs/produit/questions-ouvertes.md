@@ -5,8 +5,6 @@
 ## À trancher par l'utilisateur
 | # | Question | Quand | Piste |
 |---|---|---|---|
-| L1 | Les rédactions (chapitres, titre, résumés) d'une séance dans une autre langue que le français, avant toute mesure : les faire comme les autres, ou ne pas les lancer d'elles-mêmes tant que la langue n'est pas mesurée ? | Avec l'accord sur l'ADR 0072 | Proposé : les faire, sans en promettre la qualité, et mesurer sur la première vraie séance en anglais et en allemand |
-| L2 | Dans un résumé en français d'une séance en anglais, une citation exacte reste-t-elle dans sa langue, ou est-elle traduite ? | Avec l'accord sur l'ADR 0072 | Rédaction propose : dans sa langue, entre guillemets |
 
 ## À trancher par la mesure (banc d'essai)
 | # | Question |
