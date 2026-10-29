@@ -6,6 +6,27 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Nouveautés
+
+- dit étape par étape ce que l'arrêt a annulé (traitement)
+- arrête un traitement, ou supprime sa séance pendant qu'il tourne (traitement)
+- permet d'arrêter un traitement et de supprimer sa séance en cours (traitement)
+- demande d'abord le nombre de présents, les noms au choix (import)
+- demande « Qui était là ? » avant le traitement d'un import (import)
+- fait attendre les présents au premier traitement d'un import (import)
+- dit quand les présents ne sont pas ceux du traitement (presents)
+- prend les présents cochés avant le premier traitement (presents)
+- importe en un geste, sans fenêtre (import)
+
+### Corrections
+
+- attend la fin des programmes d'une étape arrêtée avant de supprimer sa séance (traitement)
+- ne dit « arrêtée » que d'une étape que le service dit arrêtée (traitement)
+- dit « arrêtée » pour les étapes d'un traitement arrêté (traitement)
+- garde « arrêté » quand l'annulation du moteur échoue (traitement)
+
 ## v0.35.0 — 2026-10-28
 
 ### Nouveautés depuis la 0.34.0
