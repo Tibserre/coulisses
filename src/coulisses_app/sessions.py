@@ -65,6 +65,10 @@ class Session(BaseModel):
     """People present whom nobody named, in addition to the checked ones."""
     min_voices: int | None
     """Minimum of voices asked of the engine by the latest processing (P3)."""
+    processing_starts_at: str | None = None
+    """Its first processing waits for the people present until then (UTC), unless started
+    at once; None when it does not wait, or no longer (its time passed: it starts as soon as
+    the sessions ahead of it are processed)."""
     attendees_taken: bool | None = None
     """Whether the people present now are that minimum: false once checked after its
     diarization began (a rerun of the voices takes them), or when another
@@ -96,8 +100,11 @@ def import_recording(
     unnamed_attendees: int | None = None,
     recorded_at: datetime | None,
     profile: str,
+    wait_for_attendees: bool = False,
 ) -> str:
     """Keep the file exactly as received, make it a session and queue its processing.
+    `wait_for_attendees`: an import in one gesture, made with nobody present; its processing
+    waits for them (`jobs.WAIT_FOR_ATTENDEES_S`, ADR 0069).
 
     The file is first received in `imports-en-cours/`; if ffmpeg cannot read it, that copy
     is removed and `UnreadableAudioError` says why (the user's original is untouched)."""
@@ -178,7 +185,14 @@ def import_recording(
                 stamp,
             ),
         )
-        jobs.enqueue_chain(conn, session_id, profile=profile, attendees=minimum, glossary=glossary)
+        jobs.enqueue_chain(
+            conn,
+            session_id,
+            profile=profile,
+            attendees=minimum,
+            glossary=glossary,
+            wait_s=jobs.WAIT_FOR_ATTENDEES_S if wait_for_attendees else None,
+        )
         sources.mkdir(parents=True)
         shutil.move(received, stored)
         moved = True
@@ -201,7 +215,8 @@ def import_recording(
 def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
     params = row["job_params"]
     attendee_ids = spaces.attendee_ids(conn, row["id"])
-    min_voices = jobs.ChainParams.model_validate_json(params).attendees if params else None
+    chain = jobs.ChainParams.model_validate_json(params) if params else None
+    min_voices = chain.attendees if chain else None
     return Session(
         id=row["id"],
         title=row["title"],
@@ -214,6 +229,14 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
         attendee_ids=attendee_ids,
         unnamed_attendees=row["unnamed_attendees"],
         min_voices=min_voices,
+        processing_starts_at=(
+            chain.starts_at
+            if chain
+            and chain.starts_at is not None
+            and row["job_state"] == "queued"
+            and chain.starts_at > now_iso()
+            else None
+        ),
         attendees_taken=(
             min_voices == spaces.attendee_minimum(len(attendee_ids), row["unnamed_attendees"])
             if params

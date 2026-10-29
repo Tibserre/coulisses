@@ -16,8 +16,12 @@ log = logging.getLogger(__name__)
 _MIGRATION_NAME = re.compile(r"^(\d{4})_[a-z0-9_]+\.sql$")
 
 
+ISO_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+"""Times in the database: UTC, to the second; compared as text."""
+
+
 def now_iso() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime(ISO_FORMAT)
 
 
 def connect(data: DataDir) -> sqlite3.Connection:

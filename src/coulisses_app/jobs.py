@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from coulisses_app.storage.db import now_iso
+from coulisses_app.storage.db import ISO_FORMAT, now_iso
+
+WAIT_FOR_ATTENDEES_S = 120.0
+"""How long an import in one gesture waits for the people present before its first
+processing starts without them (ADR 0069)."""
 
 Rerun = Literal["transcribe", "diarize", "all"]
 
@@ -33,6 +38,10 @@ class ChainParams(BaseModel):
     after it) to make a new version (step 7 of the plan)."""
     reuse: dict[str, str] = {}
     """For a rerun: stage → run of the version it starts from, used as it is."""
+    starts_at: str | None = None
+    """A first processing waiting for the people present (an import in one gesture): not
+    claimed before this time (UTC), unless started at once (`start_now`). Set as a time, it
+    holds across a restart: past due, it starts with the service."""
     mix: dict[str, Any] | None = None
     """When the engine heard the microphone mixed with the computer's sound (ADR 0032):
     what the mix was made of (`mixing.MixFacts`), set when the job runs. Kept here, it
@@ -64,8 +73,17 @@ def enqueue_chain(
     profile: str,
     attendees: int | None,
     glossary: list[str] | None = None,
+    wait_s: float | None = None,
 ) -> int:
-    params = ChainParams(profile=profile, attendees=attendees, glossary=glossary or [])
+    """`wait_s`: the first processing waits that long for the people present."""
+    starts_at = (
+        (datetime.now(UTC) + timedelta(seconds=wait_s)).strftime(ISO_FORMAT)
+        if wait_s is not None
+        else None
+    )
+    params = ChainParams(
+        profile=profile, attendees=attendees, glossary=glossary or [], starts_at=starts_at
+    )
     cursor = conn.execute(
         "INSERT INTO job (session_id, kind, state, params, requested_at)"
         " VALUES (?, 'chain', 'queued', ?, ?)",
@@ -128,11 +146,14 @@ def _job(row: sqlite3.Row) -> Job:
 
 
 def claim_next(conn: sqlite3.Connection) -> Job | None:
-    """Take the oldest queued job and mark it running, atomically."""
+    """Take the oldest queued job and mark it running, atomically. One waiting for the people
+    present (`starts_at`) is left until its time; the others go ahead of it."""
     with conn:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
-            "SELECT * FROM job WHERE state = 'queued' ORDER BY id LIMIT 1"
+            "SELECT * FROM job WHERE state = 'queued'"
+            " AND coalesce(json_extract(params, '$.starts_at'), '') <= ? ORDER BY id LIMIT 1",
+            (now_iso(),),
         ).fetchone()
         if row is None:
             return None
@@ -207,6 +228,25 @@ def take_attendees(conn: sqlite3.Connection, session_id: str, attendees: int | N
         "UPDATE job SET params = ? WHERE id = ? AND state = 'queued'",
         (params.model_dump_json(), job.id),
     )
+    return True
+
+
+def start_now(conn: sqlite3.Connection, session_id: str) -> bool:
+    """The first processing waiting for the people present starts now: they are checked, or
+    the user goes on without them. Returns whether one was waiting."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT * FROM job WHERE session_id = ? AND kind = 'chain' AND state = 'queued'"
+            " AND json_extract(params, '$.starts_at') IS NOT NULL",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        job = _job(row)
+        assert isinstance(job.params, ChainParams)
+        params = job.params.model_copy(update={"starts_at": None})
+        conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job.id))
     return True
 
 
