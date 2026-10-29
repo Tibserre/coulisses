@@ -166,12 +166,12 @@ Paramètres : `limite` (1 à 200, 50 par défaut), `avant` (un `id` : les entré
 ```json
 {
   "entries": [
-    {"id": 812, "at": "2026-10-29T14:02:11Z", "tool": "lire_transcript", "session_id": "20261012-201500-a1b2", "session_title": "Répétition du 12 octobre", "session_deleted": false, "names_shared": false}
+    {"id": 812, "at": "2026-10-29T14:02:11Z", "tool": "lire_transcript", "session_id": "20261012-201500-a1b2", "session_title": "Répétition du 12 octobre", "session_recorded_at": "2026-10-12T18:15:00Z", "session_deleted": false, "names_shared": false}
   ],
   "next": 790
 }
 ```
-Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` vaut `chercher`, `lister_seances`, `lire_seance`, `lire_resume` ou `lire_transcript`. Une recherche ou une liste note une entrée par séance rendue, ou une seule entrée sans séance si elle n'en rend aucune. `names_shared` : `null` pour une entrée sans séance (rien n'a été transmis). `session_title` : le titre actuel, vrai (c'est l'utilisateur qui lit) ; `null` pour une séance supprimée depuis ou sans titre (`session_deleted` le dit). Le texte de la recherche n'est pas noté. Seules les réponses 200 sont notées : une lecture refusée (403, 404, 409, 422) n'a rien transmis.
+Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` vaut `chercher`, `lister_seances`, `lire_seance`, `lire_resume` ou `lire_transcript`. Une recherche ou une liste note une entrée par séance rendue, ou une seule entrée sans séance si elle n'en rend aucune. `names_shared` : `null` pour une entrée sans séance (rien n'a été transmis). `session_title` : le titre actuel, vrai (c'est l'utilisateur qui lit) ; `null` pour une séance supprimée depuis ou sans titre (`session_deleted` le dit). `session_recorded_at` : sa date d'enregistrement, pour nommer une séance sans titre (« Séance du 29 octobre ») ; `null` pour une séance supprimée depuis. Le texte de la recherche n'est pas noté. Seules les réponses 200 sont notées : une lecture refusée (403, 404, 409, 422) n'a rien transmis.
 
 ## 3. Les deux options d'un espace
 

@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 coulisses-app = "coulisses_app.cli:main"
+coulisses-mcp = "coulisses_app.bridge:main"
 
 [tool.uv.sources]
 coulisses = { git = "https://github.com/Tibserre/coulisses-moteur", subdirectory = "engine", tag = "v1.13.2" }

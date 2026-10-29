@@ -192,6 +192,7 @@ def test_each_read_is_in_the_journal_without_what_was_searched(
     ]
     assert entries[0]["session_id"] is None and entries[0]["names_shared"] is None
     assert entries[1]["session_title"] == "Répétition chez Dupont"  # the user reads it
+    assert entries[1]["session_recorded_at"] and entries[0]["session_recorded_at"] is None
     assert all(e["names_shared"] is False for e in entries[1:])
     conn = connect(data)
     try:
@@ -199,6 +200,10 @@ def test_each_read_is_in_the_journal_without_what_was_searched(
     finally:
         conn.close()
     assert "introuvable" not in json.dumps(rows)
+    client.delete(f"/api/seances/{session_id}")
+    gone = client.get("/api/reglages/connecteur/journal").json()["entries"][1]
+    assert gone["session_deleted"] is True
+    assert (gone["session_title"], gone["session_recorded_at"]) == (None, None)
     page = client.get("/api/reglages/connecteur/journal?limite=2").json()
     assert len(page["entries"]) == 2 and page["next"] == page["entries"][-1]["id"]
     rest = client.get(f"/api/reglages/connecteur/journal?avant={page['next']}").json()
@@ -274,6 +279,12 @@ def test_a_summary_is_read_masked_with_its_provenance(
     assert client.get(f"/api/connecteur/seances/{session_id}/resumes/999").status_code == 404
 
 
+def _recorded(data: DataDir, session_id: str) -> str:
+    session = sessions.get_session(data, session_id)
+    assert session is not None
+    return session.recorded_at
+
+
 def test_the_list_and_the_search_go_on_by_pages(data: DataDir, recording: Path) -> None:
     client, first, space_id = _prepared(data, recording)
     second = import_(data, recording)
@@ -285,9 +296,11 @@ def test_the_list_and_the_search_go_on_by_pages(data: DataDir, recording: Path) 
         conn.close()
     _open(client, space_id)
     page = client.get("/api/connecteur/seances", params={"limite": 1}).json()
-    assert [s["id"] for s in page["sessions"]] == [second] and page["next"]
+    # By date, then by id: two sessions of the same second come in the order of their ids.
+    newer, older = sorted((first, second), key=lambda i: (_recorded(data, i), i), reverse=True)
+    assert [s["id"] for s in page["sessions"]] == [newer] and page["next"]
     rest = client.get("/api/connecteur/seances", params={"limite": 1, "apres": page["next"]})
-    assert [s["id"] for s in rest.json()["sessions"]] == [first] and rest.json()["next"] is None
+    assert [s["id"] for s in rest.json()["sessions"]] == [older] and rest.json()["next"] is None
     found = client.get("/api/connecteur/recherche", params={"q": "bonjour", "limite": 1}).json()
     assert len(found["sessions"]) == 1 and found["next"]
     more = client.get(
