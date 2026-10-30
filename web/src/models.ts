@@ -7,6 +7,16 @@ const STAGE_WORDS: Partial<Record<CatalogModel["stage"], string>> = {
   diarize: "Qui parle quand",
 };
 
+/** The languages a model can be for (engine v1.14.0), said in a purpose. */
+const LANGUAGE_WORDS: Record<string, string> = {
+  fr: "français",
+  en: "anglais",
+  de: "allemand",
+  es: "espagnol",
+  it: "italien",
+  pt: "portugais",
+};
+
 /** Sizes as the catalog gives them: in decimal gigabytes (4,7 Go). */
 export function gigabytes(bytes: number): string {
   if (bytes < 1e9) return `${Math.max(1, Math.round(bytes / 1e6))} Mo`;
@@ -41,6 +51,20 @@ export function purposeOf(model: CatalogModel): string {
   return STAGE_WORDS[model.stage] ?? model.role;
 }
 
+/** For the sessions of another language than the one checked (French by default). */
+function otherLanguage(model: CatalogModel, readiness: Readiness): boolean {
+  return model.language != null && model.language !== (readiness.language ?? "fr");
+}
+
+/** Its purpose, with its language when it is for another one: never two lines of the same
+ *  name for two different models. */
+function forLanguage(model: CatalogModel, readiness: Readiness): string {
+  const purpose = purposeOf(model);
+  if (!otherLanguage(model, readiness)) return purpose;
+  const language = LANGUAGE_WORDS[model.language ?? ""];
+  return language ? `${purpose} (${language})` : `${purpose} (autre langue)`;
+}
+
 function stateOf(
   key: string,
   inventory: Inventory,
@@ -73,8 +97,9 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
     return {
       key: model.key,
       model,
-      purpose: purposeOf(model),
-      required: model.required_by.includes(readiness.profile),
+      purpose: forLanguage(model, readiness),
+      // A model for one language is needed only by the sessions of that language.
+      required: model.required_by.includes(readiness.profile) && !otherLanguage(model, readiness),
       state: stateOf(model.key, inventory, action, model),
       last: action && action.state !== "running" ? action : null,
     };

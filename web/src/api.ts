@@ -90,8 +90,11 @@ export interface CatalogModel {
   /** Its terms must be accepted on this page before downloading. */
   terms_url: string | null;
   engine: string | null;
-  /** The engine's profiles that need it (the retained chain: « chaine-retenue »). */
+  /** The engine's profiles that need it (the retained chain: « chaine-retenue »)… */
   required_by: string[];
+  /** …for the sessions of this language only, when set (an aligner, engine v1.14.0;
+   *  ISO 639-1). */
+  language?: string | null;
   /** The model that does this one's job in the retained chain now (engine v1.10.0). */
   replaced_by: string | null;
   /** Why, in French, written by the engine for the user: shown as it is (engine v1.10.0). */
@@ -182,6 +185,8 @@ export interface MissingPiece {
 
 export interface Readiness {
   profile: string;
+  /** The session language checked (engine v1.14.0): only its models are required. */
+  language?: string;
   ready: boolean;
   missing: MissingPiece[];
 }

@@ -137,9 +137,9 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
   const named = (row: ModelRow) =>
     dev
       ? row.key
-      : row.required
-        ? `Le modèle « ${row.purpose} »`
-        : `L'ancien modèle « ${row.purpose} »`;
+      : row.state.kind === "installed" && row.state.replacement !== null
+        ? `L'ancien modèle « ${row.purpose} »`
+        : `Le modèle « ${row.purpose} »`;
   /** Installed models of this step the processing no longer uses (outside developer mode). */
   const oldOf = (purpose: string) => quiet?.old.get(purpose) ?? [];
 
