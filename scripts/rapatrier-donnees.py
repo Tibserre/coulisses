@@ -22,7 +22,12 @@ from typing import NoReturn
 
 from coulisses_app.lock import AlreadyRunningError, hold_data_lock
 from coulisses_app.paths import DEFAULT_DATA_DIR, DataDir
-from coulisses_app.storage.db import migrate
+from coulisses_app.storage.db import (
+    DatabaseTooNewError,
+    MigrationMismatchError,
+    check,
+    migrate,
+)
 
 
 def say(text: str) -> None:
@@ -142,6 +147,12 @@ def main() -> None:
             try:
                 if made.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise RuntimeError("la copie de la base n'est pas intègre")
+                # Before anything else is made of it (journal, copy of the base before): a
+                # base this application cannot take is refused here, and said.
+                try:
+                    check(partial, said_as=source.database)
+                except (DatabaseTooNewError, MigrationMismatchError) as exc:
+                    fail(str(exc))
                 if target.database.is_file():
                     # Every deletion stays in the log (ADR 0029): the target's carried over.
                     made.execute(
@@ -179,7 +190,10 @@ def main() -> None:
                     )
             partial.unlink(missing_ok=True)
             raise
-        migrate(target)
+        try:
+            migrate(target)
+        except (DatabaseTooNewError, MigrationMismatchError) as exc:
+            fail(str(exc))
         say(
             f"Rapatrié : {len(folders)} séance(s), {needed / 1e9:.1f} Go, dans {target.root}. "
             f"La source n'a pas bougé : {source.root}."

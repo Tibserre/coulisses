@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from pathlib import Path
 
@@ -223,3 +224,140 @@ def test_migration_0010_journals_copies_of_the_base_and_keeps_the_rows(
                 )
     finally:
         conn.close()
+
+
+def _names(data: DataDir) -> dict[str, str]:
+    conn = db.connect(data)
+    try:
+        row = conn.execute(
+            "SELECT value FROM app_setting WHERE key = ?", (db.APPLIED_KEY,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return json.loads(row[0]) if row else {}
+
+
+def test_each_migration_leaves_its_name(data: DataDir) -> None:
+    assert _names(data) == {str(v): name for v, name, _ in db.migrations()}
+
+
+def test_a_database_migrated_by_another_branch_is_refused_at_start(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two branches each made a migration under the same number: the second one sees it,
+    and says it, instead of failing later on a column that is not there."""
+    shipped = db.migrations()
+    number = len(shipped) + 1
+    theirs = (number, f"{number:04d}_autre_branche.sql", "CREATE TABLE autre (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*shipped, theirs])
+    db.migrate(data)
+    ours = (number, f"{number:04d}_cette_branche.sql", "CREATE TABLE celle_ci (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*shipped, ours])
+    with pytest.raises(db.MigrationMismatchError, match="autre_branche"):
+        db.migrate(data)
+    assert "celle_ci" not in tables(data)
+
+
+def _before_the_names(data: DataDir, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A database as the published versions leave it: at the last migration before the
+    names (0010), without names."""
+    monkeypatch.setattr(
+        db,
+        "migrations",
+        lambda: [m for m in SHIPPED if m[0] < db._NAMED_SINCE],  # pyright: ignore[reportPrivateUsage]
+    )
+    db.migrate(data)
+    conn = db.connect(data)
+    with conn:
+        conn.execute("DELETE FROM app_setting WHERE key = ?", (db.APPLIED_KEY,))
+    conn.close()
+
+
+SHIPPED = db.migrations()
+
+
+def test_a_database_from_before_the_names_is_never_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bases of today have no names: their migrations are not checked, and the next
+    ones are recorded."""
+    data = DataDir(tmp_path / "publiee")
+    _before_the_names(data, monkeypatch)
+    assert db.migrate(data) == []
+    first = db._NAMED_SINCE  # pyright: ignore[reportPrivateUsage]
+    earlier = [m for m in SHIPPED if m[0] < first]
+    extra = (first, f"{first:04d}_suivante.sql", "CREATE TABLE suivante (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*earlier, extra])
+    db.migrate(data)
+    assert _names(data) == {str(first): f"{first:04d}_suivante.sql"}
+    assert db.migrate(data) == []
+
+
+def test_a_database_given_a_later_migration_without_its_name_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A branch made before the names migrated it past 0010 without writing them: its
+    migration under that number may not be this application's (the language, after the
+    connector's or the summaries' 0011)."""
+    data = DataDir(tmp_path / "dev")
+    _before_the_names(data, monkeypatch)
+    first = db._NAMED_SINCE  # pyright: ignore[reportPrivateUsage]
+    earlier = [m for m in SHIPPED if m[0] < first]
+    theirs = (first, f"{first:04d}_autre_branche.sql", "CREATE TABLE autre (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*earlier, theirs])
+    db.migrate(data)
+    conn = db.connect(data)
+    with conn:  # as that branch left it: no names
+        conn.execute("DELETE FROM app_setting WHERE key = ?", (db.APPLIED_KEY,))
+    conn.close()
+    ours = (first, f"{first:04d}_cette_branche.sql", "CREATE TABLE celle_ci (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*earlier, ours])
+    with pytest.raises(db.MigrationMismatchError, match=f"migration {first:04d}"):
+        db.migrate(data)
+    with pytest.raises(db.MigrationMismatchError):
+        db.check(data.database)
+    assert "celle_ci" not in tables(data)
+
+
+def test_a_step_1_database_records_the_names_it_receives(tmp_path: Path) -> None:
+    data = DataDir(tmp_path / "ancienne")
+    data.root.mkdir(parents=True)
+    conn = sqlite3.connect(data.database)
+    conn.executescript(db.migrations()[0][2] + "\nPRAGMA user_version = 1;")
+    conn.close()
+    db.migrate(data)
+    expected = {str(v): name for v, name, _ in db.migrations() if v > 1}
+    assert _names(data) == expected
+
+
+def test_a_refused_database_stops_the_start_with_its_reason(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from coulisses_app import cli
+
+    def refused(_data: DataDir) -> list[Path]:
+        raise db.MigrationMismatchError("La base a reçu la migration « 0011_autre ».")
+
+    monkeypatch.setattr(cli, "migrate", refused)
+    with pytest.raises(SystemExit) as stopped:
+        cli.migrate_or_exit(data)
+    assert stopped.value.code == 1
+    assert "0011_autre" in capsys.readouterr().err
+
+
+def test_a_database_is_checked_before_it_replaces_another(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db.check(data.database)  # this application's own: taken
+    shipped = db.migrations()
+    number = len(shipped) + 1
+    theirs = (number, f"{number:04d}_autre_branche.sql", "CREATE TABLE autre (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*shipped, theirs])
+    db.migrate(data)
+    ours = (number, f"{number:04d}_cette_branche.sql", "SELECT 1;")
+    monkeypatch.setattr(db, "migrations", lambda: [*shipped, ours])
+    with pytest.raises(db.MigrationMismatchError):
+        db.check(data.database)
+    monkeypatch.setattr(db, "migrations", lambda: shipped)
+    with pytest.raises(db.DatabaseTooNewError):
+        db.check(data.database)

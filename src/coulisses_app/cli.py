@@ -22,7 +22,7 @@ from coulisses_app.paths import DataDir, RealDataRefusedError
 from coulisses_app.processing import Processor
 from coulisses_app.retention import Watcher, prune_backups
 from coulisses_app.sessions import interrupted_imports
-from coulisses_app.storage.db import migrate
+from coulisses_app.storage.db import DatabaseTooNewError, MigrationMismatchError, migrate
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,16 @@ def launch_settings(args: argparse.Namespace) -> tuple[DataDir, int]:
     return data, port if args.port is None else args.port
 
 
+def migrate_or_exit(data: DataDir) -> list[Path]:
+    """The database brought to this application's schema, or the reason it cannot be, said
+    on stderr, and the service not started."""
+    try:
+        return migrate(data)
+    except (DatabaseTooNewError, MigrationMismatchError) as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
@@ -102,7 +112,7 @@ def main(argv: list[str] | None = None) -> None:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
     pruned: list[str] = []
-    for backup in migrate(data):
+    for backup in migrate_or_exit(data):
         print(f"Base sauvegardée avant mise à jour : {backup}", file=sys.stderr)
         # Only the latest copies are kept (ADR 0052); what could not go is said at start.
         pruned += [f"Anciennes copies de la base : {p}" for p in prune_backups(data, backup)]
