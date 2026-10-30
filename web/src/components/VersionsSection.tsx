@@ -336,6 +336,9 @@ export function RerunDialog({
   const target = stage !== "diarize" ? (chosen ?? shownLanguage) : shownLanguage;
   const other = target !== null && target !== shownLanguage;
   const targetLabel = target !== null && languages ? labelOf(languages, target) : null;
+  // A version whose provenance says no language: the text's language is chosen, never
+  // supposed French (P7); the service asks for it.
+  const toChoose = stage !== "diarize" && shownLanguage === null && chosen === null;
   const ask = async () => {
     try {
       await api.rerun(sessionId, stage, withVoices ? proposed : null, other ? target : null);
@@ -392,28 +395,31 @@ export function RerunDialog({
             </button>
           ))}
         </div>
-        {stage !== "diarize" && languages && shownLanguage !== null && (
+        {stage !== "diarize" && languages && (
           <div className="cl-rerun__language">
             <Text weight="medium">Langue du texte</Text>
             <LanguagePick
               languages={languages}
-              value={target ?? shownLanguage}
+              value={target ?? ""}
               title="Langue du texte"
               onPick={(l) => setChosen(l.language)}
             >
               <button type="button" className="cl-modelpick">
                 <span className="cl-modelpick__name">
-                  {targetLabel ?? "Langue plus prise en charge"}
+                  {targetLabel ??
+                    (target === null ? "À choisir" : "Langue plus prise en charge")}
                 </span>
                 <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
               </button>
             </LanguagePick>
             <Text type="supporting">
-              Par défaut, celle de la version affichée
-              {labelOf(languages, shownLanguage)
-                ? ` : ${languageWord(labelOf(languages, shownLanguage)!)}`
-                : ""}
-              .
+              {shownLanguage === null
+                ? "La langue de la version affichée est inconnue : choisissez celle du texte."
+                : `Par défaut, celle de la version affichée${
+                    labelOf(languages, shownLanguage)
+                      ? ` : ${languageWord(labelOf(languages, shownLanguage)!)}`
+                      : ""
+                  }.`}
             </Text>
           </div>
         )}
@@ -473,7 +479,7 @@ export function RerunDialog({
                 ? `${ACTION[stage]} en ${languageWord(targetLabel)}`
                 : ACTION[stage]
             }
-            isDisabled={!facts?.possible}
+            isDisabled={!facts?.possible || toChoose}
             clickAction={ask}
           />
         </div>

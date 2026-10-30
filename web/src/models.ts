@@ -1,20 +1,10 @@
-import type { CatalogModel, EnvironmentInfo, Inventory, ModelAction, ModelsView, Readiness, UvStore } from "./api.ts";
+import type { CatalogModel, EnvironmentInfo, Inventory, Language, ModelAction, ModelsView, Readiness, UvStore } from "./api.ts";
 
 /** What each stage is for, said to the user. */
 const STAGE_WORDS: Partial<Record<CatalogModel["stage"], string>> = {
   transcribe: "Transcription",
   align: "Alignement des mots",
   diarize: "Qui parle quand",
-};
-
-/** The languages a model can be for (engine v1.14.0), said in a purpose. */
-const LANGUAGE_WORDS: Record<string, string> = {
-  fr: "français",
-  en: "anglais",
-  de: "allemand",
-  es: "espagnol",
-  it: "italien",
-  pt: "portugais",
 };
 
 /** Sizes as the catalog gives them: in decimal gigabytes (4,7 Go). */
@@ -61,11 +51,12 @@ function otherLanguage(model: CatalogModel, readiness: Readiness): boolean {
 
 /** Its purpose, with its language when it is for another one: never two lines of the same
  *  name for two different models. */
-function forLanguage(model: CatalogModel, readiness: Readiness): string {
+function forLanguage(model: CatalogModel, readiness: Readiness, languages: Language[]): string {
   const purpose = purposeOf(model);
   if (!otherLanguage(model, readiness)) return purpose;
-  const language = LANGUAGE_WORDS[model.language ?? ""];
-  return language ? `${purpose} (${language})` : `${purpose} (autre langue)`;
+  // Named as the engine names it (GET /api/langues), never by the application (P6).
+  const label = languages.find((l) => l.language === model.language)?.label;
+  return label ? `${purpose} (${label.toLocaleLowerCase("fr")})` : `${purpose} (autre langue)`;
 }
 
 function stateOf(
@@ -90,8 +81,9 @@ function stateOf(
 }
 
 /** One row per model of the catalog, then one per thing on the disk outside it: from what
- *  is on the disk and what runs. Nothing taking space is left unseen. */
-export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] {
+ *  is on the disk and what runs. Nothing taking space is left unseen. `languages` names the
+ *  language of a model for another one; until read, « (autre langue) ». */
+export function modelRows(view: ModelsView, actions: ModelAction[], languages: Language[] = []): ModelRow[] {
   const { inventory, readiness } = view;
   const actionOf = (key: string) => actions.find((a) => a.kind === "model" && a.name === key) ?? null;
   const known = new Set(view.catalog.models.map((m) => m.key));
@@ -100,7 +92,7 @@ export function modelRows(view: ModelsView, actions: ModelAction[]): ModelRow[] 
     return {
       key: model.key,
       model,
-      purpose: forLanguage(model, readiness),
+      purpose: forLanguage(model, readiness, languages),
       // A model for one language is needed only by the sessions of that language.
       required: model.required_by.includes(readiness.profile) && !otherLanguage(model, readiness),
       otherLanguage: otherLanguage(model, readiness) ? (model.language ?? null) : null,

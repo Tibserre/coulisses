@@ -13,6 +13,7 @@ import {
   type ModelsView,
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
+import { useLanguages } from "./Languages.tsx";
 import { lastModelsView, stepsChanged } from "../steps.ts";
 import {
   environmentState,
@@ -50,6 +51,8 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
   );
   const [unreadable, setUnreadable] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  // The names of the languages, for the models of another one (P6).
+  const { languages } = useLanguages(setRefused);
   const [asking, setAsking] = useState<Asking>(null);
   const [working, setWorking] = useState(false);
   const running = useRef(new Set<string>());
@@ -115,7 +118,7 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
     }
   };
 
-  const rows = view ? modelRows(view, actions) : [];
+  const rows = view ? modelRows(view, actions, languages ?? []) : [];
   const purposeOfKey = (key: string) =>
     rows.find((r) => r.key === key)?.purpose;
   const lacking = view
