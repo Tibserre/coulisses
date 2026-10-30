@@ -15,7 +15,7 @@ import type {
   Versions,
 } from "../api.ts";
 import { formatClock, formatDateTime, plural } from "../format.ts";
-import { labelOf, languageWord, versionLanguage } from "../languages.ts";
+import { labelOf, languageWord, rerunLanguageMissing, versionLanguage } from "../languages.ts";
 import { LanguageDownloadDialog, LanguagePick, useLanguages } from "./Languages.tsx";
 import {
   carriedText,
@@ -336,9 +336,7 @@ export function RerunDialog({
   const target = stage !== "diarize" ? (chosen ?? shownLanguage) : shownLanguage;
   const other = target !== null && target !== shownLanguage;
   const targetLabel = target !== null && languages ? labelOf(languages, target) : null;
-  // A version whose provenance says no language: the text's language is chosen, never
-  // supposed French (P7); the service asks for it.
-  const toChoose = stage !== "diarize" && shownLanguage === null && chosen === null;
+  const missing = rerunLanguageMissing(stage, shownLanguage, chosen);
   const ask = async () => {
     try {
       await api.rerun(sessionId, stage, withVoices ? proposed : null, other ? target : null);
@@ -423,6 +421,13 @@ export function RerunDialog({
             </Text>
           </div>
         )}
+        {missing === "redo_text" && (
+          <Banner
+            status="info"
+            title="La langue du texte est inconnue"
+            description="Sa provenance ne la dit pas. Refaire les voix garde ce texte : refaites plutôt le texte, en choisissant sa langue."
+          />
+        )}
         {facts && (
           <Text as="p" color="secondary">
             {other && targetLabel
@@ -479,7 +484,7 @@ export function RerunDialog({
                 ? `${ACTION[stage]} en ${languageWord(targetLabel)}`
                 : ACTION[stage]
             }
-            isDisabled={!facts?.possible || toChoose}
+            isDisabled={!facts?.possible || missing !== null}
             clickAction={ask}
           />
         </div>

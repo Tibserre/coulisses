@@ -1,4 +1,5 @@
 import type { CatalogModel, EnvironmentInfo, Inventory, Language, ModelAction, ModelsView, Readiness, UvStore } from "./api.ts";
+import { languageWord } from "./languages.ts";
 
 /** What each stage is for, said to the user. */
 const STAGE_WORDS: Partial<Record<CatalogModel["stage"], string>> = {
@@ -56,7 +57,7 @@ function forLanguage(model: CatalogModel, readiness: Readiness, languages: Langu
   if (!otherLanguage(model, readiness)) return purpose;
   // Named as the engine names it (GET /api/langues), never by the application (P6).
   const label = languages.find((l) => l.language === model.language)?.label;
-  return label ? `${purpose} (${label.toLocaleLowerCase("fr")})` : `${purpose} (autre langue)`;
+  return label ? `${purpose} (${languageWord(label)})` : `${purpose} (autre langue)`;
 }
 
 function stateOf(

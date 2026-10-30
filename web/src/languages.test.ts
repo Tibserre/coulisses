@@ -9,6 +9,7 @@ import {
   languageState,
   languageUses,
   languageWorthShowing,
+  rerunLanguageMissing,
   theLanguage,
   versionLanguage,
   waitWords,
@@ -182,4 +183,12 @@ test("French is included: never removed, whatever its models", () => {
   );
   assert.equal(canRemoveLanguage(language({ installed: true })), true);
   assert.equal(canRemoveLanguage(language({})), false);
+});
+
+test("a rerun of a version without a language waits for it to be chosen", () => {
+  assert.equal(rerunLanguageMissing("transcribe", "fr", null), null);
+  assert.equal(rerunLanguageMissing("transcribe", null, null), "choose");
+  assert.equal(rerunLanguageMissing("all", null, "en"), null);
+  // The voices alone keep the text: no language to choose, the text is redone instead.
+  assert.equal(rerunLanguageMissing("diarize", null, "en"), "redo_text");
 });

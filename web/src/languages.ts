@@ -1,4 +1,4 @@
-import type { Language, ProcessingWait } from "./api.ts";
+import type { Language, ProcessingWait, Rerun } from "./api.ts";
 import { formatDate } from "./format.ts";
 import { sessionHref } from "./library.ts";
 import { gigabytes } from "./models.ts";
@@ -76,6 +76,19 @@ export function canRemoveLanguage(language: Language): boolean {
     language.installed &&
     language.own_models.length > 0
   );
+}
+
+/** What a rerun lacks when the shown version's provenance says no language (P7: never
+ *  supposed French): the text's language to choose, or, for the voices alone, which keep
+ *  that text, nothing to choose at all (the service refuses both). Null: nothing lacks. */
+export function rerunLanguageMissing(
+  stage: Rerun,
+  shown: string | null,
+  chosen: string | null,
+): "choose" | "redo_text" | null {
+  if (shown !== null) return null;
+  if (stage === "diarize") return "redo_text";
+  return chosen === null ? "choose" : null;
 }
 
 /** The share downloaded, 0 to 100. */
