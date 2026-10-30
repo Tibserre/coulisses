@@ -8,8 +8,15 @@ la publication lit celle de `main`.
 
 ## Non publié
 
+### Nouveautés
+
+- dit à part et en français l'arrêt du traitement et la reprise en échec (etat)
+- transcrit une séance dans la langue de son espace ou choisie (langue)
+
 ### Corrections
 
+- démarre le service même si la reprise des séances en attente échoue (langue)
+- refait les voix d'une version de langue inconnue, et dit un échec de reprise (langue)
 - refuse une base migrée au-delà de 0010 sans noms (base)
 - refuse au démarrage une base migrée par une autre branche (base)
 - ne dit un aligneur exigé que pour sa langue (modeles)
