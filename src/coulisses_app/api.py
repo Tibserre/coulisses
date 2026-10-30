@@ -425,7 +425,7 @@ def create_app(
     recorder = recorder or capture.Recorder(data)
     engine_store = engine_store or engine_models.EngineModels(profile)
     if processor is not None:
-        engine_store.after_install = processor.release_waiting
+        engine_store.after_install = processor.after_install
 
     def _language(code: str | None) -> str | None:
         """A language asked for, refused unless the engine handles it (ADR 0072)."""
@@ -496,7 +496,9 @@ def create_app(
             pid=os.getpid(),
             profile=profile,
             recovery_problems=problems,
-            processing_error=processor.loop_error if processor else None,
+            processing_error=(processor.loop_error or processor.release_error)
+            if processor
+            else None,
         )
 
     def _folders() -> Folders:

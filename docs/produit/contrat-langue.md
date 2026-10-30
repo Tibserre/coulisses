@@ -95,7 +95,8 @@ Si la séance attendait un modèle et que la nouvelle langue est installée, ell
 
 `RerunRequest` gagne **`langue`** (facultatif) :
 - `etape: "transcribe"` (« Refaire le texte ») ou `"all"` (« Tout refaire ») : la langue de la nouvelle version. Par défaut, celle de la version affichée.
-- `etape: "diarize"` : refusé avec une langue différente de celle de la version affichée (422) ; refaire les voix garde le texte, donc sa langue.
+- `etape: "diarize"` : refusé avec une langue différente de celle de la version affichée (422) ; refaire les voix garde le texte, donc sa langue. Si la langue de la version affichée est inconnue (`Version.language` à `null`), « Refaire les voix » reste possible, sans langue.
+- `etape: "transcribe"` ou `"all"` sans `langue`, quand la langue de la version affichée est inconnue : 422, il faut la choisir.
 
 La langue de la séance ne change que lorsque la nouvelle version devient la version affichée. Si un modèle manque, la relance attend comme un premier traitement (`processing_waits_for`). Une relance arrêtée ou en échec ne change rien.
 

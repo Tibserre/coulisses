@@ -5,6 +5,7 @@ not removed. The engine's languages are `conftest.FakeLanguages`."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -460,7 +461,7 @@ def test_a_finished_download_releases_what_waited_for_it(data: DataDir) -> None:
     create_app(
         data, FAKE_CHAIN, profile="essai", processor=processor, web_dir=None, engine_store=store
     )
-    assert store.after_install == processor.release_waiting
+    assert store.after_install == processor.after_install
 
 
 def test_a_language_the_chain_does_not_align_is_not_offered(
@@ -483,3 +484,47 @@ def test_a_model_some_languages_share_stays_while_one_of_them_serves(
     refused = client.delete("/api/moteur/modeles/aligneur-germanique")
     assert refused.status_code == 409 and "Meetings" in refused.json()["detail"]
     assert removed.keys == []
+
+
+def test_the_voices_of_a_version_whose_language_is_unknown_can_be_made_again(
+    client: TestClient, data: DataDir, recording: Path
+) -> None:
+    session_id = import_(client, recording)
+    run_next(data)
+    conn = connect(data)
+    try:
+        row = conn.execute(
+            "SELECT run_id FROM active_run WHERE session_id = ? AND stage = 'transcribe'",
+            (session_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    provenance = data.run_dir(session_id, row["run_id"]) / "provenance.json"
+    raw = json.loads(provenance.read_text(encoding="utf-8"))
+    del raw["inputs"]["language"]  # a provenance of v1.14 that does not say it
+    provenance.write_text(json.dumps(raw), encoding="utf-8")
+    assert transcribed_in(data, session_id) is None
+
+    text = client.post(f"/api/seances/{session_id}/relancer", json={"etape": "transcribe"})
+    assert text.status_code == 422 and "inconnue" in text.json()["detail"]
+    voices = client.post(f"/api/seances/{session_id}/relancer", json={"etape": "diarize"})
+    assert voices.status_code == 202, voices.text
+    run_next(data)
+    assert session(client, session_id)["language"] == "fr"  # left as it was
+
+
+def test_a_failure_after_a_download_is_said_by_the_service(data: DataDir) -> None:
+    processor = Processor(data, FAKE_CHAIN)
+
+    def broken() -> None:
+        raise RuntimeError("base verrouillée")
+
+    working = processor.release_waiting
+    processor.release_waiting = broken  # type: ignore[method-assign]
+    processor.after_install()
+    assert processor.release_error == "RuntimeError : base verrouillée"
+    processor.loop_error = None  # a job of the loop ending says nothing about it
+    assert processor.release_error is not None
+    processor.release_waiting = working  # type: ignore[method-assign]
+    processor.after_install()  # seen again: no longer said
+    assert processor.release_error is None

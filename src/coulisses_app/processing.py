@@ -180,6 +180,9 @@ class Processor:
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
         self.loop_error: str | None = None
+        self.release_error: str | None = None
+        """Last failure to see again the jobs waiting for a model, after a download: they
+        stay waiting until it succeeds."""
         """Last error of the processing loop itself (not of a job), shown by the service."""
 
     # -- lifecycle ----------------------------------------------------------------------
@@ -205,6 +208,16 @@ class Processor:
     def _models_waits_for(self, profile: str, language: str) -> jobs.WaitsFor | None:
         return languages.waits_for(profile, language, self.models)
 
+    def after_install(self) -> None:
+        """A model was installed: what waited for it goes. A failure here is said by the
+        service (`release_error`), not only logged, until the jobs waiting are seen again
+        (the next start, or the next download)."""
+        try:
+            self.release_waiting()
+        except Exception as exc:
+            log.exception("releasing the jobs waiting for a model")
+            self.release_error = f"{type(exc).__name__} : {exc}"
+
     def release_waiting(self) -> None:
         """The jobs waiting for a model, or for another language, seen again: those that
         can now run go back in their turn; the others say what they still wait for (a model
@@ -220,6 +233,7 @@ class Processor:
                 released = released or waits is None
         finally:
             conn.close()
+        self.release_error = None
         if released:
             log.info("jobs waiting for a model may run now")
             self._wake.set()

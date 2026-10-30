@@ -188,7 +188,9 @@ def request_rerun(
         raise SpaceError("Il faut au moins une personne présente.")
     conn = connect(data)
     try:
-        row = conn.execute("SELECT space_id FROM session WHERE id = ?", (session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT space_id, language FROM session WHERE id = ?", (session_id,)
+        ).fetchone()
         if row is None:
             raise NotFoundError("Séance introuvable.")
         # Checked and queued in one write transaction: a double click queues one rerun.
@@ -203,12 +205,14 @@ def request_rerun(
         chain = _ancestors(conn, shown)
         shown_language = transcription_language(data, session_id, chain.get("transcribe"))
         if rerun == "diarize":
-            if language is not None and language != shown_language:
+            if language is not None and shown_language is not None and language != shown_language:
                 raise SpaceError(
                     "Refaire les voix garde le texte, et donc sa langue. Pour une autre langue : "
                     "« Refaire le texte »."
                 )
-            language = shown_language
+            # The text is kept as it is: a language its provenance does not say is no reason
+            # to refuse; the session's stands for it (the models it waits for).
+            language = shown_language or row["language"]
         elif language is None:
             language = shown_language
         if language is None:
