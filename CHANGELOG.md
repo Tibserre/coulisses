@@ -6,6 +6,12 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- enregistre avec un micro qui ne tourne pas à 48 kHz (enregistrement)
+
 ## v0.38.0 — 2026-10-30
 
 ### Nouveautés depuis la 0.37.0
