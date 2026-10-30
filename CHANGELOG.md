@@ -8,23 +8,15 @@ la publication lit celle de `main`.
 
 ## v0.38.0 — 2026-10-30
 
-### Nouveautés
+### Nouveautés depuis la 0.37.0
 
-- dit à part et en français l'arrêt du traitement et la reprise en échec (etat)
-- transcrit une séance dans la langue de son espace ou choisie (langue)
-- choisit la langue d'un espace et d'une séance dans l'interface (langue)
+- Transcrire dans une autre langue. Une séance peut maintenant être transcrite en anglais, allemand, espagnol, italien ou portugais, en plus du français. Chaque langue s'ajoute une fois dans **Réglages > Transcription**, rubrique « Langues » (environ 1,3 Go par langue autre que le français, téléchargés quand vous le demandez). Chaque espace a une langue par défaut, réglée dans ses paramètres ; une séance la prend à sa création, et se change au-dessus de son titre. Une séance déjà transcrite peut être refaite dans une autre langue : « ⋯ › Refaire le traitement… › Le texte ».
+- Les comptes rendus (titres, chapitres, résumés) restent rédigés en français, quelle que soit la langue de la séance. Leur qualité sur une séance dans une autre langue n'est pas encore mesurée.
 
 ### Corrections
 
-- démarre le service même si la reprise des séances en attente échoue (langue)
-- refait les voix d'une version de langue inconnue, et dit un échec de reprise (langue)
-- relance les voix d'une version de langue inconnue (langues)
-- refuse une base migrée au-delà de 0010 sans noms (base)
-- réunit la spec de la langue et ne relance pas les voix d'une langue inconnue (langues)
-- nomme les langues des modèles d'après le service et laisse choisir une langue inconnue (langues)
-- ne propose jamais de supprimer le français (langues)
-- refuse au démarrage une base migrée par une autre branche (base)
-- ne dit un aligneur exigé que pour sa langue (modeles)
+- Une base de données mise à jour par une version de développement de Coulisses est maintenant reconnue au démarrage, avec un message qui dit quelle copie reprendre, au lieu d'une erreur plus tard.
+- Si la reprise des séances qui attendaient un modèle échoue, l'app démarre quand même et le dit.
 
 ## v0.37.0 — 2026-10-29
 
