@@ -1,6 +1,6 @@
 # 0068 — Un micro qui ne tourne pas à 48 kHz est converti avec le son de l'ordinateur
 
-Statut : Proposée (2026-10-29, correction d'un bug signalé par l'utilisateur ; à accepter après l'essai avec de vrais AirPods). Précise l'ADR 0032.
+Statut : Acceptée (2026-10-30, par l'utilisateur, après un essai réussi avec de vrais AirPods à 24 kHz). Proposée le 2026-10-29 (correction d'un bug signalé par l'utilisateur). Précise l'ADR 0032.
 
 ## Contexte
 Des AirPods dont le micro est actif passent en mode « mains libres », à 16 ou 24 kHz, et refusent 48 kHz. Le programme du son de l'ordinateur (ADR 0032) donne au micro l'horloge de l'agrégat et lui demande 48 kHz : il s'arrêtait sur l'erreur `frequence` (« 24000.0 Hz » au journal). Or « Nouvelle note » démarre avec le son de l'ordinateur (ADR 0056) : avec des AirPods, l'enregistrement ne démarrait pas. Sans le son de l'ordinateur, PortAudio convertit déjà à la fréquence demandée.
