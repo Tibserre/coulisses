@@ -150,7 +150,7 @@ def main() -> None:
                 # Before anything else is made of it (journal, copy of the base before): a
                 # base this application cannot take is refused here, and said.
                 try:
-                    check(partial)
+                    check(partial, said_as=source.database)
                 except (DatabaseTooNewError, MigrationMismatchError) as exc:
                     fail(str(exc))
                 if target.database.is_file():

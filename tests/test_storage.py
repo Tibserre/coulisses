@@ -258,23 +258,65 @@ def test_a_database_migrated_by_another_branch_is_refused_at_start(
     assert "celle_ci" not in tables(data)
 
 
-def test_a_database_from_before_the_names_is_never_refused(
-    data: DataDir, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The bases of today have no names: their migrations are not checked, and the next
-    ones are recorded."""
+def _before_the_names(data: DataDir, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A database as the published versions leave it: at the last migration before the
+    names (0010), without names."""
+    monkeypatch.setattr(
+        db,
+        "migrations",
+        lambda: [m for m in SHIPPED if m[0] < db._NAMED_SINCE],  # pyright: ignore[reportPrivateUsage]
+    )
+    db.migrate(data)
     conn = db.connect(data)
     with conn:
         conn.execute("DELETE FROM app_setting WHERE key = ?", (db.APPLIED_KEY,))
     conn.close()
+
+
+SHIPPED = db.migrations()
+
+
+def test_a_database_from_before_the_names_is_never_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bases of today have no names: their migrations are not checked, and the next
+    ones are recorded."""
+    data = DataDir(tmp_path / "publiee")
+    _before_the_names(data, monkeypatch)
     assert db.migrate(data) == []
-    shipped = db.migrations()
-    number = len(shipped) + 1
-    extra = (number, f"{number:04d}_suivante.sql", "CREATE TABLE suivante (id INTEGER);")
-    monkeypatch.setattr(db, "migrations", lambda: [*shipped, extra])
+    first = db._NAMED_SINCE  # pyright: ignore[reportPrivateUsage]
+    earlier = [m for m in SHIPPED if m[0] < first]
+    extra = (first, f"{first:04d}_suivante.sql", "CREATE TABLE suivante (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*earlier, extra])
     db.migrate(data)
-    assert _names(data) == {str(number): f"{number:04d}_suivante.sql"}
+    assert _names(data) == {str(first): f"{first:04d}_suivante.sql"}
     assert db.migrate(data) == []
+
+
+def test_a_database_given_a_later_migration_without_its_name_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A branch made before the names migrated it past 0010 without writing them: its
+    migration under that number may not be this application's (the language, after the
+    connector's or the summaries' 0011)."""
+    data = DataDir(tmp_path / "dev")
+    _before_the_names(data, monkeypatch)
+    first = db._NAMED_SINCE  # pyright: ignore[reportPrivateUsage]
+    earlier = [m for m in SHIPPED if m[0] < first]
+    theirs = (first, f"{first:04d}_autre_branche.sql", "CREATE TABLE autre (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*earlier, theirs])
+    db.migrate(data)
+    conn = db.connect(data)
+    with conn:  # as that branch left it: no names
+        conn.execute("DELETE FROM app_setting WHERE key = ?", (db.APPLIED_KEY,))
+    conn.close()
+    ours = (first, f"{first:04d}_cette_branche.sql", "CREATE TABLE celle_ci (id INTEGER);")
+    monkeypatch.setattr(db, "migrations", lambda: [*earlier, ours])
+    with pytest.raises(db.MigrationMismatchError, match=f"migration {first:04d}"):
+        db.migrate(data)
+    with pytest.raises(db.MigrationMismatchError):
+        db.check(data.database)
+    assert "celle_ci" not in tables(data)
 
 
 def test_a_step_1_database_records_the_names_it_receives(tmp_path: Path) -> None:
