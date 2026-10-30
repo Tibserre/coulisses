@@ -505,12 +505,27 @@ def test_the_voices_of_a_version_whose_language_is_unknown_can_be_made_again(
     provenance.write_text(json.dumps(raw), encoding="utf-8")
     assert transcribed_in(data, session_id) is None
 
-    text = client.post(f"/api/seances/{session_id}/relancer", json={"etape": "transcribe"})
-    assert text.status_code == 422 and "inconnue" in text.json()["detail"]
+    for redone in ("transcribe", "all"):
+        text = client.post(f"/api/seances/{session_id}/relancer", json={"etape": redone})
+        assert text.status_code == 422 and "inconnue" in text.json()["detail"]
     voices = client.post(f"/api/seances/{session_id}/relancer", json={"etape": "diarize"})
     assert voices.status_code == 202, voices.text
     run_next(data)
     assert session(client, session_id)["language"] == "fr"  # left as it was
+
+
+def test_a_failure_to_release_at_start_never_stops_the_service(data: DataDir) -> None:
+    processor = Processor(data, FAKE_CHAIN)
+
+    def broken() -> None:
+        raise RuntimeError("base verrouillée")
+
+    processor.release_waiting = broken  # type: ignore[method-assign]
+    processor.start()
+    try:
+        assert processor.release_error == "RuntimeError : base verrouillée"
+    finally:
+        processor.stop()
 
 
 def test_a_failure_after_a_download_is_said_by_the_service(data: DataDir) -> None:

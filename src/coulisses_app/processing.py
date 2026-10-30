@@ -180,16 +180,17 @@ class Processor:
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
         self.loop_error: str | None = None
-        self.release_error: str | None = None
-        """Last failure to see again the jobs waiting for a model, after a download: they
-        stay waiting until it succeeds."""
         """Last error of the processing loop itself (not of a job), shown by the service."""
+        self.release_error: str | None = None
+        """Last failure to see again the jobs waiting for a model (at start, after a
+        download): they stay waiting until it succeeds; shown by the service."""
 
     # -- lifecycle ----------------------------------------------------------------------
 
     def start(self) -> None:
-        # Models installed while the app was closed: what waited for them goes.
-        self.release_waiting()
+        # Models installed while the app was closed: what waited for them goes. A failure
+        # here never stops the service: said, and seen again at the next download.
+        self.after_install()
         self._thread = threading.Thread(target=self._loop, name="coulisses-processing")
         self._thread.start()
 
@@ -209,9 +210,9 @@ class Processor:
         return languages.waits_for(profile, language, self.models)
 
     def after_install(self) -> None:
-        """A model was installed: what waited for it goes. A failure here is said by the
-        service (`release_error`), not only logged, until the jobs waiting are seen again
-        (the next start, or the next download)."""
+        """Models may have been installed (at start, after a download): what waited for
+        them goes. A failure here is said by the service (`release_error`), not only logged,
+        until the jobs waiting are seen again (the next start, or the next download)."""
         try:
             self.release_waiting()
         except Exception as exc:
