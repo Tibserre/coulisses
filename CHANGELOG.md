@@ -12,12 +12,17 @@ la publication lit celle de `main`.
 
 - dit à part et en français l'arrêt du traitement et la reprise en échec (etat)
 - transcrit une séance dans la langue de son espace ou choisie (langue)
+- choisit la langue d'un espace et d'une séance dans l'interface (langue)
 
 ### Corrections
 
 - démarre le service même si la reprise des séances en attente échoue (langue)
 - refait les voix d'une version de langue inconnue, et dit un échec de reprise (langue)
+- relance les voix d'une version de langue inconnue (langues)
 - refuse une base migrée au-delà de 0010 sans noms (base)
+- réunit la spec de la langue et ne relance pas les voix d'une langue inconnue (langues)
+- nomme les langues des modèles d'après le service et laisse choisir une langue inconnue (langues)
+- ne propose jamais de supprimer le français (langues)
 - refuse au démarrage une base migrée par une autre branche (base)
 - ne dit un aligneur exigé que pour sa langue (modeles)
 
