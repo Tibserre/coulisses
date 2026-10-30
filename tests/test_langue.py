@@ -562,14 +562,12 @@ def test_the_two_failures_are_said_apart_in_french(data: DataDir) -> None:
     assert state["loop_error"] is None
     assert state["waiting_release_error"].startswith("Les séances qui attendaient un modèle")
     assert state["waiting_release_error_detail"] == "RuntimeError : base verrouillée"
-    # As before for the interface of today: the detail, never lost.
-    assert state["processing_error"] == "RuntimeError : base verrouillée"
+    assert "processing_error" not in state  # said apart, in French
 
     processor.loop_error = "OperationalError : database is locked"
     state = reading.get("/api/etat").json()
     assert state["loop_error"].startswith("Le traitement des séances est arrêté")
     assert state["loop_error_detail"] == "OperationalError : database is locked"
-    assert state["processing_error"] == "OperationalError : database is locked"
 
 
 # -- everything the chain lacks, not only the language's models --------------------------
