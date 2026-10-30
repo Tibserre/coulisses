@@ -12,6 +12,7 @@ la publication lit celle de `main`.
 
 - refuse une base migrée au-delà de 0010 sans noms (base)
 - refuse au démarrage une base migrée par une autre branche (base)
+- ne dit un aligneur exigé que pour sa langue (modeles)
 
 ## v0.37.0 — 2026-10-29
 
