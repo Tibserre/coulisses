@@ -217,7 +217,8 @@ _CRASHING_APP = textwrap.dedent(
     conn = connect(data)
     job = jobs.claim_next(conn)
     conn.close()
-    Processor(data, chain).run_job(job)
+    # Its languages are not the engine's: nothing to wait for (ADR 0072).
+    Processor(data, chain, waits_for=lambda profile, language: None).run_job(job)
     """
 )
 
