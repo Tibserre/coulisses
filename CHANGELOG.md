@@ -6,6 +6,13 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- refuse une base migrée au-delà de 0010 sans noms (base)
+- refuse au démarrage une base migrée par une autre branche (base)
+
 ## v0.37.0 — 2026-10-29
 
 ### Nouveautés depuis la 0.36.0
