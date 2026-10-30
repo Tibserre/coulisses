@@ -536,10 +536,12 @@ class Recorder:
         project_id: int | None = None,
         extra_device_indexes: list[int] | None = None,
         system: bool = False,
+        language: str | None = None,
     ) -> RecordingState:
         """`extra_device_indexes`: microphones added, recording at the same time (often the
         iPhone through Continuity, ADR 0031, 0033), each into a file of its own. `system`:
-        the computer's sound too, for a meeting online or hybrid (ADR 0032)."""
+        the computer's sound too, for a meeting online or hybrid (ADR 0032). `language`:
+        checked by the caller; by default the space's (ADR 0072)."""
         with self._lock:
             if self._current is not None:
                 raise RecordingError("Un enregistrement est déjà en cours.")
@@ -656,6 +658,7 @@ class Recorder:
                         if sessions.is_extra_microphone(o.source_id)
                     ],
                     system=system,
+                    language=language,
                 )
             except Exception:
                 for made in opened:

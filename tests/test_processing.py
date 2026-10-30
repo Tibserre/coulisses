@@ -217,7 +217,8 @@ _CRASHING_APP = textwrap.dedent(
     conn = connect(data)
     job = jobs.claim_next(conn)
     conn.close()
-    Processor(data, chain).run_job(job)
+    # Its languages are not the engine's: nothing to wait for (ADR 0072).
+    Processor(data, chain, waits_for=lambda profile, language: None).run_job(job)
     """
 )
 
@@ -337,6 +338,28 @@ def test_the_processing_loop_outlives_an_error_and_shows_it(
         processor.wake()
         wait_for(lambda: job_state(data, session_id).state == "done")
         assert processor.loop_error is None
+    finally:
+        processor.stop()
+
+
+def test_the_loops_error_ends_once_the_queue_is_read_again_even_empty(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[int] = []
+    real_claim = jobs.claim_next
+
+    def flaky(conn: sqlite3.Connection) -> jobs.Job | None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return real_claim(conn)
+
+    monkeypatch.setattr(jobs, "claim_next", flaky)
+    processor = Processor(data, FAKE_CHAIN)
+    processor.start()
+    try:
+        wait_for(lambda: len(calls) >= 2)  # nothing queued: no job ends it
+        wait_for(lambda: processor.loop_error is None)
     finally:
         processor.stop()
 

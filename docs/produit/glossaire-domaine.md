@@ -7,6 +7,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Espace | `space` | Ce qui regroupe des séances et les gens qui y participent : une troupe d'impro, une équipe, un client (ADR 0020). Possède des membres, des invités, un glossaire, des projets, des réglages. Étanche : une personne n'appartient qu'à un espace. |
 | Modèle de départ | `space_template` | Pré-remplissage des réglages d'un espace à sa création (« Troupe d'impro », « Réunions de travail », « Vide »). Pas un type : tout reste modifiable ensuite. |
 | Reconnaissance des voix | `voice_recognition` | Réglage d'un espace : reconnaître une personne d'une séance à l'autre par sa voix. Désactivé par défaut. |
+| Langue d'une séance | `language` | La langue parlée, que le moteur transcrit et aligne (code ISO 639-1, « fr » par défaut) : celle d'un espace pour ses nouvelles séances, celle d'une séance pour son traitement, celle d'une version d'après la provenance (ADR 0072). |
+| Attente du modèle | `waits_for_models` | Un traitement en file qui attend le modèle de sa langue au lieu d'échouer ; la séance le dit (`processing_waits_for`) (ADR 0072). |
 | Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
 | Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |

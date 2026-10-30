@@ -42,6 +42,7 @@ from coulisses_app import (
     engine_models,
     exports,
     jobs,
+    languages,
     lossless,
     marks,
     mixing,
@@ -86,8 +87,29 @@ class AppInfo(BaseModel):
     profile: str
     recovery_problems: list[str]
     processing_error: str | None
-    """The processing loop's own last error (not a job's): the queue may be stuck."""
+    """As before, for the interface of today: the technical detail of the loop's own last
+    error, or else of the failure to release the sessions waiting for a model. Replaced by
+    `loop_error` and `waiting_release_error`, said apart and in French."""
+    loop_error: str | None = None
+    """Said in French: the processing loop's own last error (not a job's); the queue may be
+    stuck, the loop tries again every two seconds."""
+    loop_error_detail: str | None = None
+    """Its technical detail (developer mode)."""
+    waiting_release_error: str | None = None
+    """Said in French: the sessions waiting for a model could not be seen again (at start, or
+    after a download); they stay waiting until the next start or the next download."""
+    waiting_release_error_detail: str | None = None
+    """Its technical detail (developer mode)."""
 
+
+LOOP_ERROR = (
+    "Le traitement des séances est arrêté par une erreur. Il réessaie toutes les deux "
+    "secondes ; si cela dure, quittez puis relancez Coulisses."
+)
+RELEASE_ERROR = (
+    "Les séances qui attendaient un modèle n'ont pas pu repartir. Elles réessaieront au "
+    "prochain téléchargement ou au prochain lancement de Coulisses."
+)
 
 SERVICE_LOG = Path.home() / "Library" / "Logs" / "Coulisses" / "service.log"
 """Where the app in the Dock writes the service's output (ADR 0034)."""
@@ -148,6 +170,28 @@ class RerunRequest(BaseModel):
     """transcribe: the transcription (and the alignment); diarize: the voices; all: both."""
     presents: int | None = Field(default=None, ge=1)
     """For the voices (diarize, all): the minimum of voices to look for (P3)."""
+    langue: str | None = None
+    """For the text (transcribe, all): its language; by default the shown version's."""
+
+
+class LanguageRequest(BaseModel):
+    langue: str
+
+
+class LanguageView(BaseModel):
+    """A language the chain transcribes, for the settings and the choice (ADR 0072)."""
+
+    language: str
+    label: str
+    installed: bool
+    """Nothing is missing to process a session in it."""
+    missing_models: list[str]
+    download_bytes: int
+    models: list[str]
+    own_models: list[str]
+    """The models only it needs: removing them removes the language."""
+    downloads: list[engine_models.ModelAction]
+    used_by: languages.UsedBy
 
 
 class ResumeRequest(BaseModel):
@@ -165,6 +209,8 @@ class SpaceRequest(BaseModel):
     archived: bool | None = None
     template: str = "vide"
     """At creation only: impro, reunion or vide (ADR 0020)."""
+    language: str | None = None
+    """Its default language (ADR 0072); « fr » at creation when not given."""
 
 
 class OfferedActionRequest(BaseModel):
@@ -263,6 +309,8 @@ class RecordingRequest(BaseModel):
     """Microphones added, recording at the same time (often an iPhone), each its file."""
     son_ordinateur: bool = False
     """The computer's sound too: a meeting online or hybrid (ADR 0032)."""
+    langue: str | None = None
+    """By default the space's (ADR 0072)."""
 
 
 class AddMicrophoneRequest(BaseModel):
@@ -397,6 +445,14 @@ def create_app(
     model_client = model_client or (processor.model_client if processor else OllamaClient())
     recorder = recorder or capture.Recorder(data)
     engine_store = engine_store or engine_models.EngineModels(profile)
+    if processor is not None:
+        engine_store.after_install = processor.after_install
+
+    def _language(code: str | None) -> str | None:
+        """A language asked for, refused unless the engine handles it (ADR 0072)."""
+        if code is None:
+            return None
+        return languages.check(profile, code, engine_store.root).language
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -444,7 +500,7 @@ def create_app(
             404
             if isinstance(exc, spaces.NotFoundError)
             else 409
-            if isinstance(exc, corrections.VersionChangedError)
+            if isinstance(exc, (corrections.VersionChangedError, spaces.ConflictError))
             else 422
         )
         return JSONResponse(status_code=status, content={"detail": str(exc)})
@@ -461,7 +517,13 @@ def create_app(
             pid=os.getpid(),
             profile=profile,
             recovery_problems=problems,
-            processing_error=processor.loop_error if processor else None,
+            processing_error=(processor.loop_error or processor.release_error)
+            if processor
+            else None,
+            loop_error=LOOP_ERROR if processor and processor.loop_error else None,
+            loop_error_detail=processor.loop_error if processor else None,
+            waiting_release_error=RELEASE_ERROR if processor and processor.release_error else None,
+            waiting_release_error_detail=processor.release_error if processor else None,
         )
 
     def _folders() -> Folders:
@@ -522,7 +584,32 @@ def create_app(
 
     @app.delete("/api/moteur/modeles/{cle}", status_code=204)
     def remove_model(cle: str) -> None:
+        # A model only a language needs stays while that language serves (ADR 0072).
+        with _db() as conn:
+            languages.refuse_removal(conn, profile, cle, engine_store.root)
         engine_store.remove(cle)
+
+    @app.get("/api/langues")
+    def list_languages() -> list[LanguageView]:
+        """The languages the chain transcribes, French first (ADR 0072). No network."""
+        found = languages.supported(profile, engine_store.root)
+        owned = languages.own_models(found)
+        actions = [a for a in engine_store.actions() if a.kind == "model"]
+        with _db() as conn:
+            return [
+                LanguageView(
+                    language=s.language,
+                    label=s.label,
+                    installed=not s.missing_models,
+                    missing_models=list(s.missing_models),
+                    download_bytes=s.download_bytes,
+                    models=languages.models_of(s),
+                    own_models=owned[s.language],
+                    downloads=[a for a in actions if a.name in languages.models_of(s)],
+                    used_by=languages.used_by(conn, s.language),
+                )
+                for s in found
+            ]
 
     # -- the requested steps (ADR 0049): what the user asked not to be reminded of --------
 
@@ -559,11 +646,14 @@ def create_app(
         non_nommes: Annotated[int | None, Form()] = None,
         date_fichier_ms: Annotated[int | None, Form()] = None,
         attendre_presents: Annotated[bool, Form()] = False,
+        langue: Annotated[str | None, Form()] = None,
     ) -> Imported:
         """`presents`: the people checked (repeated field); `non_nommes`: people present
         whom nobody names, added to them as a minimum of voices (P3). `attendre_presents`:
         an import in one gesture; its processing waits for the people present (ADR 0069)
-        until `/lancer`, or for `jobs.WAIT_FOR_ATTENDEES_S`."""
+        until `/lancer`, or for `jobs.WAIT_FOR_ATTENDEES_S`. `langue`: by default the
+        space's (ADR 0072)."""
+        language = _language(langue)
         recorded_at = (
             datetime.fromtimestamp(date_fichier_ms / 1000, tz=UTC) if date_fichier_ms else None
         )
@@ -579,6 +669,7 @@ def create_app(
                 recorded_at=recorded_at,
                 profile=profile,
                 wait_for_attendees=attendre_presents,
+                language=language,
             )
         except (UnreadableAudioError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -647,7 +738,12 @@ def create_app(
         version, which replaces it once complete, with the corrections carried over."""
         attendees = demande.presents if demande.etape in ("diarize", "all") else None
         versions.request_rerun(
-            data, session_id, demande.etape, attendees=attendees, profile=profile
+            data,
+            session_id,
+            demande.etape,
+            attendees=attendees,
+            profile=profile,
+            language=_language(demande.langue),
         )
         if processor is not None:
             processor.wake()
@@ -777,6 +873,17 @@ def create_app(
         assert session is not None
         return SpaceMoved(session=session, unchecked=unchecked)
 
+    @app.put("/api/seances/{session_id}/langue")
+    def set_language(session_id: str, demande: LanguageRequest) -> sessions.Session:
+        """The language of a session whose text is not made yet (ADR 0072); 409 after,
+        where « Refaire le texte » takes one."""
+        spoken = languages.check(profile, demande.langue, engine_store.root).language
+        session = sessions.set_language(data, session_id, spoken)
+        if processor is not None:
+            processor.release_waiting()
+            processor.wake()
+        return session
+
     @app.put("/api/seances/{session_id}/presents")
     def set_attendees(session_id: str, demande: AttendeesRequest) -> sessions.Session:
         spaces.set_attendees(data, session_id, demande.person_ids, demande.unnamed)
@@ -792,7 +899,12 @@ def create_app(
 
     @app.post("/api/espaces", status_code=201)
     def create_space(demande: SpaceRequest) -> spaces.Space:
-        return spaces.create_space(data, demande.name or "", demande.template)
+        return spaces.create_space(
+            data,
+            demande.name or "",
+            demande.template,
+            language=_language(demande.language) or jobs.DEFAULT_LANGUAGE,
+        )
 
     @app.get("/api/espaces/{space_id}/actions")
     def space_actions(space_id: int) -> list[spaces.SpaceAction]:
@@ -891,6 +1003,7 @@ def create_app(
             device_index=demande.micro,
             extra_device_indexes=demande.micros_en_plus,
             system=demande.son_ordinateur,
+            language=_language(demande.langue),
         )
 
     @app.post("/api/enregistrement/son-ordinateur")
@@ -1151,6 +1264,7 @@ def create_app(
             name=demande.name,
             voice_recognition=demande.voice_recognition,
             archived=demande.archived,
+            language=_language(demande.language),
         )
 
     @app.get("/api/espaces/{space_id}/personnes")

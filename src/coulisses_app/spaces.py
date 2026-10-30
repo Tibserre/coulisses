@@ -28,11 +28,17 @@ class NotFoundError(SpaceError):
     pass
 
 
+class ConflictError(SpaceError):
+    """Refused because of the state of something else (409): a language still in use."""
+
+
 class Space(BaseModel):
     id: int
     name: str
     voice_recognition: bool
     archived: bool
+    language: str
+    """Its default language (ADR 0072), taken by its new sessions."""
 
 
 class Person(BaseModel):
@@ -69,6 +75,7 @@ def _space(row: sqlite3.Row) -> Space:
         name=row["name"],
         voice_recognition=bool(row["voice_recognition"]),
         archived=row["archived_at"] is not None,
+        language=row["language"],
     )
 
 
@@ -130,15 +137,18 @@ TEMPLATES: dict[str, list[str]] = {
 fill the settings once; there is no space type afterwards."""
 
 
-def create_space(data: DataDir, name: str, template: str = "vide") -> Space:
+def create_space(
+    data: DataDir, name: str, template: str = "vide", *, language: str = "fr"
+) -> Space:
+    """`language`: checked against the engine's by the caller (ADR 0072)."""
     if template not in TEMPLATES:
         raise SpaceError("Modèle de départ inconnu.")
     conn = connect(data)
     try:
         with conn:
             cursor = conn.execute(
-                "INSERT INTO space (name, created_at) VALUES (?, ?)",
-                (_clean(name, "Le nom de l'espace"), now_iso()),
+                "INSERT INTO space (name, created_at, language) VALUES (?, ?, ?)",
+                (_clean(name, "Le nom de l'espace"), now_iso(), language),
             )
             conn.executemany(
                 "INSERT INTO action_preference (space_id, action_ref, auto_run) VALUES (?, ?, 1)",
@@ -157,11 +167,15 @@ def update_space(
     name: str | None = None,
     voice_recognition: bool | None = None,
     archived: bool | None = None,
+    language: str | None = None,
 ) -> Space:
+    """`language`: checked against the engine's by the caller; its sessions keep theirs."""
     conn = connect(data)
     try:
         get_space(conn, space_id)
         with conn:
+            if language is not None:
+                conn.execute("UPDATE space SET language = ? WHERE id = ?", (language, space_id))
             if name is not None:
                 conn.execute(
                     "UPDATE space SET name = ? WHERE id = ?",
