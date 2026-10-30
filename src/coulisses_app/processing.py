@@ -243,9 +243,10 @@ class Processor:
         while not self._stopping.is_set():
             try:
                 job = self._claim()
+                # The queue is read again: the loop's former error is over.
+                self.loop_error = None
                 if job is not None:
                     self.run_job(job)
-                    self.loop_error = None
                     continue
             # The loop must outlive a database error, or later imports would wait forever
             # without a word: the error is logged, shown by the service, and retried (P8).

@@ -543,3 +543,26 @@ def test_a_failure_after_a_download_is_said_by_the_service(data: DataDir) -> Non
     processor.release_waiting = working  # type: ignore[method-assign]
     processor.after_install()  # seen again: no longer said
     assert processor.release_error is None
+
+
+def test_the_two_failures_are_said_apart_in_french(data: DataDir) -> None:
+    processor = Processor(data, FAKE_CHAIN)
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
+    assert client.get("/api/etat").json()["waiting_release_error"] is None
+    app = create_app(data, FAKE_CHAIN, profile="essai", processor=processor, web_dir=None)
+    reading = TestClient(app, base_url="http://127.0.0.1:8765")
+    processor.release_error = "RuntimeError : base verrouillée"
+    state = reading.get("/api/etat").json()
+    assert state["loop_error"] is None
+    assert state["waiting_release_error"].startswith("Les séances qui attendaient un modèle")
+    assert state["waiting_release_error_detail"] == "RuntimeError : base verrouillée"
+    # As before for the interface of today: the detail, never lost.
+    assert state["processing_error"] == "RuntimeError : base verrouillée"
+
+    processor.loop_error = "OperationalError : database is locked"
+    state = reading.get("/api/etat").json()
+    assert state["loop_error"].startswith("Le traitement des séances est arrêté")
+    assert state["loop_error_detail"] == "OperationalError : database is locked"
+    assert state["processing_error"] == "OperationalError : database is locked"

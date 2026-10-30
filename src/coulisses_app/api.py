@@ -87,8 +87,29 @@ class AppInfo(BaseModel):
     profile: str
     recovery_problems: list[str]
     processing_error: str | None
-    """The processing loop's own last error (not a job's): the queue may be stuck."""
+    """As before, for the interface of today: the technical detail of the loop's own last
+    error, or else of the failure to release the sessions waiting for a model. Replaced by
+    `loop_error` and `waiting_release_error`, said apart and in French."""
+    loop_error: str | None = None
+    """Said in French: the processing loop's own last error (not a job's); the queue may be
+    stuck, the loop tries again every two seconds."""
+    loop_error_detail: str | None = None
+    """Its technical detail (developer mode)."""
+    waiting_release_error: str | None = None
+    """Said in French: the sessions waiting for a model could not be seen again (at start, or
+    after a download); they stay waiting until the next start or the next download."""
+    waiting_release_error_detail: str | None = None
+    """Its technical detail (developer mode)."""
 
+
+LOOP_ERROR = (
+    "Le traitement des séances est arrêté par une erreur. Il réessaie toutes les deux "
+    "secondes ; si cela dure, quittez puis relancez Coulisses."
+)
+RELEASE_ERROR = (
+    "Les séances qui attendaient un modèle n'ont pas pu repartir. Elles réessaieront au "
+    "prochain téléchargement ou au prochain lancement de Coulisses."
+)
 
 SERVICE_LOG = Path.home() / "Library" / "Logs" / "Coulisses" / "service.log"
 """Where the app in the Dock writes the service's output (ADR 0034)."""
@@ -499,6 +520,10 @@ def create_app(
             processing_error=(processor.loop_error or processor.release_error)
             if processor
             else None,
+            loop_error=LOOP_ERROR if processor and processor.loop_error else None,
+            loop_error_detail=processor.loop_error if processor else None,
+            waiting_release_error=RELEASE_ERROR if processor and processor.release_error else None,
+            waiting_release_error_detail=processor.release_error if processor else None,
         )
 
     def _folders() -> Folders:
