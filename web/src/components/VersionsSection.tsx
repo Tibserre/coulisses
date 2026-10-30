@@ -5,8 +5,8 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Heading } from "@astryxdesign/core/Heading";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Text } from "@astryxdesign/core/Text";
-import { FileText, Users } from "lucide-react";
-import { api } from "../api.ts";
+import { ChevronDown, FileText, Users } from "lucide-react";
+import { api, type Language } from "../api.ts";
 import type {
   Carryover,
   NotCarried,
@@ -15,6 +15,8 @@ import type {
   Versions,
 } from "../api.ts";
 import { formatClock, formatDateTime, plural } from "../format.ts";
+import { labelOf, languageWord, rerunLanguageMissing, versionLanguage } from "../languages.ts";
+import { LanguageDownloadDialog, LanguagePick, useLanguages } from "./Languages.tsx";
 import {
   carriedText,
   rerunMinutes,
@@ -49,6 +51,7 @@ export function VersionsSection({
   const [versions, setVersions] = useState<Versions | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const { languages } = useLanguages(setError);
 
   const load = useCallback(async () => {
     try {
@@ -77,6 +80,8 @@ export function VersionsSection({
       <Banner status="error" title="Versions illisibles" description={error} />
     ) : null;
   const facts = versions.rerun;
+  // Each version's language, once one of them is not in French (ADR 0072).
+  const saysLanguage = versions.versions.some((v) => v.language !== "fr");
   return (
     <section className="cl-versions">
       <Heading level={3}>Versions du traitement</Heading>
@@ -89,6 +94,7 @@ export function VersionsSection({
                 <span className="cl-versions__origin">
                   {" "}
                   · {versionOrigin(v)}
+                  {saysLanguage && languages && ` · ${versionLanguage(languages, v.language)}`}
                 </span>
               </Text>
               <Text type="supporting">
@@ -278,6 +284,7 @@ export function RerunDialog({
   onClose,
   onAsked,
   from = "all",
+  language = null,
 }: {
   isOpen: boolean;
   sessionId: string;
@@ -286,12 +293,19 @@ export function RerunDialog({
   onAsked: () => Promise<void>;
   /** The tile chosen on opening: « Tout », unless asked from the people present (the voices). */
   from?: Rerun;
+  /** The language asked for the new text (chosen above the title), else the shown one's. */
+  language?: string | null;
 }) {
   const [facts, setFacts] = useState<RerunFacts | null>(null);
   const [stage, setStage] = useState<Rerun>("all");
   const [voices, setVoices] = useState<number | null>(null);
   const [battery, setBattery] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { languages, reload: reloadLanguages } = useLanguages(setError);
+  // The shown version's language (its provenance), and the one asked for the new text.
+  const [shownLanguage, setShownLanguage] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [toDownload, setToDownload] = useState<Language | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -300,28 +314,42 @@ export function RerunDialog({
     setError(null);
     setVoices(null);
     setFacts(null);
+    setChosen(language ?? null);
+    setShownLanguage(null);
     api.versions(sessionId).then(
-      (v) => setFacts(v.rerun),
+      (v) => {
+        setFacts(v.rerun);
+        setShownLanguage(v.versions.find((x) => x.shown)?.language ?? null);
+      },
       (e: Error) => setError(e.message),
     );
     api.power().then(
       (p) => setBattery(p.on_battery),
       () => setBattery(null), // unknown: nothing said, the rerun is the user's call anyway
     );
-  }, [isOpen, sessionId, from]);
+  }, [isOpen, sessionId, from, language]);
 
   const proposed = voices ?? facts?.attendees_now ?? facts?.min_voices ?? 1;
   const time = facts ? rerunMinutes(facts, stage, duration) : null;
   const withVoices = stage !== "transcribe";
+  // Another language for the text: refaire les voix keeps the text, so its language.
+  const target = stage !== "diarize" ? (chosen ?? shownLanguage) : shownLanguage;
+  const other = target !== null && target !== shownLanguage;
+  const targetLabel = target !== null && languages ? labelOf(languages, target) : null;
+  const missing = rerunLanguageMissing(stage, shownLanguage, chosen);
   const ask = async () => {
     try {
-      await api.rerun(sessionId, stage, withVoices ? proposed : null);
+      await api.rerun(sessionId, stage, withVoices ? proposed : null, other ? target : null);
+      const needed = other ? languages?.find((l) => l.language === target) : undefined;
       await onAsked();
+      // Not on this Mac: the rerun waits for it; its download is offered, never started alone.
+      if (needed && !needed.installed) setToDownload(needed);
     } catch (e) {
       setError((e as Error).message);
     }
   };
   return (
+    <>
     <Dialog
       isOpen={isOpen}
       onOpenChange={(open) => !open && onClose()}
@@ -365,9 +393,39 @@ export function RerunDialog({
             </button>
           ))}
         </div>
+        {stage !== "diarize" && languages && (
+          <div className="cl-rerun__language">
+            <Text weight="medium">Langue du texte</Text>
+            <LanguagePick
+              languages={languages}
+              value={target ?? ""}
+              title="Langue du texte"
+              onPick={(l) => setChosen(l.language)}
+            >
+              <button type="button" className="cl-modelpick">
+                <span className="cl-modelpick__name">
+                  {targetLabel ??
+                    (target === null ? "À choisir" : "Langue plus prise en charge")}
+                </span>
+                <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
+              </button>
+            </LanguagePick>
+            <Text type="supporting">
+              {shownLanguage === null
+                ? "La langue de la version affichée est inconnue : choisissez celle du texte."
+                : `Par défaut, celle de la version affichée${
+                    labelOf(languages, shownLanguage)
+                      ? ` : ${languageWord(labelOf(languages, shownLanguage)!)}`
+                      : ""
+                  }.`}
+            </Text>
+          </div>
+        )}
         {facts && (
           <Text as="p" color="secondary">
-            {rerunSays(stage, facts)}
+            {other && targetLabel
+              ? `Le texte est refait en ${languageWord(targetLabel)} depuis l'audio. ${stage === "all" ? "Les voix sont séparées à nouveau" : "Les voix sont gardées, et leurs noms suivent"} ; les corrections du texte ne suivent presque jamais dans une autre langue : celles qui ne suivent pas restent sur l'ancienne version, listées pour être reprises.`
+              : rerunSays(stage, facts)}
           </Text>
         )}
         {withVoices && facts && (
@@ -414,12 +472,24 @@ export function RerunDialog({
           <Button variant="ghost" label="Annuler" onClick={onClose} />
           <Button
             variant="primary"
-            label={ACTION[stage]}
-            isDisabled={!facts?.possible}
+            label={
+              other && targetLabel
+                ? `${ACTION[stage]} en ${languageWord(targetLabel)}`
+                : ACTION[stage]
+            }
+            isDisabled={!facts?.possible || missing}
             clickAction={ask}
           />
         </div>
       </div>
     </Dialog>
+    {/* Apart: it opens once the rerun is asked and this window closed. */}
+    <LanguageDownloadDialog
+      language={toDownload}
+      after="Le traitement attend ce modèle ; d'ici là, la séance garde son texte actuel."
+      onClose={() => setToDownload(null)}
+      onStarted={() => void reloadLanguages()}
+    />
+    </>
   );
 }

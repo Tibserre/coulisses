@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -22,6 +22,7 @@ export function AttendeesAsk({
   startsAt,
   onSave,
   onLaunch,
+  language,
 }: {
   session: Session;
   people: Person[];
@@ -30,6 +31,8 @@ export function AttendeesAsk({
   /** Saves who was there (PUT /presents), then reads the session again, even on failure. */
   onSave: (ids: number[], unnamed: number | null) => Promise<void>;
   onLaunch: () => Promise<void>;
+  /** Its language and the way to change it (ADR 0072), when it has something to say. */
+  language?: ReactNode;
 }) {
   const [ids, setIds] = useState<number[]>(session.attendee_ids);
   const [count, setCount] = useState(
@@ -158,6 +161,7 @@ export function AttendeesAsk({
             />
           </div>
         ))}
+      {language}
       <div className="cl-ask__actions">
         <Button
           label={

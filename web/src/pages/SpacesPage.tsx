@@ -11,12 +11,15 @@ import {
   api,
   type ActionInfo,
   type GlossaryEntry,
+  type Language,
   type Person,
   type Space,
   type SpaceAction,
   type SpaceTemplate,
 } from "../api.ts";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
+import { LanguageDownloadDialog, LanguagePick, useLanguages } from "../components/Languages.tsx";
+import { labelOf, languageWord } from "../languages.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { plural } from "../format.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
@@ -165,6 +168,7 @@ function SpaceDetail({
       <PeopleSection spaceId={space.id} people={people} attempt={attempt} />
       <GlossarySection spaceId={space.id} entries={glossary} attempt={attempt} />
       <AutoSummaries spaceId={space.id} onError={onError} />
+      <SpaceLanguage space={space} attempt={attempt} onError={onError} />
 
       <section className="cl-space__section">
         <Heading level={3}>Voix</Heading>
@@ -195,6 +199,73 @@ function SpaceDetail({
         </div>
       </section>
     </div>
+  );
+}
+
+/** The language its new sessions take (ADR 0072): changing it touches none of the
+ *  sessions there already. One not on this Mac is offered to download, never fetched alone. */
+function SpaceLanguage({
+  space,
+  attempt,
+  onError,
+}: {
+  space: Space;
+  attempt: Attempt;
+  onError: (message: string | null) => void;
+}) {
+  const { languages, reload } = useLanguages(onError);
+  const [toDownload, setToDownload] = useState<Language | null>(null);
+  const label = languages ? labelOf(languages, space.language) : null;
+  return (
+    <section className="cl-space__section">
+      <Heading level={3}>Langue des séances</Heading>
+      <Text color="secondary">
+        Les nouvelles séances de cet espace sont transcrites dans cette langue.
+        La changer ne touche pas les séances déjà là ; chacune se change à part.
+      </Text>
+      {languages === null ? (
+        <Skeleton width={160} height={20} radius={1} />
+      ) : (
+        <div>
+          <LanguagePick
+            languages={languages}
+            value={space.language}
+            title="Langue des séances"
+            onPick={(l) =>
+              void attempt(() =>
+                api.updateSpace(space.id, { language: l.language }),
+              ).then((done) => {
+                if (done && !l.installed) setToDownload(l);
+              })
+            }
+          >
+            <button type="button" className="cl-modelpick">
+              <span className="cl-modelpick__name">
+                {label ?? "Langue plus prise en charge"}
+              </span>
+              <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
+            </button>
+          </LanguagePick>
+        </div>
+      )}
+      {languages !== null && label === null && (
+        <Banner
+          status="warning"
+          title="Cette langue n'est plus prise en charge"
+          description="Ses nouvelles séances attendront qu'on leur choisisse une autre langue. Choisissez-en une pour l'espace."
+        />
+      )}
+      <LanguageDownloadDialog
+        language={toDownload}
+        after={
+          toDownload
+            ? `L'espace passe en ${languageWord(toDownload.label)} dès maintenant. Une séance traitée avant la fin du téléchargement l'attend, sans bloquer les autres.`
+            : undefined
+        }
+        onClose={() => setToDownload(null)}
+        onStarted={() => void reload()}
+      />
+    </section>
   );
 }
 

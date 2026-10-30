@@ -33,6 +33,44 @@ export interface Session {
   job_error: string | null;
   /** Kept, removed (when, why), or when its purge is due (spec §7.10). */
   audio: AudioStatus;
+  /** Its language (ISO 639-1, ADR 0072): the one chosen before its first processing, then
+   *  that of the version shown. */
+  language: string;
+  /** Changeable by PUT /langue while its text is not made; after, by « Refaire le texte ». */
+  language_editable: boolean;
+  /** What its queued processing waits for (ADR 0072), or null. */
+  processing_waits_for: ProcessingWait | null;
+}
+
+/** A queued processing waiting for a language's models, or for a language the engine no
+ *  longer offers (then `label` is null and nothing is to download). */
+export interface ProcessingWait {
+  reason: "model_missing" | "language_unsupported";
+  language: string;
+  label: string | null;
+  missing_models: string[];
+  download_bytes: number;
+}
+
+/** GET /api/langues: a language the chain transcribes (contrat-langue.md). */
+export interface Language {
+  language: string;
+  /** Said by the engine, in French (« Anglais »). */
+  label: string;
+  /** Nothing missing to process a session in it. */
+  installed: boolean;
+  missing_models: string[];
+  download_bytes: number;
+  models: string[];
+  /** The models only it needs: those « Supprimer » removes. */
+  own_models: string[];
+  /** Its models' downloads, running or just over. */
+  downloads: ModelAction[];
+  /** What keeps it from being removed. */
+  used_by: {
+    spaces: { id: number; name: string; archived: boolean }[];
+    waiting_sessions: { id: string; title: string | null; recorded_at: string }[];
+  };
 }
 
 export interface Project {
@@ -281,6 +319,8 @@ export interface Space {
   name: string;
   voice_recognition: boolean;
   archived: boolean;
+  /** The language its new sessions take (ISO 639-1, ADR 0072). */
+  language: string;
 }
 
 export interface Person {
@@ -537,6 +577,9 @@ export interface Version {
   /** When it replaced another version: corrections carried over, and not. */
   carried: number | null;
   not_carried: number | null;
+  /** Its transcription's language, read in the engine's provenance (P7); null when the
+   *  provenance does not say it although it should: « langue inconnue », never French. */
+  language: string | null;
 }
 
 export interface RerunFacts {
@@ -1068,8 +1111,17 @@ export const api = {
   deleteSession: (id: string) => send<{ problems: string[] }>("DELETE", sessionPath(id)),
   showVersion: (id: string, runId: string) =>
     send<Versions>("POST", `${sessionPath(id)}/versions/${encodeURIComponent(runId)}/afficher`),
-  rerun: (id: string, stage: Rerun, attendees: number | null) =>
-    send<Session>("POST", `${sessionPath(id)}/relancer`, { etape: stage, presents: attendees }),
+  /** `language`: the new version's, for the text (null: that of the version shown). */
+  rerun: (id: string, stage: Rerun, attendees: number | null, language: string | null = null) =>
+    send<Session>("POST", `${sessionPath(id)}/relancer`, {
+      etape: stage,
+      presents: attendees,
+      ...(language != null ? { langue: language } : {}),
+    }),
+  /** While its text is not made (`language_editable`); 409 after. */
+  setSessionLanguage: (id: string, language: string) =>
+    send<Session>("PUT", `${sessionPath(id)}/langue`, { langue: language }),
+  languages: () => getJson<Language[]>("/api/langues"),
   /** An import waiting for its people present: processed now (after PUT /presents, or
    *  without anybody). */
   launch: (id: string) => send<Session>("POST", `${sessionPath(id)}/lancer`),
@@ -1135,7 +1187,7 @@ export const api = {
     `${sessionPath(id)}/export?contenu=${contenu}${generationId != null ? `&resume=${generationId}` : ""}`,
   updateSpace: (
     id: number,
-    changes: Partial<Pick<Space, "name" | "voice_recognition" | "archived">>,
+    changes: Partial<Pick<Space, "name" | "voice_recognition" | "archived" | "language">>,
   ) => send<Space>("PATCH", `/api/espaces/${id}`, changes),
   people: (spaceId: number) =>
     getJson<Person[]>(`/api/espaces/${spaceId}/personnes`),
