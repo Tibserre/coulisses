@@ -421,13 +421,6 @@ export function RerunDialog({
             </Text>
           </div>
         )}
-        {missing === "redo_text" && (
-          <Banner
-            status="info"
-            title="La langue du texte est inconnue"
-            description="Sa provenance ne la dit pas. Refaire les voix garde ce texte : refaites plutôt le texte, en choisissant sa langue."
-          />
-        )}
         {facts && (
           <Text as="p" color="secondary">
             {other && targetLabel
@@ -484,7 +477,7 @@ export function RerunDialog({
                 ? `${ACTION[stage]} en ${languageWord(targetLabel)}`
                 : ACTION[stage]
             }
-            isDisabled={!facts?.possible || missing !== null}
+            isDisabled={!facts?.possible || missing}
             clickAction={ask}
           />
         </div>

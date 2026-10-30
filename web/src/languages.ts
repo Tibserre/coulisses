@@ -78,17 +78,15 @@ export function canRemoveLanguage(language: Language): boolean {
   );
 }
 
-/** What a rerun lacks when the shown version's provenance says no language (P7: never
- *  supposed French): the text's language to choose, or, for the voices alone, which keep
- *  that text, nothing to choose at all (the service refuses both). Null: nothing lacks. */
+/** Whether a rerun waits for the text's language to be chosen: the shown version's
+ *  provenance says none (P7: never supposed French) and its text is redone. The voices
+ *  alone keep the text, and the service gives them the session's language. */
 export function rerunLanguageMissing(
   stage: Rerun,
   shown: string | null,
   chosen: string | null,
-): "choose" | "redo_text" | null {
-  if (shown !== null) return null;
-  if (stage === "diarize") return "redo_text";
-  return chosen === null ? "choose" : null;
+): boolean {
+  return stage !== "diarize" && shown === null && chosen === null;
 }
 
 /** The share downloaded, 0 to 100. */

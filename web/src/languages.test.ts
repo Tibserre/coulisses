@@ -186,9 +186,9 @@ test("French is included: never removed, whatever its models", () => {
 });
 
 test("a rerun of a version without a language waits for it to be chosen", () => {
-  assert.equal(rerunLanguageMissing("transcribe", "fr", null), null);
-  assert.equal(rerunLanguageMissing("transcribe", null, null), "choose");
-  assert.equal(rerunLanguageMissing("all", null, "en"), null);
-  // The voices alone keep the text: no language to choose, the text is redone instead.
-  assert.equal(rerunLanguageMissing("diarize", null, "en"), "redo_text");
+  assert.equal(rerunLanguageMissing("transcribe", "fr", null), false);
+  assert.equal(rerunLanguageMissing("transcribe", null, null), true);
+  assert.equal(rerunLanguageMissing("all", null, "en"), false);
+  // The voices alone keep the text, and with it its language: nothing to choose.
+  assert.equal(rerunLanguageMissing("diarize", null, null), false);
 });
