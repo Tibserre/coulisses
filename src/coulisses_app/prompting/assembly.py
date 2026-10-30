@@ -197,6 +197,8 @@ class SessionContext:
     project: str | None = None
     notes: str | None = None
     """The note written by hand after the session."""
+    language: str | None = None
+    """The name of the language it was transcribed in, when not French (ADR 0072)."""
 
 
 def _voice(speaker: Speaker) -> str:
@@ -213,6 +215,11 @@ def context_block(ctx: SessionContext, view: CorrectedView) -> str:
         lines.append(f"- Projet : {ctx.project}")
     lines.append(f"- Date : {ctx.date}")
     lines.append(f"- Durée : {ctx.duration}")
+    if ctx.language:
+        lines.append(
+            f"- Langue de la séance : {ctx.language}. Ta réponse reste en français ; une "
+            f"citation exacte reste en {ctx.language}, entre guillemets."
+        )
     if ctx.attendees or ctx.unnamed_attendees:
         people = [
             f"{a.name} ({'invité' if a.guest else (a.role or 'membre')})" for a in ctx.attendees

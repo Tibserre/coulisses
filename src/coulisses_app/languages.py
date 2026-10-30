@@ -11,12 +11,13 @@ import re
 import sqlite3
 from pathlib import Path
 
-from coulisses.api import LanguageSupport, Provenance
+from coulisses.api import DEFAULT_PROFILE, LanguageSupport, Provenance, read_provenance
 from coulisses.api import languages as engine_languages
 from pydantic import BaseModel
 
 from coulisses_app.jobs import DEFAULT_LANGUAGE as DEFAULT
-from coulisses_app.jobs import WaitsFor
+from coulisses_app.jobs import ChainParams, WaitsFor
+from coulisses_app.paths import DataDir
 from coulisses_app.spaces import ConflictError, SpaceError
 
 FIRST_ENGINE_WITH_LANGUAGE = (1, 14, 0)
@@ -79,6 +80,46 @@ def of_transcription(prov: Provenance) -> str | None:
     if numbers is not None and tuple(int(n) for n in numbers.groups()) < FIRST_ENGINE_WITH_LANGUAGE:
         return DEFAULT
     return None
+
+
+class Spoken(BaseModel):
+    language: str
+    label: str
+    """Its name as the engine gives it, already in French; the code when it no longer
+    knows it."""
+
+
+def of_version(
+    conn: sqlite3.Connection, data: DataDir, session_id: str, run_id: str
+) -> Spoken | None:
+    """The language of the transcription a run comes from (the version summarised), read in
+    its provenance (P7), named by the engine of the profile it ran with. None: it does not
+    say it (the version says so, ADR 0072); the caller then names no language. A run whose
+    folder is gone is an error, not a language left out (P8)."""
+    row = conn.execute(
+        "WITH RECURSIVE up(id) AS (SELECT ? UNION"
+        " SELECT u.upstream_run_id FROM run_upstream u JOIN up ON u.run_id = up.id)"
+        " SELECT r.id, j.params FROM up JOIN run r ON r.id = up.id"
+        " LEFT JOIN job j ON j.id = r.job_id AND j.kind = 'chain'"
+        " WHERE r.stage = 'transcribe'",
+        (run_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    prov = read_provenance(data.run_dir(session_id, row["id"]))
+    if prov is None:
+        raise FileNotFoundError(
+            f"La provenance de la transcription {row['id']} est introuvable : sa langue ne peut "
+            "pas être lue."
+        )
+    code = of_transcription(prov)
+    if code is None:
+        return None
+    profile = ChainParams.model_validate_json(row["params"]).profile if row["params"] else None
+    for support in engine_languages(profile or DEFAULT_PROFILE).languages:
+        if support.language == code:
+            return Spoken(language=code, label=support.label)
+    return Spoken(language=code, label=code)
 
 
 def said_failure(prov: Provenance, profile: str, root: Path | None = None) -> str | None:

@@ -162,7 +162,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
   2. prompt de l'action ;
   3. règle de repli : si rien de substantiel, une phrase factuelle, jamais une réponse vide ;
   4. consigne de langue explicite (français) ;
-  5. contexte de séance : espace, projet, date, présents et rôles, glossaire, locuteurs avec leur nom et les personnages identifiés, notes manuelles ;
+  5. contexte de séance : espace, projet, date, langue de la transcription quand elle n'est pas le français (la réponse reste en français, une citation exacte garde sa langue, entre guillemets ; ADR 0072), présents et rôles, glossaire, locuteurs avec leur nom et les personnages identifiés, notes manuelles ;
   6. transcript au format `[mm:ss] Nom : texte`, avec les marqueurs et les phases (pour le titre : les chapitres, sinon le dernier résumé, ADR 0026).
 - **Pas de troncature silencieuse** : la taille du prompt est mesurée avant l'envoi. Si elle dépasse la fenêtre du modèle, l'app bascule sur un résumé par sections puis une consolidation, et l'indique. Chaque appel partiel et la consolidation passent par l'assemblage complet, consigne de langue comprise.
 - **Un onglet par résumé rédigé** (ADR 0060), dans la vue « Résumé » de la séance : le résumé de l'espace d'abord, puis les autres dans l'ordre où ils ont été demandés ; chacun montre sa dernière version ; « + Rédiger… » en écrit un autre. Sans résumé : « Rédiger : » le résumé de l'espace, ou un autre. Pendant l'écriture, une phrase et des lignes immobiles ; la version d'avant reste lisible.
