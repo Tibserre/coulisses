@@ -10,7 +10,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
-- enregistre avec un micro qui ne tourne pas à 48 kHz (enregistrement)
+- On peut maintenant enregistrer avec des AirPods, ou tout micro qui ne tourne pas à 48 kHz. Avant, « Nouvelle note » ne démarrait pas avec un tel micro. Le micro et le son de l'ordinateur sont convertis ensemble, et restent calés l'un sur l'autre. Avec des AirPods, le son de l'ordinateur perd ses aigus les plus hauts (au-delà de 12 kHz) : la voix n'est pas touchée.
 
 ## v0.38.0 — 2026-10-30
 
