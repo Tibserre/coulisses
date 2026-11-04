@@ -20,6 +20,15 @@ a crash: converting those is the user's decision.
 
 Interrupted (the service stopped, the Mac crashed), a conversion is taken up again at the
 next start: every step leaves the WAV, or a FLAC proven identical, in place.
+
+What the session's page plays is the same FLAC in an MP4 (ADR 0073): in a raw FLAC, the
+page's player (WebKit) lands seconds away from where it says after a jump, so the word
+lit is not the word heard. The listening mix is kept so; a track heard as it is (a session
+without the computer's sound) gets a copy in an MP4 beside it, the track untouched. The
+sessions kept in raw FLAC before are changed only when the user asks (`--ecoute-exacte`,
+ADR 0046): their listening mix moved into an MP4 (its samples proven the same, the raw FLAC
+removed and journaled), their track heard as it is copied. Until then, and without an
+ffmpeg that writes MP4, the raw FLAC is played.
 """
 
 from __future__ import annotations
@@ -35,7 +44,10 @@ import tempfile
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
+
+import numpy as np
 
 from coulisses_app import disk, mixing, sessions, wav
 from coulisses_app.paths import DataDir
@@ -51,6 +63,11 @@ MEDIA_TYPE = "audio/flac"
 """What the session's page is served (Python would say `audio/x-flac`)."""
 COMPRESSION_LEVEL = 5
 """ffmpeg's default: level 8 saves 0.1 % more, measured on a real recording (ADR 0046)."""
+HEARD_SUFFIX = ".m4a"
+"""The FLAC in an MP4, where the page's player seeks exactly (ADR 0073)."""
+HEARD_MEDIA_TYPE = "audio/mp4"
+LISTENING_COPY = "listening-copy.m4a"
+"""The copy heard of a track played as it is (a session without the computer's sound)."""
 
 _running: set[str] = set()
 _running_lock = threading.Lock()
@@ -63,10 +80,12 @@ class ConversionError(RuntimeError):
 @dataclass(frozen=True)
 class Converted:
     wav: Path
+    """The file removed: a WAV, or a listening mix in raw FLAC moved into an MP4."""
     wav_bytes: int
     wav_sha256: str
     pcm_sha256: str
     flac: Path
+    """The file kept: a FLAC, in an MP4 for the listening mix (`HEARD_SUFFIX`)."""
     flac_bytes: int
 
 
@@ -133,12 +152,25 @@ def _described(path: Path) -> tuple[int, int, int]:
         ) from exc
 
 
-def _encode(source: Path, target: Path) -> None:
+def _container(suffix: str) -> tuple[str, ...]:
+    """ffmpeg's output format for a file kept with this suffix; an MP4 has its index first,
+    read before the sound."""
+    if suffix == HEARD_SUFFIX:
+        return ("-f", "mp4", "-movflags", "+faststart")
+    return ("-f", "flac")
+
+
+def _encode(source: Path, target: Path, suffix: str = SUFFIX) -> None:
+    """`source` encoded in FLAC, or only moved (`-c:a copy`) when it is one already."""
+    codec = (
+        ("copy",)
+        if source.suffix.lower() == SUFFIX
+        else ("flac", "-compression_level", str(COMPRESSION_LEVEL))
+    )
     done = subprocess.run(
         [
             *("ffmpeg", "-nostdin", "-v", "error", "-i", str(source), "-map", "0:a:0"),
-            *("-map_metadata", "-1", "-c:a", "flac", "-compression_level"),
-            *(str(COMPRESSION_LEVEL), "-f", "flac", str(target)),
+            *("-map_metadata", "-1", "-c:a", *codec, *_container(suffix), str(target)),
         ],
         capture_output=True,
         text=True,
@@ -164,11 +196,11 @@ def _prove(flac: Path, rate: int, channels: int, samples: str, source: Path) -> 
         )
 
 
-def convert_file(source: Path, expected: str | None) -> Converted:
-    """`source` (a WAV of Coulisses) kept as FLAC beside it, on the disk, once the FLAC is
-    proven to hold the WAV's samples (and those recorded when it closed, `expected`). The
-    WAV is not removed here. Raises `ConversionError`, `OSError` or `ValueError`: the WAV is
-    then left as it is."""
+def convert_file(source: Path, expected: str | None, suffix: str = SUFFIX) -> Converted:
+    """`source` (a WAV of Coulisses) kept as FLAC beside it (in an MP4 with `HEARD_SUFFIX`),
+    on the disk, once the FLAC is proven to hold the WAV's samples (and those recorded when
+    it closed, `expected`). The WAV is not removed here. Raises `ConversionError`, `OSError`
+    or `ValueError`: the WAV is then left as it is."""
     rate, channels, data_bytes = wav.layout(source)
     size = source.stat().st_size
     if size != wav.HEADER_BYTES + data_bytes:
@@ -184,7 +216,7 @@ def convert_file(source: Path, expected: str | None) -> Converted:
             f"{source.name} n'a plus les échantillons enregistrés à sa fermeture : il est "
             "gardé tel quel."
         )
-    target = source.with_suffix(SUFFIX)
+    target = source.with_suffix(suffix)
     if target.is_file():
         # Left by a conversion interrupted after the FLAC took its name: proven again. One
         # that fails is set aside (never removed: the WAV beside it is the true one), so that
@@ -200,7 +232,7 @@ def convert_file(source: Path, expected: str | None) -> Converted:
         partial = target.with_name(target.name + ".partiel")
         partial.unlink(missing_ok=True)
         try:
-            _encode(source, partial)
+            _encode(source, partial, suffix)
             disk.sync_file(partial)  # on the disk before it takes its name, a crash or not
             _prove(partial, rate, channels, samples, source)
             os.replace(partial, target)
@@ -322,6 +354,7 @@ def _convert_session(data: DataDir, session_id: str) -> list[Converted] | None:
     if any(s.capture_state != "complete" for s in tracks):
         return None
     folder = data.sources_dir(session_id)
+    reference = tracks[0] if tracks[0].source_id == sessions.REFERENCE_SOURCE_ID else None
     done: list[Converted] = []
     problems: list[str] = []
 
@@ -339,6 +372,19 @@ def _convert_session(data: DataDir, session_id: str) -> list[Converted] | None:
     if mixing.read_facts(data, session_id) is not None:
         attempt("le mix", lambda: _convert_mix(data, session_id, done))
         attempt("le mix d'écoute", lambda: _convert_listening(data, session_id, done))
+    elif (
+        heard_available() is None
+        and reference is not None
+        and (
+            any(c.wav.stem == Path(reference.file_name).stem for c in done)
+            or _partial(folder / LISTENING_COPY).is_file()
+        )
+    ):
+        # Heard as it is, just kept in raw FLAC (or its copy cut short): its copy in an MP4
+        # (ADR 0073). A session kept so before changes only when the user asks
+        # (`make_heard`, ADR 0046).
+        attempt("la copie d'écoute", lambda: _make_copy(data, session_id))
+    _drop_partials(folder, session_id)
     if done or problems:
         _journal(data, session_id, session.title, done, problems)
     if done:
@@ -430,8 +476,16 @@ def _convert_listening(data: DataDir, session_id: str, done: list[Converted]) ->
     path = (data.sources_dir(session_id) / heard.file).with_suffix(".wav")
     if not path.is_file():
         return
+    # In an MP4, where the page's player seeks exactly (ADR 0073); in raw FLAC with an
+    # ffmpeg that does not write MP4, as before, and for a conversion begun before (its
+    # `mix.json` names a raw FLAC): such a session changes only when the user asks.
+    suffix = (
+        HEARD_SUFFIX
+        if heard_available() is None and Path(heard.file).suffix.lower() != SUFFIX
+        else SUFFIX
+    )
     try:
-        made = convert_file(path, heard.pcm_sha256)
+        made = convert_file(path, heard.pcm_sha256, suffix)
     except ConversionError:
         if heard.file != path.name and not (path.parent / heard.file).exists():
             back = heard.model_copy(update={"file": path.name, "sha256": _file_sha256(path)})
@@ -446,6 +500,247 @@ def _convert_listening(data: DataDir, session_id: str, done: list[Converted]) ->
     mixing.write_facts(data, session_id, facts.model_copy(update={"listening_mix": listening_mix}))
     _remove_wav(made)
     done.append(made)
+
+
+# -- heard on the page (ADR 0073) ------------------------------------------------------------
+
+
+@cache
+def heard_available() -> str | None:
+    """Why the FLAC heard cannot be put in an MP4 here, or None. Asked once per service."""
+    found = shutil.which("ffmpeg")
+    if found is None:
+        return "ffmpeg est introuvable"
+    listed = subprocess.run(
+        [found, "-hide_banner", "-muxers"], capture_output=True, text=True, check=False
+    )
+    names = {line.split()[1] for line in listed.stdout.splitlines() if len(line.split()) > 1}
+    if "mp4" not in names:
+        return "le ffmpeg de cette app n'écrit pas de MP4"
+    # Tried for real: some ffmpeg write MP4, but not FLAC in it.
+    with tempfile.TemporaryDirectory(prefix="coulisses-mp4-") as work:
+        sample = Path(work) / "essai.wav"
+        writer = wav.WavWriter(sample, 48_000, 1)
+        writer.write(np.zeros((4_800, 1), dtype=np.float32))
+        writer.close()
+        try:
+            _encode(sample, Path(work) / "essai.m4a", HEARD_SUFFIX)
+            if decoded_pcm_sha256(Path(work) / "essai.m4a") != wav.pcm_sha256(sample):
+                return "le ffmpeg de cette app ne rend pas le FLAC mis dans un MP4"
+        except ConversionError as exc:
+            return f"le ffmpeg de cette app ne met pas de FLAC dans un MP4 ({exc})"
+    return None
+
+
+def heard_path(data: DataDir, session_id: str, *, prepare: bool = True) -> Path | None:
+    """What the session's page plays: `mixing.listening_path`, but the copy in an MP4 of
+    a reference heard as it is in raw FLAC, once made. `prepare`: as there."""
+    path = mixing.listening_path(data, session_id, prepare=prepare)
+    if path is None or path.suffix.lower() != SUFFIX:
+        return path
+    copy = path.parent / LISTENING_COPY
+    if copy.is_file() and path == sessions.reference_audio_path(data, session_id):
+        return copy
+    return path
+
+
+def _partial(target: Path) -> Path:
+    return target.with_name(target.name + ".partiel")
+
+
+def _drop_partials(folder: Path, session_id: str) -> None:
+    """A copy in an MP4 cut short (the service stopped), of a file still there, which
+    nothing will finish: removed, said in the log. The file it was copied from is kept."""
+    listening = folder / Path(mixing.LISTENING_FILE).with_suffix(HEARD_SUFFIX).name
+    for target in (folder / LISTENING_COPY, listening):
+        partial = _partial(target)
+        # The one of a listening mix still in WAV is finished by its conversion.
+        if partial.is_file() and not target.with_suffix(".wav").is_file():
+            partial.unlink()
+            log.info("%s: %s cut short, removed", session_id, partial.name)
+
+
+def _moved(source: Path, target: Path, samples: str) -> None:
+    """The FLAC `source` put in an MP4 at `target`, without encoding again, on the disk and
+    proven to hold `samples`; nothing at `target` otherwise. Raises `ConversionError`."""
+    rate, channels, bits = _described(source)
+    partial = _partial(target)
+    partial.unlink(missing_ok=True)
+    try:
+        _encode(source, partial, HEARD_SUFFIX)
+        disk.sync_file(partial)
+        if _described(partial) != (rate, channels, bits):
+            raise ConversionError(
+                f"La copie d'écoute de {source.name} n'a pas sa fréquence, ses canaux ou ses "
+                "bits : elle n'est pas gardée."
+            )
+        if decoded_pcm_sha256(partial) != samples:
+            raise ConversionError(
+                f"La copie d'écoute de {source.name} ne rend pas les mêmes échantillons : "
+                "elle n'est pas gardée."
+            )
+        os.replace(partial, target)
+        disk.sync_folder(target.parent)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def _copy_reference(data: DataDir, session_id: str) -> Path | None:
+    """The reference heard as it is (no listening mix), in raw FLAC: its copy in an MP4
+    beside it, made if missing. The reference is never touched."""
+    if mixing.read_facts(data, session_id) is not None:
+        return None  # the page plays a mix
+    source = sessions.reference_source(data, session_id)
+    if source is None:
+        return None
+    path = data.sources_dir(session_id) / source.file_name
+    copy = path.parent / LISTENING_COPY
+    if path.suffix.lower() != SUFFIX or not path.is_file() or copy.is_file():
+        return None
+    _moved(path, copy, source.pcm_sha256 or decoded_pcm_sha256(path))
+    log.info("%s: %s heard from a copy in MP4 (ADR 0073)", session_id, path.name)
+    return copy
+
+
+def _make_copy(data: DataDir, session_id: str) -> None:
+    _copy_reference(data, session_id)
+
+
+def _move_listening(data: DataDir, session_id: str, title: str | None) -> list[Converted]:
+    """A listening mix kept in raw FLAC, moved into an MP4: the same samples, proven; then
+    `mix.json` names it, and the raw FLAC goes once proven again to hold them, journaled
+    first. A raw FLAC left beside its MP4 (the service stopped between) goes the same way."""
+    facts = mixing.read_facts(data, session_id)
+    if facts is None or facts.listening_mix is None:
+        return []
+    heard = facts.listening_mix
+    folder = data.sources_dir(session_id)
+    named = folder / heard.file
+    raw, target = named.with_suffix(SUFFIX), named.with_suffix(HEARD_SUFFIX)
+    if not raw.is_file() or named not in (raw, target) or not named.is_file():
+        return []
+    samples = heard.pcm_sha256 or decoded_pcm_sha256(raw)
+    if named == raw:
+        _moved(raw, target, samples)
+        update = {"file": target.name, "sha256": _file_sha256(target), "pcm_sha256": samples}
+        listening_mix = heard.model_copy(update=update)
+        mixing.write_facts(
+            data, session_id, facts.model_copy(update={"listening_mix": listening_mix})
+        )
+    elif decoded_pcm_sha256(target) != samples:
+        raise ConversionError(
+            f"{target.name} ne rend pas les échantillons du mix d'écoute : {raw.name} est gardé."
+        )
+    made = Converted(
+        wav=raw,
+        wav_bytes=raw.stat().st_size,
+        wav_sha256=_file_sha256(raw),
+        pcm_sha256=samples,
+        flac=target,
+        flac_bytes=target.stat().st_size,
+    )
+    if decoded_pcm_sha256(raw) != samples:
+        raise ConversionError(
+            f"La page fait désormais entendre {target.name} ; {raw.name} ne rend plus les mêmes "
+            "échantillons : il est gardé."
+        )
+    _journal(data, session_id, title, [made], [])
+    raw.unlink()
+    disk.sync_folder(folder)
+    return [made]
+
+
+def _audio_there(data: DataDir, session_id: str) -> bool:
+    """Under the base's write lock, so that a removal of the audio under way is over first
+    (one that starts after sees this session busy): the audio is there, nothing records."""
+    conn = connect(data)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT audio_removed_at FROM session WHERE id = ?", (session_id,)
+            ).fetchone()
+            recording = conn.execute(
+                "SELECT 1 FROM audio_source WHERE session_id = ? AND capture_state = 'recording'",
+                (session_id,),
+            ).fetchone()
+        finally:
+            conn.rollback()
+    finally:
+        conn.close()
+    return row is not None and row["audio_removed_at"] is None and recording is None
+
+
+def make_heard(data: DataDir, session_id: str) -> list[str]:
+    """What an older session needs to be heard from an MP4, done (when the user asked it,
+    ADR 0046): what was done, said in French. Raises `ConversionError`, `OSError`, …: its
+    message says what is kept."""
+    with mixing.session_lock(session_id):
+        with _running_lock:
+            _running.add(session_id)
+        try:
+            if not _audio_there(data, session_id):
+                return []
+            session = sessions.get_session(data, session_id)
+            title = session.title if session is not None else None
+            said = [
+                f"{c.wav.name} rangé en {c.flac.name}"
+                for c in _move_listening(data, session_id, title)
+            ]
+            if (copy := _copy_reference(data, session_id)) is not None:
+                said.append(f"copie d'écoute faite : {copy.name}")
+            _drop_partials(data.sources_dir(session_id), session_id)
+            return said
+        finally:
+            with _running_lock:
+                _running.discard(session_id)
+
+
+def heard_pending(data: DataDir) -> list[str]:
+    """The sessions whose page plays a raw FLAC, which `make_heard` would change."""
+    conn = connect(data)
+    try:
+        rows = conn.execute(
+            "SELECT id FROM session WHERE audio_removed_at IS NULL ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [str(row["id"]) for row in rows if _needs_heard(data, str(row["id"]))]
+
+
+def _needs_heard(data: DataDir, session_id: str) -> bool:
+    """Read only: nothing is prepared (`prepare=False`). A plain mix heard while its
+    listening mix is not made (ADR 0037) is left to that listening mix."""
+    path = heard_path(data, session_id, prepare=False)
+    facts = mixing.read_facts(data, session_id)
+    if path is not None and path.suffix.lower() == SUFFIX and path.is_file():
+        if facts is None:
+            return True  # the reference heard as it is
+        return facts.listening_mix is not None and path.name == facts.listening_mix.file
+    # A raw FLAC left beside the listening mix moved into an MP4.
+    if facts is None or facts.listening_mix is None:
+        return False
+    named = data.sources_dir(session_id) / facts.listening_mix.file
+    return named.suffix.lower() == HEARD_SUFFIX and named.with_suffix(SUFFIX).is_file()
+
+
+def make_all_heard(data: DataDir, say: Callable[[str], None]) -> int:
+    """`make_heard` for every session that needs it; each one said. Returns how many
+    failed (the others are done)."""
+    missing = heard_available()
+    if missing is not None:
+        say(f"Rien n'est fait : {missing}.")
+        return 1
+    failed = 0
+    for session_id in heard_pending(data):
+        try:
+            for line in make_heard(data, session_id) or ["rien à faire"]:
+                say(f"{session_id} : {line}")
+        except (ConversionError, OSError, ValueError, sqlite3.Error) as exc:
+            failed += 1
+            log.error("heard copy of %s: %s", session_id, exc)
+            say(f"{session_id} : {exc}")
+    return failed
 
 
 # -- when -----------------------------------------------------------------------------------
@@ -522,8 +817,13 @@ def pending(data: DataDir) -> list[str]:
     for row in rows:
         folder = data.sources_dir(row["session_id"])
         names: set[str] = {p.name for p in folder.iterdir()} if folder.is_dir() else set()
-        cut_short = any(n.endswith(SUFFIX + ".partiel") for n in names) or any(
-            n.endswith(".wav") and n[: -len(".wav")] + SUFFIX in names for n in names
+        # The listening mix is kept in an MP4 (ADR 0073).
+        cut_short = any(
+            n.endswith(suffix + ".partiel") for n in names for suffix in (SUFFIX, HEARD_SUFFIX)
+        ) or any(
+            n.endswith(".wav") and n[: -len(".wav")] + suffix in names
+            for n in names
+            for suffix in (SUFFIX, HEARD_SUFFIX)
         )
         if cut_short:
             found.append(str(row["session_id"]))

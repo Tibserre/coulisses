@@ -1326,7 +1326,8 @@ def create_app(
         if status.state == "removed":
             raise _not_found("L'audio de cette séance a été supprimé.")
         # With the computer's sound, its listening mix once made (ADR 0032, 0037).
-        path = mixing.listening_path(data, session_id)
+        # In an MP4 where it can be (ADR 0073): the player seeks exactly in it.
+        path = lossless.heard_path(data, session_id)
         if path is None:
             raise _not_found("Séance introuvable.")
         if not path.is_file():
@@ -1334,11 +1335,13 @@ def create_app(
                 "L'enregistrement est introuvable dans le dossier de la séance. "
                 "A-t-il été déplacé ou supprimé dans le Finder ?"
             )
-        media_type = (
-            lossless.MEDIA_TYPE
-            if path.suffix.lower() == lossless.SUFFIX
-            else mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        )
+        suffix = path.suffix.lower()
+        if suffix == lossless.SUFFIX:
+            media_type = lossless.MEDIA_TYPE
+        elif suffix == lossless.HEARD_SUFFIX:
+            media_type = lossless.HEARD_MEDIA_TYPE
+        else:
+            media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         return FileResponse(path, media_type=media_type)
 
     # -- projects, search, export to a folder (step 8, ADR 0030) -----------------------

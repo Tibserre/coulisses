@@ -57,6 +57,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="développement : port 8766, ~/Coulisses/Données-dev, jamais les données réelles",
     )
+    parser.add_argument(
+        "--ecoute-exacte",
+        action="store_true",
+        help=(
+            "range l'écoute des séances déjà enregistrées dans un MP4, où le lecteur va au "
+            "bon endroit (ADR 0073), sans perte, puis s'arrête ; le service doit être arrêté"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -116,6 +124,14 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Base sauvegardée avant mise à jour : {backup}", file=sys.stderr)
         # Only the latest copies are kept (ADR 0052); what could not go is said at start.
         pruned += [f"Anciennes copies de la base : {p}" for p in prune_backups(data, backup)]
+    if args.ecoute_exacte:
+        # Asked by the user (ADR 0046): the older sessions heard from an MP4, then stop. The
+        # data lock held above: no service runs meanwhile.
+        try:
+            failed = lossless.make_all_heard(data, lambda line: print(line, file=sys.stderr))
+        finally:
+            lock.close()
+        raise SystemExit(1 if failed else 0)
 
     chain = ChainConfig.from_profile(load_profile(profile_path(DEFAULT_PROFILE)))
     awake = KeepAwake()
