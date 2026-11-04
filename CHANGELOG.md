@@ -10,7 +10,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
-- sert l'écoute en FLAC dans un MP4, où le lecteur va au bon endroit (ecoute)
+- Quand on clique sur une phrase, l'écoute repart exactement à cet endroit. Avant, sur une séance enregistrée, le lecteur tombait à plusieurs secondes de la phrase cliquée, et le mot surligné prenait de l'avance sur la voix. Le son garde la même qualité, sans perte. Une séance enregistrée sans le son de l'ordinateur prend un peu plus de place (environ 260 Mo de plus par heure). Les séances enregistrées avant cette version gardent pour l'instant l'ancien comportement.
 
 ## v0.38.1 — 2026-10-30
 
