@@ -179,6 +179,24 @@ assert lossless.decoded_pcm_sha256(made.flac) == made.pcm_sha256
     fail "FLAC ($channels canaux) : la conversion de l'app n'a pas rendu les mêmes échantillons"
 done
 print "   FLAC 24 bits, mono et stéréo, par la conversion de l'app : mêmes échantillons"
+# ADR 0073: what is heard is served as FLAC in an MP4, by the app's ffmpeg: a FLAC copied
+# in, and a WAV encoded in, both read back as the WAV's samples.
+heard() { $RES/bin/ffmpeg -loglevel error -y "${@[1,-2]}" -f mp4 -movflags +faststart ${@[-1]} }
+samples() { $RES/bin/ffmpeg -loglevel error -i $1 -f s24le -c:a pcm_s24le - | shasum -a 256 }
+heard -i $WORK/piste-1.wav -c:a flac -compression_level 5 $WORK/ecoute-wav.m4a ||
+  fail "FLAC dans un MP4 : le ffmpeg de l'app ne l'écrit pas depuis un WAV"
+$RES/bin/ffmpeg -loglevel error -y -i $WORK/piste-1.wav -c:a flac $WORK/ecoute.flac ||
+  fail "FLAC : le ffmpeg de l'app ne l'écrit pas"
+heard -i $WORK/ecoute.flac -map 0:a:0 -map_metadata -1 -c:a copy $WORK/ecoute-flac.m4a ||
+  fail "FLAC dans un MP4 : le ffmpeg de l'app ne l'écrit pas depuis un FLAC"
+# Each read on its own line: a read that fails stops the trial (pipefail), never two empty
+# reads found equal.
+expected=$(samples $WORK/piste-1.wav)
+for made in ecoute-wav ecoute-flac; do
+  read_back=$(samples $WORK/$made.m4a)
+  [[ $read_back == $expected ]] || fail "FLAC dans un MP4 ($made) : pas les mêmes échantillons"
+done
+print "   FLAC dans un MP4, depuis un WAV et depuis un FLAC, par le ffmpeg de l'app : mêmes échantillons"
 
 cat > $WORK/reseau.sb <<'PROFILE'
 (version 1)
