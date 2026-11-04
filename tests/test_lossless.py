@@ -92,13 +92,13 @@ def test_a_meeting_keeps_its_tracks_and_mixes_in_flac_without_mixing_again(
 
     assert done is not None
     assert sorted(c.flac.name for c in done) == [
-        "listening.flac",
+        "listening.m4a",
         "mix.flac",
         "ref.flac",
         "system.flac",
     ]
     assert sorted(p.name for p in folder.iterdir()) == [
-        "listening.flac",
+        "listening.m4a",
         "mix.flac",
         "mix.json",
         "ref.flac",
@@ -106,19 +106,20 @@ def test_a_meeting_keeps_its_tracks_and_mixes_in_flac_without_mixing_again(
     ]
     facts = mixing.read_facts(data, session_id)
     assert facts is not None and facts.listening_mix is not None
-    assert (facts.file, facts.listening_mix.file) == ("mix.flac", "listening.flac")
+    # The one heard in an MP4, where the page's player seeks exactly (ADR 0073).
+    assert (facts.file, facts.listening_mix.file) == ("mix.flac", "listening.m4a")
     assert (facts.made_from, facts.made_at, facts.gain) == (
         before.made_from,
         before.made_at,
         before.gain,
     )
     assert lossless.decoded_pcm_sha256(folder / "mix.flac") == plain_samples == facts.pcm_sha256
-    assert lossless.decoded_pcm_sha256(folder / "listening.flac") == heard_samples
+    assert lossless.decoded_pcm_sha256(folder / "listening.m4a") == heard_samples
     # The engine is given the mix in FLAC, never made again; the page plays the listening one.
     made = (folder / "mix.flac").stat().st_mtime_ns
     assert mixing.processing_path(data, session_id) == folder / "mix.flac"
     assert (folder / "mix.flac").stat().st_mtime_ns == made
-    assert mixing.listening_path(data, session_id) == folder / "listening.flac"
+    assert lossless.heard_path(data, session_id) == folder / "listening.m4a"
 
 
 def test_a_mix_made_again_from_flac_tracks_reads_them_without_loss(data: DataDir) -> None:
@@ -138,7 +139,7 @@ def test_a_mix_made_again_from_flac_tracks_reads_them_without_loss(data: DataDir
     assert (folder / "mix.flac").is_file()
     lossless.convert_session(data, session_id)
     assert sorted(p.name for p in folder.iterdir()) == [
-        "listening.flac",
+        "listening.m4a",
         "mix.flac",
         "mix.json",
         "ref.flac",
@@ -161,7 +162,7 @@ def test_mixes_made_again_replace_those_kept_in_flac(data: DataDir) -> None:
 
     assert mixing.processing_path(data, session_id) == folder / mixing.MIX_FILE
 
-    assert not (folder / "mix.flac").exists() and not (folder / "listening.flac").exists()
+    assert not (folder / "mix.flac").exists() and not (folder / "listening.m4a").exists()
     assert (folder / mixing.LISTENING_FILE).is_file()
 
 
@@ -191,7 +192,11 @@ def test_a_flac_that_does_not_give_the_same_samples_leaves_the_wav(
     writer.write(tone(1.0, 0.2))
     writer.close()
     real_encode = lossless._encode  # pyright: ignore[reportPrivateUsage]
-    monkeypatch.setattr(lossless, "_encode", lambda source, target: real_encode(other, target))
+    monkeypatch.setattr(
+        lossless,
+        "_encode",
+        lambda source, target, suffix=lossless.SUFFIX: real_encode(other, target, suffix),
+    )
 
     assert lossless.convert_session(data, session_id) == []
 
@@ -225,7 +230,7 @@ def test_a_conversion_cut_short_is_taken_up_at_start(data: DataDir) -> None:
 
     lossless.convert_session(data, session_id)
 
-    assert sorted(p.name for p in folder.iterdir()) == ["ref.flac"]
+    assert sorted(p.name for p in folder.iterdir()) == [lossless.LISTENING_COPY, "ref.flac"]
     after = sessions.reference_source(data, session_id)
     assert after is not None and after.file_name == "ref.flac"
     assert lossless.pending(data) == []
@@ -241,7 +246,7 @@ def test_a_wav_left_after_the_base_said_flac_goes_once_proven(data: DataDir) -> 
 
     lossless.convert_session(data, session_id)
 
-    assert sorted(p.name for p in folder.iterdir()) == ["ref.flac"]
+    assert sorted(p.name for p in folder.iterdir()) == [lossless.LISTENING_COPY, "ref.flac"]
     logged = journal(data, session_id)[-1]["files"]
     assert [(f["path"], f["bytes"]) for f in logged] == [("sources/ref.wav", len(kept))]
 
@@ -280,15 +285,185 @@ def test_files_cannot_go_while_they_are_converted(data: DataDir) -> None:
         lossless._running.discard(session_id)  # pyright: ignore[reportPrivateUsage]
 
 
-def test_the_page_is_served_flac(data: DataDir) -> None:
-    session_id = recorded(data, tone(1.0, 0.3), None)
-    lossless.convert_session(data, session_id)
+def served(data: DataDir, session_id: str) -> tuple[bytes, str]:
     with local_client(
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
     ) as client:
         answer = client.get(f"/api/seances/{session_id}/audio")
     assert answer.status_code == 200
-    assert answer.headers["content-type"] == "audio/flac"
+    return answer.content, answer.headers["content-type"]
+
+
+def test_the_page_is_served_the_flac_in_an_mp4(data: DataDir) -> None:
+    session_id = recorded(data, tone(1.0, 0.3), None)
+    folder = data.sources_dir(session_id)
+    source = sessions.reference_source(data, session_id)
+    assert source is not None
+
+    lossless.convert_session(data, session_id)
+
+    # The track heard as it is keeps its raw FLAC; the page plays its copy in an MP4, the
+    # same samples (ADR 0073).
+    after = sessions.reference_source(data, session_id)
+    assert after is not None and after.file_name == "ref.flac"
+    copy = folder / lossless.LISTENING_COPY
+    assert lossless.decoded_pcm_sha256(copy) == source.pcm_sha256
+    assert served(data, session_id) == (copy.read_bytes(), "audio/mp4")
+    assert len(journal(data, session_id)) == 1  # the copy removes nothing
+
+
+def test_without_an_ffmpeg_writing_mp4_the_page_is_served_flac(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lossless, "heard_available", lambda: "pas de MP4")
+    alone = recorded(data, tone(1.0, 0.3), None)
+    meeting = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
+    mixing.processing_path(data, meeting)
+
+    lossless.convert_session(data, alone)
+    lossless.convert_session(data, meeting)
+
+    assert sorted(p.name for p in data.sources_dir(alone).iterdir()) == ["ref.flac"]
+    assert served(data, alone)[1] == "audio/flac"
+    facts = mixing.read_facts(data, meeting)
+    assert facts is not None and facts.listening_mix is not None
+    assert facts.listening_mix.file == "listening.flac"
+    assert served(data, meeting)[1] == "audio/flac"
+    lines: list[str] = []
+    assert lossless.make_all_heard(data, lines.append) == 1
+    assert lines == ["Rien n'est fait : pas de MP4."]
+
+
+def older(data: DataDir, monkeypatch: pytest.MonkeyPatch, system: bool) -> str:
+    """A session kept in raw FLAC before ADR 0073."""
+    with monkeypatch.context() as before:
+        before.setattr(lossless, "heard_available", lambda: "avant l'ADR 0073")
+        session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1) if system else None)
+        if system:
+            mixing.processing_path(data, session_id)
+        lossless.convert_session(data, session_id)
+    return session_id
+
+
+def test_an_older_session_changes_only_when_the_user_asks(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alone, meeting = older(data, monkeypatch, False), older(data, monkeypatch, True)
+    names = {s: sorted(p.name for p in data.sources_dir(s).iterdir()) for s in (alone, meeting)}
+
+    # A processing over, or a start: nothing of them changes (ADR 0046).
+    lossless.convert_session(data, alone)
+    lossless.convert_session(data, meeting)
+    assert lossless.pending(data) == []  # nothing for a start to take up
+
+    assert {s: sorted(p.name for p in data.sources_dir(s).iterdir()) for s in names} == names
+    assert served(data, alone)[1] == served(data, meeting)[1] == "audio/flac"
+    assert lossless.heard_pending(data) == sorted([alone, meeting])
+
+
+def test_asked_an_older_session_is_heard_from_an_mp4_without_loss(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alone, meeting = older(data, monkeypatch, False), older(data, monkeypatch, True)
+    folder = data.sources_dir(meeting)
+    before = mixing.read_facts(data, meeting)
+    assert before is not None and before.listening_mix is not None
+    raw = folder / "listening.flac"
+    raw_bytes, raw_sha256 = raw.stat().st_size, lossless._file_sha256(raw)  # pyright: ignore[reportPrivateUsage]
+    reference = sessions.reference_source(data, alone)
+    assert reference is not None
+    entries = len(journal(data, meeting))
+
+    lines: list[str] = []
+    assert lossless.make_all_heard(data, lines.append) == 0
+
+    # The listening mix moved into an MP4: the same samples, the raw FLAC gone, journaled.
+    facts = mixing.read_facts(data, meeting)
+    assert facts is not None and facts.listening_mix is not None
+    assert facts.listening_mix.file == "listening.m4a"
+    assert facts.listening_mix.pcm_sha256 == before.listening_mix.pcm_sha256
+    assert lossless.decoded_pcm_sha256(folder / "listening.m4a") == before.listening_mix.pcm_sha256
+    assert not raw.exists()
+    assert (facts.made_from, facts.file, facts.sha256) == (
+        before.made_from,
+        before.file,
+        before.sha256,
+    )
+    [entry] = journal(data, meeting)[entries:]
+    assert entry["kind"] == "conversion" and entry["problems"] == []
+    assert entry["files"] == [
+        {
+            "path": "sources/listening.flac",
+            "bytes": raw_bytes,
+            "sha256": raw_sha256,
+            "pcm_sha256": before.listening_mix.pcm_sha256,
+        }
+    ]
+    assert entry["kept"][0]["path"] == "sources/listening.m4a"
+    assert served(data, meeting) == ((folder / "listening.m4a").read_bytes(), "audio/mp4")
+    # The track heard as it is untouched, with its copy beside it.
+    after = sessions.reference_source(data, alone)
+    assert after is not None and (after.file_name, after.sha256) == ("ref.flac", reference.sha256)
+    copy = data.sources_dir(alone) / lossless.LISTENING_COPY
+    assert lossless.decoded_pcm_sha256(copy) == reference.pcm_sha256
+    assert served(data, alone)[1] == "audio/mp4"
+    assert sorted(lines) == sorted(
+        [
+            f"{alone} : copie d'écoute faite : {lossless.LISTENING_COPY}",
+            f"{meeting} : listening.flac rangé en listening.m4a",
+        ]
+    )
+    # Done once: asked again, nothing is left to do.
+    assert lossless.heard_pending(data) == []
+    again: list[str] = []
+    assert lossless.make_all_heard(data, again.append) == 0 and again == []
+
+
+def test_a_copy_that_does_not_give_the_same_samples_changes_nothing(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    meeting = older(data, monkeypatch, True)
+    folder = data.sources_dir(meeting)
+    names = sorted(p.name for p in folder.iterdir())
+    assert lossless.heard_available() is None  # asked once, before the samples go wrong
+    monkeypatch.setattr(lossless, "decoded_pcm_sha256", lambda path: "autre")
+
+    lines: list[str] = []
+    assert lossless.make_all_heard(data, lines.append) == 1
+
+    assert sorted(p.name for p in folder.iterdir()) == names
+    facts = mixing.read_facts(data, meeting)
+    assert facts is not None and facts.listening_mix is not None
+    assert facts.listening_mix.file == "listening.flac"
+    assert "ne rend pas les mêmes échantillons" in lines[0]
+
+
+def test_the_audio_cannot_go_while_its_copy_is_made(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    alone = older(data, monkeypatch, False)
+    tried: list[str] = []
+
+    def remove_meanwhile(source: Path, target: Path, suffix: str = lossless.SUFFIX) -> None:
+        try:
+            retention.remove_audio(data, alone, "audio_deletion")
+        except retention.DeletionError as exc:
+            tried.append(str(exc))
+        real_encode(source, target, suffix)
+
+    real_encode = lossless._encode  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(lossless, "_encode", remove_meanwhile)
+    lossless.make_heard(data, alone)
+
+    assert tried and "en train d'être gardées" in tried[0]
+
+
+def test_a_removed_audio_gets_no_copy(data: DataDir, monkeypatch: pytest.MonkeyPatch) -> None:
+    alone = older(data, monkeypatch, False)
+    retention.remove_audio(data, alone, "audio_deletion")
+    assert lossless.make_heard(data, alone) == []
+    assert lossless.heard_pending(data) == []
+    assert not data.sources_dir(alone).exists() or not any(data.sources_dir(alone).iterdir())
 
 
 def test_the_recorder_hands_over_once_stopped(data: DataDir) -> None:
@@ -469,3 +644,104 @@ def test_the_engine_hears_the_same_from_a_wav_and_its_flac(
         words = read_output(data.run_dir(session_id, attribute["id"]), AttributedTranscript).words
         heard.append([(w.text, w.start, w.end, w.speaker) for w in words])
     assert heard[0] == heard[1] and heard[0]
+
+
+def test_a_listening_mix_conversion_cut_short_is_finished(data: DataDir) -> None:
+    session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
+    mixing.processing_path(data, session_id)
+    folder = data.sources_dir(session_id)
+    kept = (folder / mixing.LISTENING_FILE).read_bytes()
+    lossless.convert_session(data, session_id)
+    (folder / mixing.LISTENING_FILE).write_bytes(kept)  # mix.json said MP4, the WAV stayed
+    assert lossless.pending(data) == [session_id]
+
+    lossless.convert_session(data, session_id)
+
+    assert not (folder / mixing.LISTENING_FILE).exists()
+    assert (folder / "listening.m4a").is_file()
+    assert lossless.pending(data) == []
+
+
+def test_a_raw_flac_left_beside_its_mp4_goes_once_proven(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    meeting = older(data, monkeypatch, True)
+    folder = data.sources_dir(meeting)
+    raw = (folder / "listening.flac").read_bytes()
+    lossless.make_heard(data, meeting)
+    (folder / "listening.flac").write_bytes(raw)  # the service stopped before removing it
+    entries = len(journal(data, meeting))
+    assert lossless.heard_pending(data) == [meeting]
+
+    lines: list[str] = []
+    assert lossless.make_all_heard(data, lines.append) == 0
+
+    assert not (folder / "listening.flac").exists() and (folder / "listening.m4a").is_file()
+    [entry] = journal(data, meeting)[entries:]
+    assert [(f["path"], f["bytes"]) for f in entry["files"]] == [
+        ("sources/listening.flac", len(raw))
+    ]
+    assert lossless.heard_pending(data) == []
+
+
+def test_a_copy_cut_short_is_made_again(data: DataDir) -> None:
+    alone = recorded(data, tone(1.0, 0.3), None)
+    lossless.convert_session(data, alone)
+    folder = data.sources_dir(alone)
+    copy = folder / lossless.LISTENING_COPY
+    copy.unlink()  # the service stopped while it was made
+    (folder / (lossless.LISTENING_COPY + ".partiel")).write_bytes(b"coupe")
+    assert lossless.pending(data) == [alone]
+
+    lossless.convert_session(data, alone)
+
+    assert sorted(p.name for p in folder.iterdir()) == [lossless.LISTENING_COPY, "ref.flac"]
+    assert lossless.pending(data) == []
+
+
+def test_a_listening_mix_moved_cut_short_leaves_nothing_behind(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    meeting = older(data, monkeypatch, True)
+    folder = data.sources_dir(meeting)
+    (folder / "listening.m4a.partiel").write_bytes(b"coupe")  # `--ecoute-exacte` stopped
+    assert lossless.pending(data) == [meeting]
+
+    lossless.convert_session(data, meeting)
+
+    assert not (folder / "listening.m4a.partiel").exists()
+    assert (folder / "listening.flac").is_file()  # still the one heard, as before
+    assert lossless.pending(data) == []
+
+
+def test_asking_what_is_left_prepares_nothing(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    meeting = older(data, monkeypatch, True)
+    folder = data.sources_dir(meeting)
+    facts = mixing.read_facts(data, meeting)
+    assert facts is not None and facts.listening_mix is not None
+    # A mix made before its listening one existed (ADR 0037).
+    (folder / facts.listening_mix.file).unlink()
+    mixing.write_facts(data, meeting, facts.model_copy(update={"listening_mix": None}))
+
+    prepared: list[str] = []
+    monkeypatch.setattr(mixing, "prepare_in_background", lambda d, s: prepared.append(s))
+
+    # The plain mix in raw FLAC is heard until its listening mix is made: not for this.
+    assert lossless.heard_pending(data) == []
+
+    assert prepared == []
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "mix.flac",
+        "mix.json",
+        "ref.flac",
+        "system.flac",
+    ]
+
+
+def test_the_command_is_asked_by_name() -> None:
+    from coulisses_app.cli import parse_args
+
+    assert parse_args(["--dev", "--ecoute-exacte"]).ecoute_exacte
+    assert not parse_args(["--dev"]).ecoute_exacte
