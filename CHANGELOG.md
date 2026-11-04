@@ -6,6 +6,12 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- sert l'écoute en FLAC dans un MP4, où le lecteur va au bon endroit (ecoute)
+
 ## v0.38.1 — 2026-10-30
 
 ### Corrections
