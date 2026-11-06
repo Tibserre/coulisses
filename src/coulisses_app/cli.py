@@ -61,8 +61,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--ecoute-exacte",
         action="store_true",
         help=(
-            "range l'écoute des séances déjà enregistrées dans un MP4, où le lecteur va au "
-            "bon endroit (ADR 0073), sans perte, puis s'arrête ; le service doit être arrêté"
+            "range dans un MP4 les pistes encore gardées en FLAC brut, y compris celles "
+            "d'une séance où cela a échoué au démarrage (ADR 0074), sans perte, puis "
+            "s'arrête ; le service doit être arrêté"
         ),
     )
     return parser.parse_args(argv)
@@ -125,10 +126,10 @@ def main(argv: list[str] | None = None) -> None:
         # Only the latest copies are kept (ADR 0052); what could not go is said at start.
         pruned += [f"Anciennes copies de la base : {p}" for p in prune_backups(data, backup)]
     if args.ecoute_exacte:
-        # Asked by the user (ADR 0046): the older sessions heard from an MP4, then stop. The
-        # data lock held above: no service runs meanwhile.
+        # The tracks still in raw FLAC (those that failed at a start too) put in an MP4,
+        # then stop (ADR 0074). The data lock held above: no service runs meanwhile.
         try:
-            failed = lossless.make_all_heard(data, lambda line: print(line, file=sys.stderr))
+            failed = lossless.rewrap_all(data, lambda line: print(line, file=sys.stderr))
         finally:
             lock.close()
         raise SystemExit(1 if failed else 0)
