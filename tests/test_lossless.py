@@ -828,3 +828,40 @@ def test_a_copy_left_unfinished_or_beside_its_track_in_an_mp4_goes_at_start(
 
     assert names(data, unfinished) == names(data, beside) == ["ref.m4a"]
     assert lossless.pending(data) == []
+
+
+def test_a_session_put_in_an_mp4_reuses_its_runs_whatever_the_path_they_read(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coulisses.api import read_provenance
+
+    from coulisses_app import versions
+    from coulisses_app.status import stage_views
+
+    from .test_versions import claim, shown
+
+    alone = older(data, monkeypatch, False)
+    sessions.start_processing(data, alone, profile="essai")
+    assert Processor(data, FAKE_CHAIN).run_job(claim(data)).error is None
+    first = shown(data, alone)
+
+    def read(stage: str) -> str:
+        prov = read_provenance(data.run_dir(alone, shown(data, alone)[stage]))
+        assert prov is not None
+        return json.dumps(prov.inputs)
+
+    assert "ref.flac" in read("diarize")
+    assert lossless.rewrap_all(data, lambda line: None) == 0
+
+    # The runs read ref.flac, gone: they are still the version, never made again for it.
+    assert shown(data, alone) == first
+    stages = {s.stage: s for s in stage_views(data, FAKE_CHAIN, alone)}
+    assert all(s.state == "succeeded" and not s.stale for s in stages.values())
+    # Run again, the voices only: the text is reused (by its run, not by the path it read),
+    # the new run reads the same samples from the MP4.
+    versions.request_rerun(data, alone, "diarize", attendees=3, profile="essai")
+    assert Processor(data, FAKE_CHAIN).run_job(claim(data)).error is None
+    now = shown(data, alone)
+    assert (now["transcribe"], now["align"]) == (first["transcribe"], first["align"])
+    assert now["diarize"] != first["diarize"]
+    assert "ref.m4a" in read("diarize") and "ref.flac" in read("transcribe")
