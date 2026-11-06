@@ -174,7 +174,7 @@ samples = raw.read_bytes()
 assert len(samples) > 100_000, len(samples)
 target.write_bytes(wav.header(48000, channels, len(samples)) + samples)
 made = lossless.convert_file(target, wav.pcm_sha256(target))
-assert lossless.decoded_pcm_sha256(made.flac) == made.pcm_sha256
+assert lossless.decoded_pcm_sha256(made.kept) == made.pcm_sha256
 ' $WORK/piste-$channels.raw $channels $WORK/piste-$channels.wav ||
     fail "FLAC ($channels canaux) : la conversion de l'app n'a pas rendu les mêmes échantillons"
 done
