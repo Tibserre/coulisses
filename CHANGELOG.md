@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- lit le fichier gardé par son nouveau champ (essai)
 - entend depuis le mix un mix d'écoute qui lui est identique (ecoute)
 - garde chaque son en un seul fichier, du FLAC dans un MP4 (ecoute)
 
