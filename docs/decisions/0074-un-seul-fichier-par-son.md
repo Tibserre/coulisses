@@ -1,6 +1,6 @@
 # 0074 — Un seul fichier par son : chaque piste gardée en FLAC dans un MP4
 
-Statut : Acceptée (2026-11-06, par l'utilisateur, « vas y », puis « il faut que la migration se fasse aussi », relayés par Pilotage : une solution durable qui ne multiplie pas la place prise, et les séances existantes migrées). Le mix d'écoute identique au mix applique la même règle : vu à l'essai de Distribution, soumis à l'utilisateur par Pilotage le 2026-11-06. Remplace l'ADR 0073. Précise l'ADR 0046.
+Statut : Acceptée (2026-11-06, par l'utilisateur, « vas y », puis « il faut que la migration se fasse aussi », relayés par Pilotage : une solution durable qui ne multiplie pas la place prise, et les séances existantes migrées). Le mix d'écoute identique au mix applique la même règle : vu à l'essai de Distribution, accepté par l'utilisateur (« Oui, supprimer », 2026-11-06). Remplace l'ADR 0073. Précise l'ADR 0046.
 
 ## Contexte
 - L'ADR 0073 a corrigé le saut dans l'écoute. Dans un FLAC brut, le lecteur de la page (WebKit) tombe à plusieurs secondes de l'endroit annoncé après un clic sur une phrase. Dans le même FLAC rangé dans un MP4, il tombe juste.
