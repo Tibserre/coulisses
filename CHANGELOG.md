@@ -6,6 +6,13 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- entend depuis le mix un mix d'écoute qui lui est identique (ecoute)
+- garde chaque son en un seul fichier, du FLAC dans un MP4 (ecoute)
+
 ## v0.38.2 — 2026-11-04
 
 ### Corrections
