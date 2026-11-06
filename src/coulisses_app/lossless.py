@@ -471,6 +471,8 @@ def _convert_session(
     if mixing.read_facts(data, session_id) is not None:
         attempt("le mix", lambda: _convert_mix(data, session_id, rewrap, done))
         attempt("le mix d'écoute", lambda: _convert_listening(data, session_id, rewrap, done))
+        if _same_listening(data, session_id) is not None:
+            attempt("le mix d'écoute", lambda: _drop_same_listening(data, session_id, done))
     if (folder / LISTENING_COPY).is_file():
         attempt("la copie d'écoute", lambda: _drop_copy(data, session_id, done))
     unfinished = _partial(folder / LISTENING_COPY)
@@ -554,14 +556,23 @@ def _convert_mix(data: DataDir, session_id: str, rewrap: bool, done: list[Conver
         made = convert_file(plain, facts.pcm_sha256)
     except ConversionError:
         if facts.file != plain.name and not (plain.parent / facts.file).exists():
-            back = {"file": plain.name, "sha256": _file_sha256(plain)}
+            back: dict[str, object] = {"file": plain.name, "sha256": _file_sha256(plain)}
+            if facts.listening_mix is not None and facts.listening_mix.file == facts.file:
+                # Heard from the mix's file: it follows the mix back (ADR 0074).
+                back["listening_mix"] = facts.listening_mix.model_copy(
+                    update={"file": back["file"], "sha256": back["sha256"]}
+                )
             mixing.write_facts(data, session_id, facts.model_copy(update=back))
         raise
-    update = {
+    update: dict[str, object] = {
         "file": made.kept.name,
         "sha256": _file_sha256(made.kept),
         "pcm_sha256": made.pcm_sha256,
     }
+    if facts.listening_mix is not None and facts.listening_mix.file == facts.file:
+        # Heard from the mix's own file (the same sound, ADR 0074): it follows the mix.
+        heard = {"file": update["file"], "sha256": update["sha256"]}
+        update["listening_mix"] = facts.listening_mix.model_copy(update=heard)
     mixing.write_facts(data, session_id, facts.model_copy(update=update))
     _remove_source(made)
     done.append(made)
@@ -572,6 +583,8 @@ def _convert_listening(data: DataDir, session_id: str, rewrap: bool, done: list[
     if facts is None or facts.listening_mix is None:
         return
     heard = facts.listening_mix
+    if heard.file == facts.file:
+        return  # heard from the mix's file, which the mix keeps (ADR 0074)
     path = _source_of(data.sources_dir(session_id), heard.file, rewrap)
     if path is None:
         return
@@ -590,6 +603,64 @@ def _convert_listening(data: DataDir, session_id: str, rewrap: bool, done: list[
     listening_mix = heard.model_copy(update=update)
     mixing.write_facts(data, session_id, facts.model_copy(update={"listening_mix": listening_mix}))
     _remove_source(made)
+    done.append(made)
+
+
+def _same_listening(data: DataDir, session_id: str) -> Path | None:
+    """The file of a listening mix that gives the very samples of the mix (the microphone
+    never turned down, ADR 0037), kept beside it: a second file of the same sound. Also the
+    one left once `mix.json` named the mix's file (the service stopped between). Read
+    only."""
+    facts = mixing.read_facts(data, session_id)
+    if facts is None or facts.listening_mix is None or facts.pcm_sha256 is None:
+        return None
+    heard = facts.listening_mix
+    folder = data.sources_dir(session_id)
+    # Once the mix is in an MP4, its last form: never a file a later step would move.
+    if Path(facts.file).suffix.lower() != MP4_SUFFIX:
+        return None
+    if not (folder / facts.file).is_file() or heard.pcm_sha256 != facts.pcm_sha256:
+        return None
+    if heard.file != facts.file:
+        named = folder / heard.file
+        same_kind = named.suffix.lower() == Path(facts.file).suffix.lower()
+        return named if same_kind and named.is_file() else None
+    left = (folder / mixing.LISTENING_FILE).with_suffix(Path(facts.file).suffix)
+    return left if left.is_file() else None
+
+
+def _drop_same_listening(data: DataDir, session_id: str, done: list[Converted]) -> None:
+    """The listening mix the same sound as the mix: `mix.json` has it heard from the mix's
+    file, then its own file goes, once both are proven to hold those samples (ADR 0074)."""
+    facts = mixing.read_facts(data, session_id)
+    heard = _same_listening(data, session_id)
+    if facts is None or facts.listening_mix is None or heard is None:
+        return
+    folder = data.sources_dir(session_id)
+    kept = folder / facts.file
+    rate, channels, samples = _layout(heard)
+    if samples != facts.pcm_sha256:
+        raise ConversionError(
+            f"{heard.name} ne rend pas les échantillons de {kept.name} : il est gardé."
+        )
+    _prove(kept, rate, channels, samples, heard)
+    made = Converted(
+        source=heard,
+        source_bytes=heard.stat().st_size,
+        source_sha256=_file_sha256(heard),
+        pcm_sha256=samples,
+        kept=kept,
+        kept_bytes=kept.stat().st_size,
+        duplicate=True,
+    )
+    if facts.listening_mix.file != facts.file:
+        update = {"file": facts.file, "sha256": facts.sha256}
+        listening_mix = facts.listening_mix.model_copy(update=update)
+        mixing.write_facts(
+            data, session_id, facts.model_copy(update={"listening_mix": listening_mix})
+        )
+    heard.unlink()
+    disk.sync_folder(folder)
     done.append(made)
 
 
@@ -834,6 +905,8 @@ def pending(data: DataDir) -> list[str]:
             # MP4 (a second file of the same sound, ADR 0074).
             or LISTENING_COPY + ".partiel" in names
             or (LISTENING_COPY in names and _reference_in_mp4(data, row["session_id"]))
+            # A listening mix kept beside the mix it equals (ADR 0074).
+            or _same_listening(data, row["session_id"]) is not None
         )
         if cut_short:
             found.append(str(row["session_id"]))

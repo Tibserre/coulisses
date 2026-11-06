@@ -865,3 +865,124 @@ def test_a_session_put_in_an_mp4_reuses_its_runs_whatever_the_path_they_read(
     assert (now["transcribe"], now["align"]) == (first["transcribe"], first["align"])
     assert now["diarize"] != first["diarize"]
     assert "ref.m4a" in read("diarize") and "ref.flac" in read("transcribe")
+
+
+def heard_like_the_mix(data: DataDir, session_id: str) -> None:
+    """The microphone never turned down: the listening mix gives the mix's very samples."""
+    folder = data.sources_dir(session_id)
+    (folder / mixing.LISTENING_FILE).write_bytes((folder / mixing.MIX_FILE).read_bytes())
+    facts = mixing.read_facts(data, session_id)
+    assert facts is not None and facts.listening_mix is not None
+    heard = facts.listening_mix.model_copy(
+        update={
+            "sha256": lossless._file_sha256(folder / mixing.LISTENING_FILE),  # pyright: ignore[reportPrivateUsage]
+            "pcm_sha256": facts.pcm_sha256,
+        }
+    )
+    mixing.write_facts(data, session_id, facts.model_copy(update={"listening_mix": heard}))
+
+
+def test_a_listening_mix_the_same_as_the_mix_is_heard_from_the_mix(data: DataDir) -> None:
+    session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
+    mixing.processing_path(data, session_id)
+    heard_like_the_mix(data, session_id)
+    folder = data.sources_dir(session_id)
+
+    lossless.convert_session(data, session_id)
+
+    # One file for the sound: the listening mix is heard from the mix's (ADR 0074).
+    assert names(data, session_id) == ["mix.json", "mix.m4a", "ref.m4a", "system.m4a"]
+    facts = mixing.read_facts(data, session_id)
+    assert facts is not None and facts.listening_mix is not None
+    assert (facts.listening_mix.file, facts.listening_mix.sha256) == (facts.file, facts.sha256)
+    assert facts.listening_mix.pcm_sha256 == facts.pcm_sha256
+    assert served(data, session_id) == ((folder / "mix.m4a").read_bytes(), "audio/mp4")
+    # Journaled: the listening WAV kept in an MP4, then that MP4 freed whole, nothing kept in
+    # its place.
+    [entry] = journal(data, session_id)
+    removed = [f["path"] for f in entry["files"]]
+    assert "sources/listening.wav" in removed and "sources/listening.m4a" in removed
+    assert entry["bytes"] == sum(f["bytes"] for f in entry["files"]) - sum(
+        k["bytes"] for k in entry["kept"]
+    )
+    # Nothing mixed again for it, nothing left to do.
+    made = (folder / "mix.m4a").stat().st_mtime_ns
+    assert mixing.processing_path(data, session_id) == folder / "mix.m4a"
+    assert (folder / "mix.m4a").stat().st_mtime_ns == made
+    assert lossless.pending(data) == []
+
+
+def test_an_older_listening_mix_the_same_as_the_mix_goes_at_start(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with monkeypatch.context() as before:
+        before.setattr(lossless, "mp4_available", lambda: "avant l'ADR 0073")
+        meeting = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
+        mixing.processing_path(data, meeting)
+        heard_like_the_mix(data, meeting)
+        lossless.convert_session(data, meeting)
+    # In raw FLAC, both stay: the mix will still move into an MP4.
+    assert "listening.flac" in names(data, meeting) and "mix.flac" in names(data, meeting)
+
+    lossless.migrate(data)
+
+    assert names(data, meeting) == ["mix.json", "mix.m4a", "ref.m4a", "system.m4a"]
+    facts = mixing.read_facts(data, meeting)
+    assert facts is not None and facts.listening_mix is not None
+    assert facts.listening_mix.file == facts.file == "mix.m4a"
+    assert lossless.pending(data) == [] and lossless.rewrap_pending(data) == []
+
+
+def test_a_listening_mix_left_beside_the_mix_it_equals_goes_once_proven(
+    data: DataDir,
+) -> None:
+    session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
+    mixing.processing_path(data, session_id)
+    heard_like_the_mix(data, session_id)
+    lossless.convert_session(data, session_id)
+    folder = data.sources_dir(session_id)
+    # The service stopped once `mix.json` named the mix's file, before the other went.
+    (folder / "listening.m4a").write_bytes((folder / "mix.m4a").read_bytes())
+    assert lossless.pending(data) == [session_id]
+
+    lossless.convert_session(data, session_id)
+
+    assert names(data, session_id) == ["mix.json", "mix.m4a", "ref.m4a", "system.m4a"]
+    assert lossless.pending(data) == []
+
+
+def test_a_listening_mix_of_its_own_stays(data: DataDir) -> None:
+    session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
+    mixing.processing_path(data, session_id)
+    lossless.convert_session(data, session_id)
+    facts = mixing.read_facts(data, session_id)
+    assert facts is not None and facts.listening_mix is not None
+    assert facts.listening_mix.pcm_sha256 != facts.pcm_sha256
+    assert "listening.m4a" in names(data, session_id)
+
+
+def test_a_listening_mix_heard_from_the_mix_follows_it_into_an_mp4(
+    data: DataDir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Heard from the mix's raw FLAC (as `mix.json` may say): the mix moves, it follows."""
+    meeting = older(data, monkeypatch, True)
+    folder = data.sources_dir(meeting)
+    facts = mixing.read_facts(data, meeting)
+    assert facts is not None and facts.listening_mix is not None
+    (folder / facts.listening_mix.file).unlink()
+    heard = facts.listening_mix.model_copy(
+        update={"file": facts.file, "sha256": facts.sha256, "pcm_sha256": facts.pcm_sha256}
+    )
+    mixing.write_facts(data, meeting, facts.model_copy(update={"listening_mix": heard}))
+
+    assert lossless.rewrap_all(data, lambda line: None) == 0
+
+    after = mixing.read_facts(data, meeting)
+    assert after is not None and after.listening_mix is not None
+    assert (after.file, after.listening_mix.file) == ("mix.m4a", "mix.m4a")
+    assert after.listening_mix.sha256 == after.sha256
+    assert names(data, meeting) == ["mix.json", "mix.m4a", "ref.m4a", "system.m4a"]
+    made = (folder / "mix.m4a").stat().st_mtime_ns
+    assert mixing.processing_path(data, meeting) == folder / "mix.m4a"
+    assert (folder / "mix.m4a").stat().st_mtime_ns == made
+    assert not (folder / mixing.LISTENING_FILE).exists()  # nothing made again
