@@ -1,6 +1,6 @@
 # 0073 — L'écoute est servie en FLAC dans un MP4, où le lecteur va au bon endroit
 
-Statut : Acceptée (2026-11-03, par l'utilisateur, qui a choisi « Écoute en mp4 » parmi trois formats, puis « Oui, finir » le 2026-11-04). Correction d'un bug signalé par l'utilisateur. Précise l'ADR 0046.
+Statut : Remplacée par 0074 (2026-11-06 : un seul fichier par son, plus de copie d'écoute). Acceptée (2026-11-03, par l'utilisateur, qui a choisi « Écoute en mp4 » parmi trois formats, puis « Oui, finir » le 2026-11-04). Correction d'un bug signalé par l'utilisateur. Précise l'ADR 0046.
 
 ## Contexte
 Sur une séance enregistrée, le mot surligné prenait de l'avance sur la voix, de plus en plus loin dans la séance. Mesures sur la séance enregistrée la plus récente :
