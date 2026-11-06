@@ -10,9 +10,8 @@ la publication lit celle de `main`.
 
 ### Corrections
 
-- lit le fichier gardé par son nouveau champ (essai)
-- entend depuis le mix un mix d'écoute qui lui est identique (ecoute)
-- garde chaque son en un seul fichier, du FLAC dans un MP4 (ecoute)
+- Les séances enregistrées avant la v0.38.2 repartent elles aussi exactement à la phrase cliquée. Au premier démarrage, Coulisses range leur son dans le nouveau format, en tâche de fond, sans perte de qualité : chaque fichier est vérifié avant que l'ancien soit supprimé, et la conversion est notée au journal. Une séance qui n'a pas pu être convertie garde ses fichiers.
+- Plus de son en double. Chaque son est gardé en un seul fichier : une séance enregistrée sans le son de l'ordinateur ne prend plus les 260 Mo par heure de plus de la v0.38.2, et la copie déjà faite par cette version est retirée.
 
 ## v0.38.2 — 2026-11-04
 
