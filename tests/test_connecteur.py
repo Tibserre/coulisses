@@ -143,17 +143,16 @@ def test_the_names_are_masked_everywhere(data: DataDir, recording: Path) -> None
             assert name.lower() not in text, (path, name)
     seance = answers[f"/api/connecteur/seances/{session_id}"].json()
     assert seance["names_shared"] is False
-    # In order of first appearance in the transcript: Jean, Zorglub, Marie; the same
-    # letter everywhere.
-    assert seance["speakers"][0]["name"] == "Personne C"
-    assert sorted(seance["attendees"]) == ["Personne A", "Personne C"]
-    assert seance["title"] == "Répétition chez Personne C"
-    assert seance["project"] == "Cours de Personne A"
-    assert seance["note"] == "Revoir la scène de Personne C"
-    assert seance["timed_notes"][0]["text"] == "Personne A arrive en retard"
+    # In the space's order of creation: Marie, Jean, Zorglub; the same letter everywhere.
+    assert seance["speakers"][0]["name"] == "Personne A"
+    assert sorted(seance["attendees"]) == ["Personne A", "Personne B"]
+    assert seance["title"] == "Répétition chez Personne A"
+    assert seance["project"] == "Cours de Personne B"
+    assert seance["note"] == "Revoir la scène de Personne A"
+    assert seance["timed_notes"][0]["text"] == "Personne B arrive en retard"
     transcript = answers[f"/api/connecteur/seances/{session_id}/transcript"].json()
     assert transcript["turns"][0]["text"] == (
-        "bonjour Personne A, Personne B et Personne C : échauffement et catch"
+        "bonjour Personne B, Personne C et Personne A : échauffement et catch"
     )
     assert transcript["provenance"]["engine_version"]
     assert transcript["provenance"]["profile"] == "essai"
@@ -216,7 +215,6 @@ def test_a_reading_in_parts_says_when_the_session_changed(data: DataDir, recordi
     path = f"/api/connecteur/seances/{session_id}/transcript"
     first = client.get(path, params={"nombre": 1}).json()
     assert first["next"] is None and first["total_turns"] == 1
-    assert client.get(path, params={"depuis": 5}).status_code == 422  # no « vue »
     assert client.get(path, params={"depuis": 0, "vue": first["view"]}).status_code == 200
     corrections.add(data, session_id, {"kind": "edit_text", "turn": 0, "text": "rebonjour"})
     changed = client.get(path, params={"depuis": 0, "vue": first["view"]})
@@ -273,7 +271,7 @@ def test_a_summary_is_read_masked_with_its_provenance(
     read = client.get(f"/api/connecteur/seances/{session_id}/resumes/{listed[0]['id']}")
     assert read.status_code == 200, read.text
     body = read.json()
-    assert body["markdown"].rstrip() == "## Retours\n- Personne C tient bien la scène."
+    assert body["markdown"].rstrip() == "## Retours\n- Personne A tient bien la scène."
     assert body["provenance"]["model"] == "modele-essai"
     assert body["provenance"]["engine_version"]
     assert client.get(f"/api/connecteur/seances/{session_id}/resumes/999").status_code == 404
@@ -348,7 +346,7 @@ def test_a_long_transcript_is_read_in_parts_and_by_chapter(
         ).json()
     assert read == [0, 1, 2, 3, 4]  # nothing skipped, nothing twice
     chapter = client.get(path, params={"chapitre": 2}).json()
-    assert chapter["phase"] == {"number": 2, "title": "Scène de Personne C"}
+    assert chapter["phase"] == {"number": 2, "title": "Scène de Personne A"}
     assert [t["index"] for t in chapter["turns"]] == [3, 4] and chapter["next"] is None
     first = client.get(path, params={"chapitre": 1, "nombre": 2}).json()
     assert first["next"] == 2
@@ -385,7 +383,7 @@ def test_a_failed_summary_says_why(data: DataDir, recording: Path, fake_model: F
     assert len(listed) == 1  # listed all the same: said when read
     read = client.get(f"/api/connecteur/seances/{session_id}/resumes/{listed[0]['id']}")
     assert read.status_code == 409
-    assert read.json()["detail"] == "La rédaction de ce résumé a échoué : Personne C a tout cassé"
+    assert read.json()["detail"] == "La rédaction de ce résumé a échoué : Personne A a tout cassé"
 
 
 def test_a_web_page_cannot_read_it(data: DataDir, recording: Path) -> None:
@@ -480,3 +478,164 @@ def test_the_view_is_keyed_by_a_secret_of_this_mac(data: DataDir, recording: Pat
     finally:
         conn.close()
     assert client.get(path).json()["view"] != first
+
+
+def test_the_letters_are_the_same_in_every_session_of_the_space(
+    data: DataDir, recording: Path
+) -> None:
+    """A name keeps its letter from one session to the next, whoever speaks first; a person
+    added later takes the next letter and changes none of the others."""
+    client, first, space_id = _prepared(data, recording)
+    second = import_(data, recording)
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute("UPDATE session SET space_id = ? WHERE id = ?", (space_id, second))
+    finally:
+        conn.close()
+    while True:
+        conn = connect(data)
+        try:
+            job = jobs.claim_next(conn)
+        finally:
+            conn.close()
+        if job is None:
+            break
+        assert Processor(data, FAKE_CHAIN).run_job(job).error is None
+    corrections.add(
+        data, second, {"kind": "edit_text", "turn": 0, "text": "Zorglub puis Jean puis Marie"}
+    )
+    spaces.add_person(data, space_id, kind="guest", name="Léonie")
+    _open(client, space_id)
+    text = client.get(f"/api/connecteur/seances/{second}/transcript").json()["turns"][0]["text"]
+    assert text == "Personne C puis Personne B puis Personne A"
+    turn = client.get(f"/api/connecteur/seances/{first}/transcript").json()["turns"][0]
+    assert turn["text"].startswith("bonjour Personne B, Personne C et Personne A")
+    summaries.set_title(data, second, "Avec Léonie")
+    listed = client.get("/api/connecteur/seances").json()["sessions"]
+    assert {s["title"] for s in listed} == {"Avec Personne D", "Répétition chez Personne A"}
+
+
+def test_an_excerpt_found_is_read_from_its_turn_without_a_view(
+    data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+    real = corrections.build_view
+    monkeypatch.setattr(corrections, "build_view", lambda *a, **k: _longer(real(*a, **k)))
+    path = f"/api/connecteur/seances/{session_id}/transcript"
+    part = client.get(path, params={"depuis": 3, "nombre": 1})
+    assert part.status_code == 200
+    assert [t["index"] for t in part.json()["turns"]] == [3] and part.json()["next"] == 4
+    rest = client.get(path, params={"depuis": 4, "vue": part.json()["view"]}).json()
+    assert [t["index"] for t in rest["turns"]] == [4] and rest["next"] is None
+
+
+def test_the_turns_of_one_person_are_read_alone(
+    data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+    real = corrections.build_view
+
+    def two_voices(*a: Any, **k: Any) -> corrections.CorrectedView | None:
+        view = _longer(real(*a, **k))
+        if view is None:
+            return None
+        turns = [
+            t.model_copy(update={"speaker": None}) if t.index in (1, 3) else t for t in view.turns
+        ]
+        return view.model_copy(update={"turns": turns})
+
+    monkeypatch.setattr(corrections, "build_view", two_voices)
+    path = f"/api/connecteur/seances/{session_id}/transcript"
+    everything = client.get(path).json()["turns"]
+    marie = [t["index"] for t in everything if t["speaker"] == "Personne A"]
+    assert marie and len(marie) < len(everything)
+    alone = client.get(path, params={"voix": "personne a"}).json()
+    assert [t["index"] for t in alone["turns"]] == marie
+    assert alone["total_turns"] == len(marie)
+    in_chapter = client.get(path, params={"voix": "Personne A", "chapitre": 1, "nombre": 1}).json()
+    assert [t["index"] for t in in_chapter["turns"]] == [0] and in_chapter["next"] == 2
+    rest = client.get(
+        path,
+        params={"voix": "Personne A", "chapitre": 1, "depuis": 2, "vue": in_chapter["view"]},
+    ).json()
+    assert [t["index"] for t in rest["turns"]] == [2] and rest["next"] is None
+    unknown = client.get(path, params={"voix": "Marie"})
+    assert unknown.status_code == 422 and "lire_seance" in unknown.json()["detail"]
+
+
+def test_the_spaces_and_projects_are_listed_and_filter(data: DataDir, recording: Path) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO project (space_id, name, created_at) VALUES (?, 'Vide', '')",
+                (space_id,),
+            )
+    finally:
+        conn.close()
+    listed = client.get("/api/connecteur/espaces").json()["spaces"]
+    assert len(listed) == 1
+    space = listed[0]
+    assert space["sessions"] == 1 and space["names_shared"] is False
+    assert space["projects"] == [
+        {"name": "Cours de Personne B", "archived": False, "sessions": 1},
+        {"name": "Vide", "archived": False, "sessions": 0},
+    ]
+    for route, extra in (("seances", {}), ("recherche", {"q": "bonjour"})):
+        got = client.get(
+            f"/api/connecteur/{route}", params={"projet": "cours de personne b", **extra}
+        )
+        assert [s["id"] for s in got.json()["sessions"]] == [session_id], route
+        none = client.get(f"/api/connecteur/{route}", params={"projet": "Vide", **extra})
+        assert none.json()["sessions"] == [], route
+    closed = spaces.create_space(data, "Réunions secrètes")
+    assert [x["name"] for x in client.get("/api/connecteur/espaces").json()["spaces"]] == [
+        space["name"]
+    ]
+    client.patch(f"/api/espaces/{closed.id}", json={"connector_access": True})
+    client.patch(f"/api/espaces/{space_id}", json={"connector_access": False})
+    assert client.get("/api/connecteur/espaces").json()["spaces"] == [
+        {
+            "name": "Réunions secrètes",
+            "names_shared": False,
+            "archived": False,
+            "sessions": 0,
+            "projects": [],
+        }
+    ]
+    client.put("/api/reglages/connecteur", json={"open": False})
+    assert client.get("/api/connecteur/espaces").status_code == 403
+    noted = [e for e in client.get("/api/reglages/connecteur/journal").json()["entries"]]
+    spaces_read = [e for e in noted if e["tool"] == "lister_espaces"]
+    assert len(spaces_read) == 3  # the three 200 answers above, the 403 not
+    assert all(e["session_id"] is None and e["names_shared"] is None for e in spaces_read)
+
+
+def test_a_project_named_after_a_free_voice_is_found_by_its_listed_name(
+    data: DataDir, recording: Path
+) -> None:
+    """« Paul » is only a voice named freely: masked in his session, not in the list of
+    spaces; the filter takes both names."""
+    client, session_id, space_id = _prepared(data, recording)
+    corrections.add(data, session_id, {"kind": "assign_speaker", "speaker": "S1", "name": "Paul"})
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE project SET name = 'Cours de Paul' WHERE space_id = ?", (space_id,)
+            )
+    finally:
+        conn.close()
+    _open(client, space_id)
+    listed = client.get("/api/connecteur/espaces").json()["spaces"][0]["projects"][0]["name"]
+    assert listed == "Cours de Paul"
+    seance = client.get(f"/api/connecteur/seances/{session_id}").json()
+    assert "Paul" not in seance["project"]
+    for name in (listed, seance["project"]):
+        found = client.get("/api/connecteur/seances", params={"projet": name}).json()
+        assert [x["id"] for x in found["sessions"]] == [session_id], name

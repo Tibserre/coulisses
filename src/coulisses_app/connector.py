@@ -36,7 +36,9 @@ from coulisses_app.storage.db import ISO_FORMAT, connect, now_iso
 
 log = logging.getLogger(__name__)
 
-Tool = Literal["chercher", "lister_seances", "lire_seance", "lire_resume", "lire_transcript"]
+Tool = Literal[
+    "lister_espaces", "chercher", "lister_seances", "lire_seance", "lire_resume", "lire_transcript"
+]
 
 SECRET_KEY = "connector_view_secret"
 OPEN_KEY = "connector_open"
@@ -125,7 +127,7 @@ def _letter(rank: int) -> str:
 
 class Masker:
     """Every form of each group (a person, a term) replaced by its « Personne X », the same
-    letter for the whole session. Groups come in the order the letters are given."""
+    letter in every session of the space. Groups come in the order the letters are given."""
 
     def __init__(self, groups: list[list[str]]) -> None:
         self.names: dict[str, str] = {}
@@ -179,41 +181,41 @@ def _masker(
     conn: sqlite3.Connection, space_id: int, view: corrections.CorrectedView | None
 ) -> Masker:
     """The names known to the space: its people (archived too), its glossary's proper nouns
-    and their variants, the voices named freely in the session. Letters in order of first
-    appearance in the transcript, then in order of creation (never the alphabet's, which
-    would say something of the names)."""
-    groups: list[list[str]] = []
-    people: dict[int, list[str]] = {}
+    and their variants, in their order of creation, the same letters in every session of
+    the space (never the alphabet's order, which would say something of the names). Then
+    the voices named freely in this session, the only ones not known to the space, in their
+    order of first appearance in its transcript."""
+    known: list[tuple[str, int, int, list[str]]] = []
     for row in conn.execute(
-        "SELECT id, name FROM person WHERE space_id = ? ORDER BY id", (space_id,)
+        "SELECT id, name, created_at FROM person WHERE space_id = ?", (space_id,)
     ):
-        people[row["id"]] = _forms(row["name"])
-        groups.append(people[row["id"]])
+        known.append((row["created_at"], 0, row["id"], _forms(row["name"])))
     for row in conn.execute(
-        "SELECT term, variants FROM glossary_entry WHERE space_id = ? ORDER BY id", (space_id,)
+        "SELECT id, term, variants, created_at FROM glossary_entry WHERE space_id = ?",
+        (space_id,),
     ):
         terms = [row["term"], *_variants(row["variants"])]
         # Proper nouns only: a common word of the trade (« catch ») stays.
         if row["term"][:1].isupper():
-            groups.append([f for t in terms for f in _forms(t)])
+            known.append((row["created_at"], 1, row["id"], [f for t in terms for f in _forms(t)]))
+    # Times are to the second: a person and a term made in the same second keep the order
+    # (people first), which no later addition can change.
+    groups = [forms for *_, forms in sorted(known, key=lambda k: k[:3])]
     if view is not None:
-        for speaker in view.speakers:
-            if speaker.named and speaker.person_id is None and speaker.character is None:
-                groups.append(_forms(speaker.name))
-    text = (
-        _fold(" ".join(" ".join(w.text for w in t.words) for t in view.turns))
-        if view is not None
-        else ""
-    )
-    order = sorted(
-        range(len(groups)),
-        key=lambda k: (
-            (seen := _first_seen(groups[k], text)) is None,
-            seen if seen is not None else 0,
-            k,
-        ),
-    )
-    return Masker([groups[k] for k in order if groups[k]])
+        free = [
+            _forms(speaker.name)
+            for speaker in view.speakers
+            if speaker.named and speaker.person_id is None and speaker.character is None
+        ]
+        text = _fold(" ".join(" ".join(w.text for w in t.words) for t in view.turns))
+        groups += sorted(
+            free,
+            key=lambda forms: (
+                (seen := _first_seen(forms, text)) is None,
+                seen if seen is not None else 0,
+            ),
+        )
+    return Masker([g for g in groups if g])
 
 
 def _variants(raw: str) -> list[str]:
@@ -234,6 +236,9 @@ class _Seen:
     masker: Masker | None
     unreadable: bool = False
     """Its transcript's files could not be read: said when it is read (409), never hidden."""
+    listed: Masker | None = None
+    """The space's masker without this session's free voices: the names `lister_espaces`
+    gives, which the filters accept too."""
 
     def m(self, text: str) -> str:
         return self.masker.mask(text) if self.masker is not None else text
@@ -281,6 +286,7 @@ def _seen(data: DataDir, conn: sqlite3.Connection, session_id: str) -> _Seen:
         view=view,
         masker=None if names_shared else _masker(conn, row["space_id"], view),
         unreadable=unreadable,
+        listed=None if names_shared else _masker(conn, row["space_id"], None),
     )
 
 
@@ -624,14 +630,30 @@ def _check_dates(since: str | None, until: str | None) -> None:
             raise ConnectorError(422, f"« {name} » s'écrit AAAA-MM-JJ.")
 
 
-def _in_space(seen: _Seen, space: str | None) -> bool:
-    return space is None or _fold(seen.m(seen.session.space_name)).strip() == _fold(space).strip()
+def _same(shown: str | None, asked: str | None) -> bool:
+    """A name as the assistant sees it (masked or not) against the one it asks for, accents
+    and case ignored; nothing asked: anything goes."""
+    if asked is None:
+        return True
+    return shown is not None and _fold(shown).strip() == _fold(asked).strip()
+
+
+def _in_space(seen: _Seen, space: str | None, project: str | None = None) -> bool:
+    """As named in this session, or as `lister_espaces` names it (without the session's
+    free voices)."""
+
+    def named(text: str | None, asked: str | None) -> bool:
+        listed = seen.listed.mask(text) if seen.listed is not None and text else text
+        return _same(seen.m_opt(text), asked) or _same(listed, asked)
+
+    return named(seen.session.space_name, space) and named(seen.project, project)
 
 
 def list_sessions(
     data: DataDir,
     *,
     space: str | None = None,
+    project: str | None = None,
     since: str | None = None,
     until: str | None = None,
     limit: int = 30,
@@ -664,7 +686,9 @@ def list_sessions(
         more = False
         for session_id in ids:
             seen = _seen(data, conn, session_id)
-            if not _in_dates(seen.session.recorded_at, since, until) or not _in_space(seen, space):
+            if not _in_dates(seen.session.recorded_at, since, until) or not _in_space(
+                seen, space, project
+            ):
                 continue
             if len(found) == limit:
                 more = True
@@ -739,6 +763,15 @@ def _speaker_name(seen: _Seen, speaker: corrections.Speaker) -> str:
     return seen.m(speaker.name)
 
 
+def _speaker_names(seen: _Seen, speaker: corrections.Speaker) -> list[str]:
+    """What the assistant may call a voice by, as it sees it: its name as given, and for a
+    character, the character and who plays it."""
+    found = [_speaker_name(seen, speaker), seen.m(speaker.name)]
+    if speaker.character and speaker.played_by:
+        found += [seen.m(speaker.character), seen.m(speaker.played_by)]
+    return found
+
+
 def _phases(seen: _Seen) -> list[PhaseItem]:
     if seen.view is None:
         return []
@@ -790,6 +823,7 @@ def read_transcript(
     since: int | None = None,
     count: int = DEFAULT_TURNS,
     view_key: str | None = None,
+    speaker: str | None = None,
 ) -> TranscriptPart:
     conn = connect(data)
     try:
@@ -821,15 +855,27 @@ def read_transcript(
             p = view.phases[phase - 1]
             chosen = PhaseRef(number=phase, title=seen.m(p.title))
             turns = [t for t in turns if p.turn <= t.index < p.end_turn]
+        speakers = {sp.label: sp for sp in view.speakers}
+        if speaker is not None:
+            wanted = _fold(speaker).strip()
+            labels = {
+                label
+                for label, sp in speakers.items()
+                if wanted in (_fold(n).strip() for n in _speaker_names(seen, sp))
+            }
+            if not labels:
+                raise ConnectorError(
+                    422,
+                    f"Aucune voix « {speaker} » dans cette séance : lire_seance donne ses voix.",
+                )
+            turns = [t for t in turns if t.speaker in labels]
+        # `depuis` alone starts anywhere (an excerpt found by `chercher`); `vue`, once given,
+        # makes sure that what follows is read from the same transcript.
         key = _view_key(conn, seen)
-        start = turns[0].index if turns else 0
-        if since is not None and since > start and view_key is None:
-            raise ConnectorError(422, "Passez la « view » du morceau précédent en « vue ».")
         if view_key is not None and view_key != key:
             raise ConnectorError(409, CHANGED)
         rest = [t for t in turns if since is None or t.index >= since]
         part = rest[:count]
-        speakers = {sp.label: sp for sp in view.speakers}
         items = [
             TurnItem(
                 index=t.index,
@@ -967,6 +1013,7 @@ def find(
     until: str | None = None,
     limit: int = 10,
     after: str | None = None,
+    project: str | None = None,
 ) -> SearchResults:
     conn = connect(data)
     try:
@@ -1017,7 +1064,9 @@ def find(
         found: list[SearchSession] = []
         for session_id, entries in by_session.items():
             seen = _seen(data, conn, session_id)
-            if not _in_dates(seen.session.recorded_at, since, until) or not _in_space(seen, space):
+            if not _in_dates(seen.session.recorded_at, since, until) or not _in_space(
+                seen, space, project
+            ):
                 continue
             hits: list[SearchHit] = []
             more = False
@@ -1062,6 +1111,76 @@ def find(
         nxt = f"{offset + limit}.{key}" if offset + limit < len(found) else None
         _note(conn, "chercher", [(f.id, f.names_shared) for f in page])
         return SearchResults(query=query, sessions=page, next=nxt, problems=problems)
+    finally:
+        conn.close()
+
+
+# -- spaces ------------------------------------------------------------------------------
+
+
+class ProjectItem(BaseModel):
+    name: str
+    archived: bool
+    sessions: int
+
+
+class SpaceItem(BaseModel):
+    name: str
+    names_shared: bool
+    archived: bool
+    sessions: int
+    projects: list[ProjectItem]
+    """Its projects, those without a session too; its sessions outside any project are the
+    rest of `sessions`."""
+
+
+class SpaceList(BaseModel):
+    spaces: list[SpaceItem]
+
+
+def list_spaces(data: DataDir) -> SpaceList:
+    """The spaces open to the connector, their projects and how many sessions each holds,
+    names masked as everywhere else. In their order of creation, never the alphabet's (which
+    would say something of masked names). In the journal as one entry without a session."""
+    conn = connect(data)
+    try:
+        check_open(conn)
+        found: list[SpaceItem] = []
+        for space in conn.execute(
+            "SELECT sp.id, sp.name, sp.connector_names, sp.archived_at,"
+            " (SELECT COUNT(*) FROM session s WHERE s.space_id = sp.id) AS sessions"
+            " FROM space sp WHERE sp.connector_access = 1"
+            " ORDER BY sp.archived_at IS NOT NULL, sp.id"
+        ).fetchall():
+            names_shared = bool(space["connector_names"])
+            masker = None if names_shared else _masker(conn, space["id"], None)
+
+            def m(text: str, masker: Masker | None = masker) -> str:
+                return masker.mask(text) if masker is not None else text
+
+            projects = [
+                ProjectItem(
+                    name=m(p["name"]), archived=p["archived_at"] is not None, sessions=p["sessions"]
+                )
+                for p in conn.execute(
+                    "SELECT p.name, p.archived_at,"
+                    " (SELECT COUNT(*) FROM session s WHERE s.project_id = p.id) AS sessions"
+                    " FROM project p WHERE p.space_id = ?"
+                    " ORDER BY p.archived_at IS NOT NULL, p.id",
+                    (space["id"],),
+                )
+            ]
+            found.append(
+                SpaceItem(
+                    name=m(space["name"]),
+                    names_shared=names_shared,
+                    archived=space["archived_at"] is not None,
+                    sessions=space["sessions"],
+                    projects=projects,
+                )
+            )
+        _note(conn, "lister_espaces", [])
+        return SpaceList(spaces=found)
     finally:
         conn.close()
 

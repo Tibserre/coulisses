@@ -97,7 +97,10 @@ def test_an_assistant_reads_coulisses_through_it(data: DataDir, recording: Path)
     assert [r["id"] for r in replies] == [1, 2, 3, 4, 5, 6, 7, 8]  # no answer to a notification
     assert replies[0]["result"]["serverInfo"]["name"] == "coulisses"
     assert replies[0]["result"]["protocolVersion"] == "2025-06-18"
-    assert {t["name"] for t in replies[1]["result"]["tools"]} == {
+    tools = replies[1]["result"]["tools"]
+    assert all(t["annotations"] == {"readOnlyHint": True, "openWorldHint": False} for t in tools)
+    assert {t["name"] for t in tools} == {
+        "lister_espaces",
         "chercher",
         "lister_seances",
         "lire_seance",
@@ -106,11 +109,30 @@ def test_an_assistant_reads_coulisses_through_it(data: DataDir, recording: Path)
     }
     assert json.loads(_text(replies[2]))["sessions"][0]["id"] == session_id
     assert replies[3]["result"]["isError"] is False
-    assert json.loads(_text(replies[3]))["title"] == "Répétition chez Personne C"
+    assert json.loads(_text(replies[3]))["title"] == "Répétition chez Personne A"
     assert "Personne" in json.loads(_text(replies[4]))["turns"][0]["text"]
     assert json.loads(_text(replies[5]))["sessions"]
     assert replies[6]["result"]["isError"] is True
     assert _text(replies[6]) == "Séance introuvable, ou dans un espace fermé au connecteur."
+
+
+def test_the_new_tools_and_filters_go_through_it(data: DataDir, recording: Path) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+    replies = _exchange(
+        Service(PUBLISHED, fetch=Through(client)),
+        _call(1, "lister_espaces"),
+        _call(2, "lister_seances", projet="Cours de Personne B"),
+        _call(3, "chercher", q="bonjour", projet="Cours de Personne B"),
+        _call(4, "lire_transcript", seance=session_id, depuis=0, voix="Personne A"),
+    )
+    assert all(r["result"]["isError"] is False for r in replies), replies
+    spaces_read = json.loads(_text(replies[0]))["spaces"]
+    assert spaces_read[0]["projects"][0]["name"] == "Cours de Personne B"
+    assert [s["id"] for s in json.loads(_text(replies[1]))["sessions"]] == [session_id]
+    assert [s["id"] for s in json.loads(_text(replies[2]))["sessions"]] == [session_id]
+    turns = json.loads(_text(replies[3]))["turns"]
+    assert turns and all(t["speaker"] == "Personne A" for t in turns)
 
 
 def test_it_sends_nothing_but_get_to_nothing_but_its_own_service(

@@ -180,18 +180,33 @@ UNTRUSTED = (
 
 _FILTERS: dict[str, Any] = {
     "espace": {"type": "string", "description": "Le nom d'un espace, pour s'y tenir."},
+    "projet": {
+        "type": "string",
+        "description": "Le nom d'un projet (lister_espaces), pour s'y tenir.",
+    },
     "depuis": {"type": "string", "description": "Date d'enregistrement minimale, AAAA-MM-JJ."},
     "jusqu_a": {"type": "string", "description": "Date d'enregistrement maximale, AAAA-MM-JJ."},
     "apres": {"type": "string", "description": "Le « next » de la page précédente."},
 }
 
+READ_ONLY: dict[str, Any] = {"readOnlyHint": True, "openWorldHint": False}
+"""Every tool only reads, and only Coulisses on this Mac (MCP annotations)."""
+
 TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "lister_espaces",
+        "description": "Liste les espaces de Coulisses ouverts au connecteur, leurs projets et"
+        " le nombre de séances de chacun. Pour savoir où chercher.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
     {
         "name": "chercher",
         "description": "Cherche des mots dans les séances de Coulisses (transcriptions"
         " corrigées, annotations, notes, résumés, titres), comme la recherche de l'app :"
         " chaque mot comme début de mot, accents et casse ignorés. Rend les séances trouvées,"
-        " avec au plus cinq passages chacune ; « next » donne la page suivante." + UNTRUSTED,
+        " avec au plus cinq passages chacune ; « next » donne la page suivante. Pour lire"
+        " autour d'une réplique trouvée (« turn »), passer son « ref » (moins quelques"
+        " répliques) en « depuis » à lire_transcript." + UNTRUSTED,
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -238,21 +253,36 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "lire_transcript",
         "description": "Lit le transcript corrigé d'une séance, par morceaux de répliques (200"
-        " par défaut, 500 au plus), en entier ou un chapitre. Pour la suite, repasser « next »"
-        " en « depuis » et « view » en « vue » ; « next » vide : il n'y a plus rien." + UNTRUSTED,
+        " par défaut, 500 au plus), en entier, un chapitre ou les répliques d'une voix."
+        " « depuis » part d'une réplique (le « ref » d'un passage trouvé par chercher). Pour la"
+        " suite, repasser « next » en « depuis » et « view » en « vue » (sans « vue », rien ne"
+        " garantit que la suite vient du même transcript) ; « next » vide : il"
+        " n'y a plus rien." + UNTRUSTED,
         "inputSchema": {
             "type": "object",
             "properties": {
                 "seance": {"type": "string", "description": "L'id de la séance."},
                 "chapitre": {"type": "integer", "minimum": 1},
-                "depuis": {"type": "integer", "minimum": 0},
+                "depuis": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "L'indice de la première réplique à lire.",
+                },
                 "nombre": {"type": "integer", "minimum": 1, "maximum": 500},
                 "vue": {"type": "string", "description": "La « view » du morceau précédent."},
+                "voix": {
+                    "type": "string",
+                    "description": "Une voix telle que la nomme lire_seance (« Personne A »…),"
+                    " pour ne lire que ses répliques.",
+                },
             },
             "required": ["seance"],
         },
     },
 ]
+
+for _tool in TOOLS:
+    _tool["annotations"] = READ_ONLY
 
 
 def _segment(arguments: dict[str, Any], name: str) -> str:
@@ -268,11 +298,13 @@ def _pick(arguments: dict[str, Any], *keys: str) -> dict[str, Any]:
 
 def call_tool(service: Service, name: str, arguments: dict[str, Any]) -> Any:
     """One tool: the route that answers it, in GET."""
+    if name == "lister_espaces":
+        return service.get("/api/connecteur/espaces")
     if name == "chercher":
-        found = _pick(arguments, "q", "espace", "depuis", "jusqu_a", "limite", "apres")
+        found = _pick(arguments, "q", "espace", "projet", "depuis", "jusqu_a", "limite", "apres")
         return service.get("/api/connecteur/recherche", found)
     if name == "lister_seances":
-        found = _pick(arguments, "espace", "depuis", "jusqu_a", "limite", "apres")
+        found = _pick(arguments, "espace", "projet", "depuis", "jusqu_a", "limite", "apres")
         return service.get("/api/connecteur/seances", found)
     if name == "lire_seance":
         return service.get(f"/api/connecteur/seances/{_segment(arguments, 'seance')}")
@@ -285,7 +317,7 @@ def call_tool(service: Service, name: str, arguments: dict[str, Any]) -> Any:
     if name == "lire_transcript":
         return service.get(
             f"/api/connecteur/seances/{_segment(arguments, 'seance')}/transcript",
-            _pick(arguments, "chapitre", "depuis", "nombre", "vue"),
+            _pick(arguments, "chapitre", "depuis", "nombre", "vue", "voix"),
         )
     raise BridgeError(f"Outil inconnu : {name}.")
 

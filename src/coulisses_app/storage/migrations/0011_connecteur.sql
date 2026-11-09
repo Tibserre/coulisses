@@ -14,10 +14,14 @@ CREATE TABLE connector_access_log (
     id INTEGER PRIMARY KEY,
     at TEXT NOT NULL,
     tool TEXT NOT NULL CHECK (
-        tool IN ('chercher', 'lister_seances', 'lire_seance', 'lire_resume', 'lire_transcript')
+        tool IN (
+            'lister_espaces', 'chercher', 'lister_seances', 'lire_seance', 'lire_resume',
+            'lire_transcript'
+        )
     ),
     session_id TEXT,
-    -- Empty with the session: a search or a list that gave nothing passed nothing on.
+    -- Empty with the session: a search or a list that gave no session (and the list of
+    -- spaces, which never gives one).
     names_shared INTEGER CHECK (names_shared IN (0, 1)),
     CHECK ((session_id IS NULL) = (names_shared IS NULL))
 );

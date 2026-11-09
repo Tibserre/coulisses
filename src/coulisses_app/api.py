@@ -1420,27 +1420,46 @@ def create_app(
     @app.get("/api/connecteur/seances", dependencies=[Depends(connector_gate)])
     def connector_sessions(
         espace: str | None = None,
+        projet: str | None = None,
         depuis: str | None = None,
         jusqu_a: str | None = None,
         limite: int = 30,
         apres: str | None = None,
     ) -> connector.SessionList:
         return connector.list_sessions(
-            data, space=espace, since=depuis, until=jusqu_a, limit=limite, after=apres
+            data,
+            space=espace,
+            project=projet,
+            since=depuis,
+            until=jusqu_a,
+            limit=limite,
+            after=apres,
         )
 
     @app.get("/api/connecteur/recherche", dependencies=[Depends(connector_gate)])
     def connector_search(
         q: str = "",
         espace: str | None = None,
+        projet: str | None = None,
         depuis: str | None = None,
         jusqu_a: str | None = None,
         limite: int = 10,
         apres: str | None = None,
     ) -> connector.SearchResults:
         return connector.find(
-            data, q, space=espace, since=depuis, until=jusqu_a, limit=limite, after=apres
+            data,
+            q,
+            space=espace,
+            project=projet,
+            since=depuis,
+            until=jusqu_a,
+            limit=limite,
+            after=apres,
         )
+
+    @app.get("/api/connecteur/espaces", dependencies=[Depends(connector_gate)])
+    def connector_spaces() -> connector.SpaceList:
+        return connector.list_spaces(data)
 
     @app.get("/api/connecteur/seances/{session_id}", dependencies=[Depends(connector_gate)])
     def connector_session(session_id: str) -> connector.SessionRead:
@@ -1455,6 +1474,7 @@ def create_app(
         depuis: int | None = None,
         nombre: int = connector.DEFAULT_TURNS,
         vue: str | None = None,
+        voix: str | None = None,
     ) -> connector.TranscriptPart:
         return connector.read_transcript(
             data,
@@ -1464,6 +1484,7 @@ def create_app(
             since=depuis,
             count=nombre,
             view_key=vue,
+            speaker=voix,
         )
 
     @app.get(

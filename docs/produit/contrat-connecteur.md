@@ -21,7 +21,7 @@ Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n
 Le connecteur coupé est vérifié **avant tout autre contrôle** (404, 409, 422, types des paramètres compris) : coupé, tout répond 403. Aucune réponse ne nomme un espace fermé, ne compte ses séances ni ne cite son texte ; `more` et `next` ne tiennent compte que des espaces accessibles.
 
 ### Masquage des noms
-Dans un espace dont l'option **Transmettre les noms** est fermée, chaque nom connu de l'espace devient « Personne A », « Personne B »… : présents, voix nommées, personnes de l'espace (membres et invités, archivés compris), noms propres de son glossaire et leurs variantes. Une lettre par personne (ou par terme), la même dans toute la séance ; l'ordre : première apparition dans le transcript, puis les autres dans leur ordre de création (jamais l'ordre alphabétique, qui dirait quelque chose des noms). Le masquage vaut **partout**, dans tout texte rendu : titre, nom de l'espace et du projet, présents, voix, chapitres, annotations, note, résumés, transcript, extraits de recherche. Il est fait au mieux (mots entiers, accents et casse ignorés) : un surnom, un diminutif ou une faute de transcription passe. Chaque réponse qui porte du texte d'une séance dit `names_shared` (vrai : rien n'est masqué).
+Dans un espace dont l'option **Transmettre les noms** est fermée, chaque nom connu de l'espace devient « Personne A », « Personne B »… : présents, voix nommées, personnes de l'espace (membres et invités, archivés compris), noms propres de son glossaire et leurs variantes. Une lettre par personne (ou par terme), **la même dans toutes les séances de l'espace** (choix de l'utilisateur, 2026-11-09 : la ré-identification en est plus facile, l'utilisateur l'accepte). L'ordre : celui de création des personnes et des termes de l'espace, archivés compris (jamais l'ordre alphabétique, qui dirait quelque chose des noms) ; une personne ou un terme ajouté prend la lettre suivante et ne change aucune des autres. Seuls les termes qui commencent par une majuscule sont masqués : un terme dont on change la majuscule entre ou sort de l'ordre, et décale les lettres qui le suivent. Seules les voix nommées librement dans une séance, inconnues de l'espace, prennent les lettres d'après, dans leur ordre d'apparition dans le transcript : celles-là ne valent que pour la séance. Le masquage vaut **partout**, dans tout texte rendu : titre, nom de l'espace et du projet, présents, voix, chapitres, annotations, note, résumés, transcript, extraits de recherche. Il est fait au mieux (mots entiers, accents et casse ignorés) : un surnom, un diminutif ou une faute de transcription passe. Chaque réponse qui porte du texte d'une séance dit `names_shared` (vrai : rien n'est masqué).
 
 ### Provenance
 Le transcript d'une séance porte la provenance de sa version affichée :
@@ -30,8 +30,25 @@ Le transcript d'une séance porte la provenance de sa version affichée :
 ```
 Telle que la donne le moteur (`read_provenance`) : version, profil, modèles par étape, date de fin, durée totale des étapes ; `corrections` : le nombre de corrections de l'utilisateur appliquées. Un résumé porte la sienne (modèle de rédaction, date, version du transcript résumé, version du moteur).
 
+### `GET /api/connecteur/espaces` — outil `lister_espaces`
+Sans paramètre. Les espaces accessibles, leurs projets (ceux sans séance compris) et le nombre de séances de chacun, noms masqués comme partout ailleurs, à ceci près que seuls les noms connus de l'espace y sont masqués (une voix nommée librement ne l'est que dans les séances où elle parle) :
+```json
+{
+  "spaces": [
+    {
+      "name": "Troupe",
+      "names_shared": false,
+      "archived": false,
+      "sessions": 42,
+      "projects": [{"name": "Spectacle de juin", "archived": false, "sessions": 30}]
+    }
+  ]
+}
+```
+Dans leur ordre de création, les archivés après les autres (jamais l'ordre alphabétique). Les séances hors projet sont le reste de `sessions`. Elle est notée au journal par une entrée sans séance (choix de l'utilisateur, 2026-11-09).
+
 ### `GET /api/connecteur/seances` — outil `lister_seances`
-Paramètres : `espace` (son nom tel que l'assistant le voit, masqué compris ; facultatif), `depuis`, `jusqu_a` (dates `AAAA-MM-JJ`, facultatives, sur la date d'enregistrement), `limite` (1 à 100, 30 par défaut), `apres` (le `next` d'une réponse précédente).
+Paramètres : `espace` (son nom tel que l'assistant le voit, masqué compris, dans la séance ou dans `lister_espaces` ; facultatif), `projet` (de même, facultatif), `depuis`, `jusqu_a` (dates `AAAA-MM-JJ`, facultatives, sur la date d'enregistrement), `limite` (1 à 100, 30 par défaut), `apres` (le `next` d'une réponse précédente).
 ```json
 {
   "sessions": [
@@ -53,7 +70,7 @@ Paramètres : `espace` (son nom tel que l'assistant le voit, masqué compris ; f
 Du plus récent au plus ancien, seulement les espaces accessibles ; `espace` qui désigne un espace fermé ou inconnu donne une liste vide, sans le distinguer. `next` : opaque, à passer en `apres` pour la suite (les séances d'avant la dernière rendue, par date puis id : une séance supprimée n'interrompt pas la lecture et aucune n'est rendue deux fois ; une séance dont la date est corrigée pendant la lecture peut changer de place) ; `null` s'il n'y a plus rien. `title` : `null` pour une séance sans titre ; `project` : `null` hors projet. `generations` : la version affichée de chaque résumé ; un résumé échoué, pas fini ou illisible répond 409 à sa lecture, avec la raison.
 
 ### `GET /api/connecteur/recherche` — outil `chercher`
-Paramètres : `q` (1 à 200 caractères), `espace`, `depuis`, `jusqu_a` (comme pour la liste), `limite` (1 à 30 séances, 10 par défaut), `apres` (le `next` d'une réponse précédente, avec les mêmes `q` et filtres). La recherche plein texte de Coulisses (§7.11), dans les seuls espaces accessibles, sur le texte **tel que l'assistant le verrait** : un nom masqué ne trouve rien dans cet espace, et les extraits sont masqués.
+Paramètres : `q` (1 à 200 caractères), `espace`, `projet`, `depuis`, `jusqu_a` (comme pour la liste), `limite` (1 à 30 séances, 10 par défaut), `apres` (le `next` d'une réponse précédente, avec les mêmes `q` et filtres). La recherche plein texte de Coulisses (§7.11), dans les seuls espaces accessibles, sur le texte **tel que l'assistant le verrait** : un nom masqué ne trouve rien dans cet espace, et les extraits sont masqués.
 ```json
 {
   "query": "échauffement",
@@ -102,8 +119,9 @@ Les séances, de la plus pertinente à la moins pertinente ; `next` : opaque, à
 ### `GET /api/connecteur/seances/{id}/transcript` — outil `lire_transcript`
 Le transcript corrigé (version affichée, corrections appliquées), par morceaux. Paramètres :
 - `chapitre` (facultatif) : un numéro de chapitre (de 1) ; la lecture reste dans ce chapitre ;
-- `depuis` (indice de réplique ; par défaut, le début de la séance ou du chapitre) et `nombre` (1 à 500, 200 par défaut) ;
-- `vue` : la `view` du morceau précédent ; **obligatoire** dès que `depuis` dépasse le début de la séance ou du chapitre (sinon 422 « Passez la `view` du morceau précédent en `vue`. »).
+- `depuis` (indice de réplique ; par défaut, le début de la séance ou du chapitre) et `nombre` (1 à 500, 200 par défaut) ; `depuis` seul part de n'importe quelle réplique, comme le `ref` d'un passage rendu par `chercher` ;
+- `vue` : la `view` du morceau précédent, pour lire la suite ; donnée, elle garantit que la suite vient du même transcript ; sans elle, rien ne le garantit ;
+- `voix` (facultatif) : une voix telle que l'assistant la voit (« Personne A », un nom transmis, un personnage ou qui le joue), accents et casse ignorés ; seules ses répliques sont lues, `total_turns` et `next` comptent dans celles-là. Une voix absente de la séance : 422.
 ```json
 {
   "session_id": "20261012-201500-a1b2",
@@ -118,7 +136,7 @@ Le transcript corrigé (version affichée, corrections appliquées), par morceau
   "provenance": {"engine_version": "1.13.2", "profile": "chaine-retenue", "models": {"…": "…"}, "processed_at": "…", "duration_s": 534.2, "corrections": 12}
 }
 ```
-`next` : l'indice à passer en `depuis` (avec `vue`) pour la suite ; `null` s'il n'y a plus rien, dans la séance ou dans le chapitre demandé. Un morceau s'arrête entre deux répliques et ne dépasse jamais `nombre` : un long chapitre se lit en plusieurs. `view` désigne ce qui est lu (version affichée, corrections, chapitres) : si `vue` est donnée et ne correspond plus, 409 (« reprenez au début »), jamais une réplique sautée ou lue deux fois en silence. `phase` : le chapitre lu (`number`, `title`), ou `null`. `start_s` et `end_s` sont mesurés ou `null` (P2). `speaker` : `null` pour une réplique sans voix. Chapitre inconnu : 422.
+`next` : l'indice à passer en `depuis` (avec `vue`, et les mêmes `chapitre` et `voix`) pour la suite ; `null` s'il n'y a plus rien, dans la séance, le chapitre ou les répliques demandés. Un morceau s'arrête entre deux répliques et ne dépasse jamais `nombre` : un long chapitre se lit en plusieurs. `view` désigne ce qui est lu (version affichée, corrections, chapitres) : si `vue` est donnée et ne correspond plus, 409 (« reprenez au début »), jamais une réplique sautée ou lue deux fois en silence. `phase` : le chapitre lu (`number`, `title`), ou `null`. `start_s` et `end_s` sont mesurés ou `null` (P2). `speaker` : `null` pour une réplique sans voix. Chapitre inconnu : 422.
 
 ### `GET /api/connecteur/seances/{id}/resumes/{resume}` — outil `lire_resume`
 La version affichée d'un résumé (en Markdown, masqué si besoin), avec sa provenance.
@@ -171,7 +189,7 @@ Paramètres : `limite` (1 à 200, 50 par défaut), `avant` (un `id` : les entré
   "next": 790
 }
 ```
-Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` vaut `chercher`, `lister_seances`, `lire_seance`, `lire_resume` ou `lire_transcript`. Une recherche ou une liste note une entrée par séance rendue, ou une seule entrée sans séance si elle n'en rend aucune. `names_shared` : `null` pour une entrée sans séance (rien n'a été transmis). `session_title` : le titre actuel, vrai (c'est l'utilisateur qui lit) ; `null` pour une séance supprimée depuis ou sans titre (`session_deleted` le dit). `session_recorded_at` : sa date d'enregistrement, pour nommer une séance sans titre (« Séance du 29 octobre ») ; `null` pour une séance supprimée depuis. Le texte de la recherche n'est pas noté. Seules les réponses 200 sont notées : une lecture refusée (403, 404, 409, 422) n'a rien transmis.
+Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` vaut `lister_espaces`, `chercher`, `lister_seances`, `lire_seance`, `lire_resume` ou `lire_transcript`. Une recherche ou une liste note une entrée par séance rendue, ou une seule entrée sans séance si elle n'en rend aucune ; `lister_espaces`, une entrée sans séance. `names_shared` : `null` pour une entrée sans séance (rien n'a été transmis). `session_title` : le titre actuel, vrai (c'est l'utilisateur qui lit) ; `null` pour une séance supprimée depuis ou sans titre (`session_deleted` le dit). `session_recorded_at` : sa date d'enregistrement, pour nommer une séance sans titre (« Séance du 29 octobre ») ; `null` pour une séance supprimée depuis. Le texte de la recherche n'est pas noté. Seules les réponses 200 sont notées : une lecture refusée (403, 404, 409, 422) n'a rien transmis.
 
 ## 3. Les deux options d'un espace
 
@@ -179,5 +197,6 @@ Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` 
 
 ## 4. Le pont et l'app du Dock
 
+- Chaque outil du pont se déclare en lecture seule, sur ce Mac seulement (annotations MCP `readOnlyHint: true`, `openWorldHint: false`).
 - Le pont lit `GET /api/etat` pour savoir si le service répond. S'il ne répond pas, il ouvre l'app par son identifiant, en arrière-plan : `open -g -b <identifiant> --args --connecteur`. L'identifiant est celui que lui passe le lanceur fixe (`coulisses-mcp [--dev] --identifiant <identifiant de l'app qui l'a écrit>`) : l'app publiée (`io.github.tibserre.coulisses`) n'a pas celui de l'app installée depuis le dépôt. Sans l'option : `local.coulisses.app` (Coulisses (dév) : `local.coulisses.app.dev`). `--dev` donne le port 8766 et le nom `coulisses-dev`. L'app ouverte avec `--connecteur` n'ouvre aucune fenêtre (pas même celle des gestes demandés au lancement, ADR 0049). Le pont attend le service 60 s au plus, puis dit en français qu'il n'a pas pu l'ouvrir.
 - Si, en cours de route, le service répond avec un autre `app_build` que celui du premier appel (une mise à jour par Sparkle), ou que l'app du pont a disparu, le pont s'arrête (code de sortie 0) : le client le relance.
