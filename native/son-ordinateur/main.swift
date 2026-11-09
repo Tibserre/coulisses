@@ -5,14 +5,20 @@
 // the microphone's: the tap is resampled to it (drift compensation), so the two tracks
 // never drift apart. Nothing is processed: no echo cancelling, no gain, no noise reduction.
 //
+// A microphone that cannot run at the recording's rate (AirPods in hands-free mode, 16 or
+// 24 kHz) keeps its own: both tracks are then converted to the recording's rate together,
+// so they stay on the same clock, and the frames lost are counted at that rate.
+//
 // Usage: coulisses-son-ordinateur --micro <name> --canaux <n> --frequence <hz>
 // stdout: blocks, each an 8-byte header (UInt32 frames, UInt32 frames lost just before it,
 //         little-endian) then its float32 little-endian frames, interleaved: the
 //         microphone's first <n> channels, then the computer's sound (mono).
 // stderr: one JSON object per line: {"event":"ready",...}, {"event":"waiting",...},
+//         {"event":"rate",...} (the microphone changed its rate),
 //         {"event":"error","code":...,"detail":...}.
 // It stops, cleanly, when its standard input closes or on SIGTERM.
 
+import AVFoundation
 import AudioToolbox
 import CoreAudio
 import Foundation
@@ -164,6 +170,166 @@ var actualRate: Float64 = 0
 var announced = false
 var calls = 0
 var lastTapBytes: UInt32 = 0
+var width = 0
+
+// -- to the recording's rate (on `writing` only) ---------------------------------------------
+
+var deviceRate: Float64 = 0
+/// From the microphone's rate to the recording's; nil while they are the same.
+var converter: AVAudioConverter?
+/// Frames lost, counted at the recording's rate, not yet said with a block.
+var lostPending = 0
+/// No converter works from the microphone's rate: each block is sent as silence of its
+/// length at the recording's rate, all counted lost. Never sent unconverted at another rate:
+/// every time read from the files would be wrong (P2), and the loss is seen (P8).
+var broken = false
+/// Since the converter was made: frames given at the microphone's rate, frames it made. What
+/// it holds when it fails is their difference, counted lost.
+var givenFrames = 0
+var madeFrames = 0
+/// What rounding each block to whole frames at the recording's rate left over: carried to
+/// the next, so lengths add up exactly over an hour (P2).
+var carry = 0.0
+
+/// `frames` at the microphone's rate, as whole frames at the recording's.
+func atRecordingRate(_ frames: Int) -> Int {
+    let exact = Double(frames) * rate / deviceRate + carry
+    let whole = exact.rounded(.down)
+    carry = exact - whole
+    return Int(whole)
+}
+
+func pcm(_ hz: Float64) -> AVAudioFormat? {
+    AVAudioFormat(
+        commonFormat: .pcmFormatFloat32, sampleRate: hz, channels: AVAudioChannelCount(width),
+        interleaved: true)
+}
+
+func makeConverter(from hz: Float64) throws -> AVAudioConverter? {
+    if abs(hz - rate) <= 0.5 { return nil }
+    guard let source = pcm(hz), let target = pcm(rate),
+        let made = AVAudioConverter(from: source, to: target)
+    else {
+        throw Failure(code: "frequence", detail: "no converter from \(hz) Hz to \(rate) Hz")
+    }
+    made.sampleRateConverterQuality = AVAudioQuality.max.rawValue
+    return made
+}
+
+/// `frames` interleaved frames at the microphone's rate (nil: the end, what the converter
+/// still holds), as frames at the recording's rate. Some may come with a later call. Nil if
+/// the converter failed.
+func convert(_ samples: [Float32]?, frames: Int) -> ([Float32], Int)? {
+    guard let converter else { return (samples ?? [], frames) }
+    let ratio = rate / deviceRate
+    guard let target = pcm(rate),
+        let out = AVAudioPCMBuffer(
+            pcmFormat: target,
+            frameCapacity: AVAudioFrameCount(Double(frames) * ratio) + 4096)
+    else { return nil }
+    var input: AVAudioPCMBuffer?
+    if let samples, frames > 0, let source = pcm(deviceRate),
+        let buffer = AVAudioPCMBuffer(pcmFormat: source, frameCapacity: AVAudioFrameCount(frames))
+    {
+        buffer.frameLength = AVAudioFrameCount(frames)
+        samples.withUnsafeBufferPointer {
+            buffer.floatChannelData![0].update(from: $0.baseAddress!, count: frames * width)
+        }
+        input = buffer
+    }
+    var given = false
+    var error: NSError?
+    let status = converter.convert(to: out, error: &error) { _, inputStatus in
+        if given || input == nil {
+            inputStatus.pointee = samples == nil ? .endOfStream : .noDataNow
+            return nil
+        }
+        given = true
+        inputStatus.pointee = .haveData
+        return input
+    }
+    if status == .error {
+        say(["event": "error", "code": "conversion", "detail": "\(String(describing: error))"])
+        return nil
+    }
+    let made = Int(out.frameLength)
+    let pointer = out.floatChannelData![0]
+    return (Array(UnsafeBufferPointer(start: pointer, count: made * width)), made)
+}
+
+/// Writes one block (header, then its frames) to the service.
+func send(_ samples: [Float32], frames: Int, lost: Int) {
+    var data = Data(capacity: 8 + frames * width * 4)
+    withUnsafeBytes(of: UInt32(frames).littleEndian) { data.append(contentsOf: $0) }
+    withUnsafeBytes(of: UInt32(clamping: lost).littleEndian) { data.append(contentsOf: $0) }
+    samples.withUnsafeBufferPointer { data.append($0) }
+    do {
+        try output.write(contentsOf: data)
+    } catch {
+        // The service is gone: nothing left to record for.
+        tearDown()
+        exit(0)
+    }
+}
+
+/// One block heard at the microphone's rate (nil: the end), sent at the recording's.
+func deliver(_ samples: [Float32]?, frames: Int, lost: Int) {
+    lostPending += atRecordingRate(lost)
+    if !broken, let (converted, made) = convert(samples, frames: frames) {
+        givenFrames += frames
+        madeFrames += made
+        // A converter holds a few frames back until more come: the loss waits with them,
+        // and goes alone at the end.
+        if made > 0 || (samples == nil && lostPending > 0) {
+            send(converted, frames: made, lost: lostPending)
+            lostPending = 0
+        }
+        return
+    }
+    if !broken {
+        say(["event": "error", "code": "conversion", "detail": "blocks sent as silence, lost"])
+        broken = true
+        // What the converter held, never written: counted lost, and its length kept.
+        let held = max(0, Int((Double(givenFrames) * rate / deviceRate).rounded()) - madeFrames)
+        if held > 0 {
+            lostPending += held
+            send([Float32](repeating: 0, count: held * width), frames: held, lost: 0)
+        }
+    }
+    // Silence of its length, on the same clock, counted lost.
+    let made = atRecordingRate(frames)
+    lostPending += made
+    if made > 0 || samples == nil {
+        send([Float32](repeating: 0, count: made * width), frames: made, lost: lostPending)
+        lostPending = 0
+    }
+}
+
+/// The microphone changed its rate while recording (AirPods switching modes): what the
+/// converter holds is sent, then the next blocks are converted from the new rate. Blocks
+/// the device hands over at the new rate before this is called would be converted at the
+/// old ratio; the HAL stops the device's I/O to change its rate, so none is expected.
+func rateChanged(to hz: Float64) {
+    if abs(hz - deviceRate) <= 0.5 || hz <= 0 { return }
+    deliver(nil, frames: 0, lost: 0)
+    say(["event": "rate", "device_rate": hz, "from": deviceRate])
+    deviceRate = hz
+    givenFrames = 0
+    madeFrames = 0
+    carry = 0
+    do {
+        converter = try makeConverter(from: hz)
+        broken = false
+    } catch let failure as Failure {
+        say(["event": "error", "code": failure.code, "detail": failure.detail])
+        converter = nil
+        broken = true
+    } catch {
+        say(["event": "error", "code": "conversion", "detail": "\(error)"])
+        converter = nil
+        broken = true
+    }
+}
 
 func start() throws {
     let devices = try allDevices()
@@ -207,7 +373,8 @@ func start() throws {
         AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &aggregateID), "aggregat",
         "creating the aggregate device")
 
-    // The microphone's clock runs the aggregate: it is asked for the recording's rate.
+    // The microphone's clock runs the aggregate: it is asked for the recording's rate, and
+    // keeps its own if it cannot (converted, below).
     var nominal = rate
     var rateWhere = address(kAudioDevicePropertyNominalSampleRate)
     AudioObjectSetPropertyData(
@@ -217,7 +384,7 @@ func start() throws {
     try check(
         AudioObjectGetPropertyData(aggregateID, &rateWhere, 0, nil, &rateSize, &actual),
         "frequence", "reading the rate")
-    if abs(actual - rate) > 0.5 {
+    if actual <= 0 {
         throw Failure(code: "frequence", detail: "\(actual) Hz")
     }
     actualRate = actual
@@ -236,7 +403,18 @@ func start() throws {
         throw Failure(code: "format", detail: "not interleaved float32")
     }
 
-    let width = wanted + 1
+    width = wanted + 1
+    deviceRate = actual
+    converter = try makeConverter(from: actual)
+    try check(
+        AudioObjectAddPropertyListenerBlock(aggregateID, &rateWhere, writing) { _, _ in
+            var now: Float64 = 0
+            var nowSize = UInt32(MemoryLayout<Float64>.size)
+            var where_ = address(kAudioDevicePropertyNominalSampleRate)
+            if AudioObjectGetPropertyData(aggregateID, &where_, 0, nil, &nowSize, &now) == noErr {
+                rateChanged(to: now)
+            }
+        }, "frequence", "listening to the rate")
     try check(
         AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateID, nil) {
             _, inputData, inputTime, _, _ in
@@ -284,10 +462,7 @@ func start() throws {
                 missing = frames
             }
             lost += max(missing, 0)
-            var data = Data(capacity: 8 + frames * width * 4)
-            withUnsafeBytes(of: UInt32(frames).littleEndian) { data.append(contentsOf: $0) }
-            withUnsafeBytes(of: UInt32(clamping: lost).littleEndian) { data.append(contentsOf: $0) }
-            interleaved.withUnsafeBufferPointer { data.append($0) }
+            let heardLost = lost
             let first = !announced
             announced = true
             writing.async {
@@ -295,17 +470,11 @@ func start() throws {
                 // recording starts with it, nothing said before is missing.
                 if first {
                     say([
-                        "event": "ready", "rate": actualRate, "channels": wanted,
-                        "micro": micName, "micro_streams": micChannels,
+                        "event": "ready", "rate": rate, "device_rate": actualRate,
+                        "channels": wanted, "micro": micName, "micro_streams": micChannels,
                     ])
                 }
-                do {
-                    try output.write(contentsOf: data)
-                } catch {
-                    // The service is gone: nothing left to record for.
-                    tearDown()
-                    exit(0)
-                }
+                deliver(interleaved, frames: frames, lost: heardLost)
             }
         }, "demarrage", "creating the I/O procedure")
     try check(AudioDeviceStart(aggregateID, procID), "demarrage", "starting the device")
@@ -322,8 +491,9 @@ do {
 
 func finish() -> Never {
     tearDown()
-    // What was heard before stopping is written, then the pipe is closed.
-    writing.sync {}
+    // What was heard before stopping is written, with what the converter still holds, then
+    // the pipe is closed.
+    writing.sync { deliver(nil, frames: 0, lost: 0) }
     exit(0)
 }
 

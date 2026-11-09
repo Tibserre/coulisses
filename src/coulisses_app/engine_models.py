@@ -164,6 +164,13 @@ class EngineModels:
         self._tasks: dict[tuple[Kind, str], ModelAction] = {}
         self._cancels: dict[tuple[Kind, str], threading.Event] = {}
         self._threads: list[threading.Thread] = []
+        self.after_install: Callable[[], None] | None = None
+        """Called once a model is installed: what waited for it may start (ADR 0072)."""
+
+    @property
+    def root(self) -> Path | None:
+        """Where the models are; None: the engine's default folder."""
+        return self._root
 
     # -- reading ------------------------------------------------------------------------
 
@@ -243,6 +250,12 @@ class EngineModels:
             )
             return
         self._finish(key, "done")
+        if self.after_install is not None:
+            # Its own failure is not the download's: logged, the download stays done.
+            try:
+                self.after_install()
+            except Exception:
+                log.exception("after installing %s %s", kind, name)
 
     def _finish(self, key: tuple[Kind, str], state: str, **fields: Any) -> None:
         with self._lock:

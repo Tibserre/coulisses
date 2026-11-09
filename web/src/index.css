@@ -5537,3 +5537,55 @@ button.cl-tree__more:hover {
   justify-content: center;
   margin-top: calc(-1 * var(--spacing-2));
 }
+
+/* The languages (ADR 0072): the list under what opens it, then why one cannot be removed. */
+.cl-languagepick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.cl-languagepick > p {
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-1);
+}
+
+.cl-languageuses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.cl-languageuses__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-languageuses__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-languageuses__what {
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-languageuses__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* « En français · Changer », in « Qui était là ? » (ADR 0072). */
+.cl-ask__language {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding-top: var(--spacing-3);
+  border-top: 1px solid var(--color-border);
+}

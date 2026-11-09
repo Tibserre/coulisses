@@ -6,6 +6,43 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Nouveautés
+
+- garde « Mettre à jour » dans la colonne après « Plus tard » (mises-a-jour)
+
+## v0.38.3 — 2026-11-06
+
+### Corrections
+
+- Les séances enregistrées avant la v0.38.2 repartent elles aussi exactement à la phrase cliquée. Au premier démarrage, Coulisses range leur son dans le nouveau format, en tâche de fond, sans perte de qualité : chaque fichier est vérifié avant que l'ancien soit supprimé, et la conversion est notée au journal. Une séance qui n'a pas pu être convertie garde ses fichiers.
+- Plus de son en double. Chaque son est gardé en un seul fichier : une séance enregistrée sans le son de l'ordinateur ne prend plus les 260 Mo par heure de plus de la v0.38.2, et la copie déjà faite par cette version est retirée.
+
+## v0.38.2 — 2026-11-04
+
+### Corrections
+
+- Quand on clique sur une phrase, l'écoute repart exactement à cet endroit. Avant, sur une séance enregistrée, le lecteur tombait à plusieurs secondes de la phrase cliquée, et le mot surligné prenait de l'avance sur la voix. Le son garde la même qualité, sans perte. Une séance enregistrée sans le son de l'ordinateur prend un peu plus de place (environ 260 Mo de plus par heure). Les séances enregistrées avant cette version gardent pour l'instant l'ancien comportement.
+
+## v0.38.1 — 2026-10-30
+
+### Corrections
+
+- On peut maintenant enregistrer avec des AirPods, ou tout micro qui ne tourne pas à 48 kHz. Avant, « Nouvelle note » ne démarrait pas avec un tel micro. Le micro et le son de l'ordinateur sont convertis ensemble, et restent calés l'un sur l'autre. Avec des AirPods, le son de l'ordinateur perd ses aigus les plus hauts (au-delà de 12 kHz) : la voix n'est pas touchée.
+
+## v0.38.0 — 2026-10-30
+
+### Nouveautés depuis la 0.37.0
+
+- Transcrire dans une autre langue. Une séance peut maintenant être transcrite en anglais, allemand, espagnol, italien ou portugais, en plus du français. Chaque langue s'ajoute une fois dans **Réglages > Transcription**, rubrique « Langues » (environ 1,3 Go par langue autre que le français, téléchargés quand vous le demandez). Chaque espace a une langue par défaut, réglée dans ses paramètres ; une séance la prend à sa création, et se change au-dessus de son titre. Une séance déjà transcrite peut être refaite dans une autre langue : « ⋯ › Refaire le traitement… › Le texte ».
+- Les comptes rendus (titres, chapitres, résumés) restent rédigés en français, quelle que soit la langue de la séance. Leur qualité sur une séance dans une autre langue n'est pas encore mesurée.
+
+### Corrections
+
+- Une base de données mise à jour par une version de développement de Coulisses est maintenant reconnue au démarrage, avec un message qui dit quelle copie reprendre, au lieu d'une erreur plus tard.
+- Si la reprise des séances qui attendaient un modèle échoue, l'app démarre quand même et le dit.
+
 ## v0.37.0 — 2026-10-29
 
 ### Nouveautés depuis la 0.36.0

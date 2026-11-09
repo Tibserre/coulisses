@@ -355,7 +355,83 @@ def test_the_program_refusing_is_said_in_french(tmp_path: Path) -> None:
         """,
     )
     stream = system_audio.HelperStream("AirPods", 1, lambda *_: None, program=refusing)
-    with pytest.raises(system_audio.SystemAudioError, match="« AirPods » ne peut pas enregistrer"):
+    with pytest.raises(system_audio.SystemAudioError, match="« AirPods » n'a pas pu être converti"):
+        stream.start()
+
+
+AT_24_KHZ = SPEAKING.replace(
+    'say(event="ready", rate=48000, channels=channels)',
+    'say(event="ready", rate=48000, device_rate=24000, channels=channels)',
+)
+
+
+def test_airpods_at_24_khz_are_recorded_at_48_and_said_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Hands-free AirPods run at 24 kHz: the program converts both tracks to 48 kHz, on the
+    same clock; the service records as it would any microphone."""
+    got: list[NDArray[np.float32]] = []
+    stream = system_audio.HelperStream(
+        "AirPods", 1, lambda block, _: got.append(block), program=program(tmp_path, AT_24_KHZ)
+    )
+    with caplog.at_level("WARNING", logger="coulisses_app.system_audio"):
+        stream.start()
+        deadline = time.monotonic() + 5
+        while len(got) < 2:
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        stream.stop()
+    assert got[0].shape == (1024, 2)
+    assert "AirPods runs at 24000 Hz, converted to 48000 Hz" in caplog.text
+
+
+LOSS_AT_THE_END = """
+    import json, struct, sys
+    args = sys.argv[1:]
+    channels = int(args[args.index("--canaux") + 1])
+    sys.stderr.write(json.dumps({"event": "ready", "rate": 48000}) + "\\n"); sys.stderr.flush()
+    sys.stdin.read()
+    # Stopping: the converter held nothing more, but frames were lost meanwhile.
+    sys.stdout.buffer.write(struct.pack("<II", 0, 480)); sys.stdout.buffer.flush()
+"""
+
+
+def test_a_loss_said_alone_at_the_end_is_passed_on(tmp_path: Path) -> None:
+    got: list[tuple[tuple[int, ...], bool]] = []
+    stream = system_audio.HelperStream(
+        "AirPods",
+        1,
+        lambda block, lost: got.append((block.shape, lost)),
+        program=program(tmp_path, LOSS_AT_THE_END),
+    )
+    stream.start()
+    stream.stop()
+    assert got == [((0, 2), True)]
+
+
+def test_an_empty_block_with_a_loss_is_counted_and_writes_nothing(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    session_id = start_online(rec).session_id
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    assert tap.on_block is not None
+    tap.on_block(np.zeros((0, 2), np.float32), True)
+    wait_for(lambda: rec.state() is not None and rec.state().dropouts == 1)  # type: ignore[union-attr]
+    assert rec.stop(profile="essai").duration_s == pytest.approx(1.0)
+    folder = data.sources_dir(session_id)
+    assert read(folder / "ref.wav").shape == read(folder / "system.wav").shape == (48_000, 1)
+
+
+def test_a_program_at_another_rate_is_refused_never_written_at_the_wrong_one(
+    tmp_path: Path,
+) -> None:
+    """An older program that hands over the microphone's own rate: every time read from
+    the files would be wrong (P2)."""
+    other = program(tmp_path, SPEAKING.replace("rate=48000", "rate=24000"))
+    stream = system_audio.HelperStream("AirPods", 1, lambda *_: None, program=other)
+    with pytest.raises(system_audio.SystemAudioError, match="converti en 48 kHz"):
         stream.start()
 
 
@@ -492,7 +568,7 @@ FLUSHING = """
     import struct, sys
     args = sys.argv[1:]
     channels = int(args[args.index("--canaux") + 1])
-    sys.stderr.write('{"event": "ready"}\\n'); sys.stderr.flush()
+    sys.stderr.write('{"event": "ready", "rate": 48000}\\n'); sys.stderr.flush()
     block = struct.pack("<II", 512, 0) + b"\\0" * (512 * (channels + 1) * 4)
     for _ in range(200):
         sys.stdout.buffer.write(block)

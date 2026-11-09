@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sqlite3
@@ -52,6 +53,103 @@ class DatabaseTooNewError(RuntimeError):
     """The database was migrated by a newer version of the application."""
 
 
+class MigrationMismatchError(RuntimeError):
+    """The database received, under a number, another migration than this application's (two
+    branches that each made their own): refused at start rather than failing later."""
+
+
+APPLIED_KEY = "applied_migrations"
+"""Key of `app_setting`: {version: file name} of each migration applied since this key exists.
+A database migrated before has no names for its earlier migrations: those are not checked,
+never refused on a guess."""
+
+_APP_SETTING_SINCE = 3
+"""The migration that creates `app_setting` (0003): from it on, the names are written."""
+
+_NAMED_SINCE = 11
+"""The first migration shipped after the names: from it on, a database must have the name of
+each one it received. One without was migrated by a branch made before this check, under a
+number this application may use for another migration: refused, never taken on a guess."""
+
+
+def _applied(conn: sqlite3.Connection) -> dict[int, str]:
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_setting'"
+    ).fetchone():
+        return {}
+    row = conn.execute("SELECT value FROM app_setting WHERE key = ?", (APPLIED_KEY,)).fetchone()
+    if row is None:
+        return {}
+    try:
+        found = json.loads(row[0])
+        return {int(version): str(name) for version, name in found.items()}
+    except (ValueError, AttributeError) as exc:
+        raise MigrationMismatchError(
+            f"La liste des migrations reçues par la base est illisible ({exc}). "
+            "Revenez à une copie de la base, ou signalez-le."
+        ) from exc
+
+
+_COPIES_WHERE = "dans le dossier « sauvegardes » à côté de la base"
+"""Where `migrate` keeps the copy of the base made before a run of migrations."""
+
+
+def _check_names(
+    database: Path, current: int, applied: dict[int, str], shipped: dict[int, str]
+) -> None:
+    unnamed = [v for v in range(_NAMED_SINCE, current + 1) if v not in applied]
+    if unnamed:
+        raise MigrationMismatchError(
+            f"La base {database} est en version {current}, mais n'a pas noté le nom de sa"
+            f" migration {unnamed[0]:04d} : elle a été mise à jour par une version de Coulisses"
+            " d'avant ce contrôle (une branche en développement), peut-être avec une autre"
+            " migration sous ce numéro. Revenez à la copie de la base faite avant elle"
+            f" (« coulisses-avant-{unnamed[0]:04d}-….db », {_COPIES_WHERE}), ou refaites cette"
+            " base."
+        )
+    for version, name in sorted(applied.items()):
+        ours = shipped.get(version)
+        if ours is not None and ours != name:
+            raise MigrationMismatchError(
+                f"La base {database} a reçu la migration « {name} », mais cette version de"
+                f" Coulisses a « {ours} » sous le même numéro : elle a été mise à jour par une"
+                " autre version de l'application. Utilisez celle-là, ou revenez à la copie de"
+                f" la base faite avant cette migration (« coulisses-avant-{version:04d}-….db »,"
+                f" {_COPIES_WHERE})."
+            )
+
+
+def _record(applied: dict[int, str]) -> str:
+    """SQL writing the names, in the transaction of the migration it follows."""
+    value = json.dumps({str(v): n for v, n in sorted(applied.items())}).replace("'", "''")
+    key = APPLIED_KEY.replace("'", "''")
+    return (
+        f"INSERT INTO app_setting (key, value) VALUES ('{key}', '{value}')"
+        " ON CONFLICT (key) DO UPDATE SET value = excluded.value;"
+    )
+
+
+def check(database: Path, *, said_as: Path | None = None) -> None:
+    """Whether this application can take that database as it is, before it replaces another
+    (`rapatrier-donnees.py`): not newer, the same migrations under the same numbers.
+    `said_as`: the base named in a refusal (the source, not its temporary copy)."""
+    shipped = migrations()
+    latest = shipped[-1][0] if shipped else 0
+    conn = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        current: int = conn.execute("PRAGMA user_version").fetchone()[0]
+        if current > latest:
+            raise DatabaseTooNewError(
+                f"La base {said_as or database} est en version {current}, plus récente que cette "
+                f"application ({latest}). Mettez l'application à jour."
+            )
+        _check_names(
+            said_as or database, current, _applied(conn), {v: name for v, name, _ in shipped}
+        )
+    finally:
+        conn.close()
+
+
 def migrate(data: DataDir) -> list[Path]:
     """Bring the database to the latest schema. Returns the backups made (one per run of
     pending migrations on an existing database); a new database needs none."""
@@ -66,6 +164,8 @@ def migrate(data: DataDir) -> list[Path]:
                 f"La base {data.database} est en version {current}, plus récente que cette "
                 f"application ({latest}). Mettez l'application à jour."
             )
+        applied = _applied(conn)
+        _check_names(data.database, current, applied, {v: name for v, name, _ in pending_all})
         pending = [m for m in pending_all if m[0] > current]
         if not pending:
             return []
@@ -74,8 +174,12 @@ def migrate(data: DataDir) -> list[Path]:
             backups.append(_backup(conn, data, before=pending[0][0]))
         for version, name, sql in pending:
             log.info("applying migration %s", name)
+            applied[version] = name
+            names = _record(applied) if version >= _APP_SETTING_SINCE else ""
             try:
-                conn.executescript(f"BEGIN;\n{sql}\nPRAGMA user_version = {version};\nCOMMIT;")
+                conn.executescript(
+                    f"BEGIN;\n{sql}\n{names}\nPRAGMA user_version = {version};\nCOMMIT;"
+                )
             except sqlite3.Error:
                 if conn.in_transaction:
                     conn.rollback()

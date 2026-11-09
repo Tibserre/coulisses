@@ -153,9 +153,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     #if COULISSES_SPARKLE
         /// Sparkle (ADR 0040): only in the published app, built with its feed and its key.
         var updates: SPUStandardUpdaterController?
-        /// A version found by a scheduled check, waiting for a click: the page shows a
-        /// discreet « Mettre à jour » instead of Sparkle's window (gentle reminder).
+        /// A version waiting for a click (found by a scheduled check, or left for later in
+        /// Sparkle's window, ADR 0075): the page shows a discreet « Mettre à jour » instead of
+        /// Sparkle's window (gentle reminder).
         var updateReady = false
+        /// That version was already shown in Sparkle's window: a withdrawn reminder does not
+        /// open it again by itself (no check that the user did not ask for, ADR 0040).
+        var remindedLater = false
+        /// « Installer » was chosen: an install that aborts leaves the version waiting.
+        var installChosen = false
         /// The service's page said it shows that reminder (« rappel-mises-a-jour »), forgotten
         /// at each page change: otherwise Sparkle shows its own window, as before.
         var pageShowsReminder = false
@@ -961,9 +967,8 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             return check
         }
 
-        /// The menu and the page's buttons. A version already found (the reminder) skips
-        /// `shouldProceedWithUpdate`: refused here while a recording or a processing runs,
-        /// said in French; the reminder stays.
+        /// The menu and the page's buttons. A version waiting (the reminder) is refused here
+        /// while a recording or a processing runs, said in French; the reminder stays.
         @objc func checkNow() {
             guard let updates else { return }
             if updateReady, let busy = busyNow() {
@@ -984,7 +989,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         /// once or once the recording or processing is over, unless a page shows it again.
         func reminderWithdrawn() {
             pageShowsReminder = false
-            guard updateReady, !quitting, !withdrawalPending else { return }
+            guard updateReady, !remindedLater, !quitting, !withdrawalPending else { return }
             let show = { [weak self] in
                 guard let self else { return }
                 self.withdrawalPending = false
@@ -1033,19 +1038,42 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         func standardUserDriverWillHandleShowingUpdate(
             _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
         ) {
+            installChosen = false
             guard !handleShowingUpdate else { return }
             updateReady = true
+            remindedLater = false
             refreshUpdatesState()
         }
 
-        /// Seen in Sparkle's window (installed, skipped or left for later): no more reminder.
-        func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
-            updateReady = false
+        /// What the user chose in Sparkle's window (ADR 0075): a version left for later keeps
+        /// the page's « Mettre à jour », whose click brings it back in that window; one
+        /// installed or skipped (« Ignorer cette version ») takes it away.
+        func updater(
+            _ updater: SPUUpdater, userDidMake choice: SPUUserUpdateChoice,
+            forUpdate updateItem: SUAppcastItem, state: SPUUserUpdateState
+        ) {
+            updateReady = choice == .dismiss
+            remindedLater = choice == .dismiss
+            installChosen = choice == .install
             refreshUpdatesState()
         }
 
-        func standardUserDriverWillFinishUpdateSession() {
+        /// A check that finds nothing new (the version was installed meanwhile, or withdrawn
+        /// from the appcast): nothing left to remind.
+        func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
             updateReady = false
+            remindedLater = false
+            installChosen = false
+            refreshUpdatesState()
+        }
+
+        /// A download or an install chosen, then failed or cancelled: the version still waits,
+        /// already shown.
+        func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+            guard installChosen else { return }
+            installChosen = false
+            updateReady = true
+            remindedLater = true
             refreshUpdatesState()
         }
 

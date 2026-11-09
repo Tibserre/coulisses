@@ -16,7 +16,7 @@ from typing import Literal
 from coulisses.api import read_provenance
 from pydantic import BaseModel
 
-from coulisses_app import jobs, spaces
+from coulisses_app import jobs, languages, spaces
 from coulisses_app.jobs import REDONE, Rerun
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import activate
@@ -39,6 +39,9 @@ class Version(BaseModel):
     carried: int | None = None
     not_carried: int | None = None
     """When it replaced another version: how its corrections were carried over."""
+    language: str | None = None
+    """The language of its transcription, from the engine's provenance (P7, ADR 0072). None:
+    the provenance does not say it, though it should (never taken for French)."""
 
 
 class RerunFacts(BaseModel):
@@ -157,18 +160,37 @@ def _duration(data: DataDir, session_id: str, run_ids: list[str | None]) -> floa
     return total or None
 
 
+def transcription_language(data: DataDir, session_id: str, run_id: str | None) -> str | None:
+    """The language of a transcription run, from its provenance (ADR 0072)."""
+    if run_id is None:
+        return None
+    folder = data.run_dir(session_id, run_id)
+    prov = read_provenance(folder) if folder.is_dir() else None
+    return languages.of_transcription(prov) if prov is not None else None
+
+
 def request_rerun(
-    data: DataDir, session_id: str, rerun: Rerun, *, attendees: int | None, profile: str
+    data: DataDir,
+    session_id: str,
+    rerun: Rerun,
+    *,
+    attendees: int | None,
+    profile: str,
+    language: str | None = None,
 ) -> int:
     """Queue a rerun of the shown version: the transcription (with the space's glossary as
     it is today), the voices (with `attendees` as the minimum of voices, P3), or both, nothing
     kept (`all`, ADR 0066: the glossary of today, and `attendees`, else the shown version's
-    minimum)."""
+    minimum). `language`: for the transcription (`transcribe`, `all`), checked against the
+    engine's by the caller; by default the shown version's (ADR 0072). The voices alone keep
+    the text, so its language."""
     if attendees is not None and attendees < 1:
         raise SpaceError("Il faut au moins une personne présente.")
     conn = connect(data)
     try:
-        row = conn.execute("SELECT space_id FROM session WHERE id = ?", (session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT space_id, language FROM session WHERE id = ?", (session_id,)
+        ).fetchone()
         if row is None:
             raise NotFoundError("Séance introuvable.")
         # Checked and queued in one write transaction: a double click queues one rerun.
@@ -181,6 +203,23 @@ def request_rerun(
         if _audio_removed(conn, session_id):
             raise SpaceError(AUDIO_GONE)
         chain = _ancestors(conn, shown)
+        shown_language = transcription_language(data, session_id, chain.get("transcribe"))
+        if rerun == "diarize":
+            if language is not None and shown_language is not None and language != shown_language:
+                raise SpaceError(
+                    "Refaire les voix garde le texte, et donc sa langue. Pour une autre langue : "
+                    "« Refaire le texte »."
+                )
+            # The text is kept as it is: a language its provenance does not say is no reason
+            # to refuse; the session's stands for it (the models it waits for).
+            language = shown_language or row["language"]
+        elif language is None:
+            language = shown_language
+        if language is None:
+            raise SpaceError(
+                "La langue de la version affichée est inconnue (sa provenance ne la dit pas) : "
+                "choisissez la langue du texte à refaire."
+            )
         reuse = {
             stage: run_id
             for stage, run_id in chain.items()
@@ -207,6 +246,7 @@ def request_rerun(
             reuse=reuse,
             attendees=attendees,
             glossary=glossary,
+            language=language,
         )
         conn.commit()
         return job_id
@@ -282,6 +322,9 @@ def list_versions(data: DataDir, session_id: str) -> Versions:
                 corrections=corrections.get(row["id"], 0),
                 carried=counts[0] if counts else None,
                 not_carried=counts[1] if counts else None,
+                language=transcription_language(
+                    data, session_id, chains[row["id"]].get("transcribe")
+                ),
             )
         )
     found.reverse()
@@ -324,8 +367,14 @@ def show(data: DataDir, session_id: str, run_id: str) -> None:
                     "Un traitement de cette séance est en cours : la version affichée "
                     "changera à sa fin."
                 )
-            for stage, ancestor in _ancestors(conn, run_id).items():
+            ancestors = _ancestors(conn, run_id)
+            for stage, ancestor in ancestors.items():
                 activate(conn, session_id, stage, ancestor)
+            # The session's language follows its version shown (ADR 0072); one whose
+            # provenance does not say it leaves it as it was, and says it in its version.
+            spoken = transcription_language(data, session_id, ancestors.get("transcribe"))
+            if spoken is not None:
+                conn.execute("UPDATE session SET language = ? WHERE id = ?", (spoken, session_id))
             detection = conn.execute(
                 "SELECT r.id FROM run r JOIN run_upstream u ON u.run_id = r.id"
                 " WHERE r.session_id = ? AND r.stage = 'segment_phases'"

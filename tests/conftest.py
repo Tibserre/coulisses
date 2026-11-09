@@ -12,7 +12,7 @@ from pathlib import Path
 
 import coulisses.testing.fakes  # noqa: F401  # registers the fake engines
 import pytest
-from coulisses.api import ChainConfig, StageConfig
+from coulisses.api import ChainConfig, Languages, LanguageSupport, StageConfig
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -117,3 +117,50 @@ def fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
 def local_client(app: FastAPI) -> TestClient:
     """A client as the service's own page: the service refuses any other host name."""
     return TestClient(app, base_url="http://127.0.0.1:8765")
+
+
+class FakeLanguages:
+    """Stands for the engine's `languages()` in the tests: French installed, English and
+    German each missing its aligner, unless `install` is called. No model is read."""
+
+    def __init__(self) -> None:
+        self.missing: dict[str, set[str]] = {
+            "en": {"aligneur-anglais"},
+            "de": {"aligneur-allemand"},
+        }
+        self.calls = 0
+        self.aligners = {"fr": "aligneur-francais", "de": "aligneur-allemand"}
+        self.aligners["en"] = "aligneur-anglais"
+        self.unaligned: set[str] = set()
+
+    def install(self, key: str) -> None:
+        for keys in self.missing.values():
+            keys.discard(key)
+
+    def __call__(self, profile: str = "chaine-retenue", root: Path | None = None) -> Languages:
+        self.calls += 1
+        rows = [("fr", "Français"), ("de", "Allemand"), ("en", "Anglais")]
+        return Languages(
+            profile=profile,
+            languages=tuple(
+                LanguageSupport(
+                    language=code,
+                    label=label,
+                    transcribed=True,
+                    aligned=code not in self.unaligned,
+                    transcription_model="transcripteur",
+                    alignment_model=self.aligners[code],
+                    missing_models=tuple(sorted(self.missing.get(code, set()))),
+                    download_bytes=1_260_000_000 * len(self.missing.get(code, set())),
+                )
+                for code, label in rows
+            ),
+        )
+
+
+@pytest.fixture(autouse=True)
+def fake_languages(monkeypatch: pytest.MonkeyPatch) -> FakeLanguages:
+    """No test reads the models on this Mac to know its languages (ADR 0072)."""
+    fake = FakeLanguages()
+    monkeypatch.setattr("coulisses_app.languages.engine_languages", fake)
+    return fake

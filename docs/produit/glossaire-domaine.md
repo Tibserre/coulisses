@@ -11,6 +11,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Transmettre les noms | `connector_names` | Réglage d'un espace : le connecteur rend les noms tels quels. Fermé par défaut : chaque nom connu de l'espace devient « Personne A », « Personne B »…, au mieux (ADR 0065). |
 | Connecteur | `connector` | Ce qui laisse un assistant (Claude Desktop, Claude Code, un client MCP local) lire Coulisses sans le piloter : le pont `coulisses-mcp` et les routes `/api/connecteur/…`. Coupé par défaut, ouvert dans les Réglages (ADR 0065). |
 | Journal des accès | `connector_access_log` | Chaque lecture réussie du connecteur : date, outil, séance, avec ou sans les noms. Jamais purgé ; sans le texte cherché (ADR 0065). |
+| Langue d'une séance | `language` | La langue parlée, que le moteur transcrit et aligne (code ISO 639-1, « fr » par défaut) : celle d'un espace pour ses nouvelles séances, celle d'une séance pour son traitement, celle d'une version d'après la provenance (ADR 0072). |
+| Attente du modèle | `waits_for_models` | Un traitement en file qui attend le modèle de sa langue au lieu d'échouer ; la séance le dit (`processing_waits_for`) (ADR 0072). |
 | Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
 | Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |
@@ -22,7 +24,9 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). Une seule est traitée en V1 ; chaque micro ajouté en ajoute une (`mic2`, `mic3`…, ADR 0031, 0033), le son de l'ordinateur aussi (`system`, ADR 0032). |
 | Son de l'ordinateur | `system_audio` | Tout ce que le Mac joue pendant une réunion en ligne ou hybride, enregistré avec le micro, sur son horloge (source `system`, ADR 0032). |
 | Mix | `mix` | La piste que le moteur traite quand une séance a le son de l'ordinateur : le micro plus ce son, baissés d'un seul gain (`sources/mix.wav`, puis `mix.flac` une fois l'enregistrement fini, ADR 0046). Un audio dérivé, refait depuis les sources. |
-| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, puis `listening.flac`, ADR 0037, 0046). Le moteur ne l'entend pas. |
+| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, puis `listening.m4a`, du FLAC dans un MP4 ; `listening.flac` avant l'ADR 0073 ; ADR 0037, 0046, 0074). Le moteur ne l'entend pas. |
+| Écoute | `heard` | Ce que la page d'une séance fait entendre : le mix d'écoute, ou la piste elle-même (la copie d'écoute de la v0.38.2 tant qu'elle existe ; `lossless.heard_path`, ADR 0074). |
+| Copie d'écoute | `listening_copy` | La copie en MP4 que la v0.38.2 faisait d'une piste entendue telle quelle (`sources/listening-copy.m4a`, ADR 0073) : entendue tant que la piste est en FLAC brut, supprimée une fois la piste dans un MP4 (ADR 0074). Plus jamais faite. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Micro principal | `reference_source` (captée) | Le micro choisi en premier à l'enregistrement : la source de référence, celle qui est traitée (ADR 0033). |
 | Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, choisi dans la liste des micros (« + » ou le chevron à côté du micro) ; gardé, pas encore traité (ADR 0031, 0033, 0067). |

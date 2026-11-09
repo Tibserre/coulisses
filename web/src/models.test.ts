@@ -1,7 +1,7 @@
 // Run with `npm test` (Node's own test runner).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { CatalogModel, ModelAction, ModelsView } from "./api.ts";
+import type { CatalogModel, Language, ModelAction, ModelsView } from "./api.ts";
 import { environmentState, gigabytes, modelRows, percent, readinessLine, removableEnvironment } from "./models.ts";
 
 const model = (
@@ -420,4 +420,64 @@ test("an optional model on the disk, never replaced, keeps its row: it is not an
   const quiet = quietRows(modelRows(v, []), v.inventory);
   assert.equal(quiet.old.size, 0);
   assert.deepEqual(quiet.apart.map((r) => r.key), ["asr-grand"]);
+});
+
+test("an aligner for another language is needed only by its own sessions", async () => {
+  const { quietRows } = await import("./models.ts");
+  const aligner = (key: string, language: string): CatalogModel => ({ ...model(key, "align"), language });
+  const intact = (key: string) => ({
+    key,
+    state: "intact" as const,
+    in_catalog: true,
+    repo: null,
+    revision: null,
+    outdated: false,
+    size_bytes: 1_260_000_000,
+    downloaded_at: null,
+    problem: null,
+    required: true,
+    replaced_by: null,
+  });
+  const v: ModelsView = {
+    ...view({ models: [intact("aligneur-fr")] }),
+    catalog: { models: [aligner("aligneur-fr", "fr"), aligner("aligneur-en", "en"), aligner("aligneur-de", "de")] },
+  };
+  v.readiness = { ...v.readiness, language: "fr" };
+  const named = [
+    { language: "en", label: "Anglais" },
+    { language: "de", label: "Allemand" },
+  ] as Language[];
+  const rows = modelRows(v, [], named);
+  assert.deepEqual(
+    rows.map((r) => [r.key, r.purpose, r.required]),
+    [
+      ["aligneur-fr", "Alignement des mots", true],
+      ["aligneur-en", "Alignement des mots (anglais)", false],
+      ["aligneur-de", "Alignement des mots (allemand)", false],
+    ],
+  );
+  // Not on the disk, not needed: nothing to say, never « 2,5 Go à télécharger ».
+  const quiet = quietRows(rows, v.inventory);
+  assert.deepEqual(quiet.apart, []);
+  assert.deepEqual(quiet.steps, [{ purpose: "Alignement des mots", size: 1_260_000_000 }]);
+  // Downloaded, it is said in « Langues », with its size and « Supprimer » (ADR 0072).
+  const withEnglish = { ...v, inventory: { ...v.inventory, models: [intact("aligneur-fr"), intact("aligneur-en")] } };
+  const shown = quietRows(modelRows(withEnglish, []), withEnglish.inventory);
+  assert.deepEqual(shown.apart, []);
+  assert.equal(shown.old.size, 0);
+  assert.deepEqual(shown.steps, [{ purpose: "Alignement des mots", size: 1_260_000_000 }]);
+  // Damaged, it keeps its row here, to be removed.
+  const damaged = {
+    ...v,
+    inventory: { ...v.inventory, models: [intact("aligneur-fr"), { ...intact("aligneur-en"), state: "altered" as const }] },
+  };
+  assert.deepEqual(
+    quietRows(modelRows(damaged, [], named), damaged.inventory).apart.map((r) => r.purpose),
+    ["Alignement des mots (anglais)"],
+  );
+  // Its name not read yet: said so, never a name the application would make up (P6).
+  assert.equal(modelRows(v, [])[1].purpose, "Alignement des mots (autre langue)");
+  // An older engine says no language: French, as before.
+  const older = modelRows({ ...v, readiness: { ...v.readiness, language: undefined } }, []);
+  assert.equal(older[1].required, false);
 });

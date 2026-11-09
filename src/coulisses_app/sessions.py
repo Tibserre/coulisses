@@ -15,6 +15,7 @@ from typing import BinaryIO
 from pydantic import BaseModel
 
 from coulisses_app import jobs, projects, retention, spaces, wav
+from coulisses_app.jobs import WaitsFor
 from coulisses_app.media import probe
 from coulisses_app.paths import DataDir
 from coulisses_app.storage.db import connect, now_iso
@@ -84,6 +85,14 @@ class Session(BaseModel):
     job_error: str | None
     audio: retention.AudioStatus
     """Kept, removed (when, why), or when its purge is due (spec §7.10)."""
+    language: str = "fr"
+    """The language it is transcribed in (ADR 0072): the one chosen until its text is made,
+    then its version shown's."""
+    language_editable: bool = False
+    """Its language may still change (`set_language`): its text is not made yet."""
+    processing_waits_for: WaitsFor | None = None
+    """Its processing in the queue waits for a model of its language, or for another
+    language (the engine no longer handles this one)."""
 
 
 def new_session_id(when: datetime) -> str:
@@ -104,10 +113,12 @@ def import_recording(
     recorded_at: datetime | None,
     profile: str,
     wait_for_attendees: bool = False,
+    language: str | None = None,
 ) -> str:
     """Keep the file exactly as received, make it a session and queue its processing.
     `wait_for_attendees`: an import in one gesture, made with nobody present; its processing
-    waits for them (`jobs.WAIT_FOR_ATTENDEES_S`, ADR 0069).
+    waits for them (`jobs.WAIT_FOR_ATTENDEES_S`, ADR 0069). `language`: checked against the
+    engine's by the caller; by default its space's (ADR 0072).
 
     The file is first received in `imports-en-cours/`; if ffmpeg cannot read it, that copy
     is removed and `UnreadableAudioError` says why (the user's original is untouched)."""
@@ -121,6 +132,7 @@ def import_recording(
         projects.check(conn, space, project_id)
         spaces.check_attendees(conn, space, present)
         glossary = spaces.glossary_terms(conn, space)
+        spoken = language or spaces.get_space(conn, space).language
     finally:
         conn.close()
     minimum = spaces.attendee_minimum(len(present), unnamed_attendees)
@@ -154,8 +166,8 @@ def import_recording(
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "INSERT INTO session (id, space_id, project_id, title, recorded_at, created_at,"
-            " reference_source_id, unnamed_attendees)"
-            " VALUES (?, ?, ?, NULL, ?, ?, ?, ?)",
+            " reference_source_id, unnamed_attendees, language)"
+            " VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)",
             (
                 session_id,
                 space,
@@ -164,6 +176,7 @@ def import_recording(
                 stamp,
                 REFERENCE_SOURCE_ID,
                 unnamed_attendees,
+                spoken,
             ),
         )
         conn.executemany(
@@ -195,6 +208,7 @@ def import_recording(
             attendees=minimum,
             glossary=glossary,
             wait_s=jobs.WAIT_FOR_ATTENDEES_S if wait_for_attendees else None,
+            language=spoken,
         )
         sources.mkdir(parents=True)
         shutil.move(received, stored)
@@ -253,6 +267,11 @@ def _session(conn: sqlite3.Connection, row: sqlite3.Row) -> Session:
         job_state=row["job_state"],
         job_error=row["job_error"],
         audio=retention.status_of(conn, row, retention.get_settings(conn), datetime.now(UTC)),
+        language=row["language"],
+        language_editable=jobs.first_text_pending(conn, row["id"]) is not False,
+        processing_waits_for=(
+            chain.waits_for_models if chain and row["job_state"] == "queued" else None
+        ),
     )
 
 
@@ -428,12 +447,14 @@ def start_capture(
     channels: int,
     extra: list[tuple[str, int]] | None = None,
     system: bool = False,
+    language: str | None = None,
 ) -> tuple[str, Path]:
     """The session of a recording about to start: made at once, so that a crash leaves it
     there to be repaired (state `recording`). Returns its id and where to write the audio.
     `extra`: (device, channels) of the microphones added, written beside it as `mic2`,
     `mic3`…;
-    `system`: the computer's sound, beside it as `system` (mono)."""
+    `system`: the computer's sound, beside it as `system` (mono). `language`: checked by the
+    caller; by default its space's (ADR 0072), changed while it records (`set_language`)."""
     if unnamed_attendees is not None and unnamed_attendees < 1:
         raise spaces.SpaceError("Le nombre de présents non nommés doit être au moins 1.")
     present = list(dict.fromkeys(attendee_ids))
@@ -449,10 +470,12 @@ def start_capture(
         spaces.get_space(conn, space)
         projects.check(conn, space, project_id)
         spaces.check_attendees(conn, space, present)
+        spoken = language or spaces.get_space(conn, space).language
         with conn:
             conn.execute(
                 "INSERT INTO session (id, space_id, project_id, title, recorded_at, created_at,"
-                " reference_source_id, unnamed_attendees) VALUES (?, ?, ?, NULL, ?, ?, ?, ?)",
+                " reference_source_id, unnamed_attendees, language)"
+                " VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)",
                 (
                     session_id,
                     space,
@@ -461,6 +484,7 @@ def start_capture(
                     stamp,
                     REFERENCE_SOURCE_ID,
                     unnamed_attendees,
+                    spoken,
                 ),
             )
             conn.executemany(
@@ -681,8 +705,8 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
     conn = connect(data)
     try:
         row = conn.execute(
-            "SELECT s.space_id, s.unnamed_attendees, s.audio_removed_at, a.capture_state,"
-            " a.duration_s FROM session s"
+            "SELECT s.space_id, s.unnamed_attendees, s.audio_removed_at, s.language,"
+            " a.capture_state, a.duration_s FROM session s"
             " JOIN audio_source a ON a.session_id = s.id AND a.source_id = s.reference_source_id"
             " WHERE s.id = ?",
             (session_id,),
@@ -712,6 +736,36 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
                 profile=profile,
                 attendees=minimum,
                 glossary=spaces.glossary_terms(conn, row["space_id"]),
+                language=row["language"],
             )
     finally:
         conn.close()
+
+
+def set_language(data: DataDir, session_id: str, language: str) -> Session:
+    """The language of a session whose text is not made yet (ADR 0072): while it records, or
+    while its first processing waits in the queue (for the people present, a model, or its
+    turn), or after it stopped or failed before any transcription succeeded. Its first
+    processing takes it too; the wait for the people present is not started again.
+    `language`: checked against the engine's by the caller."""
+    conn = connect(data)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT 1 FROM session WHERE id = ?", (session_id,)).fetchone() is None:
+            raise spaces.NotFoundError("Séance introuvable.")
+        pending = jobs.first_text_pending(conn, session_id)
+        if pending is False:
+            raise spaces.ConflictError(
+                "Le texte de cette séance est déjà fait. Pour une autre langue : "
+                "« Refaire le texte »."
+            )
+        conn.execute("UPDATE session SET language = ? WHERE id = ?", (language, session_id))
+        if pending is not None:
+            jobs.set_language(conn, pending, language)
+        conn.commit()
+    finally:
+        conn.rollback()  # nothing left open after a refusal (no effect after the commit)
+        conn.close()
+    session = get_session(data, session_id)
+    assert session is not None
+    return session

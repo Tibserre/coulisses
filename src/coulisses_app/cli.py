@@ -22,7 +22,7 @@ from coulisses_app.paths import DataDir, RealDataRefusedError
 from coulisses_app.processing import Processor
 from coulisses_app.retention import Watcher, prune_backups
 from coulisses_app.sessions import interrupted_imports
-from coulisses_app.storage.db import migrate
+from coulisses_app.storage.db import DatabaseTooNewError, MigrationMismatchError, migrate
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +57,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="développement : port 8766, ~/Coulisses/Données-dev, jamais les données réelles",
     )
+    parser.add_argument(
+        "--ecoute-exacte",
+        action="store_true",
+        help=(
+            "range dans un MP4 les pistes encore gardées en FLAC brut, y compris celles "
+            "d'une séance où cela a échoué au démarrage (ADR 0074), sans perte, puis "
+            "s'arrête ; le service doit être arrêté"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -67,6 +76,16 @@ def launch_settings(args: argparse.Namespace) -> tuple[DataDir, int]:
     else:
         data, port = DataDir.from_env(), DEFAULT_PORT
     return data, port if args.port is None else args.port
+
+
+def migrate_or_exit(data: DataDir) -> list[Path]:
+    """The database brought to this application's schema, or the reason it cannot be, said
+    on stderr, and the service not started."""
+    try:
+        return migrate(data)
+    except (DatabaseTooNewError, MigrationMismatchError) as exc:
+        print(exc, file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -102,10 +121,18 @@ def main(argv: list[str] | None = None) -> None:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
     pruned: list[str] = []
-    for backup in migrate(data):
+    for backup in migrate_or_exit(data):
         print(f"Base sauvegardée avant mise à jour : {backup}", file=sys.stderr)
         # Only the latest copies are kept (ADR 0052); what could not go is said at start.
         pruned += [f"Anciennes copies de la base : {p}" for p in prune_backups(data, backup)]
+    if args.ecoute_exacte:
+        # The tracks still in raw FLAC (those that failed at a start too) put in an MP4,
+        # then stop (ADR 0074). The data lock held above: no service runs meanwhile.
+        try:
+            failed = lossless.rewrap_all(data, lambda line: print(line, file=sys.stderr))
+        finally:
+            lock.close()
+        raise SystemExit(1 if failed else 0)
 
     chain = ChainConfig.from_profile(load_profile(profile_path(DEFAULT_PROFILE)))
     awake = KeepAwake()

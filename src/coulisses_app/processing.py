@@ -43,7 +43,7 @@ from coulisses.api import (
 )
 from pydantic import BaseModel
 
-from coulisses_app import carryover, jobs, mixing, settings
+from coulisses_app import carryover, jobs, languages, mixing, settings
 from coulisses_app.capture import KeepAwake
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting.generate import (
@@ -136,6 +136,8 @@ STOP_POLL_S = 0.2
 class ChainJobResult(BaseModel):
     error: str | None
     """None when every planned stage succeeded."""
+    held: bool = False
+    """Back in the queue before any stage ran: its language cannot be processed yet."""
 
 
 class Processor:
@@ -152,8 +154,14 @@ class Processor:
         model_client: ModelClient | None = None,
         keep_awake: KeepAwake | None = None,
         after_chain: Callable[[str], None] | None = None,
+        waits_for: Callable[[str, str], jobs.WaitsFor | None] | None = None,
     ) -> None:
+        """`waits_for(profile, language)`: what a processing in that language waits for
+        (`languages.waits_for` on the models of `models` by default)."""
         self.data = data
+        self._waits_for: Callable[[str, str], jobs.WaitsFor | None] = (
+            waits_for or self._models_waits_for
+        )
         # Once a chain is over, what waited for it (the tracks kept in FLAC, ADR 0046).
         self._after_chain = after_chain
         # The Mac does not go to sleep while a job runs (spec §7.4); none in tests.
@@ -173,10 +181,16 @@ class Processor:
         self._thread: threading.Thread | None = None
         self.loop_error: str | None = None
         """Last error of the processing loop itself (not of a job), shown by the service."""
+        self.release_error: str | None = None
+        """Last failure to see again the jobs waiting for a model (at start, after a
+        download): they stay waiting until it succeeds; shown by the service."""
 
     # -- lifecycle ----------------------------------------------------------------------
 
     def start(self) -> None:
+        # Models installed while the app was closed: what waited for them goes. A failure
+        # here never stops the service: said, and seen again at the next download.
+        self.after_install()
         self._thread = threading.Thread(target=self._loop, name="coulisses-processing")
         self._thread.start()
 
@@ -192,13 +206,47 @@ class Processor:
         if self._thread is not None:
             self._thread.join()
 
+    def _models_waits_for(self, profile: str, language: str) -> jobs.WaitsFor | None:
+        return languages.waits_for(profile, language, self.models)
+
+    def after_install(self) -> None:
+        """Models may have been installed (at start, after a download): what waited for
+        them goes. A failure here is said by the service (`release_error`), not only logged,
+        until the jobs waiting are seen again (the next start, or the next download)."""
+        try:
+            self.release_waiting()
+        except Exception as exc:
+            log.exception("releasing the jobs waiting for a model")
+            self.release_error = f"{type(exc).__name__} : {exc}"
+
+    def release_waiting(self) -> None:
+        """The jobs waiting for a model, or for another language, seen again: those that
+        can now run go back in their turn; the others say what they still wait for (a model
+        installed since, of two). After a download, at start, after a language changed."""
+        conn = connect(self.data)
+        try:
+            released = False
+            for job in jobs.waiting_jobs(conn):
+                assert isinstance(job.params, jobs.ChainParams)
+                waits = self._waits_for(job.params.profile, job.params.language)
+                if waits != job.params.waits_for_models:
+                    jobs.set_waits(conn, job.id, waits, language=job.params.language)
+                released = released or waits is None
+        finally:
+            conn.close()
+        self.release_error = None
+        if released:
+            log.info("jobs waiting for a model may run now")
+            self._wake.set()
+
     def _loop(self) -> None:
         while not self._stopping.is_set():
             try:
                 job = self._claim()
+                # The queue is read again: the loop's former error is over.
+                self.loop_error = None
                 if job is not None:
                     self.run_job(job)
-                    self.loop_error = None
                     continue
             # The loop must outlive a database error, or later imports would wait forever
             # without a word: the error is logged, shown by the service, and retried (P8).
@@ -292,7 +340,15 @@ class Processor:
             self._stopped_by_user.discard(job.id)
         conn = connect(self.data)
         try:
-            if stopped and result.error is not None and interrupted and not failures:
+            if result.held and stopped:
+                # Stopped as it went back to wait: the user's stop wins.
+                jobs.mark_stopped(conn, job.id)
+                result = ChainJobResult(error=jobs.STOPPED)
+            elif result.held:
+                log.info("job %s waits for its language's models", job.id)
+                # A download that ended between the check and the wait did not see it.
+                self.release_waiting()
+            elif stopped and result.error is not None and interrupted and not failures:
                 # The user's choice, not a failure: its runs are kept as they ended. Its
                 # tracks stay in WAV until it is resumed and ends (`after_chain`, ADR 0046):
                 # converting them now would hold back a deletion asked with the stop.
@@ -370,6 +426,17 @@ class Processor:
                 error="L'audio de cette séance a été supprimé : le traitement ne peut plus "
                 "reprendre."
             )
+        assert isinstance(job.params, jobs.ChainParams)
+        # A model of its language missing, or the language no longer handled: it waits
+        # in the queue, saying so, rather than failing (ADR 0072). Nothing is downloaded.
+        waits = self._waits_for(job.params.profile, job.params.language)
+        if waits is not None:
+            conn = connect(self.data)
+            try:
+                jobs.hold(conn, job.id, waits)
+            finally:
+                conn.close()
+            return ChainJobResult(error=None, held=True)
         try:
             # The microphone with the computer's sound, for a meeting online (ADR 0032).
             audio, mix = mixing.processing_input(self.data, job.session_id)
@@ -532,7 +599,12 @@ class Processor:
 
         runs = run_chain(
             self.chain,
-            ChainInput(audio=audio, attendees=params.attendees, glossary=tuple(params.glossary)),
+            ChainInput(
+                audio=audio,
+                attendees=params.attendees,
+                glossary=tuple(params.glossary),
+                language=params.language,
+            ),
             folder_of,
             run_stage,  # type: ignore[arg-type]
         )
@@ -540,9 +612,11 @@ class Processor:
         if failed:
             first = failed[0]
             label = STAGE_LABELS.get(first.provenance.stage, first.provenance.stage)
+            # Refused for its language after all: said with what to do.
+            said = languages.said_failure(first.provenance, params.profile, self.models)
             return ChainJobResult(
                 error=f"Étape « {label} » en échec : "
-                f"{error_summary(first.provenance) or 'erreur inconnue'}"
+                f"{said or error_summary(first.provenance) or 'erreur inconnue'}"
             )
         missing = [s.value for s in planned_stages(self.chain) if not _ran(runs, s)]
         if missing:
@@ -560,8 +634,10 @@ class Processor:
 
     def _complete(self, session_id: str, runs: ChainRuns) -> None:
         """The job's runs become the session's version, all at once; the corrections of the
-        version shown until then are carried over to it first, in the same transaction.
-        Done again after a crash, it changes nothing."""
+        version shown until then are carried over to it first, in the same transaction, and
+        the session takes its language, read in its transcription's provenance (P7, ADR
+        0072; one that does not say it leaves it as it was). Done again after a crash, it
+        changes nothing."""
         target = runs.attribute.folder.name if runs.attribute is not None else None
         conn = connect(self.data)
         try:
@@ -584,6 +660,18 @@ class Processor:
                 for run in runs.all:
                     if run.succeeded:
                         activate(conn, session_id, run.provenance.stage, run.folder.name)
+                spoken = next(
+                    (
+                        languages.of_transcription(run.provenance)
+                        for run in runs.text
+                        if run.provenance.stage == StageName.TRANSCRIBE and run.succeeded
+                    ),
+                    None,
+                )
+                if spoken is not None:
+                    conn.execute(
+                        "UPDATE session SET language = ? WHERE id = ?", (spoken, session_id)
+                    )
         finally:
             conn.close()
 
