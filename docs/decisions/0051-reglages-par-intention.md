@@ -12,7 +12,7 @@ L'utilisateur, le 2026-10-20 : « l'app est pas hyper claire, notamment les para
   - la coquille de la page, toujours montée, annonce le rappel (`rappel-mises-a-jour`, vrai) une fois à son montage, et le retire (faux) en se démontant ; l'annonce est à refaire après chaque rechargement ;
   - seulement alors, une version trouvée par la recherche automatique n'ouvre plus la fenêtre de Sparkle : `updates.ready` passe à vrai et l'évènement `coulisses:mises-a-jour` est envoyé ; sans annonce, Sparkle ouvre sa fenêtre comme avant ;
   - colonne masquée, un point sur son bouton dit qu'une version attend : jamais une version annoncée et vue nulle part. Pendant un enregistrement, ni bouton ni point (0040) ; ils reviennent ensuite. Un clic pendant un traitement est refusé par l'app, en français ;
-  - `ready` repasse à faux une fois la fenêtre de Sparkle vue (installée, ignorée, « plus tard »).
+  - `ready` repasse à faux une fois la fenêtre de Sparkle vue (installée, ignorée, « plus tard »). *Remplacé par l'ADR 0075 : « Plus tard » garde le bouton ; seules l'installation et « Ignorer cette version » le retirent.*
   Le réglage (recherche automatique, recherche immédiate, version) est dans Avancé.
 - **Le journal technique du service** s'ouvre depuis Avancé, aussi hors mode développeur (demande de l'utilisateur ; précise 0034).
 - **Un réglage, une ligne** : ce qu'il est à gauche, sa valeur et ce qui la change à droite. La conservation et le préavis valent dès qu'on quitte la ligne, l'onglet ou la page, sans « Enregistrer » : une écriture par décision, car chacune annonce de nouveau les purges proches (notification macOS). « Bientôt supprimés » a toujours sa ligne (« Aucun »). Le dossier d'export se dit par son nom.
