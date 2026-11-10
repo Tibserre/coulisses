@@ -6180,16 +6180,16 @@ button.cl-tree__more:hover {
   margin-bottom: 2px;
 }
 
-/* The welcome (ADR 0079): a sentence lit word by word as the play head passes over its
-   sound, the way a session reads. Played once, then still (ADR 0017: nothing loops);
-   still from the start when macOS asks for less motion. */
+/* The welcome (ADR 0079): a line of a transcript. The sentence turns from gray to
+   black word by word and its sound fills with colour at the same pace. Played once,
+   then still (ADR 0017: nothing loops); still from the start when macOS asks for
+   less motion. */
 .cl-welcome {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: var(--spacing-4);
-  padding: 0 var(--spacing-4);
+  gap: var(--spacing-3);
 }
 
 .cl-welcome__who {
@@ -6210,6 +6210,7 @@ button.cl-tree__more:hover {
 
 .cl-welcome__line {
   margin: 0;
+  font-family: var(--font-family-heading, inherit);
   font-size: 28px;
   font-weight: 500;
   line-height: 1.3;
@@ -6217,8 +6218,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-welcome__line span[aria-hidden] {
-  color: color-mix(in srgb, var(--color-text-primary) 20%, transparent);
-  animation: cl-welcome-lit 0.4s ease-out 0.3s both;
+  animation: cl-welcome-lit 0.4s ease-out both;
 }
 
 @keyframes cl-welcome-lit {
@@ -6227,7 +6227,6 @@ button.cl-tree__more:hover {
 }
 
 .cl-welcome__wave {
-  position: relative;
   height: 28px;
   display: flex;
   align-items: center;
@@ -6238,29 +6237,17 @@ button.cl-tree__more:hover {
   display: block;
   width: 3px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-border));
+  animation: cl-welcome-fill 0.4s ease-out both;
 }
 
-.cl-welcome__wave i {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--color-accent);
-  animation: cl-welcome-play 4.2s linear both;
-}
-
-/* The head crosses the sound as the words light (0.3 s + 13 × 0.27 s), then fades out. */
-@keyframes cl-welcome-play {
-  0% { left: 0; opacity: 1; }
-  88% { left: 100%; opacity: 1; }
-  100% { left: 100%; opacity: 0; }
+@keyframes cl-welcome-fill {
+  from { background: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
+  to { background: var(--color-accent); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-welcome__line span[aria-hidden] { animation: none; color: var(--color-text-primary); }
-  .cl-welcome__wave i { animation: none; opacity: 0; }
+  .cl-welcome__line span[aria-hidden],
+  .cl-welcome__wave b { animation-duration: 0s; animation-delay: 0s !important; }
 }
 
 /* Download progress round a piece's icon (ADR 0079): nothing in the tile moves as it grows. */

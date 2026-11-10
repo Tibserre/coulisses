@@ -12,7 +12,7 @@ L'utilisateur : « il faut que l'usage de celle ci soit facile et claire », « 
 
 ## Décision
 - **Un onboarding en étapes (précise 0049).** Au premier lancement, la fenêtre de la mise à jour qui attend laisse la place à six étapes, une idée par étape, plus visuelles que textuelles (choisies sur maquettes, « Premier lancement », le 2026-11-10) :
-  1. Bienvenue : une phrase, « Vos séances deviennent du texte, qui dit qui parle, et des comptes rendus. », qui s'allume mot à mot au passage d'une tête de lecture sur un son dessiné (jouée une fois puis immobile, immobile d'emblée si macOS demande moins d'animations), puis « Commencer » ou « Plus tard ».
+  1. Bienvenue : le titre « Bienvenue dans Coulisses », puis une réplique comme dans une transcription, « Vous » : « Qui a dit ça, déjà ? Tout est là, mot pour mot. ». Elle s'écrit mot à mot, du pâle au plein, pendant que son onde se colore au même rythme, une seule fois (immobile d'emblée si macOS demande moins d'animations). Dessous, ce que fait Coulisses en une phrase, puis « Commencer » ou « Plus tard ».
   2. « Ce qu'il faut pour écouter » : une tuile par chose à télécharger, dite par ce à quoi elle sert, avec sa taille ; pas de total.
   3. « Dans quelles langues ? » : une tuile par langue ; le français est inclus ; seul l'ajout de ce qui est coché est compté.
   4. « Prêt à télécharger » : le seul total, une barre de ce qu'il compte, puis « Télécharger », qui vaut confirmation (P1), ou « Plus tard ».

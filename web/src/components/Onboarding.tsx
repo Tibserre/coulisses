@@ -26,13 +26,18 @@ import { useLanguages } from "./Languages.tsx";
 import { ICON, LABELS, WHAT } from "./pieceWords.ts";
 import { ProgressTile } from "./Missing.tsx";
 
-const WELCOME =
-  "Vos séances deviennent du texte, qui dit qui parle, et des comptes rendus.";
+const WELCOME = "Qui a dit ça, déjà ? Tout est là, mot pour mot.";
+const WELCOME_WORDS = WELCOME.split(" ");
+/** When the first word lights, and the gap between two words, in seconds. */
+const WORD_START = 0.3;
+const WORD_STEP = 0.27;
 /** The welcome's drawn sound: bar heights, in px. */
 const WAVE = [
   8, 14, 20, 12, 24, 18, 10, 22, 28, 16, 12, 20, 26, 14, 8, 18, 24, 12, 20, 16,
   10, 22, 14, 8, 18, 26, 20, 12, 16, 10, 20, 24, 14, 8, 16, 12, 6,
 ];
+/** The sound fills with colour over the time the sentence takes to light. */
+const WAVE_SWEEP = WELCOME_WORDS.length * WORD_STEP;
 
 const capital = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
@@ -157,35 +162,42 @@ export function Onboarding({
   if (step === 1)
     body = (
       <>
-        {/* The welcome is what Coulisses does: a sentence read as a session is, each
-            word lit as the play head passes over its sound (ADR 0079). */}
+        <h2 className="cl-onb__title">Bienvenue dans Coulisses</h2>
+        {/* What Coulisses does, shown as a line of a transcript: the sentence turns
+            from gray to black word by word while its sound fills with colour at the
+            same pace (ADR 0079). */}
         <div className="cl-welcome">
-          <p className="cl-welcome__who">
-            Bienvenue dans Coulisses<span>0:00</span>
+          <p className="cl-welcome__who" aria-hidden>
+            Vous<span>0:00</span>
           </p>
-          <h2 className="cl-welcome__line">
+          <p className="cl-welcome__line">
             <span className="cl-sr-only">{WELCOME}</span>
-            {WELCOME.split(" ").map((word, i) => (
+            {WELCOME_WORDS.map((word, i) => (
               <span
                 key={i}
                 aria-hidden
-                style={{ animationDelay: `${(0.3 + i * 0.27).toFixed(2)}s` }}
+                style={{ animationDelay: `${(WORD_START + i * WORD_STEP).toFixed(2)}s` }}
               >
                 {word}{" "}
               </span>
             ))}
-          </h2>
+          </p>
           <div className="cl-welcome__wave" aria-hidden>
             {WAVE.map((h, i) => (
-              <b key={i} style={{ height: h }} />
+              <b
+                key={i}
+                style={{
+                  height: h,
+                  animationDelay: `${(WORD_START + (i * WAVE_SWEEP) / WAVE.length).toFixed(2)}s`,
+                }}
+              />
             ))}
-            <i />
           </div>
-          <p className="cl-onb__text">
-            Tout se fait sur ce Mac. D'abord, de quoi écouter : deux minutes
-            pour choisir.
-          </p>
         </div>
+        <p className="cl-onb__text">
+          Coulisses écoute vos séances et en tire le texte, qui parle, et un
+          compte rendu. Tout reste sur ce Mac.
+        </p>
         <div className="cl-onb__actions">
           <Button label="Plus tard" variant="ghost" onClick={onClose} />
           <Button
