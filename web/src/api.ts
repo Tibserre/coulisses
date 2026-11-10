@@ -50,6 +50,10 @@ export interface ProcessingWait {
   label: string | null;
   missing_models: string[];
   download_bytes: number;
+  /** The environments the chain lacks (ADR 0080). */
+  missing_environments?: { name: string; label: string | null }[];
+  /** Damaged models: to remove in Réglages before downloading them again (ADR 0080). */
+  altered_models?: string[];
 }
 
 /** GET /api/langues: a language the chain transcribes (contrat-langue.md). */
@@ -127,6 +131,11 @@ export interface CatalogModel {
   licence: string;
   /** Its terms must be accepted on this page before downloading. */
   terms_url: string | null;
+  /** Shipped inside the application, installed without the network (engine v1.15.0,
+   *  ADR 0081 of the engine). Absent from an older engine. */
+  bundled?: boolean;
+  /** The credit its licence requires, in French (engine v1.15.0): shown in the app. */
+  attribution?: string | null;
   engine: string | null;
   /** The engine's profiles that need it (the retained chain: « chaine-retenue »)… */
   required_by: string[];
@@ -219,6 +228,10 @@ export interface MissingPiece {
   /** For a missing environment: what it is for, in French, said by the engine (v1.9.0). */
   label: string | null;
   message: string;
+  /** The room it will take, without the network (engine v1.15.0): a model's catalog size;
+   *  for an environment, an order of magnitude measured by the engine, said « environ ».
+   *  Absent from an older engine, null when unknown. */
+  announced_bytes?: number | null;
 }
 
 export interface Readiness {

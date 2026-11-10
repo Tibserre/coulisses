@@ -12,7 +12,21 @@ import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Text } from "@astryxdesign/core/Text";
 import { Check, ChevronDown } from "lucide-react";
-import { api, type Language, type ProcessingWait, type Session } from "../api.ts";
+import {
+  api,
+  type Language,
+  type ModelsView,
+  type ProcessingWait,
+  type Session,
+} from "../api.ts";
+import { MissingPage } from "./Missing.tsx";
+import {
+  beyondLanguage,
+  everythingMissing,
+  lastModelsView,
+  onStepsChanged,
+  stepsChanged,
+} from "../steps.ts";
 import { gigabytes } from "../models.ts";
 import {
   downloadPercent,
@@ -258,6 +272,43 @@ export function LanguageWait({
 }) {
   const [error, setError] = useState<string | null>(null);
   const language = languages?.find((l) => l.language === wait.language);
+  // The engine's pieces: when more than this language's models lacks (a new install), one
+  // « Voir ce qui manque » brings everything, the session processed right after.
+  const [view, setView] = useState<ModelsView | null>(lastModelsView);
+  // Apart from `error` (a refusal): cleared once a reading succeeds again.
+  const [unread, setUnread] = useState<string | null>(null);
+  const readModels = useCallback(
+    () =>
+      api.engineModels().then(
+        (next) => {
+          setUnread(null);
+          stepsChanged(next);
+        },
+        (e: Error) =>
+          setUnread(`Ce qui manque à ce Mac n'a pas pu être lu : ${e.message}`),
+      ),
+    [],
+  );
+  useEffect(() => {
+    void readModels();
+    return onStepsChanged(setView);
+  }, [readModels]);
+  // While something downloads or installs: read again, so a failure shows here too.
+  const running = view?.actions.some((a) => a.state === "running") ?? false;
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => void readModels(), 2000);
+    return () => window.clearInterval(timer);
+  }, [running, readModels]);
+  const everything =
+    view && wait.reason === "model_missing"
+      ? // Everything lacking, running or not: the page stays « il manque » while it comes.
+        everythingMissing(view, [], wait.missing_models)
+      : null;
+  const beyond = beyondLanguage(
+    everything,
+    language?.missing_models ?? wait.missing_models,
+  );
   const words = waitWords(wait, language);
   const act = async (what: () => Promise<void>) => {
     setError(null);
@@ -267,6 +318,22 @@ export function LanguageWait({
       setError((e as Error).message);
     }
   };
+  // A damaged model is not fetched by any download: said, with the way out (ADR 0080).
+  const altered = wait.altered_models?.length
+    ? "Un élément est abîmé sur ce Mac : supprimez-le dans Réglages › Transcription, puis téléchargez-le à nouveau."
+    : null;
+  // More than its language lacks (a new install): the whole page says so (ADR 0079).
+  if (beyond && view)
+    return (
+      <MissingPage
+        view={view}
+        language={wait.language === FRENCH ? undefined : language}
+        languages={languages}
+        onStarted={onStopped}
+        said={[altered, error, unread].filter((s): s is string => s !== null)}
+        waitingLanguages={wait.language !== FRENCH && !language}
+      />
+    );
   return (
     <section className="cl-ask">
       <Heading level={3}>{words.title}</Heading>
@@ -313,11 +380,11 @@ export function LanguageWait({
           />
         )}
       </div>
-      {error && (
-        <Text as="p" color="primary" type="supporting">
-          {error}
+      {[altered, error, unread].filter(Boolean).map((said) => (
+        <Text key={said} as="p" color="primary" type="supporting">
+          {said}
         </Text>
-      )}
+      ))}
     </section>
   );
 }

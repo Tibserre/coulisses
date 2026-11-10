@@ -170,6 +170,8 @@ export function readinessLine(
   readiness: Readiness,
   inventory: Inventory,
   purposeOfKey?: (key: string) => string | undefined,
+  /** Under « Coulisses n'est pas encore prêt… »: only what lacks. */
+  short = false,
 ): string | null {
   if (readiness.ready) return null;
   const parts = readiness.missing.map((piece) => {
@@ -190,7 +192,10 @@ export function readinessLine(
       : said;
   });
   // An environment several stages need is said once.
-  return `Les séances ne peuvent pas être traitées : il manque ${[...new Set(parts)].join(", ")}.`;
+  const lacking = [...new Set(parts)].join(", ");
+  return short
+    ? `Il manque ${lacking}.`
+    : `Les séances ne peuvent pas être traitées : il manque ${lacking}.`;
 }
 
 /** The environments the chain lacks (not installed), once each however many stages need
@@ -206,6 +211,13 @@ export function missingEnvironments(
     found.set(name, found.get(name) || piece.label || "");
   }
   return [...found];
+}
+
+/** An environment's announced size (engine v1.15.0): an order of magnitude, null when the
+ *  engine does not say it. */
+export function environmentBytes(readiness: Readiness, name: string): number | null {
+  const piece = readiness.missing.find((p) => p.environment === name);
+  return piece?.announced_bytes ?? null;
 }
 
 /** A step whose models are all there and sound: said in one line, outside developer mode. */

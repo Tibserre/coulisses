@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, EnvironmentInfo, InstalledEngineModel, MissingPiece, ModelsView } from "./api.ts";
-import { lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
+import { allLackingRunning, beyondLanguage, coveredByEverything, everythingMissing, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
 
 const model = (key: string, over: Partial<CatalogModel> = {}): CatalogModel => ({
   key,
@@ -182,7 +182,7 @@ test("what the processing lacks besides is one update to download", () => {
 test("nothing installed yet: a welcome", () => {
   const [notice] = updateNotices(view({}, [lacking({ model: "asr" })], [model("asr")]));
   assert.equal(notice.eyebrow, "Bienvenue dans Coulisses");
-  assert.equal(notice.choices[0].label, "Tout télécharger");
+  assert.equal(notice.choices[0].label, "Télécharger");
   assert.equal(notice.choices[0].description, "Environ 2,5 Go depuis internet, une seule fois.");
 });
 
@@ -245,4 +245,111 @@ test("the last reading is kept, for the Transcription tab to open at once", () =
   const read = { catalog: { models: [] }, actions: [] } as unknown as ModelsView;
   stepsChanged(read);
   assert.equal(lastModelsView(), read);
+});
+
+/** A new install: nothing of the engine on this Mac. */
+const fresh = view(
+  {},
+  [
+    lacking({ model: "asr" }),
+    lacking({ model: "align-fr", stage: "align" }),
+    lacking({ model: "voix", stage: "diarize" }),
+    lacking({ code: "environment_missing", stage: "diarize", environment: "diarizen", label: "Calcul des voix" }),
+  ],
+  [model("asr"), model("align-fr", { announced_bytes: 1_260_000_000 }), model("voix", { announced_bytes: 30_000_000 })],
+);
+
+test("the first launch: the window says the two things to prepare", () => {
+  const [welcome] = updateNotices(fresh);
+  assert.equal(welcome.welcome, true);
+  assert.deepEqual(welcome.download, ["asr", "align-fr", "voix"]);
+  assert.equal(updateNotices(afterUpdate).some((n) => n.welcome), false);
+});
+
+test("« Voir ce qui manque » takes everything the chain lacks, not only a language's models", () => {
+  const all = everythingMissing(fresh, [], ["align-en"]);
+  assert.deepEqual(all?.download, ["asr", "align-fr", "voix", "align-en"]);
+  assert.deepEqual(all?.install, ["diarizen"]);
+  // An environment's size is not known before it installs: « plus de ».
+  assert.equal(all?.bytes, 3_760_000_000);
+  assert.equal(all?.more, true);
+});
+
+test("what already downloads is not asked again; nothing left, nothing offered", () => {
+  const running = (kind: "model" | "environment", name: string) => ({
+    kind,
+    name,
+    state: "running" as const,
+    done_bytes: 0,
+    total_bytes: null,
+    error: null,
+    code: null,
+    detail: null,
+    terms_url: null,
+    started_at: "2026-11-10T10:00:00Z",
+    finished_at: null,
+  });
+  const some = everythingMissing(fresh, [running("model", "asr"), running("environment", "diarizen")]);
+  assert.deepEqual(some?.download, ["align-fr", "voix"]);
+  assert.equal(some?.more, false);
+  assert.equal(some?.bytes, 1_290_000_000);
+  assert.equal(everythingMissing(view({})), null);
+});
+
+test("engine v1.15.0 sizes an environment: « environ », not « plus de »", () => {
+  const sized = view(
+    {},
+    [
+      lacking({ model: "voix", stage: "diarize" }),
+      lacking({ code: "environment_missing", stage: "diarize", environment: "diarizen", announced_bytes: 900_000_000 }),
+    ],
+    [model("voix", { announced_bytes: 30_000_000 })],
+  );
+  const all = everythingMissing(sized);
+  assert.equal(all?.bytes, 930_000_000);
+  assert.equal(all?.more, false);
+  assert.equal(all?.approximate, true);
+});
+
+test("a model without an announced size: « plus de », never a figure too low", () => {
+  const unsized = view({}, [lacking({ model: "x" })], [model("x", { announced_bytes: null as unknown as number })]);
+  assert.equal(everythingMissing(unsized)?.more, true);
+});
+
+test("a waiting session: « Voir ce qui manque » only when more than its language lacks", () => {
+  const all = everythingMissing(fresh);
+  assert.equal(beyondLanguage(all, ["asr", "align-fr"]), true);
+  const onlyLanguage = everythingMissing(view({}, [lacking({ model: "align-en", stage: "align" })], [model("align-en")]));
+  assert.equal(beyondLanguage(onlyLanguage, ["align-en"]), false);
+  assert.equal(beyondLanguage(null, []), false);
+});
+
+test("a row gives way to « Voir ce qui manque » only with nothing of its own to say", () => {
+  const all = everythingMissing(fresh);
+  const row = (over: object = {}) => ({ key: "asr", state: { kind: "missing" }, last: null, ...over });
+  assert.equal(coveredByEverything(all, row(), false), true);
+  // A failed download, a replacement, a partial file: their row stays.
+  assert.equal(coveredByEverything(all, row({ last: { state: "failed" } }), false), false);
+  assert.equal(coveredByEverything(all, row(), true), false);
+  assert.equal(coveredByEverything(all, row({ state: { kind: "partial" } }), false), false);
+  assert.equal(coveredByEverything(null, row(), false), false);
+});
+
+test("« en cours » only when everything that lacks downloads; a damaged model keeps it said", () => {
+  const act = (kind: "model" | "environment", name: string) => ({
+    kind, name, state: "running" as const, done_bytes: 0, total_bytes: null, error: null, code: null,
+    detail: null, terms_url: null, started_at: "2026-11-10T10:00:00Z", finished_at: null,
+  });
+  const every = [act("model", "asr"), act("model", "align-fr"), act("model", "voix"), act("environment", "diarizen")];
+  assert.equal(allLackingRunning(fresh, every), true);
+  assert.equal(allLackingRunning(fresh, every.slice(1)), false);
+  const damaged = view({}, [lacking({ code: "model_altered", model: "asr" })]);
+  assert.equal(allLackingRunning(damaged, [act("model", "asr")]), false);
+});
+
+test("a waiting session stays « il manque » while what it lacks downloads", () => {
+  const running = { kind: "model" as const, name: "voix", state: "running" as const, done_bytes: 0, total_bytes: null,
+    error: null, code: null, detail: null, terms_url: null, started_at: "2026-11-10T10:00:00Z", finished_at: null };
+  const withRunning = { ...fresh, actions: [running] };
+  assert.equal(beyondLanguage(everythingMissing(withRunning, [], []), ["asr", "align-fr"]), true);
 });

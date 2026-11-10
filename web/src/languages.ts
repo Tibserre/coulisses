@@ -89,6 +89,46 @@ export function rerunLanguageMissing(
   return stage !== "diarize" && shown === null && chosen === null;
 }
 
+/** The languages as Réglages › Transcription shows them (ADR 0079): a card for French
+ *  (included), for each on this Mac (or coming, or failed), and for each a space has by
+ *  default; a tile « + » for the others, once French is there. */
+export function languageCards(languages: Language[]): {
+  cards: Language[];
+  toAdd: Language[];
+} {
+  const card = (l: Language) =>
+    l.language === FRENCH ||
+    languageState(l).kind !== "missing" ||
+    l.used_by.spaces.length > 0;
+  const french = languages.find((l) => l.language === FRENCH);
+  return {
+    cards: languages.filter(card),
+    toAdd: french?.installed ? languages.filter((l) => !card(l)) : [],
+  };
+}
+
+/** « Supprimer » on a card: removable, and no space has it by default (they are named on
+ *  the card; a waiting session is said by the window). */
+export function offersRemoval(language: Language): boolean {
+  return canRemoveLanguage(language) && language.used_by.spaces.length === 0;
+}
+
+/** A language's own size on this Mac (or to add): its own models, as the catalog announces
+ *  them; the transcription, shared by all, is not counted. Null when one is not announced. */
+export function languageSize(
+  language: Language,
+  catalog: { key: string; announced_bytes: number }[],
+): number | null {
+  if (!language.own_models.length) return null;
+  let sum = 0;
+  for (const key of language.own_models) {
+    const size = catalog.find((m) => m.key === key)?.announced_bytes;
+    if (!size) return null;
+    sum += size;
+  }
+  return sum;
+}
+
 /** The share downloaded, 0 to 100. */
 export function downloadPercent(done: number, total: number): number {
   return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;

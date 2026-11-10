@@ -1794,7 +1794,8 @@ function ProcessingPanel({
         />
       )}
       {running && !session.processing_waits_for && <ProcessingOutline detail={detail} />}
-      {running && (
+      {/* Waiting for what this Mac lacks: the page is that, stopping stays in « … ». */}
+      {running && !session.processing_waits_for && (
         <div className="cl-processing__stop">
           <Button
             label="Arrêter le traitement"

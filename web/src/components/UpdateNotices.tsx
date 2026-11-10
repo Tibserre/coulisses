@@ -7,6 +7,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { api, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { gigabytes, percent } from "../models.ts";
+import { Onboarding } from "./Onboarding.tsx";
 import {
   onStepsChanged,
   pendingNotices,
@@ -287,6 +288,13 @@ export function UpdateNoticesDialog({
   const shown = working ?? queue[0] ?? null;
   const next = queue[0] ?? null;
 
+  // The first launch: its own steps (ADR 0079), kept until closed, even once what it
+  // downloads is there and the update itself is gone.
+  const [welcoming, setWelcoming] = useState(false);
+  useEffect(() => {
+    if (isOpen && shown?.welcome) setWelcoming(true);
+  }, [isOpen, shown?.welcome]);
+
   // A removal that failed after a replacement: back to the choices, the error said.
   useEffect(() => {
     if (failed) setWorking(null);
@@ -296,6 +304,18 @@ export function UpdateNoticesDialog({
     if (isOpen && shown === null && passed.length) onClose();
   }, [isOpen, shown, passed.length, onClose]);
 
+  if (welcoming || (isOpen && shown?.welcome))
+    return (
+      <Onboarding
+        isOpen={isOpen}
+        actions={actions}
+        onStop={onStop}
+        onClose={() => {
+          setWelcoming(false);
+          onClose();
+        }}
+      />
+    );
   if (!shown) return null;
 
   const pick = async (choice: Choice) => {

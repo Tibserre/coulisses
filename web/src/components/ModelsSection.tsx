@@ -14,7 +14,21 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { useLanguages } from "./Languages.tsx";
-import { lastModelsView, stepsChanged } from "../steps.ts";
+import { MissingDialog } from "./Missing.tsx";
+import { LABELS } from "./pieceWords.ts";
+import {
+  basePieces,
+  lineStarted,
+  progressLines,
+  type Piece,
+} from "../onboarding.ts";
+import {
+  allLackingRunning,
+  coveredByEverything,
+  everythingMissing,
+  lastModelsView,
+  stepsChanged,
+} from "../steps.ts";
 import {
   environmentState,
   interpreterNote,
@@ -54,6 +68,10 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
   // The names of the languages, for the models of another one (P6).
   const { languages } = useLanguages(setRefused);
   const [asking, setAsking] = useState<Asking>(null);
+  /** « Voir ce qui manque »: the window a waiting session opens too (ADR 0079). */
+  const [showMissing, setShowMissing] = useState(false);
+  /** What that window follows, fixed when it opens. */
+  const [missingPieces, setMissingPieces] = useState<Piece[]>([]);
   const [working, setWorking] = useState(false);
   const running = useRef(new Set<string>());
 
@@ -129,7 +147,13 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       )
     : null;
   const quiet = view && !dev ? quietRows(rows, view.inventory) : null;
-  const shownRows = quiet ? quiet.apart : rows;
+  // What « Voir ce qui manque » fetches: outside developer mode, the plain rows of what it
+  // covers (missing, nothing to say) give way to it.
+  const everything = view ? everythingMissing(view, actions) : null;
+  const covered = (row: ModelRow) =>
+    !dev &&
+    coveredByEverything(everything, row, !!quiet?.old.get(row.purpose)?.length);
+  const shownRows = (quiet ? quiet.apart : rows).filter((r) => !covered(r));
   const environments = quiet
     ? quiet.apartEnvironments
     : (view?.inventory.environments ?? []);
@@ -235,8 +259,60 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
     </li>
   );
 
+  useEffect(() => {
+    if (showMissing && view) setMissingPieces(basePieces(view));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fixed when it opens
+  }, [showMissing]);
+  const missingDialog = showMissing && view && (
+    <MissingDialog
+      view={view}
+      pieces={missingPieces.length ? missingPieces : basePieces(view)}
+      chosen={[]}
+      startedAlready={progressLines(
+        missingPieces.length ? missingPieces : basePieces(view),
+        [],
+        LABELS,
+      ).some((line) => lineStarted(line, actions))}
+      onStarted={() => void load()}
+      onClose={() => {
+        setShowMissing(false);
+        setMissingPieces([]);
+      }}
+    />
+  );
+
+  // All there and sound, outside developer mode: one line (ADR 0079); the languages above
+  // say their own models.
+  const allQuiet =
+    view !== null &&
+    quiet !== null &&
+    !lacking &&
+    !everything &&
+    !unreadable &&
+    !refused &&
+    shownRows.length === 0 &&
+    environments.length === 0 &&
+    missing.length === 0 &&
+    ![...quiet.old.values()].some((old) => old.length > 0);
+  if (allQuiet && view && quiet) {
+    const base =
+      quiet.steps
+        .filter((s) => s.purpose !== "Alignement des mots")
+        .reduce((sum, s) => sum + s.size, 0) + (quiet.tools ?? 0);
+    return (
+      <section className="cl-settings__section">
+        {missingDialog}
+        <p className="cl-models__ready">
+          Traitement des séances : prêt · transcription, voix et outils de
+          calcul, {gigabytes(base)}
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="cl-settings__section">
+      {missingDialog}
       <Heading level={3}>Traitement des séances</Heading>
       {unreadable && (
         <Banner
@@ -257,7 +333,40 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       {view === null && !unreadable && <ModelsSkeleton dev={dev} />}
       {view && (
         <>
-          {lacking ? (
+          {everything ? (
+            <div className="cl-ask cl-ask--row">
+              <div className="cl-models__what">
+                <Text weight="medium">
+                  Il manque de quoi écouter vos séances
+                </Text>
+                {/* What lacks, by what it is for (ADR 0036): one short line. */}
+                <Text type="supporting">
+                  {readinessLine(
+                    view.readiness,
+                    view.inventory,
+                    dev ? undefined : purposeOfKey,
+                    true,
+                  ) ?? "Tout ce qu'il faut, téléchargé une fois."}
+                </Text>
+              </div>
+              <Button
+                label="Voir ce qui manque"
+                variant="primary"
+                onClick={() => setShowMissing(true)}
+              />
+            </div>
+          ) : lacking && view && allLackingRunning(view, actions) ? (
+            <div className="cl-ask cl-ask--row">
+              <Text color="secondary">
+                Le téléchargement est en cours : les séances seront traitées
+                une fois fini.
+              </Text>
+              <Button
+                label="Voir l'avancement"
+                onClick={() => setShowMissing(true)}
+              />
+            </div>
+          ) : lacking ? (
             <Banner
               status="warning"
               title="Il manque de quoi traiter"
@@ -334,6 +443,9 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
               const action = actions.find(
                 (a) => a.kind === "environment" && a.name === name,
               );
+              // Covered by « Voir ce qui manque », with nothing of its own to say.
+              if (!dev && everything?.install.includes(name) && !action)
+                return null;
               return (
                 <li key={`manque-${name}`} className="cl-models__row">
                   <div className="cl-models__what">
