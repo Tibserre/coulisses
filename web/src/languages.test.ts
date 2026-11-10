@@ -103,6 +103,26 @@ test("one bar for a language, whatever the number of its models", () => {
   });
 });
 
+test("the shared transcription downloading: no language says it downloads, but a waiting session does", () => {
+  const english = language({
+    missing_models: ["asr", "wav2vec2-ctc-english"],
+    downloads: [action({ name: "asr", done_bytes: 1_000_000_000, total_bytes: 2_470_000_000 })],
+  });
+  assert.equal(languageState(english).kind, "missing");
+  assert.equal(languageNote(english), "à télécharger · 1,3 Go");
+  assert.equal(languageCards([french, english]).cards.length, 1);
+  // A session waiting in English waits on it too.
+  assert.deepEqual(languageState(english, true), { kind: "downloading", done: 1_000_000_000, total: 2_470_000_000 });
+  // Its own model downloading: it does; with the shared one lacking too, its own size
+  // (from the catalog) makes the bar's total.
+  const own = language({ missing_models: ["asr", "wav2vec2-ctc-english"], downloads: [action({ done_bytes: 100, total_bytes: null })] });
+  assert.deepEqual(languageState(own, false, 1_260_000_000), { kind: "downloading", done: 100, total: 1_260_000_000 });
+  // The shared one failing is the « Transcription » line's to say, not each language's.
+  const failedShared = language({ missing_models: ["asr", "wav2vec2-ctc-english"], downloads: [action({ name: "asr", state: "failed", error: "Réseau coupé." })] });
+  assert.equal(languageState(failedShared).kind, "missing");
+  assert.equal(languageState(failedShared, true).kind, "failed");
+});
+
 test("all in French, the language is not shown above the title", () => {
   assert.equal(languageWorthShowing([french, language({})], "fr"), false);
   assert.equal(

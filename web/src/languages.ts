@@ -45,21 +45,40 @@ export type LanguageState =
   | { kind: "failed"; error: string }
   | { kind: "missing"; bytes: number };
 
-/** Where a language stands on this Mac, from its models and their downloads. */
-export function languageState(language: Language): LanguageState {
+/** Where a language stands on this Mac, from its own models and their downloads: the
+ *  transcription, shared by every language, downloading says nothing of one (it is the
+ *  « Transcription » line). `whole`: every model it needs, the shared one too (a session
+ *  waiting in this language waits on it as well). */
+export function languageState(
+  language: Language,
+  whole = false,
+  /** Its own models' announced size (`languageSize`): what is still queued counts in the
+   *  bar when the shared model lacks too. */
+  ownBytes: number | null = null,
+): LanguageState {
   if (language.installed) return { kind: "installed" };
-  const running = language.downloads.filter((a) => a.state === "running");
+  const downloads = whole
+    ? language.downloads
+    : language.downloads.filter((a) => language.own_models.includes(a.name));
+  const running = downloads.filter((a) => a.state === "running");
   if (running.length) {
     const done = running.reduce((sum, a) => sum + a.done_bytes, 0);
     const known = running.reduce((sum, a) => sum + (a.total_bytes ?? 0), 0);
     // What is still to fetch counts too: one bar for the language, never one per model.
+    // Its own models only: what it lacks is all its own, or its size is not known here.
+    const ownLack = language.missing_models.every((k) =>
+      language.own_models.includes(k),
+    );
     return {
       kind: "downloading",
       done,
-      total: Math.max(known, language.download_bytes),
+      total:
+        whole || ownLack
+          ? Math.max(known, language.download_bytes)
+          : Math.max(known, ownBytes ?? 0),
     };
   }
-  const failed = language.downloads.find((a) => a.state === "failed");
+  const failed = downloads.find((a) => a.state === "failed");
   if (failed)
     return {
       kind: "failed",
@@ -199,7 +218,7 @@ export function waitWords(
       downloading: null,
     };
   const word = languageWord(wait.label);
-  const state = language ? languageState(language) : null;
+  const state = language ? languageState(language, true) : null;
   if (state?.kind === "downloading")
     return {
       title: `En attente du modèle ${word}`,

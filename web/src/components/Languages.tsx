@@ -59,7 +59,9 @@ export function useLanguages(onError?: (message: string) => void) {
     void reload();
   }, [reload]);
   const downloading =
-    languages?.some((l) => languageState(l).kind === "downloading") ?? false;
+    // Every model, the shared one too: a waiting session follows it here.
+    languages?.some((l) => languageState(l, true).kind === "downloading") ??
+    false;
   useEffect(() => {
     if (!downloading) return;
     const timer = window.setInterval(() => void reload(), 1000);

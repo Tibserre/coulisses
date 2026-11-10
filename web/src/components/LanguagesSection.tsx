@@ -66,9 +66,9 @@ export function LanguagesSection({
         <>
           <div className="cl-langcards">
             {shown.map((l) => {
-              const state = languageState(l);
-              const spaces = l.used_by.spaces;
               const size = languageSize(l, catalog);
+              const state = languageState(l, false, size);
+              const spaces = l.used_by.spaces;
               return (
                 <div key={l.language} className="cl-langcard">
                   <div className="cl-langcard__line">
@@ -94,8 +94,12 @@ export function LanguagesSection({
                         disabled={working}
                         onClick={() =>
                           void act(async () => {
+                            // Its own models only: the shared transcription
+                            // goes on, it is the « Transcription » line's.
                             for (const a of l.downloads.filter(
-                              (d) => d.state === "running",
+                              (d) =>
+                                d.state === "running" &&
+                                l.own_models.includes(d.name),
                             ))
                               await api.cancelModelAction("model", a.name);
                           })
