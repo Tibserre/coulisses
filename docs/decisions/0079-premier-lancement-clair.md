@@ -1,6 +1,6 @@
 # 0079 — Un premier lancement clair : écouter (nécessaire), rédiger (facultatif), « Tout télécharger »
 
-Statut : Proposée (2026-11-10, Interface, d'après la revue UX du premier usage ; points 1 à 3 retenus par l'utilisateur pour la v0.39.0, relayés par Pilotage). Précise 0036, 0049 et 0072. S'appuie sur 0080 du Service (une séance attend tout ce qui manque à la chaîne) et 0078 (rédaction facultative), à fusionner avant cette branche.
+Statut : Proposée (2026-11-10, Interface ; onboarding en étapes demandé par l'utilisateur sur maquettes, le même jour ; d'après la revue UX du premier usage ; points 1 à 3 retenus par l'utilisateur pour la v0.39.0, relayés par Pilotage). Précise 0036, 0049 et 0072. S'appuie sur 0080 du Service (une séance attend tout ce qui manque à la chaîne) et 0078 (rédaction facultative), et sur 0077 de Distribution (autorisation du son de l'ordinateur : `coulissesApp.systemAudio`, message `demander-son-ordinateur`, branche `feat/son-ordinateur-autorisation`), toutes à fusionner avant cette branche.
 
 ## Contexte
 La revue UX d'une installation neuve (dossier de notes de Pilotage, `interface-revue-ux-premier-usage.md`) relève trois blocages pour quelqu'un qui découvre Coulisses :
@@ -11,11 +11,15 @@ La revue UX d'une installation neuve (dossier de notes de Pilotage, `interface-r
 L'utilisateur : « il faut que l'usage de celle ci soit facile et claire », « sans surcharger de texte », et Ollama « doit être facultatif ».
 
 ## Décision
-- **Bienvenue (précise 0049).** Au premier lancement, la fenêtre dit « Avant votre première séance », à la place de « Une action est attendue de votre part » et de sa phrase. Elle affiche deux lignes :
-  - « Écouter vos séances », nécessaire ;
-  - « Rédiger des résumés », facultatif, avec Ollama, et un lien « Comment faire » vers Réglages › Rédaction.
+- **Un onboarding en étapes (précise 0049).** Au premier lancement, la fenêtre de la mise à jour qui attend laisse la place à six étapes, une idée par étape, plus visuelles que textuelles (choisies sur maquettes, « Premier lancement », le 2026-11-10) :
+  1. Bienvenue : deux phrases, « Commencer » ou « Plus tard ».
+  2. « Ce qu'il faut pour écouter » : une tuile par chose à télécharger, dite par ce à quoi elle sert, avec sa taille ; pas de total.
+  3. « Dans quelles langues ? » : une tuile par langue ; le français est inclus ; seul l'ajout de ce qui est coché est compté.
+  4. « Prêt à télécharger » : le seul total, une barre de ce qu'il compte, puis « Télécharger », qui vaut confirmation (P1), ou « Plus tard ».
+  5. « Téléchargement en cours » : une barre par élément ; « Autoriser » le son de l'ordinateur, dans l'app du Dock (0077 de Distribution).
+  6. Les résumés, facultatifs : avec ou sans Ollama, « Installer Ollama » mène à Réglages › Rédaction. Étape omise si Ollama a déjà un modèle.
 
-  Les deux sorties ne changent pas. « Plus tard » rappelle que « Tout télécharger » reste dans Réglages › Transcription.
+  « Plus tard » ou la fermeture : l'onboarding revient au lancement suivant, tant que rien n'est encore sur ce Mac ; ensuite, ce qui manque passe par la fenêtre des mises à jour (0049) et « Tout télécharger ». À l'étape 5, un téléchargement se suit et s'arrête (0049) : « Arrêter » par ligne, « Reprendre » pour une ligne arrêtée ou en échec ; un départ partiel refusé y est suivi, le refus dit. Une taille que le moteur n'annonce pas (outils de calcul) se dit « selon ce Mac », et le total « au moins ».
 - **« Tout télécharger ».** Il prend tout ce qui manque au traitement : les modèles et les outils de calcul que nomme l'état du moteur, plus les modèles de la langue d'une séance qui attend. C'est toujours confirmé, et la taille est dite d'avance (« plus de » quand des outils de calcul s'y ajoutent).
   - Sur une séance qui attend plus que les modèles de sa langue, il s'affiche sous « Coulisses n'est pas encore prêt à écouter cette séance ».
   - En tête de Réglages › Transcription, il s'affiche sous « Coulisses n'est pas encore prêt à écouter vos séances », avec ce qui manque en une ligne.
