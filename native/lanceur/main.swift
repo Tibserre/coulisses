@@ -150,6 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     var askedNotifications = false
     /// What the page reads (`notifications`): "allowed", "denied" or "unknown".
     var notificationStatus = "unknown"
+    /// What the page reads (`systemAudio`, ADR 0077): "allowed", "denied" or "unknown".
+    var systemAudioStatus = "unknown"
     #if COULISSES_SPARKLE
         /// Sparkle (ADR 0040): only in the published app, built with its feed and its key.
         var updates: SPUStandardUpdaterController?
@@ -171,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpNotifications()
+        readSystemAudioStatus()
         watchRecording()
         startUpdates()
         buildMenu()
@@ -234,6 +237,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let log = try FileHandle(forWritingTo: logFile)
         log.seekToEndOfFile()
         log.write("\n===== Coulisses démarre le \(Date()) =====\n".data(using: .utf8)!)
+        if let line = systemAudioCheckUnderNewMacOS() {
+            log.write("\(line)\n".data(using: .utf8)!)
+            markSystemAudioChecked()
+        }
         if !isStandalone, let projectDir, projectDir != installedProject {
             log.write("Projet : \(projectDir)\n".data(using: .utf8)!)
         }
@@ -660,7 +667,9 @@ extension AppDelegate: WKScriptMessageHandler {
 
     func refreshBridge(_ given: WKUserContentController? = nil) {
         guard let content = given ?? web?.configuration.userContentController else { return }
-        var state: [String: Any] = ["notifications": notificationStatus]
+        var state: [String: Any] = [
+            "notifications": notificationStatus, "systemAudio": systemAudioStatus,
+        ]
         if let updates = updatesBridgeState() { state["updates"] = updates }
         let json =
             (try? JSONSerialization.data(withJSONObject: state)).flatMap {
@@ -684,9 +693,81 @@ extension AppDelegate: WKScriptMessageHandler {
         let origin = message.frameInfo.securityOrigin
         guard message.frameInfo.isMainFrame, origin.host == base.host, origin.port == base.port ?? 0,
             let body = message.body as? [String: Any], let action = body["action"] as? String,
-            handleUpdateMessage(action, body)
+            handleSystemAudioMessage(action) || handleUpdateMessage(action, body)
         else { return }
         refreshBridge()
+    }
+}
+
+// -- the computer's sound: its permission (ADR 0077) ---------------------------------------------
+//
+// macOS has no public call to read or ask the permission to tap the computer's sound: only
+// TCC's private ones, loaded at run time and never linked. If a macOS update removes or changes
+// them, the state stays "unknown" (never a refusal assumed), « Autoriser » opens Réglages
+// Système, and the log says so once per macOS version; scripts/verifier-son-ordinateur.swift
+// and the package's test check the same calls.
+
+enum SystemAudioPermission {
+    typealias Preflight = @convention(c) (CFString, CFDictionary?) -> Int32
+    typealias Request =
+        @convention(c) (CFString, CFDictionary?, @escaping @convention(block) (Bool) -> Void) -> Void
+    static let service = "kTCCServiceAudioCapture" as CFString
+    static let tcc = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_NOW)
+    static let preflight = tcc.flatMap { dlsym($0, "TCCAccessPreflight") }.map {
+        unsafeBitCast($0, to: Preflight.self)
+    }
+    static let request = tcc.flatMap { dlsym($0, "TCCAccessRequest") }.map {
+        unsafeBitCast($0, to: Request.self)
+    }
+    static let settings = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+
+    /// "allowed", "denied" or "unknown", and whether TCC answered as expected.
+    static func read() -> (status: String, readable: Bool) {
+        guard let preflight, request != nil else { return ("unknown", false) }
+        switch preflight(service, nil) {
+        case 0: return ("allowed", true)
+        case 1: return ("denied", true)
+        case 2: return ("unknown", true)
+        default: return ("unknown", false)
+        }
+    }
+}
+
+extension AppDelegate {
+    func readSystemAudioStatus() {
+        systemAudioStatus = SystemAudioPermission.read().status
+        refreshBridge()
+    }
+
+    /// The log's line under a macOS not checked yet, written after the launch's header; the
+    /// version is marked checked only once that line is written (markSystemAudioChecked).
+    func systemAudioCheckUnderNewMacOS() -> String? {
+        let macOS = ProcessInfo.processInfo.operatingSystemVersionString
+        guard UserDefaults.standard.string(forKey: "sonOrdinateurVerifieSous") != macOS else { return nil }
+        return SystemAudioPermission.read().readable
+            ? "son de l'ordinateur : sous macOS \(macOS), l'autorisation se lit et se demande comme avant"
+            : "son de l'ordinateur : sous macOS \(macOS), l'autorisation ne se lit plus (appels privés de TCC absents ou changés, ADR 0077) ; la page dira « pas encore demandé » et « Autoriser » ouvrira les Réglages Système"
+    }
+
+    func markSystemAudioChecked() {
+        UserDefaults.standard.set(
+            ProcessInfo.processInfo.operatingSystemVersionString, forKey: "sonOrdinateurVerifieSous")
+    }
+
+    /// « demander-son-ordinateur »: macOS's question while undecided, else Réglages Système
+    /// (macOS never asks again once refused). False for any other message.
+    func handleSystemAudioMessage(_ action: String) -> Bool {
+        guard action == "demander-son-ordinateur" else { return false }
+        let (status, readable) = SystemAudioPermission.read()
+        if status == "unknown", readable, let request = SystemAudioPermission.request {
+            request(SystemAudioPermission.service, nil) { _ in
+                DispatchQueue.main.async { self.readSystemAudioStatus() }
+            }
+        } else if status != "allowed" {
+            NSWorkspace.shared.open(SystemAudioPermission.settings)
+        }
+        return true
     }
 }
 
@@ -732,6 +813,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         readNotificationStatus()  // changed in Réglages Système meanwhile
+        readSystemAudioStatus()
     }
 
     func readNotificationStatus() {
