@@ -205,7 +205,11 @@ export function MissingDialog({
                     className="cl-onb__size"
                     data-unknown={sizeOf(line) === null || undefined}
                   >
-                    {sizeWords(sizeOf(line), gigabytes)}
+                    {sizeWords(
+                      sizeOf(line),
+                      gigabytes,
+                      shown.pieces.find((p) => p.kind === line.key)?.approximate,
+                    )}
                   </span>
                 </div>
               );
@@ -256,7 +260,7 @@ export function MissingDialog({
             <div className="cl-onb__right">
               <Button label="Plus tard" variant="ghost" onClick={onClose} />
               <Button
-                label={`Télécharger · ${total.more ? "plus de " : ""}${gigabytes(total.bytes)}`}
+                label={`Télécharger · ${total.more ? "plus de " : total.approximate ? "environ " : ""}${gigabytes(total.bytes)}`}
                 variant="primary"
                 isLoading={working}
                 isDisabled={!total.download.length && !total.install.length}

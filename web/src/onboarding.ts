@@ -1,6 +1,6 @@
 import type { CatalogModel, Language, ModelAction, ModelsView } from "./api.ts";
 import { FRENCH } from "./languages.ts";
-import { missingEnvironments } from "./models.ts";
+import { environmentBytes, missingEnvironments } from "./models.ts";
 import type { Everything } from "./steps.ts";
 
 /** The first launch, in steps (ADR 0079): what will be downloaded, one tile per thing it is
@@ -15,8 +15,11 @@ export interface Piece {
   models: string[];
   /** The environments it installs (only the calculation tools). */
   environments: string[];
-  /** Their announced size; null when one of them has none (an environment). */
+  /** Their announced size; null when one of them has none (an environment the engine
+   *  does not size). */
   bytes: number | null;
+  /** The size counts an environment's order of magnitude: said « environ ». */
+  approximate?: boolean;
 }
 
 const ORDER: PieceKind[] = ["transcribe", "align", "diarize", "tools"];
@@ -56,11 +59,18 @@ export function basePieces(view: ModelsView): Piece[] {
   // A model of another stage still counts: with the calculation tools, never dropped.
   const placed = new Set(pieces.flatMap((p) => p.models));
   const other = keys.filter((key) => !placed.has(key));
+  const toolSizes = [
+    sizeOf(catalog, other),
+    ...environments.map((name) => environmentBytes(view.readiness, name)),
+  ];
   pieces.push({
     kind: "tools",
     models: other,
     environments,
-    bytes: environments.length ? null : sizeOf(catalog, other),
+    bytes: toolSizes.includes(null)
+      ? null
+      : toolSizes.reduce<number>((sum, size) => sum + (size ?? 0), 0),
+    approximate: environments.length > 0,
   });
   return pieces
     .filter((p) => p.models.length || p.environments.length)
@@ -89,12 +99,15 @@ export function languageChoices(
     });
 }
 
-/** The size said for a piece or a language: « 1,3 Go », or « selon ce Mac » when unknown. */
+/** The size said for a piece or a language: « 1,3 Go », « environ 1,4 Go » for an order of
+ *  magnitude, or « selon ce Mac » when unknown. */
 export function sizeWords(
   bytes: number | null,
   gigabytes: (b: number) => string,
+  approximate = false,
 ): string {
-  return bytes === null ? "selon ce Mac" : gigabytes(bytes);
+  if (bytes === null) return "selon ce Mac";
+  return approximate ? `environ ${gigabytes(bytes)}` : gigabytes(bytes);
 }
 
 /** What « Télécharger » fetches: the pieces, plus the chosen languages' own models. */
@@ -115,6 +128,7 @@ export function onboardingDownload(
     install,
     bytes: sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0),
     more: sizes.includes(null),
+    approximate: pieces.some((p) => p.approximate && p.bytes !== null),
   };
 }
 

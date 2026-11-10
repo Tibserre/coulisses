@@ -5,7 +5,7 @@ import {
   type ModelsView,
   type StageName,
 } from "./api.ts";
-import { gigabytes, missingEnvironments } from "./models.ts";
+import { environmentBytes, gigabytes, missingEnvironments } from "./models.ts";
 
 /** What the engine's state asks of the user on this Mac (ADR 0049; « geste demandé » in the
  *  glossary), grouped in updates the user decides one at a time: what changed, in a
@@ -375,8 +375,10 @@ export interface Everything {
   install: string[];
   /** The models' announced size; the environments' is not known before they install. */
   bytes: number;
-  /** Some environments to install: their size comes on top of `bytes`. */
+  /** Something not sized (an environment an older engine does not size): more than `bytes`. */
   more: boolean;
+  /** `bytes` counts an environment's order of magnitude: said « environ ». */
+  approximate?: boolean;
 }
 
 export function everythingMissing(
@@ -400,12 +402,22 @@ export function everythingMissing(
     .map(([name]) => name)
     .filter((name) => !running.has(`environment:${name}`));
   if (!download.length && !install.length) return null;
-  const sizes = download.map(
-    (key) => view.catalog.models.find((m) => m.key === key)?.announced_bytes ?? null,
-  );
+  const sizes = [
+    ...download.map(
+      (key) => view.catalog.models.find((m) => m.key === key)?.announced_bytes ?? null,
+    ),
+    ...install.map((name) => environmentBytes(view.readiness, name)),
+  ];
   const bytes = sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
-  // An environment, or a model without an announced size: more than the figure said.
-  return { download, install, bytes, more: install.length > 0 || sizes.includes(null) };
+  // Something without an announced size: more than the figure said. An environment the
+  // engine sizes is an order of magnitude: « environ ».
+  return {
+    download,
+    install,
+    bytes,
+    more: sizes.includes(null),
+    approximate: install.length > 0 && !sizes.includes(null),
+  };
 }
 
 /** Whether a waiting session needs more than its language's own download (a new install):

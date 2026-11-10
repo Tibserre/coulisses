@@ -213,6 +213,13 @@ export function missingEnvironments(
   return [...found];
 }
 
+/** An environment's announced size (engine v1.15.0): an order of magnitude, null when the
+ *  engine does not say it. */
+export function environmentBytes(readiness: Readiness, name: string): number | null {
+  const piece = readiness.missing.find((p) => p.environment === name);
+  return piece?.announced_bytes ?? null;
+}
+
 /** A step whose models are all there and sound: said in one line, outside developer mode. */
 export interface StepLine {
   purpose: string;

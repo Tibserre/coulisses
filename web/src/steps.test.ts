@@ -296,6 +296,21 @@ test("what already downloads is not asked again; nothing left, nothing offered",
   assert.equal(everythingMissing(view({})), null);
 });
 
+test("engine v1.15.0 sizes an environment: « environ », not « plus de »", () => {
+  const sized = view(
+    {},
+    [
+      lacking({ model: "voix", stage: "diarize" }),
+      lacking({ code: "environment_missing", stage: "diarize", environment: "diarizen", announced_bytes: 900_000_000 }),
+    ],
+    [model("voix", { announced_bytes: 30_000_000 })],
+  );
+  const all = everythingMissing(sized);
+  assert.equal(all?.bytes, 930_000_000);
+  assert.equal(all?.more, false);
+  assert.equal(all?.approximate, true);
+});
+
 test("a model without an announced size: « plus de », never a figure too low", () => {
   const unsized = view({}, [lacking({ model: "x" })], [model("x", { announced_bytes: null as unknown as number })]);
   assert.equal(everythingMissing(unsized)?.more, true);

@@ -103,6 +103,22 @@ test("one tile per thing it is for, in the order of the processing; an environme
   assert.equal(sizeWords(null, () => "x"), "selon ce Mac");
 });
 
+test("engine v1.15.0 sizes an environment: the tools say « environ », the total too", () => {
+  const sized = fresh([
+    lacking({ model: "asr" }),
+    lacking({ code: "environment_missing", stage: "diarize", environment: "diarizen", announced_bytes: 900_000_000 }),
+  ]);
+  const pieces = basePieces(sized);
+  const tools = pieces.find((p) => p.kind === "tools")!;
+  assert.equal(tools.bytes, 900_000_000);
+  assert.equal(tools.approximate, true);
+  assert.equal(sizeWords(tools.bytes, () => "0,9 Go", tools.approximate), "environ 0,9 Go");
+  const all = onboardingDownload(pieces, []);
+  assert.equal(all.bytes, 3_370_000_000);
+  assert.equal(all.more, false);
+  assert.equal(all.approximate, true);
+});
+
 test("a language adds only its own models; French is not offered, it is included", () => {
   const choices = languageChoices([french, english], CATALOG);
   assert.deepEqual(choices.map((c) => [c.language.language, c.models, c.bytes]), [["en", ["align-en"], 1_260_000_000]]);

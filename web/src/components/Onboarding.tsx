@@ -251,7 +251,7 @@ export function Onboarding({
                   className="cl-onb__size"
                   data-unknown={p.bytes === null || undefined}
                 >
-                  {sizeWords(p.bytes, gigabytes)}
+                  {sizeWords(p.bytes, gigabytes, p.approximate)}
                 </span>
               </div>
             );
@@ -365,6 +365,7 @@ export function Onboarding({
           key: "transcribe",
           label: LABELS.transcribe,
           bytes: p.bytes,
+          approximate: false,
         })),
       ...(languageNames.length
         ? [
@@ -372,12 +373,18 @@ export function Onboarding({
               key: "align",
               label: capital(languageNames.join(", ")),
               bytes: languageBytes,
+              approximate: false,
             },
           ]
         : []),
       ...pieces
         .filter((p) => p.kind === "diarize" || p.kind === "tools")
-        .map((p) => ({ key: p.kind, label: LABELS[p.kind], bytes: p.bytes })),
+        .map((p) => ({
+          key: p.kind,
+          label: LABELS[p.kind],
+          bytes: p.bytes,
+          approximate: p.approximate ?? false,
+        })),
     ];
     const known = segments.reduce((s, g) => s + (g.bytes ?? 0), 0);
     body = (
@@ -386,7 +393,11 @@ export function Onboarding({
         <div className="cl-onb__total">
           <span className="cl-onb__big">{gigabytes(total.bytes)}</span>
           <span className="cl-onb__text">
-            {total.more ? "au moins, une seule fois" : "une seule fois"}
+            {total.more
+              ? "au moins, une seule fois"
+              : total.approximate
+                ? "environ, une seule fois"
+                : "une seule fois"}
           </span>
         </div>
         <div
@@ -409,7 +420,9 @@ export function Onboarding({
             <li key={g.key}>
               <i data-part={g.key} />
               {g.label}
-              <em>{sizeWords(g.bytes, gigabytes)}</em>
+              <em>
+                {sizeWords(g.bytes, gigabytes, g.approximate)}
+              </em>
             </li>
           ))}
         </ul>
