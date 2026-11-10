@@ -514,7 +514,7 @@ export function Onboarding({
       width={560}
       aria-label="Premier lancement de Coulisses"
     >
-      <div className="cl-onb">
+      <div className="cl-onb cl-onb--steps">
         {dots}
         {body}
       </div>

@@ -5696,6 +5696,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-onb__tile {
+  min-height: 168px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: var(--spacing-4);
@@ -6179,4 +6180,17 @@ button.cl-tree__more:hover {
   color: var(--color-text-secondary);
   border-top: 1px solid var(--color-border);
   padding-top: var(--spacing-3);
+}
+
+/* A window keeps its size from its first step to its last (the user's rule): the
+   onboarding as tall as its tallest step, its buttons at the bottom. */
+.cl-onb--steps {
+  /* On a short window, it scrolls rather than cutting its buttons off. */
+  min-height: min(580px, calc(75dvh - 2 * var(--spacing-6)));
+  max-height: calc(75dvh - 2 * var(--spacing-6));
+  overflow-y: auto;
+}
+
+.cl-onb--steps > .cl-onb__actions {
+  margin-top: auto;
 }

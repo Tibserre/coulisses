@@ -182,7 +182,7 @@ export function MissingDialog({
       width={560}
       aria-label={plan ? "Téléchargement en cours" : "Ce qui manque"}
     >
-      <div className="cl-onb">
+      <div className="cl-onb cl-onb--steps">
         <h2 className="cl-onb__title">
           {plan ? "Téléchargement en cours" : "Ce qui manque"}
         </h2>
