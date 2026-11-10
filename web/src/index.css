@@ -6218,7 +6218,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-welcome__line span[aria-hidden] {
-  animation: cl-welcome-lit 0.4s ease-out both;
+  animation: cl-welcome-lit 0.5s linear both;
 }
 
 @keyframes cl-welcome-lit {
@@ -6227,27 +6227,47 @@ button.cl-tree__more:hover {
 }
 
 .cl-welcome__wave {
+  position: relative;
+  width: max-content;
+}
+
+.cl-welcome__bars {
   height: 28px;
   display: flex;
   align-items: center;
   gap: 3px;
 }
 
-.cl-welcome__wave b {
+.cl-welcome__bars b {
   display: block;
   width: 3px;
   border-radius: 2px;
-  animation: cl-welcome-fill 0.4s ease-out both;
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-border));
 }
 
-@keyframes cl-welcome-fill {
-  from { background: color-mix(in srgb, var(--color-accent) 18%, var(--color-border)); }
-  to { background: var(--color-accent); }
+.cl-welcome__bars--read {
+  position: absolute;
+  inset: 0;
+  animation-name: cl-welcome-read;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+.cl-welcome__bars--read b {
+  background: var(--color-accent);
+}
+
+@keyframes cl-welcome-read {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cl-welcome__line span[aria-hidden],
-  .cl-welcome__wave b { animation-duration: 0s; animation-delay: 0s !important; }
+  .cl-welcome__bars--read {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 }
 
 /* Download progress round a piece's icon (ADR 0079): nothing in the tile moves as it grows. */

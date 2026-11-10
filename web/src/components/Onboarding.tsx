@@ -36,8 +36,9 @@ const WAVE = [
   8, 14, 20, 12, 24, 18, 10, 22, 28, 16, 12, 20, 26, 14, 8, 18, 24, 12, 20, 16,
   10, 22, 14, 8, 18, 26, 20, 12, 16, 10, 20, 24, 14, 8, 16, 12, 6,
 ];
-/** The sound fills with colour over the time the sentence takes to light. */
+/** The sound is read over the time the sentence takes to light. */
 const WAVE_SWEEP = WELCOME_WORDS.length * WORD_STEP;
+const WAVE_BARS = WAVE.map((h, i) => <b key={i} style={{ height: h }} />);
 
 const capital = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
@@ -182,16 +183,19 @@ export function Onboarding({
               </span>
             ))}
           </p>
+          {/* The sound is read from left to right: an orange copy over the gray one,
+              uncovered at the pace the sentence lights. */}
           <div className="cl-welcome__wave" aria-hidden>
-            {WAVE.map((h, i) => (
-              <b
-                key={i}
-                style={{
-                  height: h,
-                  animationDelay: `${(WORD_START + (i * WAVE_SWEEP) / WAVE.length).toFixed(2)}s`,
-                }}
-              />
-            ))}
+            <div className="cl-welcome__bars">{WAVE_BARS}</div>
+            <div
+              className="cl-welcome__bars cl-welcome__bars--read"
+              style={{
+                animationDuration: `${WAVE_SWEEP.toFixed(2)}s`,
+                animationDelay: `${WORD_START}s`,
+              }}
+            >
+              {WAVE_BARS}
+            </div>
           </div>
         </div>
         <p className="cl-onb__text">
