@@ -12,11 +12,13 @@ import sqlite3
 from pathlib import Path
 
 from coulisses.api import LanguageSupport, Provenance
+from coulisses.api import catalog as engine_catalog
 from coulisses.api import languages as engine_languages
+from coulisses.api import readiness as engine_readiness
 from pydantic import BaseModel
 
 from coulisses_app.jobs import DEFAULT_LANGUAGE as DEFAULT
-from coulisses_app.jobs import WaitsFor
+from coulisses_app.jobs import MissingEnvironment, WaitsFor
 from coulisses_app.spaces import ConflictError, SpaceError
 
 FIRST_ENGINE_WITH_LANGUAGE = (1, 14, 0)
@@ -50,22 +52,46 @@ def check(profile: str, code: str, root: Path | None = None) -> LanguageSupport:
 
 
 def waits_for(profile: str, code: str, root: Path | None = None) -> WaitsFor | None:
-    """What a processing in this language must wait for: a model missing from this Mac, or
-    the language itself, no longer handled by the engine. None: it may start. Nothing is
+    """What a processing in this language must wait for: anything the chain lacks on this
+    Mac (the models of every stage, not only its language's, and the environments), or the
+    language itself, no longer handled by the engine. None: it may start. Nothing is
     downloaded here (P1)."""
-    for support in supported(profile, root):
-        if support.language != code or not handled(support):
-            continue
-        if not support.missing_models:
-            return None
-        return WaitsFor(
-            reason="model_missing",
-            language=code,
-            label=support.label,
-            missing_models=list(support.missing_models),
-            download_bytes=support.download_bytes,
-        )
-    return WaitsFor(reason="language_unsupported", language=code)
+    support = next(
+        (s for s in supported(profile, root) if s.language == code and handled(s)), None
+    )
+    if support is None:
+        return WaitsFor(reason="language_unsupported", language=code)
+    found = engine_readiness(profile, root=root, language=code)
+    if any(p.code.value == "language_unsupported" for p in found.missing):
+        return WaitsFor(reason="language_unsupported", language=code)
+    altered = {
+        p.model
+        for p in found.missing
+        if p.model is not None and p.code.value == "model_altered"
+    }
+    models = set(support.missing_models) - altered
+    models.update(
+        p.model for p in found.missing if p.model is not None and p.model not in altered
+    )
+    environments: dict[str, MissingEnvironment] = {}
+    for piece in found.missing:
+        if piece.environment is not None and piece.environment not in environments:
+            environments[piece.environment] = MissingEnvironment(
+                name=piece.environment, label=piece.label
+            )
+    if not models and not environments and not altered:
+        return None
+    # The catalog's announced sizes: a key it lacks is an error said, never a 0 (P8).
+    announced = {m.key: m.announced_bytes for m in engine_catalog().models} if models else {}
+    return WaitsFor(
+        reason="model_missing",
+        language=code,
+        label=support.label,
+        missing_models=sorted(models),
+        missing_environments=list(environments.values()),
+        altered_models=sorted(altered),
+        download_bytes=sum(announced[m] for m in models),
+    )
 
 
 def of_transcription(prov: Provenance) -> str | None:

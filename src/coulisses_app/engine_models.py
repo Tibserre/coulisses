@@ -212,6 +212,22 @@ class EngineModels:
         thread.start()
         return task.model_copy()
 
+    def start_all(self, models: list[str], environments: list[str]) -> list[ModelAction]:
+        """Everything the chain lacks, asked at once by the user (« Tout télécharger »): each
+        model downloaded and each environment installed in the background, as `start` does.
+        One already running is left running and returned as it is."""
+        started: list[ModelAction] = []
+        asked: list[tuple[Kind, list[str]]] = [("model", models), ("environment", environments)]
+        for kind, names in asked:
+            for name in names:
+                try:
+                    started.append(self.start(kind, name))
+                except ModelsError:
+                    # Already running (asked twice, or a click elsewhere): left as it is.
+                    with self._lock:
+                        started.append(self._tasks[(kind, name)].model_copy())
+        return started
+
     def _run(self, key: tuple[Kind, str], cancel: threading.Event) -> None:
         kind, name = key
 

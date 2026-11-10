@@ -23,15 +23,31 @@ DEFAULT_LANGUAGE = "fr"
 engine (`languages`)."""
 
 
+class MissingEnvironment(BaseModel):
+    """An environment of the engine a stage of the chain runs in, not installed."""
+
+    name: str
+    label: str | None = None
+    """What it is for, in French, as the engine says it."""
+
+
 class WaitsFor(BaseModel):
     """What a processing in the queue waits for before it may start."""
 
     reason: Literal["model_missing", "language_unsupported"]
+    """`model_missing`: something the chain needs is not on this Mac, a model of any of
+    its stages (not only its language's) or an environment."""
     language: str
     label: str | None = None
     """None for a language the engine no longer handles."""
     missing_models: list[str] = []
+    """Every model the chain lacks for this language, its language's and the others."""
+    missing_environments: list[MissingEnvironment] = []
+    altered_models: list[str] = []
+    """Models on this Mac but damaged (files missing or changed): never downloaded over,
+    removed first by the user (Réglages, Transcription), then downloaded again."""
     download_bytes: int = 0
+    """Announced size of `missing_models`; an environment's is never known beforehand."""
 
 
 Rerun = Literal["transcribe", "diarize", "all"]

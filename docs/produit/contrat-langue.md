@@ -35,7 +35,11 @@ Les langues que la chaîne transcrit, le français d'abord, puis les autres dans
 - `downloads` : les téléchargements de ses modèles, en cours ou juste finis, sous la forme de `GET /api/moteur/telechargements` (`ModelAction`, champs complets).
 - `used_by` : les espaces qui ont cette langue par défaut (archivés compris) et les séances dont le traitement attend dans cette langue. Tant que l'un des deux n'est pas vide, la suppression de ses `own_models` est refusée.
 
-**Télécharger une langue** : `POST /api/moteur/modeles/{cle}/telecharger` pour chaque modèle de `missing_models`, la route qui existe (ADR 0036), avec son avancement, son arrêt et sa reprise. Aucune route ne télécharge plusieurs modèles d'un coup.
+**Télécharger une langue** : `POST /api/moteur/modeles/{cle}/telecharger` pour chaque modèle de `missing_models`, la route qui existe (ADR 0036), avec son avancement, son arrêt et sa reprise.
+
+**Tout ce qui manque à la chaîne** (ADR 0080) : les `missing_models` d'une langue ne sont que les siens. Pour traiter une séance, la chaîne a aussi besoin des modèles de « Qui parle quand » et des outils de calcul.
+- `GET /api/moteur/manquants?langue=fr` (le français par défaut) : `null` si rien ne manque, sinon la forme de `processing_waits_for` (voir plus bas), avec tout ce qui manque. 422 pour une langue que la chaîne ne prend pas.
+- `POST /api/moteur/manquants/telecharger`, corps `{"langue": "fr"}` (facultatif) : « Tout télécharger ». Lance le téléchargement de chaque modèle et l'installation de chaque environnement qui manquent. Réponse **202** : la liste des tâches (`ModelAction`), dans l'ordre (modèles, puis environnements), une tâche déjà en cours rendue telle quelle ; `[]` si rien ne manque, ou s'il ne reste que des modèles abîmés (`altered_models`), que cette route ne relance pas. Chacune se suit, s'arrête et se reprend comme d'habitude (`GET /api/moteur/telechargements`, `POST /api/moteur/{modeles|environnements}/{nom}/annuler`).
 
 **Supprimer une langue** : `DELETE /api/moteur/modeles/{cle}` pour chaque modèle de `own_models`. Si la langue sert encore, la réponse est **409**, avec un `detail` en français qui dit où, par exemple : « L'anglais sert encore : c'est la langue de l'espace « Réunions », et une séance attend ce modèle (« Répétition du 29 octobre »). Changez-les d'abord. » Rien n'est supprimé.
 
@@ -64,14 +68,16 @@ Un modèle qui manque ne fait jamais échouer une demande : la langue est enregi
   "language": "en",
   "label": "Anglais",
   "missing_models": ["wav2vec2-ctc-english"],
+  "missing_environments": [],
+  "altered_models": [],
   "download_bytes": 1260000000
 }
 ```
 
-  - `reason` : `model_missing`, un modèle de cette langue n'est pas sur ce Mac ; ou `language_unsupported`, le moteur ne prend plus cette langue (`label` à `null`, `missing_models` vide, `download_bytes` à 0). Dans ce cas, seule une autre langue débloque la séance.
+  - `reason` : `model_missing`, quelque chose manque à la chaîne sur ce Mac pour cette langue (ADR 0080) : `missing_models` a tous les modèles qui manquent, ceux de la langue et ceux des autres étapes, `missing_environments` les outils de calcul (`name`, `label` en français), `download_bytes` la taille annoncée des modèles (celle d'un environnement n'est pas connue d'avance : seul un environnement manque, elle vaut 0), `altered_models` les modèles abîmés, jamais téléchargés par-dessus ni comptés : à supprimer d'abord (Réglages, onglet Transcription). « Télécharger » passe par `POST /api/moteur/manquants/telecharger` avec la langue de la séance ; ou `language_unsupported`, le moteur ne prend plus cette langue (`label` à `null`, `missing_models` vide, `download_bytes` à 0). Dans ce cas, seule une autre langue débloque la séance.
   - L'avancement d'un téléchargement se lit dans `GET /api/langues` (`downloads`) ou `GET /api/moteur/telechargements`.
   - `job_state` reste `queued` : la séance n'est ni en échec ni en cours. Les autres séances passent devant elle.
-  - Elle repart d'elle-même quand le dernier modèle manquant est installé (fin d'un téléchargement, ou au démarrage de l'app), ou quand sa langue change pour une langue installée.
+  - Elle repart d'elle-même quand la dernière pièce manquante est installée (fin d'un téléchargement, ou au démarrage de l'app), ou quand sa langue change pour une langue installée.
 
 ### Choisir la langue d'une séance : `PUT /api/seances/{id}/langue`
 
