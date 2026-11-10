@@ -6382,3 +6382,11 @@ button.cl-tree__more:hover {
   min-width: 72px;
   text-align: right;
 }
+
+/* The models' credits (ADR 0081 of the engine): small, under what they credit. */
+.cl-credits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  max-width: 64ch;
+}

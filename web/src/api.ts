@@ -131,6 +131,11 @@ export interface CatalogModel {
   licence: string;
   /** Its terms must be accepted on this page before downloading. */
   terms_url: string | null;
+  /** Shipped inside the application, installed without the network (engine v1.15.0,
+   *  ADR 0081 of the engine). Absent from an older engine. */
+  bundled?: boolean;
+  /** The credit its licence requires, in French (engine v1.15.0): shown in the app. */
+  attribution?: string | null;
   engine: string | null;
   /** The engine's profiles that need it (the retained chain: « chaine-retenue »)… */
   required_by: string[];

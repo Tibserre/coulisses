@@ -26,6 +26,7 @@ import { useAppNotifications } from "../appBridge.ts";
 import { setDevMode, useDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
 import { LOG_KIND, formatDay } from "../retention.ts";
+import { CreditsSection } from "../components/ModelCredits.tsx";
 import { buildShown, PARTS, partOf, type Part } from "../settingsParts.ts";
 
 /** Lists that only grow (the deletion log, the backups): the latest first, the rest on
@@ -387,6 +388,7 @@ export function SettingsPage({
               )}
             </section>
 
+
             {dev && (
               <section className="cl-settings__section">
                 <Heading level={3}>Copies de la base</Heading>
@@ -429,6 +431,7 @@ export function SettingsPage({
                 )}
               </section>
             )}
+            <CreditsSection />
           </>
         )}
       </main>
