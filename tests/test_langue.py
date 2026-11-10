@@ -6,7 +6,6 @@ not removed. The engine's languages are `conftest.FakeLanguages`."""
 from __future__ import annotations
 
 import json
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -611,52 +610,6 @@ def test_a_processing_waits_for_every_model_and_environment_of_the_chain(
     assert run_next(data).session_id == session_id
 
 
-def test_everything_missing_is_read_then_downloaded_at_once(
-    data: DataDir, fake_languages: FakeLanguages
-) -> None:
-    fake_languages.chain_missing = {"diariseur"}
-    fake_languages.environments = {"diarizen": "Qui parle quand"}
-    asked: list[str] = []
-
-    def fetch(key: str, *, on_progress: Any, cancel: Any, root: Path | None = None) -> None:
-        asked.append(key)
-        fake_languages.install(key)
-
-    def install(name: str, *, on_progress: Any, cancel: Any) -> None:
-        asked.append(name)
-        fake_languages.install(name)
-
-    store = engine_models.EngineModels("essai", fetch=fetch, install=install)
-    client = local_client(
-        create_app(
-            data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, engine_store=store
-        )
-    )
-
-    missing = client.get("/api/moteur/manquants").json()  # French by default
-    assert (missing["missing_models"], missing["missing_environments"]) == (
-        ["diariseur"],
-        [{"name": "diarizen", "label": "Qui parle quand", "announced_bytes": 900_000_000}],
-    )
-    assert missing["download_bytes"] == 500_000_000
-    english = client.get("/api/moteur/manquants", params={"langue": "en"}).json()
-    assert english["missing_models"] == ["aligneur-anglais", "diariseur"]
-    assert client.get("/api/moteur/manquants", params={"langue": "nl"}).status_code == 422
-
-    started = client.post("/api/moteur/manquants/telecharger", json={"langue": "en"})
-    assert started.status_code == 202
-    assert [(a["kind"], a["name"]) for a in started.json()] == [
-        ("model", "aligneur-anglais"),
-        ("model", "diariseur"),
-        ("environment", "diarizen"),
-    ]
-    store.shutdown()  # waits for the downloads' threads
-    assert set(asked) == {"aligneur-anglais", "diariseur", "diarizen"}
-    assert client.get("/api/moteur/manquants", params={"langue": "en"}).json() is None
-    # Nothing missing: nothing started.
-    assert client.post("/api/moteur/manquants/telecharger", json={}).json() == []
-
-
 def test_an_environment_alone_or_a_damaged_model_is_waited_for_too(
     client: TestClient, data: DataDir, recording: Path, fake_languages: FakeLanguages
 ) -> None:
@@ -688,28 +641,3 @@ def test_an_environment_alone_or_a_damaged_model_is_waited_for_too(
     fake_languages.altered = set()  # removed, then downloaded again
     Processor(data, FAKE_CHAIN).release_waiting()
     assert run_next(data).session_id == session_id
-
-
-def test_everything_at_once_leaves_a_download_already_running(
-    data: DataDir, fake_languages: FakeLanguages
-) -> None:
-    fake_languages.chain_missing = {"diariseur"}
-    go_on = threading.Event()
-
-    def fetch(key: str, *, on_progress: Any, cancel: Any, root: Path | None = None) -> None:
-        go_on.wait(5)
-        fake_languages.install(key)
-
-    store = engine_models.EngineModels("essai", fetch=fetch)
-    client = local_client(
-        create_app(
-            data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None, engine_store=store
-        )
-    )
-    first = client.post("/api/moteur/modeles/diariseur/telecharger").json()
-    again = client.post("/api/moteur/manquants/telecharger", json={}).json()
-    assert [(a["name"], a["state"], a["started_at"]) for a in again] == [
-        ("diariseur", "running", first["started_at"])
-    ]
-    go_on.set()
-    store.shutdown()

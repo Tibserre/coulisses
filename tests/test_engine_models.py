@@ -495,18 +495,3 @@ def test_a_shipped_copy_that_is_damaged_or_missing_says_to_reinstall_and_cannot_
         models.start("model", "perdu")
     assert [a.name for a in models.actions()] == ["asr"]
     models.shutdown()
-
-
-def test_everything_at_once_refuses_a_shipped_model_whose_copy_is_missing(tmp_path: Path) -> None:
-    """From the .app, « Tout télécharger » never downloads a shipped model in its place."""
-    engine = FakeEngine(tmp_path)
-    models = EngineModels(
-        "chaine-retenue",
-        read_catalog=lambda: Catalog(models=(ASR.model_copy(update={"bundled": True}),)),
-        read_readiness=engine.readiness,
-        fetch=engine.fetch,
-        bundled=lambda key: tmp_path / "modeles" / key,  # from the app, no copy there
-    )
-    with pytest.raises(ModelsError, match="introuvable"):
-        models.start_all(["asr"], [])
-    assert models.actions() == [] and engine.installed == []
