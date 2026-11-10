@@ -13,7 +13,7 @@ import functools
 import logging
 import os
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
@@ -24,6 +24,10 @@ RESOURCES_ENV = "COULISSES_RESSOURCES"
 REPOSITORY = Path(__file__).resolve().parents[2]
 BUILD_ID_FILE = "identifiant-de-version"
 """Written by the build (`scripts/construire.py`): which code the .app holds (ADR 0064)."""
+
+BUNDLED_MODELS = "modeles"
+"""In the .app's Resources: one folder per model shipped with the application (engine ADR
+0081), named by its catalog key, its files as the catalog lists them."""
 
 SYSTEM_AUDIO_PROGRAM = "coulisses-son-ordinateur"
 # Found by name on the PATH, by the service and by the engine (its README's prerequisites).
@@ -60,13 +64,19 @@ class Resources:
     def tools_dir(self) -> Path | None:
         return self.root / "bin" if self.root else None
 
+    def bundled_model(self, key: str) -> Path | None:
+        """The copy of a model shipped with the .app (engine ADR 0081); None from the
+        repository, where it is downloaded as before."""
+        return self.root / BUNDLED_MODELS / key if self.root else None
+
     @property
     def system_audio_program(self) -> Path | None:
         """Built with the .app; None from the repository, where it is built when needed."""
         return self.tools_dir / SYSTEM_AUDIO_PROGRAM if self.tools_dir else None
 
-    def check(self) -> None:
-        """Raises `IncompleteAppError` if the .app lacks one of its parts."""
+    def check(self, bundled: Iterable[str] = ()) -> None:
+        """Raises `IncompleteAppError` if the .app lacks one of its parts. `bundled`: the
+        keys of the models the engine's catalog says are shipped with the application."""
         if self.root is None or self.tools_dir is None:
             return
         missing = [] if (self.web_dir / "index.html").is_file() else ["l'interface"]
@@ -77,6 +87,11 @@ class Resources:
             for tool in TOOLS
             if not (self.tools_dir / tool).is_file()
             or not os.access(self.tools_dir / tool, os.X_OK)
+        ]
+        missing += [
+            f"le modèle {key}"
+            for key in bundled
+            if not (folder := self.bundled_model(key)) or not folder.is_dir()
         ]
         if missing:
             raise IncompleteAppError(

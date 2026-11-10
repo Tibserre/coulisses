@@ -25,6 +25,7 @@ from coulisses.api import (
     Readiness,
     catalog,
     download,
+    install_bundled,
     install_environment,
     installed,
     readiness,
@@ -34,6 +35,7 @@ from coulisses.api import (
 )
 from pydantic import BaseModel
 
+from coulisses_app.bundle import Resources
 from coulisses_app.spaces import SpaceError
 
 log = logging.getLogger(__name__)
@@ -64,6 +66,9 @@ class ModelAction(BaseModel):
     """For `terms_required`: the page where its terms are accepted."""
     started_at: datetime
     finished_at: datetime | None = None
+    from_app: bool = False
+    """Installed from its copy shipped with the application, without the network (engine
+    ADR 0081), not downloaded."""
 
 
 class ModelsView(BaseModel):
@@ -149,7 +154,11 @@ class EngineModels:
         discard: Callable[..., None] = remove,
         discard_environment: Callable[[str | Path], None] = remove_environment,
         stop_all: Callable[[], None] = stop_downloads,
+        bundled: Callable[[str], Path | None] | None = None,
+        install_from_app: Callable[..., Any] = install_bundled,
     ) -> None:
+        """`bundled(key)`: the folder of a model's copy shipped with the application, or
+        None (`Resources.bundled_model` by default)."""
         self.profile = profile
         self._root = root
         self._catalog = read_catalog
@@ -160,6 +169,8 @@ class EngineModels:
         self._discard = discard
         self._discard_environment = discard_environment
         self._stop_all = stop_all
+        self._bundled = bundled or Resources.from_env().bundled_model
+        self._install_from_app = install_from_app
         self._lock = threading.Lock()
         self._tasks: dict[tuple[Kind, str], ModelAction] = {}
         self._cancels: dict[tuple[Kind, str], threading.Event] = {}
@@ -194,18 +205,26 @@ class EngineModels:
 
     def start(self, kind: Kind, name: str) -> ModelAction:
         """A download (a model of the catalog) or an install (an environment), in the
-        background. Asked by the user only."""
+        background. Asked by the user only. A model shipped with the application is installed
+        from its copy there instead, without the network (engine ADR 0081)."""
         key = (kind, name)
+        source = self._shipped_copy(name) if kind == "model" else None
         with self._lock:
             running = self._tasks.get(key)
             if running is not None and running.state == "running":
                 raise ModelsError("C'est déjà en cours.")
-            task = ModelAction(kind=kind, name=name, state="running", started_at=datetime.now(UTC))
+            task = ModelAction(
+                kind=kind,
+                name=name,
+                state="running",
+                started_at=datetime.now(UTC),
+                from_app=source is not None,
+            )
             cancel = threading.Event()
             self._tasks[key] = task
             self._cancels[key] = cancel
         thread = threading.Thread(
-            target=self._run, args=(key, cancel), name=f"{kind}-{name}", daemon=True
+            target=self._run, args=(key, cancel, source), name=f"{kind}-{name}", daemon=True
         )
         with self._lock:
             self._threads = [t for t in self._threads if t.is_alive()] + [thread]
@@ -224,11 +243,50 @@ class EngineModels:
                     started.append(self.start(kind, name))
                 except ModelsError:
                     # Already running (asked twice, or a click elsewhere): left as it is.
+                    # Any other refusal (a shipped copy missing) is said as it is.
                     with self._lock:
-                        started.append(self._tasks[(kind, name)].model_copy())
+                        running = self._tasks.get((kind, name))
+                        if running is None or running.state != "running":
+                            raise
+                        started.append(running.model_copy())
         return started
 
-    def _run(self, key: tuple[Kind, str], cancel: threading.Event) -> None:
+    def _shipped_copy(self, name: str) -> Path | None:
+        """The copy of a model shipped with the application, to install from; None: it is
+        downloaded (not shipped, or from the repository). From the .app, a shipped model
+        whose copy is missing is refused, said: never a download in its place (P1, P8)."""
+        source = self._bundled(name)
+        if source is None:
+            return None  # from the repository: downloaded as before
+        if source.is_dir():
+            return source
+        if any(m.key == name and m.bundled for m in self._catalog().models):
+            raise ModelsError(
+                "La copie de ce modèle livrée avec Coulisses est introuvable : réinstallez "
+                "Coulisses depuis le DMG."
+            )
+        return None
+
+    def install_shipped(self) -> list[ModelAction]:
+        """Each model shipped with the application (engine ADR 0081) that the chain lacks,
+        installed from its copy there, without the network: at start, before anything says
+        it is missing. Each is a task like any other, its failure said (`integrity`…).
+        From the repository, with no copy: nothing, the model is downloaded as before."""
+        shipped = {m.key for m in self._catalog().models if m.bundled}
+        lacking = sorted({p.model for p in self.ready().missing if p.model is not None} & shipped)
+        started: list[ModelAction] = []
+        for key in lacking:
+            if self._bundled(key) is None:
+                continue  # from the repository: downloaded when asked
+            with self._lock:
+                running = self._tasks.get(("model", key))
+                if running is not None and running.state == "running":
+                    continue
+            started.append(self.start("model", key))
+        return started
+
+    def _run(self, key: tuple[Kind, str], cancel: threading.Event, source: Path | None) -> None:
+        """`source`: the copy shipped with the application to install from, else None."""
         kind, name = key
 
         def progress(step: DownloadProgress) -> None:
@@ -238,7 +296,10 @@ class EngineModels:
                 task.total_bytes = step.total_bytes
 
         try:
-            if kind == "model":
+            if source is not None:
+                # Shipped with the application: copied and checked, never downloaded.
+                self._install_from_app(name, source, root=self._root)
+            elif kind == "model":
                 self._fetch(name, on_progress=progress, cancel=cancel, root=self._root)
             else:
                 self._install(name, on_progress=progress, cancel=cancel)
@@ -248,7 +309,12 @@ class EngineModels:
             self._finish(
                 key,
                 "cancelled" if exc.code == ModelActionCode.CANCELLED else "failed",
-                error=said(exc),
+                error=(
+                    "La copie de ce modèle livrée avec Coulisses est incomplète ou abîmée : "
+                    "réinstallez Coulisses depuis le DMG."
+                )
+                if source is not None and exc.code == ModelActionCode.INTEGRITY
+                else said(exc),
                 code=exc.code.value,
                 detail=str(exc),
                 terms_url=details.get("url") if isinstance(details.get("url"), str) else None,
@@ -285,6 +351,12 @@ class EngineModels:
             task = self._tasks.get((kind, name))
             if task is None or task.state != "running":
                 raise ModelsError("Rien n'est en cours pour celui-ci.")
+            if task.from_app:
+                # The engine's install from the app takes no stop: refused, not ignored.
+                raise ModelsError(
+                    "L'installation depuis Coulisses ne s'arrête pas : elle prend quelques "
+                    "secondes."
+                )
             self._cancels[(kind, name)].set()
 
     def remove(self, name: str) -> None:

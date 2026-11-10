@@ -369,3 +369,129 @@ def test_an_environments_errors_name_an_environment(code: ModelActionCode, said:
     from coulisses_app.engine_models import said as say
 
     assert said in say(ModelActionError(code, "english", environment="diarizen"))
+
+
+def test_a_model_shipped_with_the_app_is_installed_from_it_never_downloaded(
+    tmp_path: Path,
+) -> None:
+    """Engine ADR 0081: pyannote comes with the application, no account, no network."""
+    engine = FakeEngine(tmp_path)
+    shipped = tmp_path / "Resources" / "modeles" / "asr"
+    shipped.mkdir(parents=True)
+    copied: list[tuple[str, Path]] = []
+
+    def install_from_app(key: str, source: Path, root: Path | None = None) -> None:
+        copied.append((key, source))
+        engine.installed.append(key)
+
+    models = EngineModels(
+        "chaine-retenue",
+        read_catalog=engine.catalog,
+        read_installed=engine.inventory,
+        read_readiness=engine.readiness,
+        fetch=engine.fetch,
+        install=engine.fetch,
+        discard=engine.remove,
+        stop_all=engine.stop_all,
+        bundled=lambda key: tmp_path / "Resources" / "modeles" / key,
+        install_from_app=install_from_app,
+    )
+    started = models.start("model", "asr")
+    assert started.from_app
+    settle(models, "done")
+    assert copied == [("asr", shipped)]
+    assert models.view().readiness.ready
+    # Another model, with no copy in the app: downloaded as before.
+    assert not models.start("model", "autre").from_app
+    engine.go_on.set()
+    settle(models, "done")
+    models.shutdown()
+
+
+def test_at_start_a_shipped_model_the_chain_lacks_is_installed_from_the_app(
+    tmp_path: Path,
+) -> None:
+    engine = FakeEngine(tmp_path)
+    shipped = tmp_path / "modeles"
+    (shipped / "asr").mkdir(parents=True)
+    copied: list[str] = []
+
+    def install_from_app(key: str, source: Path, root: Path | None = None) -> None:
+        copied.append(key)
+        engine.installed.append(key)
+
+    def catalog() -> Catalog:
+        return Catalog(models=(ASR.model_copy(update={"bundled": True}),))
+
+    models = EngineModels(
+        "chaine-retenue",
+        read_catalog=catalog,
+        read_installed=engine.inventory,
+        read_readiness=engine.readiness,
+        fetch=engine.fetch,
+        discard=engine.remove,
+        stop_all=engine.stop_all,
+        bundled=lambda key: shipped / key,
+        install_from_app=install_from_app,
+    )
+    assert [(a.name, a.from_app) for a in models.install_shipped()] == [("asr", True)]
+    settle(models, "done")
+    assert copied == ["asr"] and models.ready().ready
+    assert models.install_shipped() == []  # there now: nothing more
+    models.shutdown()
+
+
+def test_from_the_repository_nothing_shipped_is_installed(tmp_path: Path) -> None:
+    engine = FakeEngine(tmp_path)
+    models = EngineModels(
+        "chaine-retenue",
+        read_catalog=lambda: Catalog(models=(ASR.model_copy(update={"bundled": True}),)),
+        read_readiness=engine.readiness,
+        fetch=engine.fetch,
+        bundled=lambda key: None,
+    )
+    assert models.install_shipped() == []
+    assert models.actions() == []  # never a download without a click (P1)
+
+
+def test_a_shipped_copy_that_is_damaged_or_missing_says_to_reinstall_and_cannot_be_stopped(
+    tmp_path: Path,
+) -> None:
+    engine = FakeEngine(tmp_path)
+    shipped = tmp_path / "modeles"
+    (shipped / "asr").mkdir(parents=True)
+    go_on = threading.Event()
+
+    def install_from_app(key: str, source: Path, root: Path | None = None) -> None:
+        go_on.wait(5)
+        raise ModelActionError(ModelActionCode.INTEGRITY, "empreinte différente", model=key)
+
+    def catalog() -> Catalog:
+        return Catalog(
+            models=(
+                ASR.model_copy(update={"bundled": True}),
+                ASR.model_copy(update={"key": "perdu", "bundled": True}),
+            )
+        )
+
+    models = EngineModels(
+        "chaine-retenue",
+        read_catalog=catalog,
+        read_readiness=engine.readiness,
+        fetch=engine.fetch,
+        bundled=lambda key: shipped / key,
+        install_from_app=install_from_app,
+    )
+    models.start("model", "asr")
+    with pytest.raises(ModelsError, match="ne s'arrête pas"):
+        models.cancel("model", "asr")
+    go_on.set()
+    settle(models, "failed")
+    failed = models.actions()[0]
+    assert failed.error is not None and "réinstallez Coulisses" in failed.error
+    assert failed.detail is not None and "empreinte" in failed.detail
+    # Shipped, but its copy is not in the app: refused, never downloaded instead.
+    with pytest.raises(ModelsError, match="introuvable"):
+        models.start("model", "perdu")
+    assert [a.name for a in models.actions()] == ["asr"]
+    models.shutdown()
