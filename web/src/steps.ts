@@ -303,6 +303,25 @@ export function stillAsked(
     .sort((a, b) => Number(b.id === asked) - Number(a.id === asked));
 }
 
+/** Whether the update window takes up « Ce qui manque » for what the processing lacks:
+ *  only while the window is open, never behind the onboarding (it covers the same pieces,
+ *  and the downloads it started end the first launch while it is still open), and not once
+ *  closed in this session. */
+export function takesUpLacking(
+  isOpen: boolean,
+  shown: UpdateNotice | null,
+  welcoming: boolean,
+  lackingLater: boolean,
+): boolean {
+  return (
+    isOpen &&
+    !welcoming &&
+    !lackingLater &&
+    shown?.kind === "install" &&
+    !shown.welcome
+  );
+}
+
 /** A replacement the user chose: the old models go once the new ones are installed. */
 export interface Replacing {
   /** The update it was chosen in. */

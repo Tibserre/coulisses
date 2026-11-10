@@ -15,6 +15,7 @@ import {
   settleReplacements,
   stepsChanged,
   stillAsked,
+  takesUpLacking,
   updateNotices,
   lastModelsView,
   type Choice,
@@ -309,9 +310,9 @@ export function UpdateNoticesDialog({
   // closed, even once it is all there.
   const [lacking, setLacking] = useState<InstallNotice | null>(null);
   useEffect(() => {
-    if (isOpen && shown?.kind === "install" && !shown.welcome && !lackingLater)
-      setLacking((current) => current ?? shown);
-  }, [isOpen, shown, lackingLater]);
+    if (takesUpLacking(isOpen, shown, welcoming, lackingLater))
+      setLacking((current) => current ?? (shown as InstallNotice));
+  }, [isOpen, shown, welcoming, lackingLater]);
 
   // A removal that failed after a replacement: back to the choices, the error said.
   useEffect(() => {
@@ -329,13 +330,17 @@ export function UpdateNoticesDialog({
         actions={actions}
         onStop={onStop}
         onClose={() => {
+          // Closed: everything waits for the next launch. What still downloads goes on,
+          // followed in Réglages › Transcription; no other window opens behind it.
           setWelcoming(false);
+          setLackingLater(true);
+          setLacking(null);
           onClose();
         }}
       />
     );
   const view = lastModelsView();
-  if (lacking && view)
+  if (lacking && view && isOpen)
     return (
       <MissingDialog
         view={view}

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, EnvironmentInfo, InstalledEngineModel, MissingPiece, ModelsView } from "./api.ts";
-import { type ChoiceNotice, allLackingRunning, stillAsked, beyondLanguage, coveredByEverything, everythingMissing, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
+import { type ChoiceNotice, allLackingRunning, stillAsked, takesUpLacking, beyondLanguage, coveredByEverything, everythingMissing, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
 
 const model = (key: string, over: Partial<CatalogModel> = {}): CatalogModel => ({
   key,
@@ -400,4 +400,17 @@ test("several old versions: one tile each, no arrow between them, « Les garder 
   assert.equal(cleanup.tiles.length, 2);
   assert.ok(cleanup.tiles.every((t) => t.role === "old"));
   assert.deepEqual(cleanup.choices.map((c) => c.label), ["Libérer 2,6 Go", "Les garder"]);
+});
+
+test("after the onboarding, no « Ce qui manque » opens behind it", () => {
+  // The first models downloaded during the onboarding: no longer a first launch.
+  const [lacks] = updateNotices(view({ models: [there("voix")] }, [lacking({ model: "asr" })], [model("asr"), model("voix")]));
+  assert.equal(lacks.kind === "install" && lacks.welcome, false);
+  // While the onboarding is open: not taken up behind it.
+  assert.equal(takesUpLacking(true, lacks, true, false), false);
+  // Closed (« later » for the session), or the window closed: never.
+  assert.equal(takesUpLacking(true, lacks, false, true), false);
+  assert.equal(takesUpLacking(false, lacks, false, false), false);
+  // At a later launch, the window open on it: taken up.
+  assert.equal(takesUpLacking(true, lacks, false, false), true);
 });
