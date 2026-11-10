@@ -176,6 +176,7 @@ class FakeLanguages:
                     environment=name,
                     label=label,
                     message="absent",
+                    announced_bytes=900_000_000,
                 )
                 for name, label in self.environments.items()
             ]

@@ -29,6 +29,9 @@ class MissingEnvironment(BaseModel):
     name: str
     label: str | None = None
     """What it is for, in French, as the engine says it."""
+    announced_bytes: int | None = None
+    """Its size on disk once installed, an order of magnitude the engine publishes (said
+    « environ »); None when the engine does not give one."""
 
 
 class WaitsFor(BaseModel):
@@ -47,7 +50,8 @@ class WaitsFor(BaseModel):
     """Models on this Mac but damaged (files missing or changed): never downloaded over,
     removed first by the user (Réglages, Transcription), then downloaded again."""
     download_bytes: int = 0
-    """Announced size of `missing_models`; an environment's is never known beforehand."""
+    """Announced size of `missing_models`; the environments' is theirs (`announced_bytes`),
+    an order of magnitude."""
 
 
 Rerun = Literal["transcribe", "diarize", "all"]

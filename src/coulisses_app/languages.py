@@ -56,28 +56,22 @@ def waits_for(profile: str, code: str, root: Path | None = None) -> WaitsFor | N
     Mac (the models of every stage, not only its language's, and the environments), or the
     language itself, no longer handled by the engine. None: it may start. Nothing is
     downloaded here (P1)."""
-    support = next(
-        (s for s in supported(profile, root) if s.language == code and handled(s)), None
-    )
+    support = next((s for s in supported(profile, root) if s.language == code and handled(s)), None)
     if support is None:
         return WaitsFor(reason="language_unsupported", language=code)
     found = engine_readiness(profile, root=root, language=code)
     if any(p.code.value == "language_unsupported" for p in found.missing):
         return WaitsFor(reason="language_unsupported", language=code)
     altered = {
-        p.model
-        for p in found.missing
-        if p.model is not None and p.code.value == "model_altered"
+        p.model for p in found.missing if p.model is not None and p.code.value == "model_altered"
     }
     models = set(support.missing_models) - altered
-    models.update(
-        p.model for p in found.missing if p.model is not None and p.model not in altered
-    )
+    models.update(p.model for p in found.missing if p.model is not None and p.model not in altered)
     environments: dict[str, MissingEnvironment] = {}
     for piece in found.missing:
         if piece.environment is not None and piece.environment not in environments:
             environments[piece.environment] = MissingEnvironment(
-                name=piece.environment, label=piece.label
+                name=piece.environment, label=piece.label, announced_bytes=piece.announced_bytes
             )
     if not models and not environments and not altered:
         return None

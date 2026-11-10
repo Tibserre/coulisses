@@ -590,7 +590,9 @@ def test_a_processing_waits_for_every_model_and_environment_of_the_chain(
         "language": "en",
         "label": "Anglais",
         "missing_models": ["aligneur-anglais", "diariseur", "segmenteur"],
-        "missing_environments": [{"name": "diarizen", "label": "Qui parle quand"}],
+        "missing_environments": [
+            {"name": "diarizen", "label": "Qui parle quand", "announced_bytes": 900_000_000}
+        ],
         "altered_models": [],
         "download_bytes": 1_260_000_000 + 2 * 500_000_000,
     }
@@ -634,7 +636,7 @@ def test_everything_missing_is_read_then_downloaded_at_once(
     missing = client.get("/api/moteur/manquants").json()  # French by default
     assert (missing["missing_models"], missing["missing_environments"]) == (
         ["diariseur"],
-        [{"name": "diarizen", "label": "Qui parle quand"}],
+        [{"name": "diarizen", "label": "Qui parle quand", "announced_bytes": 900_000_000}],
     )
     assert missing["download_bytes"] == 500_000_000
     english = client.get("/api/moteur/manquants", params={"langue": "en"}).json()
@@ -666,9 +668,11 @@ def test_an_environment_alone_or_a_damaged_model_is_waited_for_too(
     assert (waits["reason"], waits["missing_models"], waits["download_bytes"]) == (
         "model_missing",
         [],
-        0,  # an environment's size is never known beforehand
+        0,  # environments are not counted in download_bytes
     )
-    assert waits["missing_environments"] == [{"name": "torch", "label": "Outils de calcul"}]
+    assert waits["missing_environments"] == [
+        {"name": "torch", "label": "Outils de calcul", "announced_bytes": 900_000_000}
+    ]
 
     # Installed, but a model found damaged: never downloaded over, said apart.
     fake_languages.install("torch")
