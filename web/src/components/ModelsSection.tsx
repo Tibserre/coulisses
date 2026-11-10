@@ -14,6 +14,7 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { useLanguages } from "./Languages.tsx";
+import { languageSize } from "../languages.ts";
 import { MissingDialog } from "./Missing.tsx";
 import { LABELS } from "./pieceWords.ts";
 import {
@@ -33,6 +34,7 @@ import {
   environmentState,
   interpreterNote,
   missingEnvironments,
+  diskParts,
   gigabytes,
   modelRows,
   percent,
@@ -56,7 +58,14 @@ type Asking =
  *  network, said before it starts), stop, remove (confirmed). Followed live while something
  *  downloads. Outside developer mode (ADR 0051), what is in use and sound is one line per
  *  step, without names, paths or Python; every other piece keeps its row and its action. */
-export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
+export function ModelsSection({
+  onReplace,
+  onOpenFolder,
+}: {
+  onReplace?: () => void;
+  /** « Ouvrir le dossier »: the models' folder in the Finder. */
+  onOpenFolder?: () => void;
+}) {
   const dev = useDevMode();
   // The last reading at once, read again behind: the skeleton only before the first one.
   const [view, setView] = useState<ModelsView | null>(lastModelsView);
@@ -281,39 +290,47 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
     />
   );
 
-  // All there and sound, outside developer mode: one line (ADR 0079); the languages above
-  // say their own models.
-  const allQuiet =
-    view !== null &&
-    quiet !== null &&
-    !lacking &&
-    !everything &&
-    !unreadable &&
-    !refused &&
-    shownRows.length === 0 &&
-    environments.length === 0 &&
-    missing.length === 0 &&
-    ![...quiet.old.values()].some((old) => old.length > 0);
-  if (allQuiet && view && quiet) {
-    const base =
-      quiet.steps
-        .filter((s) => s.purpose !== "Alignement des mots")
-        .reduce((sum, s) => sum + s.size, 0) + (quiet.tools ?? 0);
-    return (
-      <section className="cl-settings__section">
-        {missingDialog}
-        <p className="cl-models__ready">
-          Traitement des séances : prêt · transcription, voix et outils de
-          calcul, {gigabytes(base)}
-        </p>
-      </section>
-    );
-  }
+  // Outside developer mode, what is on this Mac in one bar, by what it is for (ADR 0079,
+  // proposal B): the transcription, each language, who speaks when, the calculation tools.
+  const parts =
+    view && quiet
+      ? diskParts(
+          quiet.steps,
+          (languages ?? [])
+            .filter((l) => l.installed)
+            .map((l) => ({
+              language: l.language,
+              label: l.label,
+              bytes: languageSize(l, view.catalog.models),
+            })),
+          quiet.tools,
+        )
+      : [];
+  const partsTotal = parts.reduce((sum, p) => sum + p.bytes, 0);
+  // Every download is needed: they are followed and stopped together, never one apart.
+  const runningNow = actions.filter((a) => a.state === "running");
+  // A share only when every running download says its size: never one too high.
+  const sized = runningNow.every((a) => a.total_bytes !== null);
+  const runningDone = runningNow.reduce((sum, a) => sum + a.done_bytes, 0);
+  const runningKnown = sized
+    ? runningNow.reduce((sum, a) => sum + (a.total_bytes ?? 0), 0)
+    : 0;
+  const stopAll = () =>
+    void act(async () => {
+      for (const a of runningNow) await api.cancelModelAction(a.kind, a.name);
+    });
 
   return (
     <section className="cl-settings__section">
       {missingDialog}
-      <Heading level={3}>Traitement des séances</Heading>
+      <div className="cl-disk__head">
+        <Heading level={3}>{dev ? "Traitement des séances" : "Sur ce Mac"}</Heading>
+        {onOpenFolder && (
+          <button type="button" className="cl-linkbtn" onClick={onOpenFolder}>
+            Ouvrir le dossier
+          </button>
+        )}
+      </div>
       {unreadable && (
         <Banner
           status="error"
@@ -333,7 +350,32 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       {view === null && !unreadable && <ModelsSkeleton dev={dev} />}
       {view && (
         <>
-          {everything ? (
+          {/* Only while all that lacks downloads (ADR 0079): else « Voir ce qui manque ». */}
+          {!dev && runningNow.length > 0 && !everything ? (
+            <div className="cl-ask cl-ask--row">
+              <div className="cl-models__what">
+                <Text weight="medium">Téléchargement en cours</Text>
+                <Text type="supporting">
+                  {runningKnown > 0
+                    ? `${Math.min(100, Math.round((runningDone / runningKnown) * 100))} % · `
+                    : ""}
+                  les séances seront traitées une fois fini.
+                </Text>
+              </div>
+              <div className="cl-disk__acts">
+                <Button
+                  label="Tout arrêter"
+                  variant="ghost"
+                  isDisabled={working}
+                  onClick={stopAll}
+                />
+                <Button
+                  label="Voir l'avancement"
+                  onClick={() => setShowMissing(true)}
+                />
+              </div>
+            </div>
+          ) : everything ? (
             <div className="cl-ask cl-ask--row">
               <div className="cl-models__what">
                 <Text weight="medium">
@@ -372,19 +414,52 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
               title="Il manque de quoi traiter"
               description={lacking}
             />
-          ) : (
+          ) : dev ? (
             <Text color="secondary">
               Tout est prêt pour traiter les séances :{" "}
               {gigabytes(view.inventory.total_bytes)} sur ce Mac. Rien ne se
               télécharge sans que vous le demandiez.
             </Text>
+          ) : (
+            <div className="cl-disk__total">
+              <span className="cl-disk__big">{gigabytes(partsTotal)}</span>
+              <Text color="secondary">prêt à traiter vos séances</Text>
+            </div>
+          )}
+          {!dev && parts.length > 0 && (
+            <>
+              <div
+                className="cl-disk__bar"
+                role="img"
+                aria-label="Ce que compte la place prise"
+              >
+                {parts.map((p, i) => (
+                  <i
+                    key={p.key}
+                    data-part={i % 5}
+                    style={{ flexGrow: Math.max(p.bytes, partsTotal / 100) }}
+                  />
+                ))}
+              </div>
+              <ul className="cl-disk__legend">
+                {parts.map((p, i) => (
+                  <li key={p.key}>
+                    <b data-part={i % 5} aria-hidden />
+                    {p.label}
+                    <em>{gigabytes(p.bytes)}</em>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           <ul className="cl-models">
             {/* In the catalog's order: a step's line, or its own rows when it lacks something. */}
             {[...new Set(rows.map((r) => r.purpose))].flatMap((purpose) => [
-              ...(quiet?.steps.filter((s) => s.purpose === purpose) ?? []).map(
-                stepLine,
-              ),
+              // Outside developer mode, the bar says the sound steps: only one with an
+              // old model left keeps its line, for « Supprimer l'ancien ».
+              ...(quiet?.steps.filter(
+                (s) => s.purpose === purpose && oldOf(s.purpose).length > 0,
+              ) ?? []).map(stepLine),
               ...shownRows.filter((r) => r.purpose === purpose).map(modelRow),
             ])}
             {environments.map((env) => (
@@ -501,18 +576,6 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
                 </li>
               );
             })}
-            {quiet && quiet.tools !== null && (
-              <li className="cl-models__row">
-                <div className="cl-models__what">
-                  <Text weight="medium">Outils de calcul</Text>
-                </div>
-                <Text type="supporting">
-                  Installés · {gigabytes(quiet.tools)}
-                </Text>
-                <div className="cl-models__actions" />
-              </li>
-            )}
-
           </ul>
         </>
       )}

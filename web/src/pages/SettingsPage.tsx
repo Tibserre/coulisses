@@ -324,16 +324,11 @@ export function SettingsPage({
 
         {part === "transcription" && (
           <>
+            <ModelsSection
+              onReplace={onReplace}
+              onOpenFolder={() => void act(() => api.openFolder("modeles"))}
+            />
             <LanguagesSection onError={setError} />
-            <ModelsSection onReplace={onReplace} />
-            <div className="cl-settings__buttons">
-              <Button
-                label="Ouvrir le dossier des modèles"
-                size="sm"
-                variant="ghost"
-                onClick={() => void act(() => api.openFolder("modeles"))}
-              />
-            </div>
           </>
         )}
 

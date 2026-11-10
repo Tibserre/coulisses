@@ -303,6 +303,14 @@ test("outside developer mode, what the processing uses and is sound is one line 
     { purpose: "Transcription", size: 2_500_000_000 },
     { purpose: "Qui parle quand", size: 300_000_000 },
   ]);
+  // Just downloaded (its download done, in this session): still one line, never three.
+  const done = (name: string): ModelAction => ({
+    kind: "model", name, state: "done", done_bytes: 1, total_bytes: 1, error: null, code: null,
+    detail: null, terms_url: null, started_at: "2026-11-11T10:00:00Z", finished_at: "2026-11-11T10:01:00Z",
+  });
+  const fresh = quietRows(modelRows(v, [done("voix"), done("voix2")]), v.inventory);
+  assert.deepEqual(fresh.steps, quiet.steps);
+  assert.deepEqual(fresh.apart, []);
   // The one the processing does not use is not shown while not on the disk; the old
   // environment keeps its row, to be removed.
   assert.deepEqual(quiet.apart.map((r) => r.key), []);
@@ -480,4 +488,28 @@ test("an aligner for another language is needed only by its own sessions", async
   // An older engine says no language: French, as before.
   const older = modelRows({ ...v, readiness: { ...v.readiness, language: undefined } }, []);
   assert.equal(older[1].required, false);
+});
+
+test("the bar of « Sur ce Mac »: by what it is for, the alignment said by each language", async () => {
+  const { diskParts } = await import("./models.ts");
+  const parts = diskParts(
+    [
+      { purpose: "Transcription", size: 2_500_000_000 },
+      { purpose: "Alignement des mots", size: 1_260_000_000 },
+      { purpose: "Qui parle quand", size: 340_000_000 },
+    ],
+    [
+      { language: "fr", label: "Français", bytes: 1_260_000_000 },
+      { language: "en", label: "Anglais", bytes: 1_260_000_000 },
+      { language: "de", label: "Allemand", bytes: null },
+    ],
+    2_000_000_000,
+  );
+  assert.deepEqual(parts.map((p) => [p.label, p.bytes]), [
+    ["Transcription", 2_500_000_000],
+    ["Français", 1_260_000_000],
+    ["Anglais", 1_260_000_000],
+    ["Qui parle quand", 340_000_000],
+    ["Outils de calcul", 2_000_000_000],
+  ]);
 });

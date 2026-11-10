@@ -5517,43 +5517,6 @@ button.cl-tree__more:hover {
   flex: 1;
 }
 
-.cl-langadds {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.cl-langadd {
-  font: inherit;
-  border: 1.5px dashed var(--color-border);
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  padding: 10px 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  cursor: pointer;
-}
-
-.cl-langadd__name {
-  color: var(--color-accent);
-  font-weight: 500;
-}
-
-.cl-langadd__size {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.cl-models__ready {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--spacing-3);
-}
-
 /* A window keeps its size from its first step to its last (the user's rule): the
    onboarding as tall as its tallest step, its buttons at the bottom. */
 .cl-onb--steps {
@@ -5885,4 +5848,85 @@ button.cl-tree__more:hover {
 .cl-update__gains dt {
   font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+/* Réglages › Transcription, « Sur ce Mac » (ADR 0079, proposal B): the space the
+   processing takes, in large, then one bar by what it is for and its legend. */
+.cl-disk__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.cl-disk__total {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-3);
+}
+
+.cl-disk__big {
+  font-family: var(--font-family-heading, inherit);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-disk__acts {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.cl-disk__bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.cl-disk__bar i {
+  display: block;
+  flex-basis: 0;
+}
+
+.cl-disk__bar [data-part="0"],
+.cl-disk__legend [data-part="0"] { background: var(--color-accent); }
+.cl-disk__bar [data-part="1"],
+.cl-disk__legend [data-part="1"] { background: color-mix(in srgb, var(--color-accent) 70%, var(--color-background-surface)); }
+.cl-disk__bar [data-part="2"],
+.cl-disk__legend [data-part="2"] { background: color-mix(in srgb, var(--color-accent) 45%, var(--color-background-surface)); }
+.cl-disk__bar [data-part="3"],
+.cl-disk__legend [data-part="3"] { background: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-background-surface)); }
+.cl-disk__bar [data-part="4"],
+.cl-disk__legend [data-part="4"] { background: color-mix(in srgb, var(--color-text-secondary) 40%, var(--color-background-surface)); }
+
+.cl-disk__legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.cl-disk__legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cl-disk__legend b {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.cl-disk__legend em {
+  font-style: normal;
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
 }

@@ -9,6 +9,8 @@ import {
   lineRunning,
   lineStarted,
   lineState,
+  linesRunning,
+  linesToResume,
   toResume,
   onboardingDownload,
   progressLines,
@@ -193,4 +195,23 @@ test("a line already started (even failed or stopped) is followed, not offered a
   assert.equal(lineStarted(transcribe, []), false);
   assert.equal(lineStarted(transcribe, [action("asr", { state: "failed" })]), true);
   assert.equal(lineStarted(transcribe, [action("voix-a")]), false);
+});
+
+test("one control for every piece: all that runs stops together, all that waits resumes together", () => {
+  const view = fresh();
+  const lines = progressLines(basePieces(view), [], LABELS);
+  const actions = [
+    action("asr"),
+    action("align-fr", { state: "failed", error: "Réseau coupé." }),
+    action("voix-a", { state: "cancelled" }),
+    action("autre-chose"),
+  ];
+  // What runs for these lines only: another download (a language added) is not stopped.
+  assert.deepEqual(linesRunning(lines, actions).map((a) => a.name), ["asr"]);
+  // What resumes: the failed, the stopped, what never started (a refused start), once each.
+  const left = linesToResume(lines, view, actions);
+  assert.ok(left.models.includes("align-fr") && left.models.includes("voix-a") && left.models.includes("voix-b"));
+  assert.ok(!left.models.includes("asr"));
+  assert.equal(new Set(left.models).size, left.models.length);
+  assert.deepEqual(left.environments, ["diarizen"]);
 });

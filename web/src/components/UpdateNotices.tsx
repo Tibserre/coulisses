@@ -328,7 +328,6 @@ export function UpdateNoticesDialog({
       <Onboarding
         isOpen={isOpen}
         actions={actions}
-        onStop={onStop}
         onClose={() => {
           // Closed: everything waits for the next launch. What still downloads goes on,
           // followed in Réglages › Transcription; no other window opens behind it.

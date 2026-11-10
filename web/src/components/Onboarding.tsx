@@ -11,10 +11,8 @@ import {
   onboardingDownload,
   progressLines,
   sizeWords,
-  toResume,
   type LanguageChoice,
   type Piece,
-  type ProgressLine,
 } from "../onboarding.ts";
 import {
   downloadEverything,
@@ -24,7 +22,7 @@ import {
 } from "../steps.ts";
 import { useLanguages } from "./Languages.tsx";
 import { ICON, LABELS, WHAT } from "./pieceWords.ts";
-import { ProgressTile } from "./Missing.tsx";
+import { DownloadsControl, ProgressTile } from "./Missing.tsx";
 
 const WELCOME = "Qui a dit ça, déjà ? Tout est là, mot pour mot.";
 const WELCOME_WORDS = WELCOME.split(" ");
@@ -50,13 +48,10 @@ const capital = (text: string) =>
 export function Onboarding({
   isOpen,
   actions,
-  onStop,
   onClose,
 }: {
   isOpen: boolean;
   actions: ModelAction[];
-  /** A download or an install stopped (it resumes next time). */
-  onStop: (action: ModelAction) => Promise<void>;
   onClose: () => void;
 }) {
   const [step, setStep] = useState(1);
@@ -129,40 +124,6 @@ export function Onboarding({
       setWorking(false);
     }
   };
-
-  /** A line's own downloads: stopped (they resume where they were), or started again. */
-  const act = async (what: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await what();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      try {
-        stepsChanged(await api.engineModels());
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    }
-  };
-  const stop = (line: ProgressLine) =>
-    act(async () => {
-      for (const a of actions.filter(
-        (a) =>
-          a.state === "running" &&
-          (a.kind === "model"
-            ? line.models.includes(a.name)
-            : line.environments.includes(a.name)),
-      ))
-        await onStop(a);
-    });
-  const resume = (line: ProgressLine) =>
-    act(async () => {
-      if (!view) return;
-      const left = toResume(line, view, actions);
-      for (const key of left.models) await api.downloadModel(key);
-      for (const name of left.environments) await api.installEnvironment(name);
-    });
 
   const dots = (
     <div className="cl-onb__dots" aria-label={`Étape ${step} sur ${last}`}>
@@ -459,8 +420,6 @@ export function Onboarding({
               line={line}
               view={view}
               actions={actions}
-              onStop={() => void stop(line)}
-              onResume={() => void resume(line)}
             />
           ))}
         </div>
@@ -484,11 +443,26 @@ export function Onboarding({
         )}
         {said}
         <div className="cl-onb__actions cl-onb__actions--end">
-          <Button
-            label={step < last ? "Suivant" : "Fermer"}
-            variant="primary"
-            onClick={() => (step < last ? setStep(6) : onClose())}
-          />
+          <div className="cl-onb__right">
+            <DownloadsControl
+              lines={lines}
+              view={view}
+              actions={actions}
+              onDone={async () => {
+                try {
+                  stepsChanged(await api.engineModels());
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+              onError={setError}
+            />
+            <Button
+              label={step < last ? "Suivant" : "Fermer"}
+              variant="primary"
+              onClick={() => (step < last ? setStep(6) : onClose())}
+            />
+          </div>
         </div>
       </>
     );

@@ -10,10 +10,11 @@ import {
   lineRunning,
   lineStarted,
   lineState,
+  linesRunning,
+  linesToResume,
   onboardingDownload,
   progressLines,
   sizeWords,
-  toResume,
   type LanguageChoice,
   type Piece,
   type PieceKind,
@@ -166,17 +167,6 @@ export function MissingDialog({
       onStarted();
     }
   };
-  const act = async (what: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await what();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      await reread();
-      onStarted();
-    }
-  };
 
   return (
     <Dialog
@@ -219,26 +209,6 @@ export function MissingDialog({
                 line={line}
                 view={view}
                 actions={view.actions}
-                onStop={() =>
-                  void act(async () => {
-                    for (const a of view.actions.filter(
-                      (a) =>
-                        a.state === "running" &&
-                        (a.kind === "model"
-                          ? line.models.includes(a.name)
-                          : line.environments.includes(a.name)),
-                    ))
-                      await api.cancelModelAction(a.kind, a.name);
-                  })
-                }
-                onResume={() =>
-                  void act(async () => {
-                    const left = toResume(line, view, view.actions);
-                    for (const key of left.models) await api.downloadModel(key);
-                    for (const name of left.environments)
-                      await api.installEnvironment(name);
-                  })
-                }
               />
             );
           })}
@@ -253,7 +223,19 @@ export function MissingDialog({
             <p className="cl-onb__note">
               La séance partira d'elle-même ensuite.
             </p>
-            <Button label="Fermer" variant="primary" onClick={onClose} />
+            <div className="cl-onb__right">
+              <DownloadsControl
+                lines={lines}
+                view={view}
+                actions={view.actions}
+                onDone={async () => {
+                  await reread();
+                  onStarted();
+                }}
+                onError={setError}
+              />
+              <Button label="Fermer" variant="primary" onClick={onClose} />
+            </div>
           </div>
         ) : (
           <div className="cl-onb__actions cl-onb__actions--end">
@@ -275,20 +257,16 @@ export function MissingDialog({
 }
 
 /** One piece's progress, as a tile (ADR 0079): the same in the onboarding and in « Ce qui
- *  manque ». « Arrêter » while it runs; « Reprendre » (or « Télécharger ») for what is
- *  neither running nor over. */
+ *  manque ». Its state only: every piece is needed, so they stop and resume together, by
+ *  the window's own buttons (`DownloadsControl`). */
 export function ProgressTile({
   line,
   view,
   actions,
-  onStop,
-  onResume,
 }: {
   line: ProgressLine;
   view: ModelsView;
   actions: ModelAction[];
-  onStop: () => void;
-  onResume: () => void;
 }) {
   const Icon = ICON[kindOf(line)];
   const state = lineState(line, view, actions);
@@ -298,8 +276,6 @@ export function ProgressTile({
       : state.kind === "running"
         ? (state.percent ?? 0)
         : 0;
-  const running = lineRunning(line, actions);
-  const left = toResume(line, view, actions);
   return (
     // The tile of « ce qu'il faut pour écouter », its size giving way to the progress,
     // which keeps its place at the bottom whatever the name's length.
@@ -331,22 +307,6 @@ export function ProgressTile({
       <span className="cl-onb__what">{WHAT[kindOf(line)]}</span>
       <div className="cl-missing__foot">
         <div className="cl-missing__row">
-          {running ? (
-            <button type="button" className="cl-linkbtn cl-missing__act" onClick={onStop}>
-              Arrêter
-            </button>
-          ) : state.kind !== "done" &&
-            left.models.length + left.environments.length > 0 ? (
-            <button
-              type="button"
-              className="cl-linkbtn cl-missing__act"
-              onClick={onResume}
-            >
-              {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
-            </button>
-          ) : (
-            <span />
-          )}
           <span className="cl-onb__pct">
             {state.kind === "done"
               ? "Prêt"
@@ -367,4 +327,77 @@ export function ProgressTile({
       </div>
     </div>
   );
+}
+
+/** The window's one control over the downloads (ADR 0079): « Tout arrêter » while any
+ *  runs, « Reprendre » for what stopped or failed; nothing per piece. */
+export function DownloadsControl({
+  lines,
+  view,
+  actions,
+  onDone,
+  onError,
+}: {
+  lines: ProgressLine[];
+  view: ModelsView;
+  actions: ModelAction[];
+  /** Read the models again: what stopped or started shows. */
+  onDone: () => Promise<void> | void;
+  onError: (message: string) => void;
+}) {
+  const [working, setWorking] = useState(false);
+  const running = linesRunning(lines, actions);
+  const left = linesToResume(lines, view, actions);
+  const act = async (what: () => Promise<unknown>) => {
+    setWorking(true);
+    onError("");
+    try {
+      await what();
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setWorking(false);
+      await onDone();
+    }
+  };
+  const resume = () =>
+    void act(async () => {
+      for (const key of left.models) await api.downloadModel(key);
+      for (const name of left.environments) await api.installEnvironment(name);
+    });
+  const lagging = left.models.length + left.environments.length > 0;
+  if (running.length)
+    return (
+      <>
+        {/* A start partly refused: what waits can start beside what runs (P8). */}
+        {lagging && (
+          <Button
+            label="Reprendre le reste"
+            variant="ghost"
+            isDisabled={working}
+            onClick={resume}
+          />
+        )}
+        <Button
+          label="Tout arrêter"
+          variant="ghost"
+          isLoading={working}
+          onClick={() =>
+            void act(async () => {
+              for (const a of running) await api.cancelModelAction(a.kind, a.name);
+            })
+          }
+        />
+      </>
+    );
+  if (lagging)
+    return (
+      <Button
+        label="Reprendre"
+        variant="ghost"
+        isLoading={working}
+        onClick={resume}
+      />
+    );
+  return null;
 }

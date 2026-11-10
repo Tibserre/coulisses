@@ -260,3 +260,33 @@ export function lineStarted(line: ProgressLine, actions: ModelAction[]): boolean
     a.kind === "model" ? line.models.includes(a.name) : line.environments.includes(a.name),
   );
 }
+
+/** What runs for these lines (ADR 0079): the downloads are all needed, so they stop
+ *  together, never one piece apart. */
+export function linesRunning(
+  lines: ProgressLine[],
+  actions: ModelAction[],
+): ModelAction[] {
+  return actions.filter(
+    (a) =>
+      a.state === "running" &&
+      lines.some((line) =>
+        a.kind === "model"
+          ? line.models.includes(a.name)
+          : line.environments.includes(a.name),
+      ),
+  );
+}
+
+/** What « Reprendre » starts again for these lines, all of it at once. */
+export function linesToResume(
+  lines: ProgressLine[],
+  view: ModelsView,
+  actions: ModelAction[],
+): { models: string[]; environments: string[] } {
+  const left = lines.map((line) => toResume(line, view, actions));
+  return {
+    models: [...new Set(left.flatMap((l) => l.models))],
+    environments: [...new Set(left.flatMap((l) => l.environments))],
+  };
+}
