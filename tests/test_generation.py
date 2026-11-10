@@ -15,6 +15,7 @@ from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import Provenance, generate
+from coulisses_app.prompting.ollama import InstalledModel
 from coulisses_app.storage.db import connect
 
 from .conftest import FAKE_CHAIN, FakeModel, local_client
@@ -285,9 +286,10 @@ def test_a_full_context_window_is_a_failure_not_a_cut(
     assert (folder / "calls/01-response.md").exists()  # but what came back is kept, to see
 
 
-def test_ollama_down_is_said_plainly(
+def test_without_ollama_a_summary_waits_for_it_then_is_made(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
+    """Ollama is optional: a summary asked without it is not done yet, never a failure."""
     session_id = imported(client, recording)
     run_all(data, fake_model)
     fake_model.down = True
@@ -299,10 +301,49 @@ def test_ollama_down_is_said_plainly(
     )
     run_all(data, fake_model)
     pending = client.get(f"/api/seances/{session_id}/resumes").json()["pending"]
-    assert pending[-1]["state"] == "failed"
-    assert "lancez l'application Ollama" in pending[-1]["error"]
+    assert [(p["state"], p["error"], p["waits_for_writer"]) for p in pending] == [
+        ("queued", None, {"reason": "ollama_absent"})
+    ]
     models = client.get("/api/modeles").json()
-    assert models["reachable"] is False and models["error"]
+    assert models["reachable"] is False and models["available"] is False and models["error"]
+
+    # Ollama installed, with no model yet: it still waits, saying so.
+    fake_model.down = False
+    fake_model.installed = []
+    processor = Processor(data, FAKE_CHAIN, model_client=fake_model)
+    processor.release_writer()
+    pending = client.get(f"/api/seances/{session_id}/resumes").json()["pending"]
+    assert pending[0]["waits_for_writer"] == {"reason": "no_model"}
+    assert client.get("/api/modeles").json()["available"] is False
+
+    fake_model.installed = [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
+    processor.release_writer()
+    run_all(data, fake_model)
+    listed = client.get(f"/api/seances/{session_id}/resumes").json()
+    assert listed["pending"] == []
+    assert [g["action_ref"] for g in listed["generations"]] == ["compte-rendu-reunion"]
+
+
+def test_once_ollama_has_a_model_a_waiting_writing_takes_the_one_chosen_now(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    session_id = imported(client, recording)
+    fake_model.down = True
+    run_all(data, fake_model)  # the chapters wait, with the default model
+    status = client.get(f"/api/seances/{session_id}/chapitres").json()
+    assert (status["state"], status["error"]) == ("queued", None)
+    assert status["waits_for_writer"] == {"reason": "ollama_absent"}
+    assert client.get(f"/api/seances/{session_id}").json()["session"]["job_state"] == "done"
+
+    # The user installs Ollama with another model, and chooses it.
+    fake_model.down = False
+    fake_model.installed = [InstalledModel(name="autre:latest", size_bytes=1, digest="d")]
+    client.put("/api/reglages/modeles/chapitres", json={"model": "autre"})
+    Processor(data, FAKE_CHAIN, model_client=fake_model).release_writer()
+    run_all(data, fake_model)
+    status = client.get(f"/api/seances/{session_id}/chapitres").json()
+    assert (status["state"], status["model"]) == ("done", "autre")
+    assert fake_model.calls[0][0] == "autre"
 
 
 def test_a_summary_goes_stale_when_the_transcript_is_corrected(
@@ -509,13 +550,12 @@ def test_a_failed_title_can_be_asked_again_and_the_failure_then_goes(
     client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
 ) -> None:
     session_id = imported(client, recording)
-    fake_model.down = True
     run_all(data, fake_model)
+    fake_model.answer = ""  # an empty answer: a failure
     client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "titre"})
     run_all(data, fake_model)
     pending = client.get(f"/api/seances/{session_id}/resumes").json()["pending"]
     assert [(p["action_ref"], p["state"]) for p in pending] == [("titre", "failed")]
-    fake_model.down = False
     fake_model.answer = "Scène du marché"
     assert (
         client.post(f"/api/seances/{session_id}/resumes", json={"action_ref": "titre"}).status_code
@@ -665,3 +705,65 @@ def test_only_the_latest_version_gives_way(
     run_all(data, fake_model)
     assert client.post(f"{base}/{first['id']}/revenir").status_code == 409
     assert client.post(f"{base}/999999/revenir").status_code == 404
+
+
+def test_the_settings_reading_ollama_release_what_waited_and_a_failure_is_said(
+    data: DataDir, recording: Path, fake_model: FakeModel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    processor = Processor(data, FAKE_CHAIN, model_client=fake_model)
+    # Not started: the test drives the queue itself.
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=processor, web_dir=None)
+    )
+    session_id = imported(client, recording)
+    fake_model.down = True
+    run_all(data, fake_model)
+    asked = {"action_ref": "compte-rendu-reunion"}
+    client.post(f"/api/seances/{session_id}/resumes", json=asked)
+    run_all(data, fake_model)
+    # Asked again meanwhile, with a model chosen by hand: one job, with that model.
+    client.post(f"/api/seances/{session_id}/resumes", json={**asked, "model": "modele-essai"})
+    pending = client.get(f"/api/seances/{session_id}/resumes").json()["pending"]
+    assert [(p["model"], p["waits_for_writer"]) for p in pending] == [
+        ("modele-essai", {"reason": "ollama_absent"})
+    ]
+
+    # Seeing them again fails: said by the service, the list of models still shown.
+    fake_model.down = False
+    with monkeypatch.context() as patched:
+
+        def locked(*_: object, **__: object) -> None:
+            raise RuntimeError("base verrouillée")
+
+        patched.setattr(jobs, "set_writer_wait", locked)
+        assert client.get("/api/modeles").json()["available"] is True
+    state = client.get("/api/etat").json()
+    assert (
+        state["writer_release_error"] and "base verrouillée" in state["writer_release_error_detail"]
+    )
+
+    # The settings read Ollama again: what waited goes, and the error is over.
+    client.get("/api/modeles")
+    assert client.get("/api/etat").json()["writer_release_error"] is None
+    run_all(data, fake_model)
+    listed = client.get(f"/api/seances/{session_id}/resumes").json()
+    assert listed["pending"] == []
+    assert [g["action_ref"] for g in listed["generations"]] == ["compte-rendu-reunion"]
+
+
+def test_a_model_chosen_but_absent_while_others_are_there_does_not_wait(
+    client: TestClient, data: DataDir, recording: Path, fake_model: FakeModel
+) -> None:
+    """Not an absence of Ollama: it goes to Ollama, whose refusal is said (ADR 0039)."""
+    session_id = imported(client, recording)
+    run_all(data, fake_model)
+    client.post(
+        f"/api/seances/{session_id}/resumes",
+        json={"action_ref": "compte-rendu-reunion", "model": "absent"},
+    )
+    processor = Processor(data, FAKE_CHAIN, model_client=fake_model)
+    assert processor.writer_wait("absent") is None  # Ollama has a model: no wait
+    run_all(data, fake_model)
+    # It went to Ollama with that model, which refuses it in its own words (`ollama.py`).
+    assert fake_model.calls[-1][0] == "absent"
+    assert client.get(f"/api/seances/{session_id}/resumes").json()["pending"] == []
