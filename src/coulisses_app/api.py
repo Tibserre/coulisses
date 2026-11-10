@@ -100,11 +100,20 @@ class AppInfo(BaseModel):
     after a download); they stay waiting until the next start or the next download."""
     waiting_release_error_detail: str | None = None
     """Its technical detail (developer mode)."""
+    writer_release_error: str | None = None
+    """Said in French: the titles, chapters and summaries waiting for the language model could
+    not be seen again; they stay waiting, tried again every minute."""
+    writer_release_error_detail: str | None = None
+    """Its technical detail (developer mode)."""
 
 
 LOOP_ERROR = (
     "Le traitement des séances est arrêté par une erreur. Il réessaie toutes les deux "
     "secondes ; si cela dure, quittez puis relancez Coulisses."
+)
+WRITER_RELEASE_ERROR = (
+    "Les titres, chapitres et résumés qui attendent le modèle de langage n'ont pas pu être "
+    "revus : ils restent en attente, et Coulisses réessaie chaque minute."
 )
 RELEASE_ERROR = (
     "Les séances qui attendaient un modèle n'ont pas pu repartir. Elles réessaieront au "
@@ -264,6 +273,9 @@ def writing_advice(found: list[InstalledModel]) -> WritingAdvice:
 class ModelsInfo(BaseModel):
     reachable: bool
     error: str | None
+    available: bool
+    """A language model can write: Ollama answers, with at least one model. False: titles,
+    chapters and summaries wait for it (Ollama is optional); the processing does not."""
     default: str
     """The summaries' model: the one offered first when a summary is asked."""
     writings: dict[settings.Writing, str]
@@ -524,6 +536,10 @@ def create_app(
             loop_error_detail=processor.loop_error if processor else None,
             waiting_release_error=RELEASE_ERROR if processor and processor.release_error else None,
             waiting_release_error_detail=processor.release_error if processor else None,
+            writer_release_error=WRITER_RELEASE_ERROR
+            if processor and processor.writer_release_error
+            else None,
+            writer_release_error_detail=processor.writer_release_error if processor else None,
         )
 
     def _folders() -> Folders:
@@ -942,14 +958,20 @@ def create_app(
             return ModelsInfo(
                 reachable=False,
                 error=str(exc),
+                available=False,
                 default=writings["resume"],
                 writings=writings,
                 models=[],
                 advice=writing_advice([]),
             )
+        if found and processor is not None:
+            # Seen just now: what waited for it goes without waiting for the next look. A
+            # failure there is said by the service, never the list's (`writer_release_error`).
+            processor.see_writer_again()
         return ModelsInfo(
             reachable=True,
             error=None,
+            available=bool(found),
             default=writings["resume"],
             writings=writings,
             models=found,

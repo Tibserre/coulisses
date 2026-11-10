@@ -52,7 +52,7 @@ from coulisses_app.prompting.generate import (
     ModelClient,
     generate,
 )
-from coulisses_app.prompting.ollama import OllamaClient
+from coulisses_app.prompting.ollama import OllamaClient, OllamaError
 from coulisses_app.spaces import SpaceError
 from coulisses_app.storage.db import connect, now_iso
 
@@ -140,6 +140,16 @@ class ChainJobResult(BaseModel):
     """Back in the queue before any stage ran: its language cannot be processed yet."""
 
 
+WRITER_CHECK_S = 60.0
+"""How often the generations waiting for the language model see whether it came (a request
+to Ollama on 127.0.0.1, only while some wait)."""
+
+
+def _has(installed: set[str], model: str) -> bool:
+    """Ollama names a model with its tag; « qwen3 » is « qwen3:latest »."""
+    return model in installed or f"{model}:latest" in installed
+
+
 class Processor:
     """Runs queued jobs in a background thread, one at a time."""
 
@@ -181,6 +191,11 @@ class Processor:
         self._thread: threading.Thread | None = None
         self.loop_error: str | None = None
         """Last error of the processing loop itself (not of a job), shown by the service."""
+        self._writer_seen_at = 0.0
+        """When the jobs waiting for the language model were last seen again (monotonic)."""
+        self.writer_release_error: str | None = None
+        """Last failure to see again the generations waiting for the language model; they
+        stay waiting until it succeeds (every minute); shown by the service."""
         self.release_error: str | None = None
         """Last failure to see again the jobs waiting for a model (at start, after a
         download): they stay waiting until it succeeds; shown by the service."""
@@ -191,6 +206,7 @@ class Processor:
         # Models installed while the app was closed: what waited for them goes. A failure
         # here never stops the service: said, and seen again at the next download.
         self.after_install()
+        self.see_writer_again()
         self._thread = threading.Thread(target=self._loop, name="coulisses-processing")
         self._thread.start()
 
@@ -239,8 +255,72 @@ class Processor:
             log.info("jobs waiting for a model may run now")
             self._wake.set()
 
+    # -- the language model, optional ---------------------------------------------------
+
+    def writer_wait(self, model: str) -> jobs.WriterWait | None:
+        """Whether a generation with `model` must wait for the language model: Ollama does
+        not answer, or has no model at all. None: it may go (a model chosen but absent while
+        others are there fails as before, saying so: ADR 0039). Only 127.0.0.1 (P1)."""
+        try:
+            installed = self.model_client.models()
+        except OllamaError:
+            return jobs.WriterWait(reason="ollama_absent")
+        return None if installed else jobs.WriterWait(reason="no_model")
+
+    def release_writer(self) -> None:
+        """The generations waiting for the language model, seen again: once Ollama answers
+        with a model, they go in their turn, with the model they were asked with if it is
+        installed, else the one chosen now for their writing if that one is. One request to
+        Ollama for them all."""
+        conn = connect(self.data)
+        try:
+            waiting = jobs.writer_waiting_jobs(conn)
+            if not waiting:
+                return
+            try:
+                installed: set[str] = {m.name for m in self.model_client.models()}
+                still: jobs.WriterWait | None = (
+                    None if installed else jobs.WriterWait(reason="no_model")
+                )
+            except OllamaError:
+                installed, still = set[str](), jobs.WriterWait(reason="ollama_absent")
+            released = False
+            for job in waiting:
+                assert isinstance(job.params, jobs.GenerationParams)
+                params = job.params
+                if still is not None:
+                    if still != params.waits_for_writer:
+                        jobs.set_writer_wait(conn, job.id, still, model=params.model)
+                    continue
+                model = params.model
+                chosen = settings.writing_model(conn, settings.writing_of(params.action_ref))
+                if not _has(installed, model) and _has(installed, chosen):
+                    log.info("job %s: %s not installed, %s chosen now", job.id, model, chosen)
+                    model = chosen
+                jobs.set_writer_wait(conn, job.id, None, model=model)
+                released = True
+        finally:
+            conn.close()
+        if released:
+            log.info("generations waiting for the language model may run now")
+            self._wake.set()
+
+    def see_writer_again(self) -> None:
+        """`release_writer`, its failure said by the service (`writer_release_error`), never
+        only logged: what waits would otherwise say it waits while Ollama is there (P8)."""
+        self._writer_seen_at = time.monotonic()
+        try:
+            self.release_writer()
+        except Exception as exc:
+            log.exception("releasing the generations waiting for the language model")
+            self.writer_release_error = f"{type(exc).__name__} : {exc}"
+        else:
+            self.writer_release_error = None
+
     def _loop(self) -> None:
         while not self._stopping.is_set():
+            if time.monotonic() - self._writer_seen_at >= WRITER_CHECK_S:
+                self.see_writer_again()
             try:
                 job = self._claim()
                 # The queue is read again: the loop's former error is over.
@@ -382,6 +462,16 @@ class Processor:
 
     def _run_generation_job(self, job: jobs.Job, params: jobs.GenerationParams) -> ChainJobResult:
         log.info("job %s: %s for session %s", job.id, params.action_ref, job.session_id)
+        # No language model on this Mac: it waits for one, not a failure (Ollama is optional).
+        waits = self.writer_wait(params.model)
+        if waits is not None:
+            conn = connect(self.data)
+            try:
+                jobs.hold_generation(conn, job.id, waits)
+            finally:
+                conn.close()
+            log.info("job %s waits for the language model (%s)", job.id, waits.reason)
+            return ChainJobResult(error=None, held=True)
         try:
             prov = generate(
                 self.data,
