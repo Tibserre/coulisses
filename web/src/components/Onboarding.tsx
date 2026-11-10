@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Check } from "lucide-react";
@@ -60,6 +60,24 @@ export function Onboarding({
   onClose: () => void;
 }) {
   const [step, setStep] = useState(1);
+  // Which way the steps went, for the way the new one comes in: none for the first.
+  const [shownStep, setShownStep] = useState(step);
+  const [direction, setDirection] = useState<"next" | "back" | undefined>();
+  if (step !== shownStep) {
+    setShownStep(step);
+    setDirection(step > shownStep ? "next" : "back");
+  }
+  // The new step replaces the button that was pressed: the keyboard goes on from its main
+  // button (the last one), so Entrée carries on.
+  const stepRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!direction) return;
+    const buttons = stepRef.current?.querySelectorAll<HTMLButtonElement>(
+      ".cl-onb__actions button",
+    );
+    const main = buttons?.[buttons.length - 1] ?? stepRef.current;
+    main?.focus({ preventScroll: true });
+  }, [step, direction]);
   const [view, setView] = useState<ModelsView | null>(lastModelsView);
   const [error, setError] = useState<string | null>(null);
   const { languages } = useLanguages(setError);
@@ -515,7 +533,16 @@ export function Onboarding({
     >
       <div className="cl-onb cl-onb--steps">
         {dots}
-        {body}
+        {/* Each step comes in from the side it is on (ADR 0079): the window stays. */}
+        <div
+          key={step}
+          ref={stepRef}
+          className="cl-onb__step"
+          data-direction={direction}
+          tabIndex={-1}
+        >
+          {body}
+        </div>
       </div>
     </Dialog>
   );
