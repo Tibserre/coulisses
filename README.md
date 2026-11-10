@@ -1,6 +1,6 @@
 # Coulisses
 
-Assistant de débrief, 100 % local, pour une troupe d'impro comme pour une équipe : enregistrer une séance, savoir qui a dit quoi, obtenir un compte rendu en français.
+Assistant de débrief, 100 % local, pour une troupe d'impro comme pour une équipe : enregistrer une séance, savoir qui a dit quoi, obtenir un compte rendu. La séance se transcrit en français ou dans une autre langue que le moteur prend en charge (ADR 0072). Titres, chapitres et résumés sont rédigés en français.
 
 Ce dépôt contient **l'application**. Le traitement de l'audio (transcription, alignement, diarisation, attribution) est fait par **le moteur**, dépôt `coulisses-moteur`, utilisé par version (`vX.Y.Z`) et par son contrat.
 
@@ -8,9 +8,20 @@ Ce dépôt contient **l'application**. Le traitement de l'audio (transcription, 
 - Décisions : [`docs/decisions/`](docs/decisions/README.md)
 - Direction artistique : [`docs/produit/direction-artistique.md`](docs/produit/direction-artistique.md)
 - Questions ouvertes : [`docs/produit/questions-ouvertes.md`](docs/produit/questions-ouvertes.md)
-- Versions : [`CHANGELOG.md`](CHANGELOG.md), publiées automatiquement à chaque fusion dans `main`.
+- Versions : [`CHANGELOG.md`](CHANGELOG.md). Elles sont numérotées à la publication, jamais à la fusion (ADR 0064).
 
-État : étape 1 du [plan](docs/produit/plan-v1.md) (importer, traiter, lire).
+État : les étapes 1 à 10 du [plan](docs/produit/plan-v1.md) sont livrées. La distribution (11) est presque faite. L'allègement (12) et la revue de l'expérience (13) sont en cours.
+
+## Installer
+
+Coulisses tourne sur un Mac Apple Silicon, sous macOS 14.4 ou plus récent.
+
+1. Téléchargez le DMG de la dernière version dans les [Releases](https://github.com/Tibserre/coulisses/releases/latest), puis glissez Coulisses dans Applications.
+2. Au premier lancement, macOS bloque l'app, qui n'est pas notarisée. Ouvrez-la par Réglages Système > Confidentialité et sécurité > « Ouvrir quand même ».
+3. Au premier lancement, l'app propose de télécharger les modèles de transcription. Rien ne se télécharge sans votre accord. Ensuite, le traitement se fait hors ligne, et tout reste sur le Mac.
+4. Pour les titres, chapitres et résumés, installez [Ollama](https://ollama.com) et un modèle de langage. L'onglet « Rédaction » des Réglages dit lequel prendre. Coulisses ne télécharge aucun modèle de langage lui-même.
+
+Au deuxième lancement, l'app demande si elle peut chercher seule ses mises à jour. Une mise à jour ne s'installe jamais sans un clic.
 
 ## Lancer
 
@@ -52,15 +63,16 @@ L'essai lance le service de l'app comme son lanceur, réseau coupé et sans Home
 
 ## Publier une version
 
-Depuis une étiquette `vX.Y.Z` (née d'une fusion dans `main`), en trois temps (ADR 0040) :
+Depuis `main` à jour, dans `~/Coulisses/App`, en quatre temps (ADR 0040, 0064) :
 
 ```bash
+uv run python scripts/publier.py --numeroter         # calcule la version, l'écrit, commite et pose l'étiquette
 uv run python scripts/publier.py vX.Y.Z              # prépare tout ici, n'envoie rien
 uv run python scripts/publier.py vX.Y.Z --envoyer    # cette préparation, en pré-version
 uv run python scripts/publier.py vX.Y.Z --confirmer  # les amis la reçoivent
 ```
 
-Préparer passe tous les tests de l'étiquette, construit et signe l'app, l'essaie, vérifie qu'elle garde l'exigence désignée et ouvre la base de la version publiée avant, puis fait le DMG, sa signature EdDSA, les notes (tirées de `CHANGELOG.md`) et l'appcast signé, dans `~/Coulisses/Publications/vX.Y.Z`. La toute première publication se prépare avec `--premiere` (il n'y a encore rien à comparer). La pré-version n'a pas d'appcast : vous l'installez et vous en servez ; confirmer vérifie que son DMG est celui préparé, puis publie l'appcast. Le dépôt doit être public pour que les apps des amis le lisent.
+Numéroter tire la version suivante des commits depuis la dernière étiquette (`feat` : mineure ; `fix`, `perf` : corrective ; `!` : majeure) et l'écrit dans les fichiers de `release.toml` et dans `CHANGELOG.md` ; on réécrit ensuite les notes pour les utilisateurs. Préparer passe tous les tests de l'étiquette, construit et signe l'app, l'essaie, vérifie qu'elle garde l'exigence désignée et ouvre la base de la version publiée avant, puis fait le DMG, sa signature EdDSA, les notes (tirées de `CHANGELOG.md`) et l'appcast signé, dans `~/Coulisses/Publications/vX.Y.Z`. La toute première publication se prépare avec `--premiere` (il n'y a encore rien à comparer). La pré-version n'a pas d'appcast : vous l'installez et vous en servez ; confirmer vérifie que son DMG est celui préparé, puis publie l'appcast. Enfin, `git push origin main` et l'étiquette. Le dépôt doit être public pour que les apps des amis le lisent.
 
 ## Tests
 
@@ -71,4 +83,4 @@ uv run ruff check . && uv run pyright
 cd web && npm test && npm run typecheck && npm run lint
 ```
 
-Après un clonage : `git config core.hooksPath .githooks` active les garde-fous (données de séance hors de git, messages de commit, versions automatiques).
+Après un clonage : `git config core.hooksPath .githooks` active les garde-fous (données de séance hors de git, messages de commit, section « Non publié » de `CHANGELOG.md` réécrite à chaque fusion).
