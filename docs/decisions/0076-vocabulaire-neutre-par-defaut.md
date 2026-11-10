@@ -1,6 +1,6 @@
 # 0076 — Aucun vocabulaire d'impro imposé par défaut
 
-Statut : Proposée (2026-11-10, Rédaction, à la demande de l'utilisateur relayée par Pilotage : « je ne veux pas qu'il y ait tout ce vocabulaire d'impro que je ne pense pas necessaire »). Précise l'ADR 0020 (« les résumés proposés d'un espace » et « scènes et discussions pour l'impro ») ; s'appuie sur l'ADR 0063, acceptée, qui n'est pas encore dans `main`.
+Statut : Acceptée (2026-11-10, par l'utilisateur, telle quelle, après l'accord d'Interface sur les libellés). Proposée le même jour (Rédaction, à la demande de l'utilisateur relayée par Pilotage : « je ne veux pas qu'il y ait tout ce vocabulaire d'impro que je ne pense pas necessaire »). Précise l'ADR 0020 (« les résumés proposés d'un espace » et « scènes et discussions pour l'impro ») ; s'appuie sur l'ADR 0063, acceptée, qui n'est pas encore dans `main`.
 
 ## Contexte
 L'application va être donnée à quelqu'un qui ne fait pas forcément d'impro. Ce qui suppose aujourd'hui l'impro, dans `main` :
