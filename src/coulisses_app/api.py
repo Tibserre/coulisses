@@ -580,8 +580,9 @@ def create_app(
 
     @app.post("/api/moteur/manquants/telecharger", status_code=202)
     def download_missing(demande: MissingDownload) -> list[engine_models.ModelAction]:
-        """« Tout télécharger »: everything the chain lacks for that language, asked by the
-        user, each in the background. Nothing missing: an empty list."""
+        """« Télécharger » in « Voir ce qui manque »: everything the chain lacks for that
+        language, asked by the user, each in the background. Nothing missing: an empty
+        list."""
         languages.check(profile, demande.langue, engine_store.root)
         waits = languages.waits_for(profile, demande.langue, engine_store.root)
         if waits is None:

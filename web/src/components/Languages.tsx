@@ -317,6 +317,10 @@ export function LanguageWait({
       setError((e as Error).message);
     }
   };
+  // A damaged model is not fetched by any download: said, with the way out (ADR 0080).
+  const altered = wait.altered_models?.length
+    ? "Un élément est abîmé sur ce Mac : supprimez-le dans Réglages › Transcription, puis téléchargez-le à nouveau."
+    : null;
   // More than its language lacks (a new install): the whole page says so (ADR 0079).
   if (beyond && view)
     return (
@@ -325,7 +329,7 @@ export function LanguageWait({
         language={wait.language === FRENCH ? undefined : language}
         languages={languages}
         onStarted={onStopped}
-        said={[error, unread].filter((s): s is string => s !== null)}
+        said={[altered, error, unread].filter((s): s is string => s !== null)}
         waitingLanguages={wait.language !== FRENCH && !language}
       />
     );
@@ -375,7 +379,7 @@ export function LanguageWait({
           />
         )}
       </div>
-      {[error, unread].filter(Boolean).map((said) => (
+      {[altered, error, unread].filter(Boolean).map((said) => (
         <Text key={said} as="p" color="primary" type="supporting">
           {said}
         </Text>

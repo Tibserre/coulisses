@@ -50,6 +50,10 @@ export interface ProcessingWait {
   label: string | null;
   missing_models: string[];
   download_bytes: number;
+  /** The environments the chain lacks (ADR 0080). */
+  missing_environments?: { name: string; label: string | null }[];
+  /** Damaged models: to remove in Réglages before downloading them again (ADR 0080). */
+  altered_models?: string[];
 }
 
 /** GET /api/langues: a language the chain transcribes (contrat-langue.md). */

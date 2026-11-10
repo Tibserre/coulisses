@@ -213,9 +213,10 @@ class EngineModels:
         return task.model_copy()
 
     def start_all(self, models: list[str], environments: list[str]) -> list[ModelAction]:
-        """Everything the chain lacks, asked at once by the user (« Tout télécharger »): each
-        model downloaded and each environment installed in the background, as `start` does.
-        One already running is left running and returned as it is."""
+        """Everything the chain lacks, asked at once by the user (« Télécharger » in « Voir ce
+        qui manque »): each model downloaded and each environment installed in the
+        background, as `start` does. One already running is left running and returned as it
+        is."""
         started: list[ModelAction] = []
         asked: list[tuple[Kind, list[str]]] = [("model", models), ("environment", environments)]
         for kind, names in asked:

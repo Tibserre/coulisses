@@ -1,6 +1,6 @@
 # 0080 — Une séance attend tout ce qui manque à la chaîne, et tout se télécharge d'un coup
 
-Statut : Acceptée (2026-11-10, demande de l'utilisateur relayée par Pilotage : point bloquant n° 2 de la revue UX d'Interface, à corriger avant la v0.39.0). Précise 0072 et 0036.
+Statut : Acceptée (2026-11-10, demande de l'utilisateur relayée par Pilotage : point bloquant n° 2 de la revue UX d'Interface, à corriger avant la v0.39.0). Précise 0072 et 0036. À l'écran, « Tout télécharger » devient « Voir ce qui manque », une fenêtre en tuiles avec « Télécharger · taille » : précisé par 0079 (la route `POST /api/moteur/manquants/telecharger` ne change pas).
 
 ## Contexte
 - Sur une installation neuve, après « Plus tard », le « Télécharger (3,7 Go) » d'une séance ne prenait que les modèles de sa langue : la transcription et l'alignement.
