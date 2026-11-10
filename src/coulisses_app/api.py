@@ -129,11 +129,6 @@ class Folders(BaseModel):
 _FOLDER_FIELDS: dict[str, str] = {"donnees": "data", "modeles": "models", "journal": "log"}
 
 
-class MissingDownload(BaseModel):
-    langue: str = jobs.DEFAULT_LANGUAGE
-    """The session language the chain must be complete for."""
-
-
 class EnvironmentRemoval(BaseModel):
     chemin: str
     """The environment's folder, as the inventory gives it."""
@@ -578,25 +573,6 @@ def create_app(
     @app.post("/api/moteur/modeles/{cle}/telecharger", status_code=202)
     def download_model(cle: str) -> engine_models.ModelAction:
         return engine_store.start("model", cle)
-
-    @app.get("/api/moteur/manquants")
-    def chain_missing(langue: str = jobs.DEFAULT_LANGUAGE) -> jobs.WaitsFor | None:
-        """What the chain lacks on this Mac to process a session in this language: the
-        models of every stage and the environments. None: nothing. No network."""
-        languages.check(profile, langue, engine_store.root)
-        return languages.waits_for(profile, langue, engine_store.root)
-
-    @app.post("/api/moteur/manquants/telecharger", status_code=202)
-    def download_missing(demande: MissingDownload) -> list[engine_models.ModelAction]:
-        """« Tout télécharger »: everything the chain lacks for that language, asked by the
-        user, each in the background. Nothing missing: an empty list."""
-        languages.check(profile, demande.langue, engine_store.root)
-        waits = languages.waits_for(profile, demande.langue, engine_store.root)
-        if waits is None:
-            return []
-        return engine_store.start_all(
-            waits.missing_models, [e.name for e in waits.missing_environments]
-        )
 
     @app.post("/api/moteur/environnements/{nom}/installer", status_code=202)
     def install_environment(nom: str) -> engine_models.ModelAction:
