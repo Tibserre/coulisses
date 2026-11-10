@@ -186,6 +186,29 @@ test("nothing installed yet: a welcome", () => {
   assert.equal(notice.choices[0].description, "Environ 2,5 Go depuis internet, une seule fois.");
 });
 
+test("only a model the app ships is installed (engine v1.15.0): still the first launch", () => {
+  const shipped = model("voix", { bundled: true, announced_bytes: 30_000_000 });
+  const [notice] = updateNotices(
+    view(
+      { models: [there("voix")] },
+      [lacking({ model: "asr" }), lacking({ code: "environment_missing", stage: "diarize", environment: "torch", announced_bytes: 1_400_000_000 })],
+      [model("asr"), shipped],
+    ),
+  );
+  assert.equal(notice.welcome, true);
+  assert.equal(notice.eyebrow, "Bienvenue dans Coulisses");
+  // The environment sized by the engine: « environ », the whole figure.
+  assert.equal(notice.choices[0].description, "Environ 3,9 Go depuis internet, une seule fois.");
+});
+
+test("a model of the user's own on this Mac: an update, not a welcome", () => {
+  const [notice] = updateNotices(view({ models: [there("align")] }, [lacking({ model: "asr" })], [model("asr"), model("align", { bundled: false })]));
+  assert.equal(notice.welcome, false);
+  // An engine before v1.15.0 says nothing of « bundled »: a model there is the user's own.
+  const [older] = updateNotices(view({ models: [there("align")] }, [lacking({ model: "asr" })], [model("asr"), model("align")]));
+  assert.equal(older.welcome, false);
+});
+
 test("a damaged model is left to the settings; all done, nothing is asked", () => {
   assert.deepEqual(updateNotices(view({ models: [there("voix", { state: "altered" })] }, [lacking({ code: "model_altered", model: "voix" })])), []);
   assert.deepEqual(updateNotices(view({ models: [there("asr")], environments: [env("torch")] })), []);
