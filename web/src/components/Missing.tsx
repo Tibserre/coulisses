@@ -294,55 +294,57 @@ export function ProgressTile({
   const running = lineRunning(line, actions);
   const left = toResume(line, view, actions);
   return (
-    <div className="cl-onb__tile cl-missing__tile">
-      <div className="cl-missing__row">
-        <span
-          className="cl-missing__ico"
-          data-done={state.kind === "done" || undefined}
-        >
-          {state.kind === "done" ? (
-            <Check size={14} strokeWidth={3} aria-hidden />
-          ) : (
-            <Icon size={16} strokeWidth={1.75} aria-hidden />
-          )}
-        </span>
-        <span className="cl-onb__name cl-missing__name">{line.label}</span>
-        <span className="cl-onb__pct">
-          {state.kind === "done"
-            ? "Prêt"
-            : state.kind === "running"
-              ? state.percent === null
-                ? "En cours"
-                : `${state.percent} %`
-              : state.kind === "failed"
-                ? "Échoué"
-                : state.kind === "stopped"
-                  ? "Arrêté"
-                  : "En attente"}
-        </span>
-      </div>
-      <span className="cl-onb__bar">
-        <i style={{ width: `${share}%` }} />
+    // The tile of « ce qu'il faut pour écouter », its size giving way to the progress,
+    // which keeps its place at the bottom whatever the name's length.
+    <div className="cl-onb__tile">
+      <span className="cl-onb__icon" data-done={state.kind === "done" || undefined}>
+        {state.kind === "done" ? (
+          <Check size={18} strokeWidth={2.5} aria-hidden />
+        ) : (
+          <Icon size={20} strokeWidth={1.75} aria-hidden />
+        )}
       </span>
-      {state.kind === "failed" && (
-        <span className="cl-onb__failed">{state.error}</span>
-      )}
-      {running && (
-        <button type="button" className="cl-linkbtn cl-missing__act" onClick={onStop}>
-          Arrêter
-        </button>
-      )}
-      {state.kind !== "done" &&
-        !running &&
-        left.models.length + left.environments.length > 0 && (
-          <button
-            type="button"
-            className="cl-linkbtn cl-missing__act"
-            onClick={onResume}
-          >
-            {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
+      <span className="cl-onb__name">{line.label}</span>
+      <span className="cl-onb__what">{WHAT[kindOf(line)]}</span>
+      <div className="cl-missing__foot">
+        <div className="cl-missing__row">
+          <span className="cl-onb__bar">
+            <i style={{ width: `${share}%` }} />
+          </span>
+          <span className="cl-onb__pct">
+            {state.kind === "done"
+              ? "Prêt"
+              : state.kind === "running"
+                ? state.percent === null
+                  ? "En cours"
+                  : `${state.percent} %`
+                : state.kind === "failed"
+                  ? "Échoué"
+                  : state.kind === "stopped"
+                    ? "Arrêté"
+                    : "En attente"}
+          </span>
+        </div>
+        {state.kind === "failed" && (
+          <span className="cl-onb__failed">{state.error}</span>
+        )}
+        {running && (
+          <button type="button" className="cl-linkbtn cl-missing__act" onClick={onStop}>
+            Arrêter
           </button>
         )}
+        {state.kind !== "done" &&
+          !running &&
+          left.models.length + left.environments.length > 0 && (
+            <button
+              type="button"
+              className="cl-linkbtn cl-missing__act"
+              onClick={onResume}
+            >
+              {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
+            </button>
+          )}
+      </div>
     </div>
   );
 }

@@ -5998,9 +5998,21 @@ button.cl-tree__more:hover {
   justify-content: center;
 }
 
-.cl-missing__tile {
-  gap: 8px;
-  min-height: 0;
+.cl-missing__foot {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cl-missing__foot .cl-onb__bar {
+  flex: 1;
+}
+
+.cl-onb__icon[data-done] {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 .cl-missing__row {
@@ -6009,26 +6021,9 @@ button.cl-tree__more:hover {
   gap: 10px;
 }
 
-.cl-missing__ico {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  flex: none;
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  color: var(--color-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cl-missing__ico[data-done] {
-  background: var(--color-accent);
-  color: #fff;
-}
-
-.cl-missing__name {
-  flex: 1;
-  text-align: left;
+.cl-missing__row .cl-onb__pct {
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .cl-missing__act {
@@ -6041,24 +6036,28 @@ button.cl-tree__more:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-3);
+  gap: var(--spacing-2);
   text-align: center;
-  padding: var(--spacing-8, 64px) var(--spacing-4);
+  padding: var(--spacing-4) var(--spacing-4) var(--spacing-6);
 }
 
 .cl-nowriting__card {
-  width: 360px;
+  width: 300px;
   max-width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
   text-align: left;
   opacity: 0.75;
-  margin-bottom: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.cl-nowriting > button {
+  margin-top: var(--spacing-1);
 }
 
 /* Réglages › Transcription, the languages (ADR 0079): compact cards, the spaces that have
@@ -6182,4 +6181,30 @@ button.cl-tree__more:hover {
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Tiles keep their size: the area scrolls rather than squeezing them. */
+.cl-onb__tiles {
+  grid-auto-rows: max-content;
+  align-content: start;
+}
+
+.cl-onb__tile > * {
+  flex-shrink: 0;
+}
+
+/* Five tiles or more (a language added): three columns, so all of them show at once. */
+.cl-onb__tiles:has(> :nth-child(5)) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cl-onb__tiles:has(> :nth-child(5)) .cl-onb__tile {
+  min-height: 0;
+  padding: 12px;
+}
+
+.cl-onb__tiles:has(> :nth-child(5)) .cl-onb__icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 2px;
 }
