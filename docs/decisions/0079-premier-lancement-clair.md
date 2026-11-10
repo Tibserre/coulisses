@@ -12,11 +12,11 @@ L'utilisateur : « il faut que l'usage de celle ci soit facile et claire », « 
 
 ## Décision
 - **Un onboarding en étapes (précise 0049).** Au premier lancement, la fenêtre de la mise à jour qui attend laisse la place à six étapes, une idée par étape, plus visuelles que textuelles (choisies sur maquettes, « Premier lancement », le 2026-11-10) :
-  1. Bienvenue : deux phrases, « Commencer » ou « Plus tard ».
+  1. Bienvenue : une phrase, « Vos séances deviennent du texte, qui dit qui parle, et des comptes rendus. », qui s'allume mot à mot au passage d'une tête de lecture sur un son dessiné (jouée une fois puis immobile, immobile d'emblée si macOS demande moins d'animations), puis « Commencer » ou « Plus tard ».
   2. « Ce qu'il faut pour écouter » : une tuile par chose à télécharger, dite par ce à quoi elle sert, avec sa taille ; pas de total.
   3. « Dans quelles langues ? » : une tuile par langue ; le français est inclus ; seul l'ajout de ce qui est coché est compté.
   4. « Prêt à télécharger » : le seul total, une barre de ce qu'il compte, puis « Télécharger », qui vaut confirmation (P1), ou « Plus tard ».
-  5. « Téléchargement en cours » : une tuile par élément, qui se remplit ; « Autoriser » le son de l'ordinateur, dans l'app du Dock (0077 de Distribution).
+  5. « Téléchargement en cours » : une tuile par élément, un anneau autour de son icône qui se remplit et le pourcentage à largeur fixe, pour que rien ne bouge ; « Autoriser » le son de l'ordinateur, dans l'app du Dock (0077 de Distribution).
   6. Les résumés, facultatifs : avec ou sans Ollama, « Installer Ollama » mène à Réglages › Rédaction. Étape omise si Ollama a déjà un modèle.
 
   « Plus tard » ou la fermeture : l'onboarding revient au lancement suivant, tant que rien n'est encore sur ce Mac ; ensuite, ce qui manque passe par la fenêtre des mises à jour (0049) et « Voir ce qui manque ». À l'étape 5, un téléchargement se suit et s'arrête (0049) : « Arrêter » par ligne, « Reprendre » pour une tuile arrêtée ou en échec, « Télécharger » pour une tuile qu'un départ refusé a laissée ; un départ partiel refusé y est suivi, le refus dit. Une taille que le moteur n'annonce pas (outils de calcul) se dit « selon ce Mac », et le total « au moins ».

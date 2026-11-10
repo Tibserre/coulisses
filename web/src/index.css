@@ -5627,17 +5627,6 @@ button.cl-tree__more:hover {
   background: var(--color-accent);
 }
 
-.cl-onb__logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--color-accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .cl-onb__title {
   margin: 0;
   font-family: var(--font-family-heading, inherit);
@@ -5864,19 +5853,6 @@ button.cl-tree__more:hover {
 }
 
 
-.cl-onb__bar {
-  height: 5px;
-  border-radius: 3px;
-  background: var(--color-background-muted);
-  overflow: hidden;
-}
-
-.cl-onb__bar i {
-  display: block;
-  height: 5px;
-  background: var(--color-accent);
-}
-
 .cl-onb__pct {
   text-align: right;
   color: var(--color-text-secondary);
@@ -6006,13 +5982,8 @@ button.cl-tree__more:hover {
   gap: 4px;
 }
 
-.cl-missing__foot .cl-onb__bar {
-  flex: 1;
-}
-
-.cl-onb__icon[data-done] {
-  background: var(--color-accent);
-  color: #fff;
+.cl-missing__row {
+  justify-content: space-between;
 }
 
 .cl-missing__row {
@@ -6207,4 +6178,156 @@ button.cl-tree__more:hover {
   width: 32px;
   height: 32px;
   margin-bottom: 2px;
+}
+
+/* The welcome (ADR 0079): a sentence lit word by word as the play head passes over its
+   sound, the way a session reads. Played once, then still (ADR 0017: nothing loops);
+   still from the start when macOS asks for less motion. */
+.cl-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--spacing-4);
+  padding: 0 var(--spacing-4);
+}
+
+.cl-welcome__who {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.cl-welcome__who span {
+  margin-left: 6px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.cl-welcome__line {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.cl-welcome__line span[aria-hidden] {
+  color: color-mix(in srgb, var(--color-text-primary) 20%, transparent);
+  animation: cl-welcome-lit 0.4s ease-out 0.3s both;
+}
+
+@keyframes cl-welcome-lit {
+  from { color: color-mix(in srgb, var(--color-text-primary) 20%, transparent); }
+  to { color: var(--color-text-primary); }
+}
+
+.cl-welcome__wave {
+  position: relative;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cl-welcome__wave b {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-border));
+}
+
+.cl-welcome__wave i {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  animation: cl-welcome-play 4.2s linear both;
+}
+
+/* The head crosses the sound as the words light (0.3 s + 13 × 0.27 s), then fades out. */
+@keyframes cl-welcome-play {
+  0% { left: 0; opacity: 1; }
+  88% { left: 100%; opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-welcome__line span[aria-hidden] { animation: none; color: var(--color-text-primary); }
+  .cl-welcome__wave i { animation: none; opacity: 0; }
+}
+
+/* Download progress round a piece's icon (ADR 0079): nothing in the tile moves as it grows. */
+.cl-ring {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  flex: none;
+}
+
+.cl-ring > svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.cl-ring__track {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 3;
+}
+
+.cl-ring__value {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s;
+}
+
+.cl-ring__icon {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cl-ring[data-done] .cl-ring__icon {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.cl-onb__tiles:has(> :nth-child(5)) .cl-ring {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 2px;
+}
+
+.cl-onb__tiles:has(> :nth-child(5)) .cl-ring__icon {
+  inset: 4px;
+}
+
+.cl-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cl-missing__row .cl-onb__pct {
+  min-width: 72px;
+  text-align: right;
 }

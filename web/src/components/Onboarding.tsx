@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
-import { AudioLines, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { api, type ModelAction, type ModelsView } from "../api.ts";
 import { requestSystemAudio, useSystemAudio } from "../appBridge.ts";
 import { gigabytes } from "../models.ts";
@@ -25,6 +25,14 @@ import {
 import { useLanguages } from "./Languages.tsx";
 import { ICON, LABELS, WHAT } from "./pieceWords.ts";
 import { ProgressTile } from "./Missing.tsx";
+
+const WELCOME =
+  "Vos séances deviennent du texte, qui dit qui parle, et des comptes rendus.";
+/** The welcome's drawn sound: bar heights, in px. */
+const WAVE = [
+  8, 14, 20, 12, 24, 18, 10, 22, 28, 16, 12, 20, 26, 14, 8, 18, 24, 12, 20, 16,
+  10, 22, 14, 8, 18, 26, 20, 12, 16, 10, 20, 24, 14, 8, 16, 12, 6,
+];
 
 const capital = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
@@ -149,18 +157,35 @@ export function Onboarding({
   if (step === 1)
     body = (
       <>
-        <span className="cl-onb__logo">
-          <AudioLines size={24} strokeWidth={1.75} aria-hidden />
-        </span>
-        <h2 className="cl-onb__title">Bienvenue dans Coulisses</h2>
-        <p className="cl-onb__text">
-          Coulisses écoute vos séances et en tire le texte, qui parle, et des
-          comptes rendus. Tout se fait sur ce Mac.
-        </p>
-        <p className="cl-onb__text">
-          Avant la première séance, il faut télécharger de quoi écouter, une
-          seule fois. Deux minutes pour choisir.
-        </p>
+        {/* The welcome is what Coulisses does: a sentence read as a session is, each
+            word lit as the play head passes over its sound (ADR 0079). */}
+        <div className="cl-welcome">
+          <p className="cl-welcome__who">
+            Bienvenue dans Coulisses<span>0:00</span>
+          </p>
+          <h2 className="cl-welcome__line">
+            <span className="cl-sr-only">{WELCOME}</span>
+            {WELCOME.split(" ").map((word, i) => (
+              <span
+                key={i}
+                aria-hidden
+                style={{ animationDelay: `${(0.3 + i * 0.27).toFixed(2)}s` }}
+              >
+                {word}{" "}
+              </span>
+            ))}
+          </h2>
+          <div className="cl-welcome__wave" aria-hidden>
+            {WAVE.map((h, i) => (
+              <b key={i} style={{ height: h }} />
+            ))}
+            <i />
+          </div>
+          <p className="cl-onb__text">
+            Tout se fait sur ce Mac. D'abord, de quoi écouter : deux minutes
+            pour choisir.
+          </p>
+        </div>
         <div className="cl-onb__actions">
           <Button label="Plus tard" variant="ghost" onClick={onClose} />
           <Button

@@ -26,6 +26,9 @@ import {
 } from "../steps.ts";
 import { ICON, LABELS, WHAT } from "./pieceWords.ts";
 
+/** The ring's length (r = 20): its dash offset says what is left. */
+const RING = 2 * Math.PI * 20;
+
 const kindOf = (line: ProgressLine): PieceKind =>
   line.key.startsWith("align") ? "align" : (line.key as PieceKind);
 
@@ -297,20 +300,49 @@ export function ProgressTile({
     // The tile of « ce qu'il faut pour écouter », its size giving way to the progress,
     // which keeps its place at the bottom whatever the name's length.
     <div className="cl-onb__tile">
-      <span className="cl-onb__icon" data-done={state.kind === "done" || undefined}>
-        {state.kind === "done" ? (
-          <Check size={18} strokeWidth={2.5} aria-hidden />
-        ) : (
-          <Icon size={20} strokeWidth={1.75} aria-hidden />
-        )}
+      {/* The progress goes round the icon: nothing moves as it grows. */}
+      <span className="cl-ring" data-done={state.kind === "done" || undefined}>
+        <svg viewBox="0 0 44 44" aria-hidden>
+          <circle className="cl-ring__track" cx="22" cy="22" r="20" />
+          <circle
+            className="cl-ring__value"
+            cx="22"
+            cy="22"
+            r="20"
+            style={{
+              strokeDasharray: RING,
+              strokeDashoffset: RING * (1 - share / 100),
+            }}
+          />
+        </svg>
+        <span className="cl-ring__icon">
+          {state.kind === "done" ? (
+            <Check size={16} strokeWidth={2.5} aria-hidden />
+          ) : (
+            <Icon size={18} strokeWidth={1.75} aria-hidden />
+          )}
+        </span>
       </span>
       <span className="cl-onb__name">{line.label}</span>
       <span className="cl-onb__what">{WHAT[kindOf(line)]}</span>
       <div className="cl-missing__foot">
         <div className="cl-missing__row">
-          <span className="cl-onb__bar">
-            <i style={{ width: `${share}%` }} />
-          </span>
+          {running ? (
+            <button type="button" className="cl-linkbtn cl-missing__act" onClick={onStop}>
+              Arrêter
+            </button>
+          ) : state.kind !== "done" &&
+            left.models.length + left.environments.length > 0 ? (
+            <button
+              type="button"
+              className="cl-linkbtn cl-missing__act"
+              onClick={onResume}
+            >
+              {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
+            </button>
+          ) : (
+            <span />
+          )}
           <span className="cl-onb__pct">
             {state.kind === "done"
               ? "Prêt"
@@ -328,22 +360,6 @@ export function ProgressTile({
         {state.kind === "failed" && (
           <span className="cl-onb__failed">{state.error}</span>
         )}
-        {running && (
-          <button type="button" className="cl-linkbtn cl-missing__act" onClick={onStop}>
-            Arrêter
-          </button>
-        )}
-        {state.kind !== "done" &&
-          !running &&
-          left.models.length + left.environments.length > 0 && (
-            <button
-              type="button"
-              className="cl-linkbtn cl-missing__act"
-              onClick={onResume}
-            >
-              {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
-            </button>
-          )}
       </div>
     </div>
   );
