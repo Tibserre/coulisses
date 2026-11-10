@@ -456,6 +456,14 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        # The models shipped with the app, installed from it without the network (engine
+        # ADR 0081), before a processing resumes: a failure to look is logged and seen again
+        # at the next start (the model is shown missing meanwhile); an install that fails is
+        # a task said like any download.
+        try:
+            engine_store.install_shipped()
+        except Exception:
+            log.exception("installing the models shipped with the application")
         if processor is not None:
             processor.start()
         if watcher is not None:
