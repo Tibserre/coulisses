@@ -5589,3 +5589,42 @@ button.cl-tree__more:hover {
   padding-top: var(--spacing-3);
   border-top: 1px solid var(--color-border);
 }
+
+/* « Tout télécharger », in Réglages › Transcription: what it is, then its button. */
+.cl-ask--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+}
+
+/* The first launch's two lines (spec §7.12): listening, needed; writing, optional. */
+.cl-welcome {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cl-welcome__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) 0;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-accent);
+}
+
+.cl-welcome__row:last-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-welcome__what {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text-primary);
+}
+
+.cl-ask--row > button {
+  flex: none;
+}

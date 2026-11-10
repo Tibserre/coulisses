@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Language, ModelAction, ProcessingWait } from "./api.ts";
 import {
+  baseFirst,
   canRemoveLanguage,
   inLanguage,
   languageNote,
@@ -191,4 +192,14 @@ test("a rerun of a version without a language waits for it to be chosen", () => 
   assert.equal(rerunLanguageMissing("all", null, "en"), false);
   // The voices alone keep the text, and with it its language: nothing to choose.
   assert.equal(rerunLanguageMissing("diarize", null, null), false);
+});
+
+test("a new install: French is included, the others come after « Tout télécharger »", () => {
+  const frenchMissing = { ...french, installed: false, missing_models: ["asr"], download_bytes: 2_470_000_000 };
+  const english = language({});
+  assert.equal(baseFirst([frenchMissing, english], frenchMissing), "Inclus");
+  assert.equal(baseFirst([frenchMissing, english], english), "");
+  // French there: each language its usual « Ajouter ».
+  assert.equal(baseFirst([french, english], english), null);
+  assert.equal(baseFirst([french, english], french), null);
 });

@@ -9,6 +9,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { api, type Language } from "../api.ts";
 import { gigabytes } from "../models.ts";
 import {
+  baseFirst,
   canRemoveLanguage,
   downloadPercent,
   languageState,
@@ -50,7 +51,10 @@ export function LanguagesSection({
       <Heading level={3}>Langues</Heading>
       <Text color="secondary">
         Les langues dans lesquelles Coulisses sait transcrire. Le français est
-        inclus ; chaque autre langue demande un modèle, téléchargé une fois.
+        inclus ;{" "}
+        {languages?.some((l) => baseFirst(languages, l) === "")
+          ? "les autres s'ajoutent une fois « Tout télécharger » fait, plus bas."
+          : "chaque autre langue demande un modèle, téléchargé une fois."}
       </Text>
       {languages === null ? (
         <Skeleton width={320} height={14} radius={1} />
@@ -58,6 +62,8 @@ export function LanguagesSection({
         <ul className="cl-models">
           {languages.map((l) => {
             const state = languageState(l);
+            // French comes with « Tout télécharger », above; another language only after it.
+            const base = baseFirst(languages, l);
             const spaces = l.used_by.spaces.filter((s) => !s.archived);
             return (
               <li key={l.language} className="cl-models__row">
@@ -87,6 +93,8 @@ export function LanguagesSection({
                   </div>
                 ) : state.kind === "installed" ? (
                   <Text type="supporting">Installé</Text>
+                ) : base ? (
+                  <Text type="supporting">{base}</Text>
                 ) : (
                   <span />
                 )}
@@ -116,7 +124,8 @@ export function LanguagesSection({
                       }
                     />
                   )}
-                  {(state.kind === "missing" || state.kind === "failed") && (
+                  {base === null &&
+                    (state.kind === "missing" || state.kind === "failed") && (
                     <Button
                       label={`${state.kind === "failed" ? "Réessayer" : "Ajouter"} · ${gigabytes(l.download_bytes)}`}
                       size="sm"

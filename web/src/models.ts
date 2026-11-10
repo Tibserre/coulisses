@@ -170,6 +170,8 @@ export function readinessLine(
   readiness: Readiness,
   inventory: Inventory,
   purposeOfKey?: (key: string) => string | undefined,
+  /** Under « Coulisses n'est pas encore prêt… »: only what lacks. */
+  short = false,
 ): string | null {
   if (readiness.ready) return null;
   const parts = readiness.missing.map((piece) => {
@@ -190,7 +192,10 @@ export function readinessLine(
       : said;
   });
   // An environment several stages need is said once.
-  return `Les séances ne peuvent pas être traitées : il manque ${[...new Set(parts)].join(", ")}.`;
+  const lacking = [...new Set(parts)].join(", ");
+  return short
+    ? `Il manque ${lacking}.`
+    : `Les séances ne peuvent pas être traitées : il manque ${lacking}.`;
 }
 
 /** The environments the chain lacks (not installed), once each however many stages need

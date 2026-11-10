@@ -12,7 +12,21 @@ import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Text } from "@astryxdesign/core/Text";
 import { Check, ChevronDown } from "lucide-react";
-import { api, type Language, type ProcessingWait, type Session } from "../api.ts";
+import {
+  api,
+  type Language,
+  type ModelsView,
+  type ProcessingWait,
+  type Session,
+} from "../api.ts";
+import { InstallEverything } from "./InstallEverything.tsx";
+import {
+  beyondLanguage,
+  everythingMissing,
+  lastModelsView,
+  onStepsChanged,
+  stepsChanged,
+} from "../steps.ts";
 import { gigabytes } from "../models.ts";
 import {
   downloadPercent,
@@ -258,7 +272,49 @@ export function LanguageWait({
 }) {
   const [error, setError] = useState<string | null>(null);
   const language = languages?.find((l) => l.language === wait.language);
-  const words = waitWords(wait, language);
+  // The engine's pieces: when more than this language's models lacks (a new install), one
+  // « Tout télécharger » brings everything, the session processed right after.
+  const [view, setView] = useState<ModelsView | null>(lastModelsView);
+  // Apart from `error` (a refusal): cleared once a reading succeeds again.
+  const [unread, setUnread] = useState<string | null>(null);
+  const readModels = useCallback(
+    () =>
+      api.engineModels().then(
+        (next) => {
+          setUnread(null);
+          stepsChanged(next);
+        },
+        (e: Error) =>
+          setUnread(`Ce qui manque à ce Mac n'a pas pu être lu : ${e.message}`),
+      ),
+    [],
+  );
+  useEffect(() => {
+    void readModels();
+    return onStepsChanged(setView);
+  }, [readModels]);
+  // While something downloads or installs: read again, so a failure shows here too.
+  const running = view?.actions.some((a) => a.state === "running") ?? false;
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => void readModels(), 2000);
+    return () => window.clearInterval(timer);
+  }, [running, readModels]);
+  const everything =
+    view && wait.reason === "model_missing"
+      ? everythingMissing(view, view.actions, wait.missing_models)
+      : null;
+  const beyond = beyondLanguage(
+    everything,
+    language?.missing_models ?? wait.missing_models,
+  );
+  const words = beyond
+    ? {
+        title: "Coulisses n'est pas encore prêt à écouter cette séance",
+        text: "Il faut d'abord télécharger de quoi écouter, une seule fois pour toutes vos séances. Celle-ci sera traitée juste après.",
+        downloading: null,
+      }
+    : waitWords(wait, language);
   const act = async (what: () => Promise<void>) => {
     setError(null);
     try {
@@ -284,7 +340,15 @@ export function LanguageWait({
         </div>
       )}
       <div className="cl-ask__actions">
-        {wait.reason === "model_missing" && !words.downloading && language && (
+        {beyond && everything && (
+          <InstallEverything
+            everything={everything}
+            after="La séance sera traitée juste après."
+            onStarted={onStopped}
+            onRefused={setError}
+          />
+        )}
+        {!beyond && wait.reason === "model_missing" && !words.downloading && language && (
           <Button
             variant="primary"
             label={`Télécharger (${gigabytes(wait.download_bytes)})`}
@@ -313,11 +377,11 @@ export function LanguageWait({
           />
         )}
       </div>
-      {error && (
-        <Text as="p" color="primary" type="supporting">
-          {error}
+      {[error, unread].filter(Boolean).map((said) => (
+        <Text key={said} as="p" color="primary" type="supporting">
+          {said}
         </Text>
-      )}
+      ))}
     </section>
   );
 }

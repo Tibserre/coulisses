@@ -155,9 +155,15 @@ export function SummaryView({
       {error && <Banner status="error" title="Résumé" description={error} />}
       {!reachable && (
         <Banner
-          status="warning"
-          title="Ollama ne répond pas"
-          description="Lancez l'application Ollama pour rédiger un résumé. Les résumés déjà faits restent lisibles."
+          status="info"
+          title="Les résumés demandent Ollama"
+          description={
+            <>
+              Ils sont facultatifs : ceux déjà faits restent lisibles. Ollama
+              n'est pas lancé, ou pas installé ;{" "}
+              <a className="cl-linkbtn" href="#/reglages?onglet=redaction">comment l'installer</a>.
+            </>
+          }
         />
       )}
 

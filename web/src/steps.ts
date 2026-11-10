@@ -1,8 +1,9 @@
-import type {
-  CatalogModel,
-  ModelAction,
-  ModelsView,
-  StageName,
+import {
+  api,
+  type CatalogModel,
+  type ModelAction,
+  type ModelsView,
+  type StageName,
 } from "./api.ts";
 import { gigabytes, missingEnvironments } from "./models.ts";
 
@@ -62,6 +63,9 @@ export interface UpdateNotice {
   install: string[];
   remove: string[];
   removeEnvironments: string[];
+  /** The first launch: nothing of the engine on this Mac yet. The window then says the two
+   *  things to prepare, listening (needed) and writing (optional). */
+  welcome?: boolean;
 }
 
 /** Whose update it is, and what a model does, by its stage. */
@@ -222,7 +226,9 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
       {
         kind: "later",
         label: "Plus tard",
-        description: "Les séances ne pourront pas être traitées d'ici là.",
+        description: firstLaunch
+          ? "Les séances attendront ; « Tout télécharger » reste dans Réglages › Transcription."
+          : "Les séances ne pourront pas être traitées d'ici là.",
         recommended: false,
       },
     ],
@@ -230,6 +236,7 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
     install: environments.map(([name]) => name),
     remove: [],
     removeEnvironments: [],
+    welcome: firstLaunch,
   };
 }
 
@@ -358,4 +365,130 @@ export function onStepsChanged(
   const handle = (e: Event) => listener((e as CustomEvent<ModelsView>).detail);
   window.addEventListener(CHANGED, handle);
   return () => window.removeEventListener(CHANGED, handle);
+}
+
+/** Everything the processing lacks on this Mac, fetched in one go (« Tout télécharger »):
+ *  the models and environments the engine's readiness names, plus the models a waiting
+ *  session's language needs (`extra`). What already runs is not asked again. */
+export interface Everything {
+  download: string[];
+  install: string[];
+  /** The models' announced size; the environments' is not known before they install. */
+  bytes: number;
+  /** Some environments to install: their size comes on top of `bytes`. */
+  more: boolean;
+}
+
+export function everythingMissing(
+  view: ModelsView,
+  actions: ModelAction[] = view.actions,
+  extra: string[] = [],
+): Everything | null {
+  const running = new Set(
+    actions
+      .filter((a) => a.state === "running")
+      .map((a) => `${a.kind}:${a.name}`),
+  );
+  const keys = new Set([
+    ...view.readiness.missing
+      .filter((p) => p.code === "model_missing" && p.model)
+      .map((p) => p.model!),
+    ...extra,
+  ]);
+  const download = [...keys].filter((key) => !running.has(`model:${key}`));
+  const install = missingEnvironments(view.readiness, view.inventory)
+    .map(([name]) => name)
+    .filter((name) => !running.has(`environment:${name}`));
+  if (!download.length && !install.length) return null;
+  const sizes = download.map(
+    (key) => view.catalog.models.find((m) => m.key === key)?.announced_bytes ?? null,
+  );
+  const bytes = sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
+  // An environment, or a model without an announced size: more than the figure said.
+  return { download, install, bytes, more: install.length > 0 || sizes.includes(null) };
+}
+
+/** Whether a waiting session needs more than its language's own download (a new install):
+ *  then « Tout télécharger », else the language's « Télécharger ». */
+export function beyondLanguage(
+  everything: Everything | null,
+  languageMissing: readonly string[],
+): boolean {
+  return (
+    everything !== null &&
+    (everything.install.length > 0 ||
+      everything.download.some((key) => !languageMissing.includes(key)))
+  );
+}
+
+/** Whether a model's row gives way to « Tout télécharger », outside developer mode: missing,
+ *  with nothing of its own to say (no last download, no old model it replaces). */
+export function coveredByEverything(
+  everything: Everything | null,
+  row: { key: string; state: { kind: string }; last: unknown },
+  replacing: boolean,
+): boolean {
+  return (
+    everything !== null &&
+    row.state.kind === "missing" &&
+    row.last === null &&
+    !replacing &&
+    everything.download.includes(row.key)
+  );
+}
+
+/** Whether everything the processing lacks is downloading or installing: then it says so,
+ *  rather than what lacks. A damaged model, or one nothing fetches, keeps it said. */
+export function allLackingRunning(
+  view: ModelsView,
+  actions: ModelAction[] = view.actions,
+): boolean {
+  const running = (kind: string, name: string | null) =>
+    name !== null &&
+    actions.some((a) => a.state === "running" && a.kind === kind && a.name === name);
+  return (
+    view.readiness.missing.length > 0 &&
+    view.readiness.missing.every((p) =>
+      p.code === "model_missing"
+        ? running("model", p.model)
+        : p.code === "environment_missing"
+          ? running("environment", p.environment)
+          : false,
+    )
+  );
+}
+
+/** Its size as said before it starts: « 4,1 Go », or « plus de 4,1 Go » when environments
+ *  come on top. */
+export function everythingSize(everything: Everything): string {
+  return `${everything.more ? "plus de " : ""}${gigabytes(everything.bytes)}`;
+}
+
+/** Starts it, each piece by the route that exists (ADR 0036); the models' view read again
+ *  after, for whoever follows the downloads. A refusal is thrown, with what had started. */
+export async function downloadEverything(everything: Everything): Promise<void> {
+  const total = everything.download.length + everything.install.length;
+  let started = 0;
+  try {
+    for (const key of everything.download) {
+      await api.downloadModel(key);
+      started += 1;
+    }
+    for (const name of everything.install) {
+      await api.installEnvironment(name);
+      started += 1;
+    }
+  } catch (e) {
+    const said = (e as Error).message;
+    throw new Error(
+      started ? `${started} sur ${total} ont démarré ; le suivant a été refusé : ${said}` : said,
+    );
+  } finally {
+    try {
+      stepsChanged(await api.engineModels());
+    } catch (e) {
+      // The service gone: the frame says it; what started runs on.
+      console.warn("everything: reading the models again:", (e as Error).message);
+    }
+  }
 }

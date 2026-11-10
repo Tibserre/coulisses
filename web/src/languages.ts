@@ -89,6 +89,16 @@ export function rerunLanguageMissing(
   return stage !== "diarize" && shown === null && chosen === null;
 }
 
+/** What a language's row says instead of « Ajouter » while French, included, is not on
+ *  this Mac yet (a new install): « Inclus » for French, nothing for the others, added once
+ *  « Tout télécharger » is done (the section says it). Null: its usual action. */
+export function baseFirst(languages: Language[], language: Language): string | null {
+  if (languageState(language).kind !== "missing") return null;
+  if (language.language === FRENCH) return "Inclus";
+  const french = languages.find((l) => l.language === FRENCH);
+  return french && !french.installed ? "" : null;
+}
+
 /** The share downloaded, 0 to 100. */
 export function downloadPercent(done: number, total: number): number {
   return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;

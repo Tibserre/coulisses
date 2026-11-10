@@ -4,6 +4,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Text } from "@astryxdesign/core/Text";
+import { AudioLines, FileText } from "lucide-react";
 import { api, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { gigabytes, percent } from "../models.ts";
@@ -338,7 +339,9 @@ export function UpdateNoticesDialog({
         </Text>
         <h2 className="cl-update__title">
           {working === null
-            ? shown.title
+            ? shown.welcome
+              ? "Avant votre première séance"
+              : shown.title
             : done
               ? "C'est fait"
               : "C'est en cours"}
@@ -354,9 +357,13 @@ export function UpdateNoticesDialog({
         )}
         {working === null ? (
           <>
-            <Text as="p" color="secondary">
-              {shown.explanation}
-            </Text>
+            {shown.welcome ? (
+              <WelcomeRows onWriting={onClose} />
+            ) : (
+              <Text as="p" color="secondary">
+                {shown.explanation}
+              </Text>
+            )}
             {shown.gains.length > 0 && (
               <dl className="cl-gains">
                 {shown.gains.map((gain) => (
@@ -471,4 +478,34 @@ function sameUpdate(a: UpdateNotice, b: UpdateNotice): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === "replacement") return a.remove.join() === b.remove.join();
   return a.id === b.id;
+}
+
+/** The first launch (spec §7.12): the two things to prepare, listening (needed, the window's
+ *  choices) and writing (optional: Ollama, explained in Réglages › Rédaction). */
+function WelcomeRows({ onWriting }: { onWriting: () => void }) {
+  return (
+    <ul className="cl-welcome">
+      <li className="cl-welcome__row">
+        <AudioLines size={18} strokeWidth={1.75} aria-hidden />
+        <div className="cl-welcome__what">
+          <Text weight="medium">Écouter vos séances</Text>
+          <Text type="supporting">Téléchargé une fois depuis internet.</Text>
+        </div>
+        <Text type="supporting">Nécessaire</Text>
+      </li>
+      <li className="cl-welcome__row">
+        <FileText size={18} strokeWidth={1.75} aria-hidden />
+        <div className="cl-welcome__what">
+          <Text weight="medium">Rédiger des résumés</Text>
+          <Text type="supporting">
+            Avec Ollama, une app gratuite ·{" "}
+            <a className="cl-linkbtn" href="#/reglages?onglet=redaction" onClick={onWriting}>
+              Comment faire
+            </a>
+          </Text>
+        </div>
+        <Text type="supporting">Facultatif</Text>
+      </li>
+    </ul>
+  );
 }

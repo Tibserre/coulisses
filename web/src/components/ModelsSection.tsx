@@ -14,7 +14,14 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { useLanguages } from "./Languages.tsx";
-import { lastModelsView, stepsChanged } from "../steps.ts";
+import { InstallEverything } from "./InstallEverything.tsx";
+import {
+  allLackingRunning,
+  coveredByEverything,
+  everythingMissing,
+  lastModelsView,
+  stepsChanged,
+} from "../steps.ts";
 import {
   environmentState,
   interpreterNote,
@@ -129,7 +136,13 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       )
     : null;
   const quiet = view && !dev ? quietRows(rows, view.inventory) : null;
-  const shownRows = quiet ? quiet.apart : rows;
+  // What « Tout télécharger » fetches: outside developer mode, the plain rows of what it
+  // covers (missing, nothing to say) give way to it.
+  const everything = view ? everythingMissing(view, actions) : null;
+  const covered = (row: ModelRow) =>
+    !dev &&
+    coveredByEverything(everything, row, !!quiet?.old.get(row.purpose)?.length);
+  const shownRows = (quiet ? quiet.apart : rows).filter((r) => !covered(r));
   const environments = quiet
     ? quiet.apartEnvironments
     : (view?.inventory.environments ?? []);
@@ -257,7 +270,34 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       {view === null && !unreadable && <ModelsSkeleton dev={dev} />}
       {view && (
         <>
-          {lacking ? (
+          {everything ? (
+            <div className="cl-ask cl-ask--row">
+              <div className="cl-models__what">
+                <Text weight="medium">
+                  Coulisses n'est pas encore prêt à écouter vos séances
+                </Text>
+                {/* What lacks, by what it is for (ADR 0036): one short line. */}
+                <Text type="supporting">
+                  {readinessLine(
+                    view.readiness,
+                    view.inventory,
+                    dev ? undefined : purposeOfKey,
+                    true,
+                  ) ?? "Tout ce qu'il faut, téléchargé une fois."}
+                </Text>
+              </div>
+              <InstallEverything
+                everything={everything}
+                onStarted={() => void load()}
+                onRefused={setRefused}
+              />
+            </div>
+          ) : lacking && view && allLackingRunning(view, actions) ? (
+            <Text color="secondary">
+              Le téléchargement est en cours : les séances seront traitées
+              une fois fini.
+            </Text>
+          ) : lacking ? (
             <Banner
               status="warning"
               title="Il manque de quoi traiter"
@@ -334,6 +374,9 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
               const action = actions.find(
                 (a) => a.kind === "environment" && a.name === name,
               );
+              // Covered by « Tout télécharger », with nothing of its own to say.
+              if (!dev && everything?.install.includes(name) && !action)
+                return null;
               return (
                 <li key={`manque-${name}`} className="cl-models__row">
                   <div className="cl-models__what">
