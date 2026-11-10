@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, EnvironmentInfo, InstalledEngineModel, MissingPiece, ModelsView } from "./api.ts";
-import { allLackingRunning, beyondLanguage, coveredByEverything, everythingMissing, everythingSize, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
+import { allLackingRunning, beyondLanguage, coveredByEverything, everythingMissing, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
 
 const model = (key: string, over: Partial<CatalogModel> = {}): CatalogModel => ({
   key,
@@ -182,7 +182,7 @@ test("what the processing lacks besides is one update to download", () => {
 test("nothing installed yet: a welcome", () => {
   const [notice] = updateNotices(view({}, [lacking({ model: "asr" })], [model("asr")]));
   assert.equal(notice.eyebrow, "Bienvenue dans Coulisses");
-  assert.equal(notice.choices[0].label, "Tout télécharger");
+  assert.equal(notice.choices[0].label, "Télécharger");
   assert.equal(notice.choices[0].description, "Environ 2,5 Go depuis internet, une seule fois.");
 });
 
@@ -266,12 +266,13 @@ test("the first launch: the window says the two things to prepare", () => {
   assert.equal(updateNotices(afterUpdate).some((n) => n.welcome), false);
 });
 
-test("« Tout télécharger » takes everything the chain lacks, not only a language's models", () => {
+test("« Voir ce qui manque » takes everything the chain lacks, not only a language's models", () => {
   const all = everythingMissing(fresh, [], ["align-en"]);
   assert.deepEqual(all?.download, ["asr", "align-fr", "voix", "align-en"]);
   assert.deepEqual(all?.install, ["diarizen"]);
-  // An environment's size is not known before it installs: said as « plus de ».
-  assert.equal(everythingSize(all!), "plus de 3,8 Go");
+  // An environment's size is not known before it installs: « plus de ».
+  assert.equal(all?.bytes, 3_760_000_000);
+  assert.equal(all?.more, true);
 });
 
 test("what already downloads is not asked again; nothing left, nothing offered", () => {
@@ -291,7 +292,7 @@ test("what already downloads is not asked again; nothing left, nothing offered",
   const some = everythingMissing(fresh, [running("model", "asr"), running("environment", "diarizen")]);
   assert.deepEqual(some?.download, ["align-fr", "voix"]);
   assert.equal(some?.more, false);
-  assert.equal(everythingSize(some!), "1,3 Go");
+  assert.equal(some?.bytes, 1_290_000_000);
   assert.equal(everythingMissing(view({})), null);
 });
 
@@ -300,7 +301,7 @@ test("a model without an announced size: « plus de », never a figure too low",
   assert.equal(everythingMissing(unsized)?.more, true);
 });
 
-test("a waiting session: « Tout télécharger » only when more than its language lacks", () => {
+test("a waiting session: « Voir ce qui manque » only when more than its language lacks", () => {
   const all = everythingMissing(fresh);
   assert.equal(beyondLanguage(all, ["asr", "align-fr"]), true);
   const onlyLanguage = everythingMissing(view({}, [lacking({ model: "align-en", stage: "align" })], [model("align-en")]));
@@ -308,7 +309,7 @@ test("a waiting session: « Tout télécharger » only when more than its langua
   assert.equal(beyondLanguage(null, []), false);
 });
 
-test("a row gives way to « Tout télécharger » only with nothing of its own to say", () => {
+test("a row gives way to « Voir ce qui manque » only with nothing of its own to say", () => {
   const all = everythingMissing(fresh);
   const row = (over: object = {}) => ({ key: "asr", state: { kind: "missing" }, last: null, ...over });
   assert.equal(coveredByEverything(all, row(), false), true);

@@ -110,7 +110,7 @@ export function MissingPage({
   );
 }
 
-function MissingDialog({
+export function MissingDialog({
   view,
   pieces,
   chosen,

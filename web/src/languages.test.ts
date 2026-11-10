@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Language, ModelAction, ProcessingWait } from "./api.ts";
 import {
-  baseFirst,
   canRemoveLanguage,
+  languageCards,
+  languageSize,
+  offersRemoval,
   inLanguage,
   languageNote,
   languageState,
@@ -194,12 +196,34 @@ test("a rerun of a version without a language waits for it to be chosen", () => 
   assert.equal(rerunLanguageMissing("diarize", null, null), false);
 });
 
-test("a new install: French is included, the others come after « Tout télécharger »", () => {
-  const frenchMissing = { ...french, installed: false, missing_models: ["asr"], download_bytes: 2_470_000_000 };
-  const english = language({});
-  assert.equal(baseFirst([frenchMissing, english], frenchMissing), "Inclus");
-  assert.equal(baseFirst([frenchMissing, english], english), "");
-  // French there: each language its usual « Ajouter ».
-  assert.equal(baseFirst([french, english], english), null);
-  assert.equal(baseFirst([french, english], french), null);
+test("a language's size: its own models only, unknown when one is not announced", () => {
+  const catalog = [{ key: "wav2vec2-ctc-english", announced_bytes: 1_260_000_000 }];
+  assert.equal(languageSize(language({}), catalog), 1_260_000_000);
+  assert.equal(languageSize(language({}), []), null);
+  assert.equal(languageSize(french, catalog), null);
+});
+
+test("Réglages: French and what is on this Mac in cards, the rest to add once French is there", () => {
+  const english = language({ installed: true });
+  const spanish = language({ language: "es", label: "Espagnol" });
+  const german = language({
+    language: "de",
+    label: "Allemand",
+    used_by: { spaces: [{ id: 2, name: "Berlin", archived: false }], waiting_sessions: [] },
+  });
+  const { cards, toAdd } = languageCards([french, english, spanish, german]);
+  // A language a space has by default is a card, even not downloaded: its space is named.
+  assert.deepEqual(cards.map((l) => l.language), ["fr", "en", "de"]);
+  assert.deepEqual(toAdd.map((l) => l.language), ["es"]);
+  const fresh = languageCards([{ ...french, installed: false }, spanish]);
+  assert.deepEqual(fresh.toAdd, []);
+});
+
+test("« Supprimer » only where no space has the language by default", () => {
+  assert.equal(offersRemoval(language({ installed: true })), true);
+  assert.equal(
+    offersRemoval(language({ installed: true, used_by: { spaces: [{ id: 1, name: "Réunions", archived: true }], waiting_sessions: [] } })),
+    false,
+  );
+  assert.equal(offersRemoval(french), false);
 });

@@ -273,7 +273,7 @@ export function LanguageWait({
   const [error, setError] = useState<string | null>(null);
   const language = languages?.find((l) => l.language === wait.language);
   // The engine's pieces: when more than this language's models lacks (a new install), one
-  // « Tout télécharger » brings everything, the session processed right after.
+  // « Voir ce qui manque » brings everything, the session processed right after.
   const [view, setView] = useState<ModelsView | null>(lastModelsView);
   // Apart from `error` (a refusal): cleared once a reading succeeds again.
   const [unread, setUnread] = useState<string | null>(null);

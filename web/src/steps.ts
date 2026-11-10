@@ -216,7 +216,7 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
     choices: [
       {
         kind: "install",
-        label: firstLaunch ? "Tout télécharger" : "Télécharger",
+        label: "Télécharger",
         description:
           bytes && !environments.length
             ? `Environ ${gigabytes(bytes)} depuis internet, une seule fois.`
@@ -227,7 +227,7 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
         kind: "later",
         label: "Plus tard",
         description: firstLaunch
-          ? "Les séances attendront ; « Tout télécharger » reste dans Réglages › Transcription."
+          ? "Les séances attendront ; « Voir ce qui manque » reste dans Réglages › Transcription."
           : "Les séances ne pourront pas être traitées d'ici là.",
         recommended: false,
       },
@@ -367,7 +367,7 @@ export function onStepsChanged(
   return () => window.removeEventListener(CHANGED, handle);
 }
 
-/** Everything the processing lacks on this Mac, fetched in one go (« Tout télécharger »):
+/** Everything the processing lacks on this Mac, fetched in one go (« Voir ce qui manque »):
  *  the models and environments the engine's readiness names, plus the models a waiting
  *  session's language needs (`extra`). What already runs is not asked again. */
 export interface Everything {
@@ -409,7 +409,7 @@ export function everythingMissing(
 }
 
 /** Whether a waiting session needs more than its language's own download (a new install):
- *  then « Tout télécharger », else the language's « Télécharger ». */
+ *  then « Voir ce qui manque », else the language's « Télécharger ». */
 export function beyondLanguage(
   everything: Everything | null,
   languageMissing: readonly string[],
@@ -421,7 +421,7 @@ export function beyondLanguage(
   );
 }
 
-/** Whether a model's row gives way to « Tout télécharger », outside developer mode: missing,
+/** Whether a model's row gives way to « Voir ce qui manque », outside developer mode: missing,
  *  with nothing of its own to say (no last download, no old model it replaces). */
 export function coveredByEverything(
   everything: Everything | null,
@@ -456,12 +456,6 @@ export function allLackingRunning(
           : false,
     )
   );
-}
-
-/** Its size as said before it starts: « 4,1 Go », or « plus de 4,1 Go » when environments
- *  come on top. */
-export function everythingSize(everything: Everything): string {
-  return `${everything.more ? "plus de " : ""}${gigabytes(everything.bytes)}`;
 }
 
 /** Starts it, each piece by the route that exists (ADR 0036); the models' view read again

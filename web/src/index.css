@@ -5590,7 +5590,7 @@ button.cl-tree__more:hover {
   border-top: 1px solid var(--color-border);
 }
 
-/* « Tout télécharger », in Réglages › Transcription: what it is, then its button. */
+/* « Voir ce qui manque », in Réglages › Transcription: what it is, then its button. */
 .cl-ask--row {
   flex-direction: row;
   align-items: center;
@@ -6081,4 +6081,102 @@ button.cl-tree__more:hover {
   opacity: 0.75;
   margin-bottom: var(--spacing-3);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+/* Réglages › Transcription, the languages (ADR 0079): compact cards, the spaces that have
+   each by default, then the ones to add. */
+.cl-langcards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-3);
+}
+
+.cl-langcard {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--color-background-body);
+}
+
+.cl-langcard__line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--spacing-2);
+}
+
+.cl-langcard__spaces {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.cl-langcard__space {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.cl-langcard__act {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.cl-langcard__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.cl-langcard__progress > :first-child {
+  flex: 1;
+}
+
+.cl-langadds {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cl-langadd {
+  font: inherit;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.cl-langadd__name {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.cl-langadd__size {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.cl-models__ready {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-3);
 }
