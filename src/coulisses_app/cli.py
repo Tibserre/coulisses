@@ -11,7 +11,7 @@ import webbrowser
 from pathlib import Path
 
 import uvicorn
-from coulisses.api import DEFAULT_PROFILE, ChainConfig, load_profile, profile_path
+from coulisses.api import DEFAULT_PROFILE, ChainConfig, catalog, load_profile, profile_path
 
 from coulisses_app import lossless, system_audio
 from coulisses_app.api import create_app
@@ -101,7 +101,8 @@ def main(argv: list[str] | None = None) -> None:
     # From the .app: its tools on the PATH, uv's downloads under ~/Coulisses (ADR 0040).
     resources = Resources.from_env()
     try:
-        resources.check()
+        # The models shipped with the .app, as the engine's catalog says (engine ADR 0081).
+        resources.check(bundled=[m.key for m in catalog().models if m.bundled])
     except IncompleteAppError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
