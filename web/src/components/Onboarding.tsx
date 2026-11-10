@@ -8,8 +8,6 @@ import { gigabytes } from "../models.ts";
 import {
   basePieces,
   languageChoices,
-  lineRunning,
-  lineState,
   onboardingDownload,
   progressLines,
   sizeWords,
@@ -26,6 +24,7 @@ import {
 } from "../steps.ts";
 import { useLanguages } from "./Languages.tsx";
 import { ICON, LABELS, WHAT } from "./pieceWords.ts";
+import { ProgressTile } from "./Missing.tsx";
 
 const capital = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
@@ -381,60 +380,18 @@ export function Onboarding({
     body = (
       <>
         <h2 className="cl-onb__title">Téléchargement en cours</h2>
-        <ul className="cl-onb__progress">
-          {lines.map((line) => {
-            const state = lineState(line, view, actions);
-            const share =
-              state.kind === "done"
-                ? 100
-                : state.kind === "running"
-                  ? (state.percent ?? 0)
-                  : 0;
-            return (
-              <li key={line.key}>
-                <span>{line.label}</span>
-                <span className="cl-onb__bar">
-                  <i style={{ width: `${share}%` }} />
-                </span>
-                <span className="cl-onb__pct">
-                  {state.kind === "done"
-                    ? "Prêt"
-                    : state.kind === "running"
-                      ? state.percent === null
-                        ? "En cours"
-                        : `${state.percent} %`
-                      : state.kind === "failed"
-                        ? "Échoué"
-                        : state.kind === "stopped"
-                          ? "Arrêté"
-                          : "En attente"}
-                </span>
-                <span className="cl-onb__lineact">
-                  {lineRunning(line, actions) && (
-                    <Button
-                      label="Arrêter"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void stop(line)}
-                    />
-                  )}
-                  {(state.kind === "stopped" || state.kind === "failed") &&
-                    !lineRunning(line, actions) && (
-                    <Button
-                      label="Reprendre"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void resume(line)}
-                    />
-                  )}
-                </span>
-                {state.kind === "failed" && (
-                  <span className="cl-onb__failed">{state.error}</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="cl-onb__tiles">
+          {lines.map((line) => (
+            <ProgressTile
+              key={line.key}
+              line={line}
+              view={view}
+              actions={actions}
+              onStop={() => void stop(line)}
+              onResume={() => void resume(line)}
+            />
+          ))}
+        </div>
         <p className="cl-onb__note">
           Vous pouvez fermer cette fenêtre et déjà enregistrer : la séance sera
           traitée une fois prêt.
@@ -512,6 +469,7 @@ export function Onboarding({
       isOpen={isOpen}
       onOpenChange={(open) => !open && onClose()}
       width={560}
+      maxHeight="90dvh"
       aria-label="Premier lancement de Coulisses"
     >
       <div className="cl-onb cl-onb--steps">

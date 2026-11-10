@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Check } from "lucide-react";
-import { api, type Language, type ModelsView } from "../api.ts";
+import { api, type Language, type ModelAction, type ModelsView } from "../api.ts";
 import { gigabytes } from "../models.ts";
 import {
   basePieces,
@@ -180,6 +180,7 @@ export function MissingDialog({
       isOpen
       onOpenChange={(isOpen) => !isOpen && onClose()}
       width={560}
+      maxHeight="90dvh"
       aria-label={plan ? "Téléchargement en cours" : "Ce qui manque"}
     >
       <div className="cl-onb cl-onb--steps">
@@ -205,92 +206,33 @@ export function MissingDialog({
                   </span>
                 </div>
               );
-            const state = lineState(line, view, view.actions);
-            const share =
-              state.kind === "done"
-                ? 100
-                : state.kind === "running"
-                  ? (state.percent ?? 0)
-                  : 0;
             return (
-              <div key={line.key} className="cl-onb__tile cl-missing__tile">
-                <div className="cl-missing__row">
-                  <span
-                    className="cl-missing__ico"
-                    data-done={state.kind === "done" || undefined}
-                  >
-                    {state.kind === "done" ? (
-                      <Check size={14} strokeWidth={3} aria-hidden />
-                    ) : (
-                      <Icon size={16} strokeWidth={1.75} aria-hidden />
-                    )}
-                  </span>
-                  <span className="cl-onb__name cl-missing__name">
-                    {line.label}
-                  </span>
-                  <span className="cl-onb__pct">
-                    {state.kind === "done"
-                      ? "Prêt"
-                      : state.kind === "running"
-                        ? state.percent === null
-                          ? "En cours"
-                          : `${state.percent} %`
-                        : state.kind === "failed"
-                          ? "Échoué"
-                          : state.kind === "stopped"
-                            ? "Arrêté"
-                            : "En attente"}
-                  </span>
-                </div>
-                <span className="cl-onb__bar">
-                  <i style={{ width: `${share}%` }} />
-                </span>
-                {state.kind === "failed" && (
-                  <span className="cl-onb__failed">{state.error}</span>
-                )}
-                {lineRunning(line, view.actions) && (
-                  <button
-                    type="button"
-                    className="cl-linkbtn cl-missing__act"
-                    onClick={() =>
-                      void act(async () => {
-                        for (const a of view.actions.filter(
-                          (a) =>
-                            a.state === "running" &&
-                            (a.kind === "model"
-                              ? line.models.includes(a.name)
-                              : line.environments.includes(a.name)),
-                        ))
-                          await api.cancelModelAction(a.kind, a.name);
-                      })
-                    }
-                  >
-                    Arrêter
-                  </button>
-                )}
-                {state.kind !== "done" &&
-                  !lineRunning(line, view.actions) &&
-                  (() => {
+              <ProgressTile
+                key={line.key}
+                line={line}
+                view={view}
+                actions={view.actions}
+                onStop={() =>
+                  void act(async () => {
+                    for (const a of view.actions.filter(
+                      (a) =>
+                        a.state === "running" &&
+                        (a.kind === "model"
+                          ? line.models.includes(a.name)
+                          : line.environments.includes(a.name)),
+                    ))
+                      await api.cancelModelAction(a.kind, a.name);
+                  })
+                }
+                onResume={() =>
+                  void act(async () => {
                     const left = toResume(line, view, view.actions);
-                    return left.models.length + left.environments.length > 0;
-                  })() && (
-                    <button
-                      type="button"
-                      className="cl-linkbtn cl-missing__act"
-                      onClick={() =>
-                        void act(async () => {
-                          const left = toResume(line, view, view.actions);
-                          for (const key of left.models)
-                            await api.downloadModel(key);
-                          for (const name of left.environments)
-                            await api.installEnvironment(name);
-                        })
-                      }
-                    >
-                      {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
-                    </button>
-                  )}
-              </div>
+                    for (const key of left.models) await api.downloadModel(key);
+                    for (const name of left.environments)
+                      await api.installEnvironment(name);
+                  })
+                }
+              />
             );
           })}
         </div>
@@ -322,5 +264,85 @@ export function MissingDialog({
         )}
       </div>
     </Dialog>
+  );
+}
+
+/** One piece's progress, as a tile (ADR 0079): the same in the onboarding and in « Ce qui
+ *  manque ». « Arrêter » while it runs; « Reprendre » (or « Télécharger ») for what is
+ *  neither running nor over. */
+export function ProgressTile({
+  line,
+  view,
+  actions,
+  onStop,
+  onResume,
+}: {
+  line: ProgressLine;
+  view: ModelsView;
+  actions: ModelAction[];
+  onStop: () => void;
+  onResume: () => void;
+}) {
+  const Icon = ICON[kindOf(line)];
+  const state = lineState(line, view, actions);
+  const share =
+    state.kind === "done"
+      ? 100
+      : state.kind === "running"
+        ? (state.percent ?? 0)
+        : 0;
+  const running = lineRunning(line, actions);
+  const left = toResume(line, view, actions);
+  return (
+    <div className="cl-onb__tile cl-missing__tile">
+      <div className="cl-missing__row">
+        <span
+          className="cl-missing__ico"
+          data-done={state.kind === "done" || undefined}
+        >
+          {state.kind === "done" ? (
+            <Check size={14} strokeWidth={3} aria-hidden />
+          ) : (
+            <Icon size={16} strokeWidth={1.75} aria-hidden />
+          )}
+        </span>
+        <span className="cl-onb__name cl-missing__name">{line.label}</span>
+        <span className="cl-onb__pct">
+          {state.kind === "done"
+            ? "Prêt"
+            : state.kind === "running"
+              ? state.percent === null
+                ? "En cours"
+                : `${state.percent} %`
+              : state.kind === "failed"
+                ? "Échoué"
+                : state.kind === "stopped"
+                  ? "Arrêté"
+                  : "En attente"}
+        </span>
+      </div>
+      <span className="cl-onb__bar">
+        <i style={{ width: `${share}%` }} />
+      </span>
+      {state.kind === "failed" && (
+        <span className="cl-onb__failed">{state.error}</span>
+      )}
+      {running && (
+        <button type="button" className="cl-linkbtn cl-missing__act" onClick={onStop}>
+          Arrêter
+        </button>
+      )}
+      {state.kind !== "done" &&
+        !running &&
+        left.models.length + left.environments.length > 0 && (
+          <button
+            type="button"
+            className="cl-linkbtn cl-missing__act"
+            onClick={onResume}
+          >
+            {state.kind === "waiting" ? "Télécharger" : "Reprendre"}
+          </button>
+        )}
+    </div>
   );
 }

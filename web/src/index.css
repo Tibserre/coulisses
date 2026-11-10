@@ -5863,26 +5863,6 @@ button.cl-tree__more:hover {
   margin-left: auto;
 }
 
-.cl-onb__progress {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.cl-onb__progress li {
-  display: grid;
-  grid-template-columns: 170px 1fr 64px 100px;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-}
-
-.cl-onb__progress .cl-onb__failed {
-  grid-column: 1 / -1;
-}
 
 .cl-onb__bar {
   height: 5px;
@@ -5988,10 +5968,6 @@ button.cl-tree__more:hover {
   font-size: 13px;
 }
 
-.cl-onb__lineact {
-  display: flex;
-  justify-content: flex-end;
-}
 
 /* A session waiting for what this Mac lacks (ADR 0079): the whole page says it, airy. */
 .cl-missing {
@@ -6024,6 +6000,7 @@ button.cl-tree__more:hover {
 
 .cl-missing__tile {
   gap: 8px;
+  min-height: 0;
 }
 
 .cl-missing__row {
@@ -6186,11 +6163,23 @@ button.cl-tree__more:hover {
    onboarding as tall as its tallest step, its buttons at the bottom. */
 .cl-onb--steps {
   /* On a short window, it scrolls rather than cutting its buttons off. */
-  min-height: min(580px, calc(75dvh - 2 * var(--spacing-6)));
-  max-height: calc(75dvh - 2 * var(--spacing-6));
+  height: min(620px, calc(90dvh - 2 * var(--spacing-6)));
+  /* A safety net on a very short window: nothing is ever cut off. */
   overflow-y: auto;
 }
 
 .cl-onb--steps > .cl-onb__actions {
   margin-top: auto;
+}
+
+/* What does not fit scrolls inside, between the title and the buttons, which stay. */
+.cl-onb--steps > * {
+  flex-shrink: 0;
+}
+
+.cl-onb--steps > .cl-onb__tiles,
+.cl-onb--steps > .cl-onb__langs {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
