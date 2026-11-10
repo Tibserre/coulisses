@@ -194,14 +194,30 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
   const { catalog, inventory, readiness } = view;
   const environments = missingEnvironments(readiness, inventory);
   if (!keys.length && !environments.length) return null;
+  // Nothing on this Mac yet but what the app ships and installs itself (a bundled model,
+  // engine v1.15.0): still the first launch.
+  const bundled = (key: string) =>
+    catalog.models.find((m) => m.key === key)?.bundled === true;
   const firstLaunch =
-    inventory.models.length === 0 &&
+    inventory.models.every((m) => bundled(m.key)) &&
     !inventory.environments.some((e) => e.installed);
   const bytes = keys.reduce(
     (sum, key) =>
       sum + (catalog.models.find((m) => m.key === key)?.announced_bytes ?? 0),
     0,
   );
+  // An environment the engine sizes (v1.15.0) is an order of magnitude; one it does not
+  // size makes the figure a floor.
+  const environmentSizes = environments.map(([name]) =>
+    environmentBytes(readiness, name),
+  );
+  // A model without an announced size, or an environment the engine does not size: the
+  // figure is a floor, never said « environ ».
+  const sized =
+    !environmentSizes.includes(null) &&
+    keys.every((key) => Boolean(catalog.models.find((m) => m.key === key)?.announced_bytes));
+  const total =
+    bytes + environmentSizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
   return {
     id: `installation:${[...keys, ...environments.map(([name]) => name)].join(",")}`,
     kind: "install",
@@ -218,8 +234,8 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
         kind: "install",
         label: "Télécharger",
         description:
-          bytes && !environments.length
-            ? `Environ ${gigabytes(bytes)} depuis internet, une seule fois.`
+          total && sized
+            ? `Environ ${gigabytes(total)} depuis internet, une seule fois.`
             : `Depuis internet, une seule fois${bytes ? ` (plus de ${gigabytes(bytes)})` : ""}.`,
         recommended: true,
       },
