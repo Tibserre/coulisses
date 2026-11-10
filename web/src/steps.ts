@@ -12,15 +12,11 @@ import { environmentBytes, gigabytes, missingEnvironments } from "./models.ts";
  *  sentence and a few figures, then two ways out, the recommended one first. Kept light:
  *  it speaks to people, not to engineers. Made from the models' view alone: nothing here
  *  names a model or a version (P6). */
-export type NoticeKind = "replacement" | "install" | "cleanup";
-
 export type ChoiceKind =
   /** Download the new model, then remove the old one once the new one is there. */
   | "replace"
   /** The new one is there: remove the old one. */
   | "removeOld"
-  /** Download the models and install the environments the processing lacks. */
-  | "install"
   /** Remove the environments an older engine left. */
   | "removeEnvironments"
   /** Nothing now: asked again at the next launch. */
@@ -41,10 +37,12 @@ export interface Gain {
   value: string;
 }
 
-export interface UpdateNotice {
+/** An update that asks a choice in the update window: a model replaced, old environments
+ *  left. */
+export interface ChoiceNotice {
   /** Stable while the update is the same: what « keep » keeps. */
   id: string;
-  kind: NoticeKind;
+  kind: "replacement" | "cleanup";
   /** The nature of the change, above the title. */
   eyebrow: string;
   title: string;
@@ -63,10 +61,23 @@ export interface UpdateNotice {
   install: string[];
   remove: string[];
   removeEnvironments: string[];
-  /** The first launch: nothing of the engine on this Mac yet. The window then says the two
-   *  things to prepare, listening (needed) and writing (optional). */
-  welcome?: boolean;
 }
+
+/** What the processing lacks on this Mac (ADR 0079): the onboarding at the first launch,
+ *  else the « Ce qui manque » window, its tiles and its « Télécharger ». No text of its own:
+ *  those screens say it. */
+export interface InstallNotice {
+  id: string;
+  kind: "install";
+  download: string[];
+  install: string[];
+  remove: [];
+  removeEnvironments: [];
+  /** The first launch: nothing of the engine on this Mac yet but what the app ships. */
+  welcome: boolean;
+}
+
+export type UpdateNotice = ChoiceNotice | InstallNotice;
 
 /** Whose update it is, and what a model does, by its stage. */
 const ENGINE_OF: Partial<Record<StageName, string>> = {
@@ -117,9 +128,9 @@ export function replacementGains(
   return gains;
 }
 
-function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
+function replacements(view: ModelsView, lacking: Set<string>): ChoiceNotice[] {
   const { catalog, inventory } = view;
-  const notices: UpdateNotice[] = [];
+  const notices: ChoiceNotice[] = [];
   for (const old of inventory.models) {
     if (!old.replaced_by) continue;
     const by = old.replaced_by;
@@ -190,7 +201,7 @@ function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
   return notices;
 }
 
-function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
+function installation(view: ModelsView, keys: string[]): InstallNotice | null {
   const { catalog, inventory, readiness } = view;
   const environments = missingEnvironments(readiness, inventory);
   if (!keys.length && !environments.length) return null;
@@ -198,65 +209,20 @@ function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
   // engine v1.15.0): still the first launch.
   const bundled = (key: string) =>
     catalog.models.find((m) => m.key === key)?.bundled === true;
-  const firstLaunch =
-    inventory.models.every((m) => bundled(m.key)) &&
-    !inventory.environments.some((e) => e.installed);
-  const bytes = keys.reduce(
-    (sum, key) =>
-      sum + (catalog.models.find((m) => m.key === key)?.announced_bytes ?? 0),
-    0,
-  );
-  // An environment the engine sizes (v1.15.0) is an order of magnitude; one it does not
-  // size makes the figure a floor.
-  const environmentSizes = environments.map(([name]) =>
-    environmentBytes(readiness, name),
-  );
-  // A model without an announced size, or an environment the engine does not size: the
-  // figure is a floor, never said « environ ».
-  const sized =
-    !environmentSizes.includes(null) &&
-    keys.every((key) => Boolean(catalog.models.find((m) => m.key === key)?.announced_bytes));
-  const total =
-    bytes + environmentSizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
   return {
     id: `installation:${[...keys, ...environments.map(([name]) => name)].join(",")}`,
     kind: "install",
-    eyebrow: firstLaunch ? "Bienvenue dans Coulisses" : "Mise à jour du moteur",
-    title: TITLE,
-    explanation: firstLaunch
-      ? "Pour traiter vos séances, Coulisses doit d'abord télécharger ce qui lui sert à les écouter."
-      : "Pour continuer à traiter vos séances, Coulisses doit télécharger un complément.",
-    gains: [],
-    note: null,
-    evidence: null,
-    choices: [
-      {
-        kind: "install",
-        label: "Télécharger",
-        description:
-          total && sized
-            ? `Environ ${gigabytes(total)} depuis internet, une seule fois.`
-            : `Depuis internet, une seule fois${bytes ? ` (plus de ${gigabytes(bytes)})` : ""}.`,
-        recommended: true,
-      },
-      {
-        kind: "later",
-        label: "Plus tard",
-        description: firstLaunch
-          ? "Les séances attendront ; « Voir ce qui manque » reste dans Réglages › Transcription."
-          : "Les séances ne pourront pas être traitées d'ici là.",
-        recommended: false,
-      },
-    ],
     download: keys,
     install: environments.map(([name]) => name),
     remove: [],
     removeEnvironments: [],
-    welcome: firstLaunch,
+    welcome:
+      inventory.models.every((m) => bundled(m.key)) &&
+      !inventory.environments.some((e) => e.installed),
   };
 }
 
-function cleanup(view: ModelsView): UpdateNotice | null {
+function cleanup(view: ModelsView): ChoiceNotice | null {
   const old = view.inventory.environments.filter((e) => !e.current);
   if (!old.length) return null;
   const freed = gigabytes(old.reduce((sum, e) => sum + e.size_bytes, 0));
@@ -309,6 +275,25 @@ export function updateNotices(view: ModelsView): UpdateNotice[] {
     ),
     cleanup(view),
   ].filter((n): n is UpdateNotice => n !== null);
+}
+
+/** What the update window still has to ask in this session: not what was answered (except
+ *  the one asked from the settings, shown first), and nothing of what the processing lacks
+ *  once « Ce qui manque » was closed: closing it is « later », even if what lacks changed
+ *  meanwhile (a piece installed while it was open). */
+export function stillAsked(
+  notices: UpdateNotice[],
+  passed: string[],
+  asked: string | null,
+  lackingLater: boolean,
+): UpdateNotice[] {
+  return notices
+    .filter(
+      (n) =>
+        (n.id === asked || !passed.includes(n.id)) &&
+        !(lackingLater && n.kind === "install"),
+    )
+    .sort((a, b) => Number(b.id === asked) - Number(a.id === asked));
 }
 
 /** A replacement the user chose: the old models go once the new ones are installed. */

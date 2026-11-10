@@ -13,11 +13,17 @@ import {
   pendingNotices,
   settleReplacements,
   stepsChanged,
+  stillAsked,
   updateNotices,
+  lastModelsView,
   type Choice,
+  type InstallNotice,
   type Replacing,
   type UpdateNotice,
 } from "../steps.ts";
+import { basePieces, lineStarted, progressLines } from "../onboarding.ts";
+import { MissingDialog } from "./Missing.tsx";
+import { LABELS } from "./pieceWords.ts";
 
 /** The updates the engine's state asks about (ADR 0049): read once at launch, kept up to
  *  date by whoever reads the models' view again. `open`: the window, opened at launch when
@@ -278,22 +284,28 @@ export function UpdateNoticesDialog({
 
   // The one being done stays the same while it changes form (a replacement whose new
   // model is installed, its old one being removed).
-  const queue = notices
-    .filter(
-      (n) =>
-        (n.id === asked || !passed.includes(n.id)) &&
-        !(working && sameUpdate(n, working)),
-    )
-    .sort((a, b) => Number(b.id === asked) - Number(a.id === asked));
+  /** « Ce qui manque » closed: « later » for this session, whatever lacks by then. */
+  const [lackingLater, setLackingLater] = useState(false);
+  const queue = stillAsked(notices, passed, asked, lackingLater).filter(
+    (n) => !(working && sameUpdate(n, working)),
+  );
   const shown = working ?? queue[0] ?? null;
   const next = queue[0] ?? null;
 
   // The first launch: its own steps (ADR 0079), kept until closed, even once what it
   // downloads is there and the update itself is gone.
   const [welcoming, setWelcoming] = useState(false);
+  const welcome = shown?.kind === "install" && shown.welcome;
   useEffect(() => {
-    if (isOpen && shown?.welcome) setWelcoming(true);
-  }, [isOpen, shown?.welcome]);
+    if (isOpen && welcome) setWelcoming(true);
+  }, [isOpen, welcome]);
+  // Later, what the processing lacks: the « Ce qui manque » window (ADR 0079), kept until
+  // closed, even once it is all there.
+  const [lacking, setLacking] = useState<InstallNotice | null>(null);
+  useEffect(() => {
+    if (isOpen && shown?.kind === "install" && !shown.welcome && !lackingLater)
+      setLacking((current) => current ?? shown);
+  }, [isOpen, shown, lackingLater]);
 
   // A removal that failed after a replacement: back to the choices, the error said.
   useEffect(() => {
@@ -304,7 +316,7 @@ export function UpdateNoticesDialog({
     if (isOpen && shown === null && passed.length) onClose();
   }, [isOpen, shown, passed.length, onClose]);
 
-  if (welcoming || (isOpen && shown?.welcome))
+  if (welcoming || (isOpen && welcome))
     return (
       <Onboarding
         isOpen={isOpen}
@@ -316,7 +328,34 @@ export function UpdateNoticesDialog({
         }}
       />
     );
-  if (!shown) return null;
+  const view = lastModelsView();
+  if (lacking && view)
+    return (
+      <MissingDialog
+        view={view}
+        pieces={basePieces(view)}
+        chosen={[]}
+        startedAlready={progressLines(basePieces(view), [], LABELS).some(
+          (line) => lineStarted(line, actions),
+        )}
+        onStarted={() =>
+          void api
+            .engineModels()
+            .then(stepsChanged)
+            .catch((e: Error) =>
+              // The service gone: the frame says it; the window follows the downloads.
+              console.warn("updates: reading the models again:", e.message),
+            )
+        }
+        onClose={() => {
+          // Closed: « later », asked again at the next launch.
+          setLackingLater(true);
+          setLacking(null);
+          if (!queue.some((n) => n.kind !== "install")) onClose();
+        }}
+      />
+    );
+  if (!shown || shown.kind === "install") return null;
 
   const pick = async (choice: Choice) => {
     setChoosing(true);
