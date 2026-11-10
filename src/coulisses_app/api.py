@@ -226,11 +226,6 @@ class OfferedActionRequest(BaseModel):
     action_ref: str | None = None
 
 
-class SpaceActionRequest(BaseModel):
-    auto_run: bool
-    model: str | None = None
-
-
 class GenerationRequest(BaseModel):
     action_ref: str
     model: str | None = None
@@ -941,15 +936,6 @@ def create_app(
         if demande.action_ref is not None:
             _check_action(data, demande.action_ref)
         return spaces.set_offered_action(data, space_id, demande.action_ref)
-
-    @app.put("/api/espaces/{space_id}/actions/{action_ref}")
-    def set_space_action(
-        space_id: int, action_ref: str, demande: SpaceActionRequest
-    ) -> list[spaces.SpaceAction]:
-        _check_action(data, action_ref)
-        return spaces.set_space_action(
-            data, space_id, action_ref, auto_run=demande.auto_run, model=demande.model
-        )
 
     # -- summaries --------------------------------------------------------------------
 

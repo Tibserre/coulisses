@@ -525,24 +525,6 @@ def space_actions(data: DataDir, space_id: int) -> list[SpaceAction]:
         conn.close()
 
 
-def set_space_action(
-    data: DataDir, space_id: int, action_ref: str, *, auto_run: bool, model: str | None
-) -> list[SpaceAction]:
-    conn = connect(data)
-    try:
-        get_space(conn, space_id)
-        with conn:
-            conn.execute(
-                "INSERT INTO action_preference (space_id, action_ref, auto_run, model)"
-                " VALUES (?, ?, ?, ?) ON CONFLICT (space_id, action_ref)"
-                " DO UPDATE SET auto_run = excluded.auto_run, model = excluded.model",
-                (space_id, action_ref, int(auto_run), model),
-            )
-    finally:
-        conn.close()
-    return space_actions(data, space_id)
-
-
 def set_offered_action(data: DataDir, space_id: int, action_ref: str | None) -> list[SpaceAction]:
     """The summary offered first in this space's sessions (ADR 0025), in one transaction:
     only one, and the other settings of each action are left as they are."""
