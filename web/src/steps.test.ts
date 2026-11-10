@@ -111,14 +111,18 @@ test("after the update: one update at a time, the replacement first, each with t
     ["cleanup", ["removeEnvironments", "keep"]],
   ]);
   const [replacement] = notices;
-  assert.equal(replacement.eyebrow, "Mise à jour du moteur de transcription");
-  assert.equal(replacement.title, "Une action est attendue de votre part");
-  assert.equal(replacement.explanation, "Un nouveau modèle de transcription, plus léger, peut remplacer celui que vous utilisez.");
+  assert.equal(replacement.title, "Un nouveau modèle de transcription");
+  assert.equal(replacement.explanation, "Plus léger, il remplace celui que vous utilisez. D'ici là, les séances attendent.");
   assert.deepEqual([replacement.download, replacement.remove], [["asr"], ["asr-ancien"]]);
-  // The recommended way out says what it does before it is done: the network, the space.
+  // The one in use, then its successor, by what they are for (P6).
+  assert.deepEqual(replacement.tiles.map((t) => [t.role, t.piece, t.name, t.bytes]), [
+    ["old", "transcribe", "Actuel", 4_700_000_000],
+    ["new", "transcribe", "Nouveau", 2_470_000_000],
+  ]);
+  // The recommended way out says what it does before it is done: the size downloaded.
   assert.equal(replacement.choices[0].recommended, true);
-  assert.equal(replacement.choices[0].description, "Télécharge 2,5 Go depuis internet, puis supprime l'ancien (4,7 Go libérés).");
-  assert.match(replacement.choices[1].description, /ne pourront pas être traitées/);
+  assert.equal(replacement.choices[0].label, "Remplacer · 2,5 Go");
+  assert.equal(replacement.choices[1].label, "Plus tard");
 });
 
 test("three figures from the engine's measures; its sentence only when it gave none", () => {
@@ -154,10 +158,11 @@ test("the new one already there: remove the old one, or keep it for good", () =>
     [MEASURED, model("asr")],
   );
   const [notice] = choiceNotices(v);
-  assert.equal(notice.explanation, "Le nouveau modèle de transcription est installé : l'ancien ne sert plus.");
-  assert.deepEqual(notice.choices.map((c) => [c.kind, c.label, c.description]), [
-    ["removeOld", "Supprimer l'ancien modèle", "Libère 4,7 Go sur ce Mac."],
-    ["keep", "Garder l'ancien modèle", "Il reste sur ce Mac, sans servir."],
+  assert.equal(notice.title, "L'ancien modèle de transcription ne sert plus");
+  assert.deepEqual(notice.tiles.map((t) => [t.role, t.name]), [["old", "Ancien modèle"]]);
+  assert.deepEqual(notice.choices.map((c) => [c.kind, c.label]), [
+    ["removeOld", "Libérer 4,7 Go"],
+    ["keep", "Le garder"],
   ]);
   // Its own id: keeping the old one for good does not hide a later « Remplacer ».
   assert.equal(notice.id, "ancien:asr-ancien:asr");
@@ -213,8 +218,10 @@ test("a damaged model is left to the settings; all done, nothing is asked", () =
 
 test("an old environment says what it frees, without its technical name", () => {
   const [, old] = choiceNotices(afterUpdate);
-  assert.equal(old.explanation, "Une ancienne version d'un composant du moteur est restée sur ce Mac. Elle ne sert plus.");
-  assert.equal(old.choices[0].description, "Libère 1,3 Go sur ce Mac.");
+  assert.equal(old.title, "Une ancienne version reste sur ce Mac");
+  assert.deepEqual(old.tiles.map((t) => [t.name, t.bytes]), [["Outils de calcul, ancienne version", 1_300_000_000]]);
+  assert.equal(old.choices[0].label, "Libérer 1,3 Go");
+  assert.deepEqual(old.removeEnvironments, ["/E/diarizen-vieux"]);
 });
 
 const action = (state: "running" | "failed" | "cancelled" | "done", started_at = "t2") => ({
@@ -382,4 +389,15 @@ test("« Ce qui manque » closed: later, even if what lacks changed while it was
   assert.deepEqual(stillAsked(after, [], null, true), []);
   // A replacement still comes after it.
   assert.deepEqual(stillAsked([...after, ...choiceNotices(afterUpdate)], [], null, true).map((n) => n.kind), ["replacement", "cleanup"]);
+});
+
+test("several old versions: one tile each, no arrow between them, « Les garder »", () => {
+  const [cleanup] = choiceNotices(
+    view({ environments: [env("torch", { path: "/E/torch-vieux", current: false }), env("diarizen", { path: "/E/diarizen-vieux", current: false })] }),
+  );
+  assert.equal(cleanup.kind, "cleanup");
+  assert.equal(cleanup.title, "D'anciennes versions restent sur ce Mac");
+  assert.equal(cleanup.tiles.length, 2);
+  assert.ok(cleanup.tiles.every((t) => t.role === "old"));
+  assert.deepEqual(cleanup.choices.map((c) => c.label), ["Libérer 2,6 Go", "Les garder"]);
 });

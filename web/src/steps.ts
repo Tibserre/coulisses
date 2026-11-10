@@ -6,6 +6,8 @@ import {
   type StageName,
 } from "./api.ts";
 import { environmentBytes, gigabytes, missingEnvironments } from "./models.ts";
+import type { PieceKind } from "./onboarding.ts";
+import { LABELS, WHAT } from "./components/pieceWords.ts";
 
 /** What the engine's state asks of the user on this Mac (ADR 0049; « geste demandé » in the
  *  glossary), grouped in updates the user decides one at a time: what changed, in a
@@ -26,10 +28,21 @@ export type ChoiceKind =
 
 export interface Choice {
   kind: ChoiceKind;
+  /** Says what it does before it is done: the size downloaded, the space freed. */
   label: string;
-  /** What it does, said before it is done: the network, the space freed, what is lost. */
-  description: string;
   recommended: boolean;
+}
+
+/** One thing the update is about, drawn as a tile (ADR 0079): the model in use and its
+ *  successor, or what no longer serves. Said by what it is for, never by its name (P6). */
+export interface NoticeTile {
+  /** The model or environment folder it stands for. */
+  key: string;
+  role: "old" | "new";
+  piece: PieceKind;
+  name: string;
+  what: string;
+  bytes: number | null;
 }
 
 export interface Gain {
@@ -43,11 +56,11 @@ export interface ChoiceNotice {
   /** Stable while the update is the same: what « keep » keeps. */
   id: string;
   kind: "replacement" | "cleanup";
-  /** The nature of the change, above the title. */
-  eyebrow: string;
   title: string;
   /** What it is about, in one sentence. */
   explanation: string;
+  /** What it is about, as tiles. */
+  tiles: NoticeTile[];
   /** A few figures, measured by the engine. */
   gains: Gain[];
   /** The engine's own sentence, as it is: only when it gave no figures. */
@@ -79,12 +92,7 @@ export interface InstallNotice {
 
 export type UpdateNotice = ChoiceNotice | InstallNotice;
 
-/** Whose update it is, and what a model does, by its stage. */
-const ENGINE_OF: Partial<Record<StageName, string>> = {
-  transcribe: "du moteur de transcription",
-  align: "de l'alignement des mots",
-  diarize: "de la reconnaissance des voix",
-};
+/** What a model does, by its stage. */
 const WHAT_OF: Partial<Record<StageName, string>> = {
   transcribe: "de transcription",
   align: "d'alignement des mots",
@@ -95,7 +103,11 @@ const QUALITY = {
   better: "meilleure",
   worse: "moindre",
 } as const;
-const TITLE = "Une action est attendue de votre part";
+const PIECE_OF: Partial<Record<StageName, PieceKind>> = {
+  transcribe: "transcribe",
+  align: "align",
+  diarize: "diarize",
+};
 
 const folderName = (path: string) =>
   path.split("/").filter(Boolean).pop() ?? path;
@@ -138,13 +150,12 @@ function replacements(view: ModelsView, lacking: Set<string>): ChoiceNotice[] {
     const now = catalog.models.find((m) => m.key === by);
     const stage = (now ?? was)?.stage;
     const what = stage && WHAT_OF[stage] ? ` ${WHAT_OF[stage]}` : "";
+    const piece = (stage && PIECE_OF[stage]) || "tools";
     const lighter = !!(was && now && now.announced_bytes < was.announced_bytes);
     const freed = gigabytes(old.size_bytes);
     const gains = replacementGains(was, now);
     const base = {
       kind: "replacement" as const,
-      eyebrow: `Mise à jour ${(stage && ENGINE_OF[stage]) || "du moteur"}`,
-      title: TITLE,
       gains,
       note: gains.length ? null : was?.replacement_note || null,
       evidence: was?.replacement_evidence ?? null,
@@ -156,21 +167,19 @@ function replacements(view: ModelsView, lacking: Set<string>): ChoiceNotice[] {
       notices.push({
         ...base,
         id: `remplacement:${old.key}:${by}`,
-        explanation: `Un nouveau modèle${what}${lighter ? ", plus léger," : ""} peut remplacer celui que vous utilisez.`,
+        title: `Un nouveau modèle${what}`,
+        explanation: `${lighter ? "Plus léger, il" : "Il"} remplace celui que vous utilisez. D'ici là, les séances attendent.`,
+        tiles: [
+          { key: old.key, role: "old", piece, name: "Actuel", what: "Supprimé ensuite", bytes: old.size_bytes },
+          { key: by, role: "new", piece, name: "Nouveau", what: WHAT[piece], bytes: now?.announced_bytes ?? null },
+        ],
         choices: [
           {
             kind: "replace",
-            label: "Remplacer l'ancien par le nouveau",
-            description: `Télécharge ${now ? gigabytes(now.announced_bytes) : "le nouveau"} depuis internet, puis supprime l'ancien (${freed} libérés).`,
+            label: now ? `Remplacer · ${gigabytes(now.announced_bytes)}` : "Remplacer",
             recommended: true,
           },
-          {
-            kind: "later",
-            label: "Garder l'ancien pour l'instant",
-            description:
-              "Les séances ne pourront pas être traitées tant que le nouveau n'est pas installé.",
-            recommended: false,
-          },
+          { kind: "later", label: "Plus tard", recommended: false },
         ],
         download: [by],
       });
@@ -179,20 +188,14 @@ function replacements(view: ModelsView, lacking: Set<string>): ChoiceNotice[] {
         ...base,
         // Its own id: keeping the old one for good never hides a later « Remplacer ».
         id: `ancien:${old.key}:${by}`,
-        explanation: `Le nouveau modèle${what} est installé : l'ancien ne sert plus.`,
+        title: `L'ancien modèle${what} ne sert plus`,
+        explanation: "Le nouveau est installé.",
+        tiles: [
+          { key: old.key, role: "old", piece, name: "Ancien modèle", what: "Ne sert plus", bytes: old.size_bytes },
+        ],
         choices: [
-          {
-            kind: "removeOld",
-            label: "Supprimer l'ancien modèle",
-            description: `Libère ${freed} sur ce Mac.`,
-            recommended: true,
-          },
-          {
-            kind: "keep",
-            label: "Garder l'ancien modèle",
-            description: "Il reste sur ce Mac, sans servir.",
-            recommended: false,
-          },
+          { kind: "removeOld", label: `Libérer ${freed}`, recommended: true },
+          { kind: "keep", label: "Le garder", recommended: false },
         ],
         download: [],
       });
@@ -229,24 +232,28 @@ function cleanup(view: ModelsView): ChoiceNotice | null {
   return {
     id: `nettoyage:${old.map((e) => folderName(e.path)).join(",")}`,
     kind: "cleanup",
-    eyebrow: "Mise à jour du moteur",
-    title: TITLE,
+    title:
+      old.length > 1
+        ? "D'anciennes versions restent sur ce Mac"
+        : "Une ancienne version reste sur ce Mac",
     explanation:
-      "Une ancienne version d'un composant du moteur est restée sur ce Mac. Elle ne sert plus.",
+      "Un composant du moteur a été mis à jour ; l'ancienne version ne sert plus.",
+    tiles: old.map((e) => ({
+      key: e.path,
+      role: "old" as const,
+      piece: "tools" as const,
+      name: `${LABELS.tools}, ancienne version`,
+      what: "Ne sert plus",
+      bytes: e.size_bytes,
+    })),
     gains: [],
     note: null,
     evidence: null,
     choices: [
-      {
-        kind: "removeEnvironments",
-        label: "La supprimer",
-        description: `Libère ${freed} sur ce Mac.`,
-        recommended: true,
-      },
+      { kind: "removeEnvironments", label: `Libérer ${freed}`, recommended: true },
       {
         kind: "keep",
-        label: "La garder",
-        description: "Elle reste sur ce Mac, sans servir.",
+        label: old.length > 1 ? "Les garder" : "La garder",
         recommended: false,
       },
     ],
