@@ -1,6 +1,6 @@
 # Coulisses
 
-Assistant de débrief, 100 % local, pour une troupe d'impro comme pour une équipe : enregistrer une séance, savoir qui a dit quoi, obtenir un compte rendu. La séance se transcrit en français ou dans une autre langue que le moteur prend en charge (ADR 0072). Titres, chapitres et résumés sont rédigés en français.
+Assistant de débrief, 100 % local, pour une répétition comme pour une réunion : enregistrer une séance, savoir qui a dit quoi, obtenir un compte rendu. La séance se transcrit en français ou dans une autre langue que le moteur prend en charge (ADR 0072). Titres, chapitres et résumés sont rédigés en français.
 
 Ce dépôt contient **l'application**. Le traitement de l'audio (transcription, alignement, diarisation, attribution) est fait par **le moteur**, dépôt `coulisses-moteur`, utilisé par version (`vX.Y.Z`) et par son contrat.
 
@@ -18,8 +18,9 @@ Coulisses tourne sur un Mac Apple Silicon, sous macOS 14.4 ou plus récent.
 
 1. Téléchargez le DMG de la dernière version dans les [Releases](https://github.com/Tibserre/coulisses/releases/latest), puis glissez Coulisses dans Applications.
 2. Au premier lancement, macOS bloque l'app, qui n'est pas notarisée. Ouvrez-la par Réglages Système > Confidentialité et sécurité > « Ouvrir quand même ».
-3. Au premier lancement, l'app propose de télécharger les modèles de transcription. Rien ne se télécharge sans votre accord. Ensuite, le traitement se fait hors ligne, et tout reste sur le Mac.
-4. Pour les titres, chapitres et résumés, installez [Ollama](https://ollama.com) et un modèle de langage. L'onglet « Rédaction » des Réglages dit lequel prendre. Coulisses ne télécharge aucun modèle de langage lui-même.
+3. Au premier lancement, un accueil en quelques étapes (ADR 0079) montre ce qu'il faut pour écouter les séances, avec la taille de chaque chose : les modèles de transcription, d'alignement des mots et de « qui parle quand », et les outils de calcul. Vous choisissez les langues, puis vous lancez le téléchargement. Rien ne se télécharge sans votre accord, et « Plus tard » vous le repropose au lancement suivant. Pendant le téléchargement, l'app demande l'autorisation d'enregistrer le son de l'ordinateur, pour les séances en ligne (ADR 0077). Ensuite, le traitement se fait hors ligne, et tout reste sur le Mac.
+4. Aucun compte Hugging Face n'est nécessaire. Le modèle de « qui parle quand » soumis à conditions, pyannote community-1, est livré avec l'app (licence CC BY 4.0). Ses auteurs sont cités dans Réglages › Avancé, section « Crédits », et dans `Coulisses.app/Contents/Resources/licences/`.
+5. Ollama est facultatif (ADR 0078). Sans lui, une séance est transcrite, avec qui a dit quoi, mais sans titre, ni chapitres, ni résumés. Pour les avoir, installez [Ollama](https://ollama.com) et un modèle de langage : l'onglet « Rédaction » des Réglages dit lequel prendre. Coulisses ne télécharge aucun modèle de langage lui-même.
 
 Au deuxième lancement, l'app demande si elle peut chercher seule ses mises à jour. Une mise à jour ne s'installe jamais sans un clic.
 
@@ -52,7 +53,7 @@ Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l
 
 ## Construire l'app à donner
 
-Pour les amis (ADR 0040, 0041) : une `Coulisses.app` autonome, avec son Python, l'app, le moteur, l'interface, ffmpeg, ffprobe et uv. La première fois, `--telecharger` va chercher l'archive de ffmpeg et le Python autonome (versions et empreintes dans `scripts/construction.toml`) ; ensuite, rien ne passe plus par le réseau.
+Pour les amis (ADR 0040, 0041) : une `Coulisses.app` autonome, avec son Python, l'app, le moteur, l'interface, ffmpeg, ffprobe, uv et le modèle pyannote community-1, copié depuis `~/Coulisses/Modèles` après vérification de chaque fichier (`[modele_livre]` de `scripts/construction.toml`). La première fois, `--telecharger` va chercher l'archive de ffmpeg et le Python autonome (versions et empreintes dans `scripts/construction.toml`) ; ensuite, rien ne passe plus par le réseau.
 
 ```bash
 uv run python scripts/construire.py --telecharger
