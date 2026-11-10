@@ -302,7 +302,8 @@ export function LanguageWait({
   }, [running, readModels]);
   const everything =
     view && wait.reason === "model_missing"
-      ? everythingMissing(view, view.actions, wait.missing_models)
+      ? // Everything lacking, running or not: the page stays « il manque » while it comes.
+        everythingMissing(view, [], wait.missing_models)
       : null;
   const beyond = beyondLanguage(
     everything,

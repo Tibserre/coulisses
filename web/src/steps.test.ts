@@ -331,3 +331,10 @@ test("« en cours » only when everything that lacks downloads; a damaged model 
   const damaged = view({}, [lacking({ code: "model_altered", model: "asr" })]);
   assert.equal(allLackingRunning(damaged, [act("model", "asr")]), false);
 });
+
+test("a waiting session stays « il manque » while what it lacks downloads", () => {
+  const running = { kind: "model" as const, name: "voix", state: "running" as const, done_bytes: 0, total_bytes: null,
+    error: null, code: null, detail: null, terms_url: null, started_at: "2026-11-10T10:00:00Z", finished_at: null };
+  const withRunning = { ...fresh, actions: [running] };
+  assert.equal(beyondLanguage(everythingMissing(withRunning, [], []), ["asr", "align-fr"]), true);
+});
