@@ -2987,26 +2987,6 @@ a.cl-iconbtn {
   transition: background var(--duration-medium) var(--ease-standard);
 }
 
-/* The stand-in for enregistrement.riv: ink and brick, a 1.75 stroke, no background. */
-.cl-recvisual {
-  width: min(168px, 32vw);
-  height: auto;
-}
-
-.cl-recvisual__ring {
-  fill: none;
-  stroke: var(--color-accent);
-  stroke-width: 1.75;
-}
-
-.cl-recvisual__core {
-  fill: var(--color-accent);
-}
-
-.cl-recvisual[data-paused] .cl-recvisual__core {
-  fill: var(--color-text-secondary);
-}
-
 /* The input meter: the level, and the peak as a thin mark. Red when it saturates. */
 .cl-meter {
   position: relative;

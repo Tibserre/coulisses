@@ -1041,7 +1041,6 @@ export const api = {
       espace: spaceId,
     }),
   resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
-  stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
   /** Paused at once, stopped a moment later unless resumed (ADR 0058). */
   stopRecordingSoon: () =>
     send<{ state: RecordingState; delay_s: number }>("POST", "/api/enregistrement/arret-differe"),
@@ -1149,11 +1148,6 @@ export const api = {
   createSpace: (name: string, template: SpaceTemplate) =>
     send<Space>("POST", "/api/espaces", { name, template }),
   spaceActions: (spaceId: number) => getJson<SpaceAction[]>(`/api/espaces/${spaceId}/actions`),
-  setSpaceAction: (spaceId: number, ref: string, autoRun: boolean, model: string | null) =>
-    send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/actions/${encodeURIComponent(ref)}`, {
-      auto_run: autoRun,
-      model,
-    }),
   setOfferedAction: (spaceId: number, ref: string | null) =>
     send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/resume-propose`, { action_ref: ref }),
   models: () => getJson<ModelsInfo>("/api/modeles"),
