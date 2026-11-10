@@ -7,6 +7,7 @@ import {
   basePieces,
   languageChoices,
   lineRunning,
+  lineStarted,
   lineState,
   toResume,
   onboardingDownload,
@@ -168,4 +169,12 @@ test("a line half failed, half running: stop what runs, resume only what failed"
     toResume(diarize, view, [action("voix-a", { state: "done" }), action("voix-b", { state: "cancelled" })]),
     { models: ["voix-b"], environments: [] },
   );
+});
+
+test("a line already started (even failed or stopped) is followed, not offered again", () => {
+  const view = fresh();
+  const [transcribe] = progressLines(basePieces(view), [], LABELS);
+  assert.equal(lineStarted(transcribe, []), false);
+  assert.equal(lineStarted(transcribe, [action("asr", { state: "failed" })]), true);
+  assert.equal(lineStarted(transcribe, [action("voix-a")]), false);
 });

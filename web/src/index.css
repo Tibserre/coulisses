@@ -5991,3 +5991,94 @@ button.cl-tree__more:hover {
   display: flex;
   justify-content: flex-end;
 }
+
+/* A session waiting for what this Mac lacks (ADR 0079): the whole page says it, airy. */
+.cl-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  text-align: center;
+  padding: var(--spacing-8, 64px) var(--spacing-4);
+}
+
+.cl-missing__illus {
+  display: grid;
+  grid-template-columns: repeat(2, 64px);
+  gap: 10px;
+  margin-bottom: var(--spacing-3);
+}
+
+.cl-missing__cell {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1.5px dashed color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 4%, transparent);
+  color: color-mix(in srgb, var(--color-accent) 70%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cl-missing__tile {
+  gap: 8px;
+}
+
+.cl-missing__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cl-missing__ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex: none;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cl-missing__ico[data-done] {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.cl-missing__name {
+  flex: 1;
+  text-align: left;
+}
+
+.cl-missing__act {
+  align-self: flex-start;
+  font-size: 13px;
+}
+
+/* The summaries without Ollama (ADR 0079): a full, airy page, not an error. */
+.cl-nowriting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  text-align: center;
+  padding: var(--spacing-8, 64px) var(--spacing-4);
+}
+
+.cl-nowriting__card {
+  width: 360px;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  text-align: left;
+  opacity: 0.75;
+  margin-bottom: var(--spacing-3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}

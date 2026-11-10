@@ -84,7 +84,8 @@ export function SummaryView({
     void refresh();
     api.actions().then(setActions, (e: Error) => setError(e.message));
     api.models().then(
-      (m) => setReachable(m.reachable),
+      // Writing is possible: Ollama answers and has a model (ADR 0078).
+      (m) => setReachable(m.reachable && m.models.length > 0),
       (e: Error) => setError(e.message),
     );
     api
@@ -153,19 +154,6 @@ export function SummaryView({
   return (
     <div className="cl-summary">
       {error && <Banner status="error" title="Résumé" description={error} />}
-      {!reachable && (
-        <Banner
-          status="info"
-          title="Les résumés demandent Ollama"
-          description={
-            <>
-              Ils sont facultatifs : ceux déjà faits restent lisibles. Ollama
-              n'est pas lancé, ou pas installé ;{" "}
-              <a className="cl-linkbtn" href="#/reglages?onglet=redaction">comment l'installer</a>.
-            </>
-          }
-        />
-      )}
 
       <div className="cl-sumtabs" role="tablist" aria-label="Résumés">
         <button
@@ -209,6 +197,15 @@ export function SummaryView({
           </Popover>
         )}
       </div>
+      {!reachable && tabs.length > 0 && (
+        <Text type="supporting" as="p">
+          Ollama n'est pas sur ce Mac : les résumés déjà faits restent lisibles,
+          mais aucun ne peut être rédigé ·{" "}
+          <a className="cl-linkbtn" href="#/reglages?onglet=redaction">
+            Réglages › Rédaction
+          </a>
+        </Text>
+      )}
       {note ? (
         // The note after the session (ADR 0062): read and written here, beside the
         // summaries, which read it.
@@ -223,6 +220,30 @@ export function SummaryView({
           onChanged={setData}
           onError={setError}
         />
+      ) : !reachable ? (
+        // No writing on this Mac yet: optional, said as such, never as an error (ADR 0079).
+        <section className="cl-nowriting" aria-label="Résumés">
+          <div className="cl-nowriting__card" aria-hidden>
+            <span className="cl-onb__cardtitle">Compte rendu de la séance</span>
+            <span className="cl-onb__line" style={{ width: "92%" }} />
+            <span className="cl-onb__line" style={{ width: "78%" }} />
+            <span className="cl-onb__line" style={{ width: "85%" }} />
+            <span className="cl-onb__line" style={{ width: "40%" }} />
+          </div>
+          <span className="cl-onb__tag">Facultatif</span>
+          <h2 className="cl-onb__title">Pas encore de résumés</h2>
+          <p className="cl-onb__text">
+            Un compte rendu de chaque séance, rédigé sur ce Mac avec Ollama,
+            une app gratuite.
+          </p>
+          <Button
+            label="Installer Ollama"
+            variant="primary"
+            onClick={() => {
+              window.location.hash = "#/reglages?onglet=redaction";
+            }}
+          />
+        </section>
       ) : (
         <div className="cl-summary__empty">
           <Text weight="medium">Pas encore de résumé</Text>

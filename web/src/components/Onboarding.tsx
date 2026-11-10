@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
-import { AlignLeft, AudioLines, Check, Clock, Cpu, Users } from "lucide-react";
+import { AudioLines, Check } from "lucide-react";
 import { api, type ModelAction, type ModelsView } from "../api.ts";
 import { requestSystemAudio, useSystemAudio } from "../appBridge.ts";
 import { gigabytes } from "../models.ts";
@@ -17,7 +17,6 @@ import {
   type LanguageChoice,
   type Piece,
   type ProgressLine,
-  type PieceKind,
 } from "../onboarding.ts";
 import {
   downloadEverything,
@@ -26,25 +25,7 @@ import {
   stepsChanged,
 } from "../steps.ts";
 import { useLanguages } from "./Languages.tsx";
-
-const LABELS: Record<PieceKind, string> = {
-  transcribe: "Transcription",
-  align: "Alignement des mots",
-  diarize: "Qui parle quand",
-  tools: "Outils de calcul",
-};
-const WHAT: Record<PieceKind, string> = {
-  transcribe: "La parole en texte",
-  align: "Chaque mot à son instant",
-  diarize: "Les voix séparées",
-  tools: "Font tourner le tout",
-};
-const ICON: Record<PieceKind, typeof AlignLeft> = {
-  transcribe: AlignLeft,
-  align: Clock,
-  diarize: Users,
-  tools: Cpu,
-};
+import { ICON, LABELS, WHAT } from "./pieceWords.ts";
 
 const capital = (text: string) =>
   `${text.charAt(0).toUpperCase()}${text.slice(1)}`;

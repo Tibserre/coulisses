@@ -238,3 +238,11 @@ export function lineRunning(line: ProgressLine, actions: ModelAction[]): boolean
       (a.kind === "model" ? line.models.includes(a.name) : line.environments.includes(a.name)),
   );
 }
+
+/** Whether a line has been started already (running, over, failed or stopped): the window
+ *  of a waiting session then follows it rather than offering it again. */
+export function lineStarted(line: ProgressLine, actions: ModelAction[]): boolean {
+  return actions.some((a) =>
+    a.kind === "model" ? line.models.includes(a.name) : line.environments.includes(a.name),
+  );
+}

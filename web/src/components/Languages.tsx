@@ -19,7 +19,7 @@ import {
   type ProcessingWait,
   type Session,
 } from "../api.ts";
-import { InstallEverything } from "./InstallEverything.tsx";
+import { MissingPage } from "./Missing.tsx";
 import {
   beyondLanguage,
   everythingMissing,
@@ -308,13 +308,7 @@ export function LanguageWait({
     everything,
     language?.missing_models ?? wait.missing_models,
   );
-  const words = beyond
-    ? {
-        title: "Coulisses n'est pas encore prêt à écouter cette séance",
-        text: "Il faut d'abord télécharger de quoi écouter, une seule fois pour toutes vos séances. Celle-ci sera traitée juste après.",
-        downloading: null,
-      }
-    : waitWords(wait, language);
+  const words = waitWords(wait, language);
   const act = async (what: () => Promise<void>) => {
     setError(null);
     try {
@@ -323,6 +317,18 @@ export function LanguageWait({
       setError((e as Error).message);
     }
   };
+  // More than its language lacks (a new install): the whole page says so (ADR 0079).
+  if (beyond && view)
+    return (
+      <MissingPage
+        view={view}
+        language={wait.language === FRENCH ? undefined : language}
+        languages={languages}
+        onStarted={onStopped}
+        said={[error, unread].filter((s): s is string => s !== null)}
+        waitingLanguages={wait.language !== FRENCH && !language}
+      />
+    );
   return (
     <section className="cl-ask">
       <Heading level={3}>{words.title}</Heading>
@@ -340,15 +346,7 @@ export function LanguageWait({
         </div>
       )}
       <div className="cl-ask__actions">
-        {beyond && everything && (
-          <InstallEverything
-            everything={everything}
-            after="La séance sera traitée juste après."
-            onStarted={onStopped}
-            onRefused={setError}
-          />
-        )}
-        {!beyond && wait.reason === "model_missing" && !words.downloading && language && (
+        {wait.reason === "model_missing" && !words.downloading && language && (
           <Button
             variant="primary"
             label={`Télécharger (${gigabytes(wait.download_bytes)})`}
