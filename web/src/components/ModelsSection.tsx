@@ -15,10 +15,11 @@ import {
 import { useDevMode } from "../devMode.ts";
 import { useLanguages } from "./Languages.tsx";
 import { languageSize } from "../languages.ts";
-import { MissingDialog } from "./Missing.tsx";
+import { MissingDialog, MissingPanel } from "./Missing.tsx";
 import { LABELS } from "./pieceWords.ts";
 import {
   basePieces,
+  lineRunning,
   lineStarted,
   progressLines,
   type Piece,
@@ -37,6 +38,7 @@ import {
   diskParts,
   gigabytes,
   modelRows,
+  shownByTiles,
   percent,
   quietRows,
   readinessLine,
@@ -315,6 +317,46 @@ export function ModelsSection({
   const runningKnown = sized
     ? runningNow.reduce((sum, a) => sum + (a.total_bytes ?? 0), 0)
     : 0;
+  // Outside developer mode, what the processing lacks shows right here as tiles, then their
+  // progress; the pieces stay the same while they download (one done keeps its tile).
+  const [followed, setFollowed] = useState<Piece[] | null>(null);
+  const lackingPieces = view && !dev ? basePieces(view) : [];
+  const chainRunning =
+    view !== null &&
+    progressLines(followed ?? lackingPieces, [], LABELS).some((line) =>
+      lineRunning(line, actions),
+    );
+  useEffect(() => {
+    if (chainRunning && !followed) setFollowed(lackingPieces);
+    if (!chainRunning && !lackingPieces.length && followed) setFollowed(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follows the reading
+  }, [chainRunning, lackingPieces.length]);
+  const inlinePieces =
+    !dev && view && (followed?.length || lackingPieces.length)
+      ? (followed ?? lackingPieces)
+      : null;
+  const uncovered =
+    view && inlinePieces
+      ? readinessLine(
+          {
+            ...view.readiness,
+            missing: view.readiness.missing.filter(
+              (p) => p.code !== "model_missing" && p.code !== "environment_missing",
+            ),
+          },
+          view.inventory,
+          purposeOfKey,
+        )
+      : null;
+  // What the tiles show is not said again in rows below them.
+  const inPanel = new Set(
+    inlinePieces ? inlinePieces.flatMap((p) => [...p.models, ...p.environments]) : [],
+  );
+  const inlineStarted =
+    inlinePieces !== null &&
+    progressLines(inlinePieces, [], LABELS).some((line) =>
+      lineStarted(line, actions),
+    );
   const stopAll = () =>
     void act(async () => {
       for (const a of runningNow) await api.cancelModelAction(a.kind, a.name);
@@ -350,8 +392,27 @@ export function ModelsSection({
       {view === null && !unreadable && <ModelsSkeleton dev={dev} />}
       {view && (
         <>
-          {/* Only while all that lacks downloads (ADR 0079): else « Voir ce qui manque ». */}
-          {!dev && runningNow.length > 0 && !everything ? (
+          {/* What lacks, then its progress, right here: no click to see it (ADR 0079). */}
+          {inlinePieces ? (
+            <>
+              <MissingPanel
+                view={view}
+                pieces={inlinePieces}
+                chosen={[]}
+                startedAlready={inlineStarted}
+                onStarted={() => void load()}
+                actions={actions}
+              />
+              {/* What the tiles do not cover (no download fixes it) is still said. */}
+              {uncovered && (
+                <Banner
+                  status="warning"
+                  title="Il manque de quoi traiter"
+                  description={uncovered}
+                />
+              )}
+            </>
+          ) : !dev && runningNow.length > 0 && !everything ? (
             <div className="cl-ask cl-ask--row">
               <div className="cl-models__what">
                 <Text weight="medium">Téléchargement en cours</Text>
@@ -368,10 +429,6 @@ export function ModelsSection({
                   variant="ghost"
                   isDisabled={working}
                   onClick={stopAll}
-                />
-                <Button
-                  label="Voir l'avancement"
-                  onClick={() => setShowMissing(true)}
                 />
               </div>
             </div>
@@ -460,9 +517,11 @@ export function ModelsSection({
               ...(quiet?.steps.filter(
                 (s) => s.purpose === purpose && oldOf(s.purpose).length > 0,
               ) ?? []).map(stepLine),
-              ...shownRows.filter((r) => r.purpose === purpose).map(modelRow),
+              ...shownRows
+                .filter((r) => r.purpose === purpose && !shownByTiles(r, inPanel))
+                .map(modelRow),
             ])}
-            {environments.map((env) => (
+            {environments.filter((env) => dev || !inPanel.has(env.name)).map((env) => (
               <li key={env.path} className="cl-models__row">
                 <div className="cl-models__what">
                   <Text weight="medium">
@@ -518,8 +577,9 @@ export function ModelsSection({
               const action = actions.find(
                 (a) => a.kind === "environment" && a.name === name,
               );
-              // Covered by « Voir ce qui manque », with nothing of its own to say.
-              if (!dev && everything?.install.includes(name) && !action)
+              // Covered by « Voir ce qui manque », with nothing of its own to say, or
+              // shown by the tiles above.
+              if (!dev && ((everything?.install.includes(name) && !action) || inPanel.has(name)))
                 return null;
               return (
                 <li key={`manque-${name}`} className="cl-models__row">

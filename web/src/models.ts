@@ -60,6 +60,21 @@ function forLanguage(model: CatalogModel, readiness: Readiness, languages: Langu
   return label ? `${purpose} (${languageWord(label)})` : `${purpose} (autre langue)`;
 }
 
+/** A download over within the last few seconds: the disk may not have been read since. */
+export function justEnded(action: ModelAction, now = Date.now()): boolean {
+  if (!action.finished_at) return false;
+  return now - Date.parse(action.finished_at) < 15_000;
+}
+
+/** Whether a row gives way to the tiles shown above it (ADR 0079): only what they say
+ *  already, missing or downloading; anything else (interrupted, damaged, failed) keeps its
+ *  row and its words (P8). */
+export function shownByTiles(row: ModelRow, inPanel: Set<string>): boolean {
+  if (!inPanel.has(row.key)) return false;
+  if (row.state.kind !== "missing" && row.state.kind !== "running") return false;
+  return row.last === null || row.last.state === "done";
+}
+
 function stateOf(
   key: string,
   inventory: Inventory,
@@ -77,6 +92,9 @@ function stateOf(
       outdated: there.outdated,
       replacement: there.replaced_by ? { by: there.replaced_by, note: model?.replacement_note ?? null } : null,
     };
+  // Its download just ended well, the disk not read again yet: finishing, not interrupted.
+  // Only for a few seconds: a partial folder left after that is said as it is (P8).
+  if (partial && action?.state === "done" && justEnded(action)) return { kind: "running", action };
   if (partial) return { kind: "partial", done: partial.size_bytes };
   return { kind: "missing" };
 }

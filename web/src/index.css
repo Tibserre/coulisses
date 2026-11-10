@@ -5727,7 +5727,9 @@ button.cl-tree__more:hover {
   stroke: var(--color-accent);
   stroke-width: 3;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.4s;
+  /* Read twice a second: a linear glide over that time fills the ring without jolts
+     (instant when macOS asks for less motion, by the global rule). */
+  transition: stroke-dashoffset 0.6s linear;
 }
 
 .cl-ring__icon {
@@ -5929,4 +5931,26 @@ button.cl-tree__more:hover {
   margin-left: auto;
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+/* A piece's progress where its size was (ADR 0079): large, at the bottom of the tile,
+   figures that do not jump in width. */
+.cl-onb__size[data-progress] {
+  margin-top: auto;
+  padding-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* What lacks, right in a page (Réglages › Transcription, a waiting session). */
+.cl-missing__status {
+  margin: 0;
+  font-weight: 500;
+}
+
+.cl-missing__inline {
+  width: min(100%, 560px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  text-align: left;
 }

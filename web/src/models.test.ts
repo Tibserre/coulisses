@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, Language, ModelAction, ModelsView } from "./api.ts";
+import type { ModelRow } from "./models.ts";
 import { environmentState, gigabytes, modelRows, percent, readinessLine, removableEnvironment } from "./models.ts";
 
 const model = (
@@ -512,4 +513,24 @@ test("the bar of « Sur ce Mac »: by what it is for, the alignment said by each
     ["Qui parle quand", 340_000_000],
     ["Outils de calcul", 2_000_000_000],
   ]);
+});
+
+test("a download just over: finishing for a few seconds, then said as it is (P8)", async () => {
+  const { justEnded, shownByTiles } = await import("./models.ts");
+  const over = (finished: string): ModelAction => ({
+    kind: "model", name: "asr", state: "done", done_bytes: 1, total_bytes: 1, error: null, code: null,
+    detail: null, terms_url: null, started_at: "2026-11-11T10:00:00Z", finished_at: finished,
+  });
+  const now = Date.parse("2026-11-11T10:01:05Z");
+  assert.equal(justEnded(over("2026-11-11T10:01:00Z"), now), true);
+  assert.equal(justEnded(over("2026-11-11T10:00:00Z"), now), false);
+  // The tiles take the place of what they say: missing or running, nothing failed.
+  const row = (state: ModelRow["state"], last: ModelAction | null = null): ModelRow => ({
+    key: "asr", model: null, purpose: "Transcription", required: true, otherLanguage: null, state, last,
+  });
+  const panel = new Set(["asr"]);
+  assert.equal(shownByTiles(row({ kind: "missing" }), panel), true);
+  assert.equal(shownByTiles(row({ kind: "partial", done: 5 }), panel), false);
+  assert.equal(shownByTiles(row({ kind: "missing" }, { ...over("2026-11-11T10:00:00Z"), state: "failed" }), panel), false);
+  assert.equal(shownByTiles(row({ kind: "missing" }), new Set()), false);
 });

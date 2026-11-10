@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Check } from "lucide-react";
@@ -67,6 +67,16 @@ export function MissingPage({
   // not count.
   const running = lines.some((line) => lineRunning(line, view.actions));
   const started = lines.some((line) => lineStarted(line, view.actions));
+  // What it follows stays the same while it downloads: a piece done keeps its tile.
+  const [followed, setFollowed] = useState<Piece[] | null>(null);
+  const [followedChoices, setFollowedChoices] = useState<LanguageChoice[] | null>(null);
+  useEffect(() => {
+    if (started && !followed) {
+      setFollowed(pieces);
+      setFollowedChoices(choices);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fixed once started
+  }, [started]);
   return (
     <section className="cl-missing" aria-label="Il manque de quoi écouter">
       <div className="cl-missing__illus" aria-hidden>
@@ -89,12 +99,26 @@ export function MissingPage({
           ? "La séance partira d'elle-même une fois tout là."
           : "Un téléchargement, une seule fois, et elle sera traitée."}
       </p>
-      <Button
-        label={running ? "Voir l'avancement" : "Voir ce qui manque"}
-        variant="primary"
-        isDisabled={waitingLanguages}
-        onClick={() => setOpen(true)}
-      />
+      {/* Once started, the progress shows right here: no click to see it. */}
+      {started ? (
+        <div className="cl-missing__inline">
+          <MissingPanel
+            view={view}
+            pieces={followed ?? pieces}
+            chosen={followedChoices ?? choices}
+            startedAlready
+            onStarted={onStarted}
+            untitled
+          />
+        </div>
+      ) : (
+        <Button
+          label="Voir ce qui manque"
+          variant="primary"
+          isDisabled={waitingLanguages}
+          onClick={() => setOpen(true)}
+        />
+      )}
       {said.map((text) => (
         <p key={text} className="cl-onb__error" role="alert">
           {text}
@@ -121,6 +145,7 @@ export function MissingDialog({
   startedAlready,
   onStarted,
   onClose,
+  actions,
 }: {
   view: ModelsView;
   pieces: Piece[];
@@ -128,11 +153,63 @@ export function MissingDialog({
   startedAlready: boolean;
   onStarted: () => void;
   onClose: () => void;
+  /** The downloads as they go (read twice a second by the caller); else the view's. */
+  actions?: ModelAction[];
 }) {
+  return (
+    <Dialog
+      isOpen
+      onOpenChange={(isOpen) => !isOpen && onClose()}
+      width={560}
+      maxHeight="90dvh"
+      aria-label="Ce qui manque"
+    >
+      <div className="cl-onb cl-onb--steps">
+        <MissingPanel
+          view={view}
+          pieces={pieces}
+          chosen={chosen}
+          startedAlready={startedAlready}
+          onStarted={onStarted}
+          onClose={onClose}
+          actions={actions}
+        />
+      </div>
+    </Dialog>
+  );
+}
+
+/** What lacks, then its progress, as tiles (ADR 0079): in the « Ce qui manque » window, or
+ *  right in a page (`onClose` absent), where the progress shows without a click. */
+export function MissingPanel({
+  view,
+  pieces,
+  chosen,
+  startedAlready,
+  onStarted,
+  onClose,
+  actions = view.actions,
+  untitled = false,
+}: {
+  view: ModelsView;
+  pieces: Piece[];
+  chosen: LanguageChoice[];
+  startedAlready: boolean;
+  onStarted: () => void;
+  onClose?: () => void;
+  actions?: ModelAction[];
+  /** The page says it already, above. */
+  untitled?: boolean;
+}) {
+  const inline = !onClose;
   const [plan, setPlan] = useState<{
     pieces: Piece[];
     chosen: LanguageChoice[];
   } | null>(startedAlready ? { pieces, chosen } : null);
+  useEffect(() => {
+    if (startedAlready) setPlan((current) => current ?? { pieces, chosen });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- what it follows, fixed once
+  }, [startedAlready]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shown = plan ?? { pieces, chosen };
@@ -167,92 +244,99 @@ export function MissingDialog({
       onStarted();
     }
   };
+  const title = plan ? "Téléchargement en cours" : "Ce qui manque";
+  const download = (
+    <Button
+      label={`Télécharger · ${total.more ? "plus de " : total.approximate ? "environ " : ""}${gigabytes(total.bytes)}`}
+      variant="primary"
+      isLoading={working}
+      isDisabled={!total.download.length && !total.install.length}
+      onClick={() => void start()}
+    />
+  );
+  const control = (
+    <DownloadsControl
+      lines={lines}
+      view={view}
+      actions={actions}
+      onDone={async () => {
+        await reread();
+        onStarted();
+      }}
+      onError={setError}
+    />
+  );
 
   return (
-    <Dialog
-      isOpen
-      onOpenChange={(isOpen) => !isOpen && onClose()}
-      width={560}
-      maxHeight="90dvh"
-      aria-label={plan ? "Téléchargement en cours" : "Ce qui manque"}
-    >
-      <div className="cl-onb cl-onb--steps">
-        <h2 className="cl-onb__title">
-          {plan ? "Téléchargement en cours" : "Ce qui manque"}
-        </h2>
-        <div className="cl-onb__tiles">
-          {lines.map((line) => {
-            const Icon = ICON[kindOf(line)];
-            if (!plan)
-              return (
-                <div key={line.key} className="cl-onb__tile">
-                  <span className="cl-onb__icon">
-                    <Icon size={20} strokeWidth={1.75} aria-hidden />
-                  </span>
-                  <span className="cl-onb__name">{line.label}</span>
-                  <span className="cl-onb__what">{WHAT[kindOf(line)]}</span>
-                  <span
-                    className="cl-onb__size"
-                    data-unknown={sizeOf(line) === null || undefined}
-                  >
-                    {sizeWords(
-                      sizeOf(line),
-                      gigabytes,
-                      shown.pieces.find((p) => p.kind === line.key)?.approximate,
-                    )}
-                  </span>
-                </div>
-              );
+    <>
+      {untitled ? null : inline ? (
+        <p className="cl-missing__status">{title}</p>
+      ) : (
+        <h2 className="cl-onb__title">{title}</h2>
+      )}
+      <div className="cl-onb__tiles">
+        {lines.map((line) => {
+          const Icon = ICON[kindOf(line)];
+          if (!plan)
             return (
-              <ProgressTile
-                key={line.key}
-                line={line}
-                view={view}
-                actions={view.actions}
-              />
+              <div key={line.key} className="cl-onb__tile">
+                <span className="cl-onb__icon">
+                  <Icon size={20} strokeWidth={1.75} aria-hidden />
+                </span>
+                <span className="cl-onb__name">{line.label}</span>
+                <span className="cl-onb__what">{WHAT[kindOf(line)]}</span>
+                <span
+                  className="cl-onb__size"
+                  data-unknown={sizeOf(line) === null || undefined}
+                >
+                  {sizeWords(
+                    sizeOf(line),
+                    gigabytes,
+                    shown.pieces.find((p) => p.kind === line.key)?.approximate,
+                  )}
+                </span>
+              </div>
             );
-          })}
-        </div>
-        {error && (
-          <p className="cl-onb__error" role="alert">
-            {error}
-          </p>
-        )}
-        {plan ? (
-          <div className="cl-onb__actions">
-            <p className="cl-onb__note">
-              La séance partira d'elle-même ensuite.
-            </p>
-            <div className="cl-onb__right">
-              <DownloadsControl
-                lines={lines}
-                view={view}
-                actions={view.actions}
-                onDone={async () => {
-                  await reread();
-                  onStarted();
-                }}
-                onError={setError}
-              />
-              <Button label="Fermer" variant="primary" onClick={onClose} />
-            </div>
-          </div>
-        ) : (
-          <div className="cl-onb__actions cl-onb__actions--end">
-            <div className="cl-onb__right">
-              <Button label="Plus tard" variant="ghost" onClick={onClose} />
-              <Button
-                label={`Télécharger · ${total.more ? "plus de " : total.approximate ? "environ " : ""}${gigabytes(total.bytes)}`}
-                variant="primary"
-                isLoading={working}
-                isDisabled={!total.download.length && !total.install.length}
-                onClick={() => void start()}
-              />
-            </div>
-          </div>
-        )}
+          return (
+            <ProgressTile
+              key={line.key}
+              line={line}
+              view={view}
+              actions={actions}
+            />
+          );
+        })}
       </div>
-    </Dialog>
+      {error && (
+        <p className="cl-onb__error" role="alert">
+          {error}
+        </p>
+      )}
+      {plan ? (
+        <div className="cl-onb__actions">
+          <p className="cl-onb__note">
+            {inline
+              ? "Les séances seront traitées une fois tout là."
+              : "La séance partira d'elle-même ensuite."}
+          </p>
+          <div className="cl-onb__right">
+            {control}
+            {onClose && (
+              <Button label="Fermer" variant="primary" onClick={onClose} />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="cl-onb__actions cl-onb__actions--end">
+          <div className="cl-onb__right">
+            {onClose && (
+              <Button label="Plus tard" variant="ghost" onClick={onClose} />
+            )}
+            {download}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -305,26 +389,23 @@ export function ProgressTile({
       </span>
       <span className="cl-onb__name">{line.label}</span>
       <span className="cl-onb__what">{WHAT[kindOf(line)]}</span>
-      <div className="cl-missing__foot">
-        <div className="cl-missing__row">
-          <span className="cl-onb__pct">
-            {state.kind === "done"
-              ? "Prêt"
-              : state.kind === "running"
-                ? state.percent === null
-                  ? "En cours"
-                  : `${state.percent} %`
-                : state.kind === "failed"
-                  ? "Échoué"
-                  : state.kind === "stopped"
-                    ? "Arrêté"
-                    : "En attente"}
-          </span>
-        </div>
-        {state.kind === "failed" && (
-          <span className="cl-onb__failed">{state.error}</span>
-        )}
-      </div>
+      {/* Where the size was before it started: large, at the bottom, the same place. */}
+      <span className="cl-onb__size" data-progress>
+        {state.kind === "done"
+          ? "Prêt"
+          : state.kind === "running"
+            ? state.percent === null
+              ? "En cours"
+              : `${state.percent} %`
+            : state.kind === "failed"
+              ? "Échoué"
+              : state.kind === "stopped"
+                ? "Arrêté"
+                : "En attente"}
+      </span>
+      {state.kind === "failed" && (
+        <span className="cl-onb__failed">{state.error}</span>
+      )}
     </div>
   );
 }
