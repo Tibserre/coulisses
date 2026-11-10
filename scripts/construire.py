@@ -7,6 +7,7 @@ holds:
   precompiled so that nothing is written there at run time, after what the app never
   loads is removed ([elagage] of construction.toml, each removal listed);
 - the built interface;
+- the model shipped with it (engine ADR 0081, [modele_livre]), checked and with its credits;
 - its tools: ffmpeg and ffprobe (built here, audio only, LGPL), uv, the computer's sound
   program;
 - Sparkle, for its updates (in the launcher only, never in the service);
@@ -34,6 +35,7 @@ import tarfile
 import tempfile
 import tomllib
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path.home() / "Library" / "Caches" / "Coulisses" / "construction"
@@ -47,7 +49,7 @@ def say(text: str) -> None:
     print(text, flush=True)
 
 
-def fail(text: str) -> None:
+def fail(text: str) -> NoReturn:
     print(f"ÉCHEC : {text}", file=sys.stderr, flush=True)
     raise SystemExit(1)
 
@@ -464,7 +466,49 @@ def copy_tools(resources: Path, ffmpeg: Path, uv: Path, minimum_macos: str) -> N
     system_audio.compile_program(tools / SYSTEM_AUDIO_PROGRAM, minimum_macos)
 
 
-def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path, sparkle: Path) -> None:
+def bundled_model(resources: Path, config: dict) -> str:
+    """Copies the shipped model into `modeles/<key>` from this Mac's installed copy, checks
+    it (revision against the engine's catalog, each file against its digest, then the
+    engine's install_bundled into a scratch folder: what a friend's first launch will do),
+    and returns its attribution (CC BY 4.0 asks for it)."""
+    from coulisses.api import catalog, models_dir  # the dev environment's engine (`uv run`)
+
+    from coulisses_app.bundle import BUNDLED_MODELS
+
+    key, digests = config["cle"], config["empreintes"]
+    entry = next((model for model in catalog().models if model.key == key), None)
+    if entry is None or not entry.bundled or not entry.attribution:
+        fail(f"le moteur ne livre pas {key} avec l'application (catalog : bundled, attribution)")
+    if entry.revision != config["revision"]:
+        fail(f"{key} : révision {config['revision']} ici, {entry.revision} au moteur")
+    source = models_dir() / key
+    target = resources / BUNDLED_MODELS / key
+    for name, digest in digests.items():
+        if not (source / name).is_file():
+            fail(f"{source / name} manque : coulisses-models telecharger {key}")
+        if sha256(source / name) != digest:
+            fail(f"{source / name} n'a pas l'empreinte attendue : copie altérée")
+        (target / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source / name, target / name)
+    with tempfile.TemporaryDirectory() as scratch:
+        run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; from pathlib import Path; from coulisses.api import install_bundled; "
+                "install_bundled(sys.argv[1], Path(sys.argv[2]))",
+                key,
+                target,
+            ],
+            env={**os.environ, "COULISSES_MODELS_DIR": scratch},
+        )
+    say(f"{key} : {len(digests)} fichiers vérifiés, acceptés par install_bundled.")
+    return entry.attribution
+
+
+def write_licences(
+    resources: Path, ffmpeg: Path, python: Path, uv: Path, sparkle: Path, model: tuple[str, str]
+) -> None:
     licences = resources / "licences"
     licences.mkdir()
     if not (ROOT / "LICENSE").is_file():
@@ -480,6 +524,8 @@ def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path, sparkl
         fail(f"licence de uv introuvable dans {uv_home}")
     for found in uv_licences:
         shutil.copy2(found, licences / f"uv-{found.name}.txt")
+    key, attribution = model
+    (licences / f"{key}.txt").write_text(attribution + "\n", encoding="utf-8")
     (licences / "LISEZMOI.txt").write_text(
         "Licences de ce que contient Coulisses.app.\n\n"
         "- Coulisses : licence MIT (Coulisses.txt).\n"
@@ -488,6 +534,8 @@ def write_licences(resources: Path, ffmpeg: Path, python: Path, uv: Path, sparkl
         "- Python : PSF (Python.txt).\n"
         "- uv : MIT ou Apache 2.0 (uv-*.txt).\n"
         "- Sparkle (mises à jour) : MIT (Sparkle.txt).\n"
+        f"- Le modèle {key} (qui parle quand), livré sans modification dans modeles/{key} : "
+        f"CC BY 4.0, auteurs et source dans {key}.txt.\n"
         "- Les paquets Python : chacun avec sa licence, dans "
         "python/lib/python3.12/site-packages/*.dist-info/.\n",
         encoding="utf-8",
@@ -580,7 +628,9 @@ def main() -> None:
     install_python(python_dir, resources / "python", settings["elagage"], report)
     shutil.copytree(interface, resources / "web")
     copy_tools(resources, ffmpeg, uv, minimum_macos)
-    write_licences(resources, ffmpeg, resources / "python", uv, sparkle)
+    attribution = bundled_model(resources, settings["modele_livre"])
+    model = (settings["modele_livre"]["cle"], attribution)
+    write_licences(resources, ffmpeg, resources / "python", uv, sparkle, model)
     build_launcher(contents, app, version, minimum_macos, sparkle, updates)
     sign(partial, identity)
 

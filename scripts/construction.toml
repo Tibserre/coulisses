@@ -92,3 +92,20 @@ chemins = [
   "lib/libtcl9.0.dylib", "lib/libtcl9tk9.0.dylib", "lib/tcl9", "lib/tcl9.0", "lib/tk9.0",
   "lib/itcl4.3.8", "lib/thread3.0.6",
 ]
+
+[modele_livre]
+# The model shipped inside the app (engine ADR 0081): pyannote community-1, CC BY 4.0, so a
+# friend installs it without a Hugging Face account or token. Copied from this Mac's
+# installed copy (the engine's models_dir(), installed with `coulisses-models telecharger`),
+# never downloaded by the build. The revision is checked against the engine's catalog(), each
+# file against the digests below (as pinned in the engine's catalog), then the engine's own
+# install_bundled() must accept the copy. Its attribution comes from catalog().
+cle = "pyannote-community-1"
+revision = "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee"
+
+[modele_livre.empreintes]
+"config.yaml" = "5ce2bfa9a938dc132cec1172592d65173cbb8f444ea1e4133f10f9391de155be"
+"embedding/pytorch_model.bin" = "6f10ff60898a1d185fa22e1d11e0bfa8a92efec811f11bca48cb8cafebefd929"
+"plda/plda.npz" = "9b77bcd840692710dd3496f62ecfeed8d8e5f002fd991b785079b244eab7d255"
+"plda/xvec_transform.npz" = "325f1ce8e48f7e55e9c8aa47e05d2766b7c48c4b25b8de8dd751e7a4cc5fbe8f"
+"segmentation/pytorch_model.bin" = "7ad24338d844fb95985486eb1a464e32d229f6d7a03c9abe60f978bacf3f816e"
