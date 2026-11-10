@@ -25,7 +25,7 @@ Le moteur v1.10.0 transcrit avec un autre modèle (ADR 0048 du moteur). Chez un 
   |---|---|---|
   | Le nouveau modèle manque | « Remplacer l'ancien par le nouveau » : télécharge le nouveau, puis supprime l'ancien une fois le nouveau installé | « Garder l'ancien pour l'instant » : rien ne change ; les séances ne peuvent pas être traitées, et la question revient au prochain lancement |
   | Le nouveau modèle est déjà là | « Supprimer l'ancien modèle » | « Garder l'ancien modèle » : écarté pour de bon |
-  | Il manque de quoi traiter | « Télécharger » (au premier lancement : l'onboarding en étapes, précisé par 0079) | « Plus tard » : la question revient au prochain lancement |
+  | Il manque de quoi traiter | « Télécharger » (au premier lancement : l'onboarding en étapes ; ensuite : la fenêtre « Ce qui manque », précisé par 0079) | « Plus tard » : la question revient au prochain lancement |
   | Un ancien composant du moteur (environnement) est resté | « La supprimer » | « La garder » : écartée pour de bon |
 
   Rester sur l'ancien modèle n'est pas possible : le moteur n'en exige qu'un (un seul profil), et l'app ne choisit pas de modèle (P6).

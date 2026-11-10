@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { CatalogModel, EnvironmentInfo, InstalledEngineModel, MissingPiece, ModelsView } from "./api.ts";
-import { allLackingRunning, beyondLanguage, coveredByEverything, everythingMissing, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
+import { type ChoiceNotice, allLackingRunning, stillAsked, beyondLanguage, coveredByEverything, everythingMissing, lastModelsView, pendingNotices, settleReplacements, stepsChanged, updateNotices } from "./steps.ts";
 
 const model = (key: string, over: Partial<CatalogModel> = {}): CatalogModel => ({
   key,
@@ -100,8 +100,12 @@ const afterUpdate = view(
   [MEASURED, model("asr")],
 );
 
+/** The notices that ask a choice in the update window (not what the processing lacks). */
+const choiceNotices = (v: ModelsView): ChoiceNotice[] =>
+  updateNotices(v).filter((n): n is ChoiceNotice => n.kind !== "install");
+
 test("after the update: one update at a time, the replacement first, each with two ways out", () => {
-  const notices = updateNotices(afterUpdate);
+  const notices = choiceNotices(afterUpdate);
   assert.deepEqual(notices.map((n) => [n.kind, n.choices.map((c) => c.kind)]), [
     ["replacement", ["replace", "later"]],
     ["cleanup", ["removeEnvironments", "keep"]],
@@ -118,7 +122,7 @@ test("after the update: one update at a time, the replacement first, each with t
 });
 
 test("three figures from the engine's measures; its sentence only when it gave none", () => {
-  const [replacement] = updateNotices(afterUpdate);
+  const [replacement] = choiceNotices(afterUpdate);
   assert.deepEqual(replacement.gains, [
     { label: "Vitesse", value: "×1,7" },
     { label: "Poids", value: "−2,2 Go" },
@@ -127,16 +131,16 @@ test("three figures from the engine's measures; its sentence only when it gave n
   assert.equal(replacement.note, null);
   assert.equal(replacement.evidence, "Banc ESLO2");
   // Before engine v1.11.0: the weight from the catalog, and the engine's sentence.
-  const [unmeasured] = updateNotices({ ...afterUpdate, catalog: { models: [OLD, model("asr")] } });
+  const [unmeasured] = choiceNotices({ ...afterUpdate, catalog: { models: [OLD, model("asr")] } });
   assert.deepEqual(unmeasured.gains, [{ label: "Poids", value: "−2,2 Go" }]);
   // The successor missing from the catalog: still the measures, which are the old one's.
-  const [alone] = updateNotices({ ...afterUpdate, catalog: { models: [MEASURED] } });
+  const [alone] = choiceNotices({ ...afterUpdate, catalog: { models: [MEASURED] } });
   assert.deepEqual(alone.gains.map((g) => g.label), ["Vitesse", "Qualité"]);
 });
 
 test("a figure that is not a gain is not said as one", () => {
   const slower = { ...MEASURED, replacement_speedup: 0.7, announced_bytes: 1_000_000_000 };
-  const [notice] = updateNotices({ ...afterUpdate, catalog: { models: [slower, model("asr")] } });
+  const [notice] = choiceNotices({ ...afterUpdate, catalog: { models: [slower, model("asr")] } });
   assert.deepEqual(notice.gains.slice(0, 2), [
     { label: "Vitesse", value: "plus lente" },
     { label: "Poids", value: "+1,5 Go" },
@@ -149,7 +153,7 @@ test("the new one already there: remove the old one, or keep it for good", () =>
     [],
     [MEASURED, model("asr")],
   );
-  const [notice] = updateNotices(v);
+  const [notice] = choiceNotices(v);
   assert.equal(notice.explanation, "Le nouveau modèle de transcription est installé : l'ancien ne sert plus.");
   assert.deepEqual(notice.choices.map((c) => [c.kind, c.label, c.description]), [
     ["removeOld", "Supprimer l'ancien modèle", "Libère 4,7 Go sur ce Mac."],
@@ -165,25 +169,21 @@ test("an update keeps its id while it is the same; one kept for good is not aske
   assert.deepEqual(pendingNotices(notices, ["nettoyage:diarizen-vieux"]).map((n) => n.kind), ["replacement"]);
 });
 
-test("what the processing lacks besides is one update to download", () => {
+test("what the processing lacks besides: one update, drawn by the « Ce qui manque » window", () => {
   const v = view({ models: [there("asr")] }, [
     lacking({ model: "voix", stage: "diarize" }),
     lacking({ code: "environment_missing", environment: "torch", label: "Calcul des modèles" }),
     lacking({ code: "environment_missing", stage: "align", environment: "torch" }),
   ], [model("voix", { stage: "diarize", announced_bytes: 300_000_000 })]);
   const [notice] = updateNotices(v);
-  assert.equal(notice.eyebrow, "Mise à jour du moteur");
-  assert.deepEqual(notice.choices.map((c) => c.label), ["Télécharger", "Plus tard"]);
-  // An environment's size is not known before it is installed: never said smaller.
-  assert.equal(notice.choices[0].description, "Depuis internet, une seule fois (plus de 300 Mo).");
+  assert.equal(notice.kind, "install");
+  assert.equal(notice.kind === "install" && notice.welcome, false);
   assert.deepEqual([notice.download, notice.install], [["voix"], ["torch"]]);
 });
 
-test("nothing installed yet: a welcome", () => {
+test("nothing installed yet: the onboarding", () => {
   const [notice] = updateNotices(view({}, [lacking({ model: "asr" })], [model("asr")]));
-  assert.equal(notice.eyebrow, "Bienvenue dans Coulisses");
-  assert.equal(notice.choices[0].label, "Télécharger");
-  assert.equal(notice.choices[0].description, "Environ 2,5 Go depuis internet, une seule fois.");
+  assert.equal(notice.kind === "install" && notice.welcome, true);
 });
 
 test("only a model the app ships is installed (engine v1.15.0): still the first launch", () => {
@@ -195,18 +195,15 @@ test("only a model the app ships is installed (engine v1.15.0): still the first 
       [model("asr"), shipped],
     ),
   );
-  assert.equal(notice.welcome, true);
-  assert.equal(notice.eyebrow, "Bienvenue dans Coulisses");
-  // The environment sized by the engine: « environ », the whole figure.
-  assert.equal(notice.choices[0].description, "Environ 3,9 Go depuis internet, une seule fois.");
+  assert.equal(notice.kind === "install" && notice.welcome, true);
 });
 
-test("a model of the user's own on this Mac: an update, not a welcome", () => {
+test("a model of the user's own on this Mac: what lacks, not the onboarding", () => {
   const [notice] = updateNotices(view({ models: [there("align")] }, [lacking({ model: "asr" })], [model("asr"), model("align", { bundled: false })]));
-  assert.equal(notice.welcome, false);
+  assert.equal(notice.kind === "install" && notice.welcome, false);
   // An engine before v1.15.0 says nothing of « bundled »: a model there is the user's own.
   const [older] = updateNotices(view({ models: [there("align")] }, [lacking({ model: "asr" })], [model("asr"), model("align")]));
-  assert.equal(older.welcome, false);
+  assert.equal(older.kind === "install" && older.welcome, false);
 });
 
 test("a damaged model is left to the settings; all done, nothing is asked", () => {
@@ -215,7 +212,7 @@ test("a damaged model is left to the settings; all done, nothing is asked", () =
 });
 
 test("an old environment says what it frees, without its technical name", () => {
-  const [, old] = updateNotices(afterUpdate);
+  const [, old] = choiceNotices(afterUpdate);
   assert.equal(old.explanation, "Une ancienne version d'un composant du moteur est restée sur ce Mac. Elle ne sert plus.");
   assert.equal(old.choices[0].description, "Libère 1,3 Go sur ce Mac.");
 });
@@ -258,7 +255,7 @@ test("several replacements settle each on its own", () => {
 
 test("a speed that rounds to the same is said so", () => {
   const same = { ...MEASURED, replacement_speedup: 1.02 };
-  const [notice] = updateNotices({ ...afterUpdate, catalog: { models: [same, model("asr")] } });
+  const [notice] = choiceNotices({ ...afterUpdate, catalog: { models: [same, model("asr")] } });
   assert.deepEqual(notice.gains[0], { label: "Vitesse", value: "aussi rapide" });
 });
 
@@ -282,11 +279,11 @@ const fresh = view(
   [model("asr"), model("align-fr", { announced_bytes: 1_260_000_000 }), model("voix", { announced_bytes: 30_000_000 })],
 );
 
-test("the first launch: the window says the two things to prepare", () => {
+test("the first launch: the onboarding, with what it downloads", () => {
   const [welcome] = updateNotices(fresh);
-  assert.equal(welcome.welcome, true);
+  assert.equal(welcome.kind === "install" && welcome.welcome, true);
   assert.deepEqual(welcome.download, ["asr", "align-fr", "voix"]);
-  assert.equal(updateNotices(afterUpdate).some((n) => n.welcome), false);
+  assert.equal(updateNotices(afterUpdate).some((n) => n.kind === "install" && n.welcome), false);
 });
 
 test("« Voir ce qui manque » takes everything the chain lacks, not only a language's models", () => {
@@ -375,4 +372,14 @@ test("a waiting session stays « il manque » while what it lacks downloads", ()
     error: null, code: null, detail: null, terms_url: null, started_at: "2026-11-10T10:00:00Z", finished_at: null };
   const withRunning = { ...fresh, actions: [running] };
   assert.equal(beyondLanguage(everythingMissing(withRunning, [], []), ["asr", "align-fr"]), true);
+});
+
+test("« Ce qui manque » closed: later, even if what lacks changed while it was open", () => {
+  const before = updateNotices(view({ models: [there("asr")] }, [lacking({ model: "voix", stage: "diarize" }), lacking({ code: "environment_missing", environment: "torch" })], [model("voix")]));
+  const after = updateNotices(view({ models: [there("asr")] }, [lacking({ code: "environment_missing", environment: "torch" })], [model("voix")]));
+  assert.notEqual(before[0].id, after[0].id);
+  assert.equal(stillAsked(after, [], null, false).length, 1);
+  assert.deepEqual(stillAsked(after, [], null, true), []);
+  // A replacement still comes after it.
+  assert.deepEqual(stillAsked([...after, ...choiceNotices(afterUpdate)], [], null, true).map((n) => n.kind), ["replacement", "cleanup"]);
 });
