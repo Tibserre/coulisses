@@ -63,7 +63,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.1 Espaces, projets, présents (ADR 0020)
 
-- **Des espaces** : une troupe, une équipe, un client. Chaque séance appartient à un espace. Un espace a ses membres, ses invités, son glossaire, ses projets et ses réglages. Les espaces sont étanches : une personne présente dans deux espaces y a deux fiches.
+- **Des espaces** : une troupe, une équipe, un client. Chaque séance appartient à un espace. Un espace a ses membres, ses invités, son glossaire, ses projets et ses réglages. Les espaces sont étanches : une personne présente dans deux espaces y a deux fiches. Une installation neuve commence avec un espace vide, « Espace 1 », à renommer ; une mise à jour ne renomme jamais l'espace existant.
 - **Membres** : un nom et un rôle libre (« coach », « comédienne », « cheffe de projet »).
 - **Invités** : ajoutés à la volée sur une séance, réutilisables ensuite dans le même espace.
 - **Projets** : groupent les séances d'un espace (un spectacle pour une troupe). Une séance appartient à un projet, ou à aucun.
