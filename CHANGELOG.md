@@ -6,12 +6,41 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
-## Non publié
+## v0.39.0 — 2026-11-11
 
 ### Nouveautés
 
+- montre ce qui manque et son avancement sans clic (premier-lancement)
+- montre la place prise « Sur ce Mac » et arrête les téléchargements ensemble (reglages)
+- cite les auteurs des modèles dans « Avancé » (reglages)
+- dit la taille annoncée de chaque environnement manquant (modeles)
+- dit la taille des outils de calcul quand le moteur l'annonce (premier-lancement)
+- fait entrer chaque étape de l'onboarding par un glissement (premier-lancement)
+- lit l'onde de la bienvenue en continu (premier-lancement)
+- fait de la bienvenue une réplique qui s'écrit (premier-lancement)
+- anime la bienvenue et suit les téléchargements par un anneau (premier-lancement)
+- les langues en cartes compactes, et le traitement en une ligne quand tout est prêt (reglages)
+- une page « il manque » pour la séance qui attend, et un Résumé sans Ollama en page (premier-lancement)
+- remplace la bienvenue par un onboarding en six étapes (premier-lancement)
+- dit écouter et rédiger à la bienvenue, et « Tout télécharger » (premier-lancement)
+- rend Ollama facultatif, les rédactions l'attendent (redaction)
+- lit et demande l'autorisation dès le début (son-ordinateur)
 - nomme « Espace 1 » l'espace d'une installation neuve (espaces)
 - garde « Mettre à jour » dans la colonne après « Plus tard » (mises-a-jour)
+
+### Corrections
+
+- retire l'alerte vide de l'onglet Transcription (reglages)
+- n'ouvre plus « Ce qui manque » à la fermeture de l'onboarding (premier-lancement)
+- ne dit plus toutes les langues en téléchargement pendant la transcription (langues)
+- redessine la fenêtre de remplacement et de nettoyage (mises-a-jour)
+- remplace l'ancienne fenêtre d'installation par « Ce qui manque » et retire les styles morts (mises-a-jour)
+- ouvre l'accueil malgré le modèle livré avec l'application (premier-lancement)
+- des tuiles de suivi sur la base de l'étape 2, et le Résumé sans Ollama remonté (premier-lancement)
+- un seul style de suivi, en tuiles, et une taille fixe pour les fenêtres (premier-lancement)
+- une fenêtre garde sa taille du début à la fin de son parcours (premier-lancement)
+- garde la page « il manque » pendant le téléchargement (premier-lancement)
+- fait attendre et télécharger tout ce qui manque à la chaîne (modeles)
 
 ## v0.38.3 — 2026-11-06
 
