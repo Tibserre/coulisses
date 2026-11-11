@@ -231,6 +231,26 @@ class EngineModels:
         thread.start()
         return task.model_copy()
 
+    def start_all(self, models: list[str], environments: list[str]) -> list[ModelAction]:
+        """Everything the chain lacks, asked at once by the user (« Tout télécharger »): each
+        model downloaded and each environment installed in the background, as `start` does.
+        One already running is left running and returned as it is."""
+        started: list[ModelAction] = []
+        asked: list[tuple[Kind, list[str]]] = [("model", models), ("environment", environments)]
+        for kind, names in asked:
+            for name in names:
+                try:
+                    started.append(self.start(kind, name))
+                except ModelsError:
+                    # Already running (asked twice, or a click elsewhere): left as it is.
+                    # Any other refusal (a shipped copy missing) is said as it is.
+                    with self._lock:
+                        running = self._tasks.get((kind, name))
+                        if running is None or running.state != "running":
+                            raise
+                        started.append(running.model_copy())
+        return started
+
     def _shipped_copy(self, name: str) -> Path | None:
         """The copy of a model shipped with the application, to install from; None: it is
         downloaded (not shipped, or from the repository). From the .app, a shipped model
