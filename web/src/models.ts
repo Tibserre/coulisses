@@ -209,7 +209,12 @@ export function readinessLine(
       ? `${said} (abîmé)`
       : said;
   });
-  // An environment several stages need is said once.
+  // An environment several stages need is said once. Nothing to name (the engine said not
+  // ready without saying why): said all the same, never « il manque . » (P8).
+  if (!parts.length)
+    return short
+      ? "Il manque une pièce du traitement."
+      : "Les séances ne peuvent pas être traitées.";
   const lacking = [...new Set(parts)].join(", ");
   return short
     ? `Il manque ${lacking}.`

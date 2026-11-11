@@ -534,3 +534,10 @@ test("a download just over: finishing for a few seconds, then said as it is (P8)
   assert.equal(shownByTiles(row({ kind: "missing" }, { ...over("2026-11-11T10:00:00Z"), state: "failed" }), panel), false);
   assert.equal(shownByTiles(row({ kind: "missing" }), new Set()), false);
 });
+
+test("not ready without a reason: said all the same, never « il manque . »", () => {
+  const empty = { profile: "chaine-retenue", ready: false, missing: [] };
+  const inventory = view({}).inventory;
+  assert.equal(readinessLine(empty, inventory, () => undefined), "Les séances ne peuvent pas être traitées.");
+  assert.equal(readinessLine(empty, inventory, () => undefined, true), "Il manque une pièce du traitement.");
+});

@@ -335,19 +335,6 @@ export function ModelsSection({
     !dev && view && (followed?.length || lackingPieces.length)
       ? (followed ?? lackingPieces)
       : null;
-  const uncovered =
-    view && inlinePieces
-      ? readinessLine(
-          {
-            ...view.readiness,
-            missing: view.readiness.missing.filter(
-              (p) => p.code !== "model_missing" && p.code !== "environment_missing",
-            ),
-          },
-          view.inventory,
-          purposeOfKey,
-        )
-      : null;
   // What the tiles show is not said again in rows below them.
   const inPanel = new Set(
     inlinePieces ? inlinePieces.flatMap((p) => [...p.models, ...p.environments]) : [],
@@ -394,7 +381,6 @@ export function ModelsSection({
         <>
           {/* What lacks, then its progress, right here: no click to see it (ADR 0079). */}
           {inlinePieces ? (
-            <>
               <MissingPanel
                 view={view}
                 pieces={inlinePieces}
@@ -403,15 +389,6 @@ export function ModelsSection({
                 onStarted={() => void load()}
                 actions={actions}
               />
-              {/* What the tiles do not cover (no download fixes it) is still said. */}
-              {uncovered && (
-                <Banner
-                  status="warning"
-                  title="Il manque de quoi traiter"
-                  description={uncovered}
-                />
-              )}
-            </>
           ) : !dev && runningNow.length > 0 && !everything ? (
             <div className="cl-ask cl-ask--row">
               <div className="cl-models__what">
@@ -465,12 +442,16 @@ export function ModelsSection({
                 onClick={() => setShowMissing(true)}
               />
             </div>
-          ) : lacking ? (
+          ) : lacking && dev ? (
             <Banner
               status="warning"
               title="Il manque de quoi traiter"
               description={lacking}
             />
+          ) : lacking ? (
+            // No alert here (the user's choice): one line in the page, the rows below say
+            // what is wrong and what to do.
+            <Text color="secondary">{lacking}</Text>
           ) : dev ? (
             <Text color="secondary">
               Tout est prêt pour traiter les séances :{" "}
