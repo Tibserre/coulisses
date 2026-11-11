@@ -82,6 +82,8 @@ class FakeModel:
         self.prompt_tokens = 1000
         self.done_reason: str | None = "stop"
         self.counted = True
+        self.installed = [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
+        """What Ollama has installed; empty: it answers, with no model."""
 
     def version(self) -> str | None:
         return "0.0-essai"
@@ -91,7 +93,7 @@ class FakeModel:
             raise OllamaError(
                 "Ollama ne répond pas sur 127.0.0.1:11434 : lancez l'application Ollama."
             )
-        return [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
+        return list(self.installed)
 
     def chat(
         self,
