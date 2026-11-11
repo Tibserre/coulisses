@@ -138,11 +138,6 @@ class Folders(BaseModel):
 _FOLDER_FIELDS: dict[str, str] = {"donnees": "data", "modeles": "models", "journal": "log"}
 
 
-class MissingDownload(BaseModel):
-    langue: str = jobs.DEFAULT_LANGUAGE
-    """The session language the chain must be complete for."""
-
-
 class EnvironmentRemoval(BaseModel):
     chemin: str
     """The environment's folder, as the inventory gives it."""
@@ -229,11 +224,6 @@ class SpaceRequest(BaseModel):
 
 class OfferedActionRequest(BaseModel):
     action_ref: str | None = None
-
-
-class SpaceActionRequest(BaseModel):
-    auto_run: bool
-    model: str | None = None
 
 
 class GenerationRequest(BaseModel):
@@ -595,26 +585,6 @@ def create_app(
     def download_model(cle: str) -> engine_models.ModelAction:
         return engine_store.start("model", cle)
 
-    @app.get("/api/moteur/manquants")
-    def chain_missing(langue: str = jobs.DEFAULT_LANGUAGE) -> jobs.WaitsFor | None:
-        """What the chain lacks on this Mac to process a session in this language: the
-        models of every stage and the environments. None: nothing. No network."""
-        languages.check(profile, langue, engine_store.root)
-        return languages.waits_for(profile, langue, engine_store.root)
-
-    @app.post("/api/moteur/manquants/telecharger", status_code=202)
-    def download_missing(demande: MissingDownload) -> list[engine_models.ModelAction]:
-        """« Télécharger » in « Voir ce qui manque »: everything the chain lacks for that
-        language, asked by the user, each in the background. Nothing missing: an empty
-        list."""
-        languages.check(profile, demande.langue, engine_store.root)
-        waits = languages.waits_for(profile, demande.langue, engine_store.root)
-        if waits is None:
-            return []
-        return engine_store.start_all(
-            waits.missing_models, [e.name for e in waits.missing_environments]
-        )
-
     @app.post("/api/moteur/environnements/{nom}/installer", status_code=202)
     def install_environment(nom: str) -> engine_models.ModelAction:
         return engine_store.start("environment", nom)
@@ -966,15 +936,6 @@ def create_app(
         if demande.action_ref is not None:
             _check_action(data, demande.action_ref)
         return spaces.set_offered_action(data, space_id, demande.action_ref)
-
-    @app.put("/api/espaces/{space_id}/actions/{action_ref}")
-    def set_space_action(
-        space_id: int, action_ref: str, demande: SpaceActionRequest
-    ) -> list[spaces.SpaceAction]:
-        _check_action(data, action_ref)
-        return spaces.set_space_action(
-            data, space_id, action_ref, auto_run=demande.auto_run, model=demande.model
-        )
 
     # -- summaries --------------------------------------------------------------------
 

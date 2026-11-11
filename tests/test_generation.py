@@ -421,7 +421,7 @@ def test_a_new_space_starts_from_a_template(client: TestClient) -> None:
     empty = client.post("/api/espaces", json={"name": "Brouillon"}).json()
     assert client.get(f"/api/espaces/{empty['id']}/actions").json() == []
     changed = client.put(
-        f"/api/espaces/{empty['id']}/actions/resume-impro", json={"auto_run": True}
+        f"/api/espaces/{empty['id']}/resume-propose", json={"action_ref": "resume-impro"}
     ).json()
     assert changed[0]["auto_run"] is True
     assert client.post("/api/espaces", json={"name": "X", "template": "?"}).status_code == 422

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from coulisses_app.paths import DataDir
 from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import generate
+from coulisses_app.storage.db import connect
 
 from .conftest import FakeModel
 from .test_generation import client, imported, run_all  # noqa: F401  (fixture)
@@ -177,9 +178,19 @@ def test_a_summary_asked_for_an_action_archived_since_fails_visibly(
 
 def test_a_space_offers_one_summary_first_and_its_other_settings_stay(
     client: TestClient,  # noqa: F811
+    data: DataDir,
 ) -> None:
     space = client.get("/api/espaces").json()[0]["id"]
-    client.put(f"/api/espaces/{space}/actions/idees-scenes", json={"auto_run": True, "model": "m"})
+    conn = connect(data)
+    try:
+        with conn:  # a model chosen per action by an earlier version: kept
+            conn.execute(
+                "INSERT INTO action_preference (space_id, action_ref, auto_run, model)"
+                " VALUES (?, 'idees-scenes', 1, 'm')",
+                (space,),
+            )
+    finally:
+        conn.close()
     offered = client.put(
         f"/api/espaces/{space}/resume-propose", json={"action_ref": "resume-court"}
     ).json()
