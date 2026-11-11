@@ -50,6 +50,10 @@ export interface ProcessingWait {
   label: string | null;
   missing_models: string[];
   download_bytes: number;
+  /** The environments the chain lacks (ADR 0080). */
+  missing_environments?: { name: string; label: string | null }[];
+  /** Damaged models: to remove in Réglages before downloading them again (ADR 0080). */
+  altered_models?: string[];
 }
 
 /** GET /api/langues: a language the chain transcribes (contrat-langue.md). */
@@ -127,6 +131,11 @@ export interface CatalogModel {
   licence: string;
   /** Its terms must be accepted on this page before downloading. */
   terms_url: string | null;
+  /** Shipped inside the application, installed without the network (engine v1.15.0,
+   *  ADR 0081 of the engine). Absent from an older engine. */
+  bundled?: boolean;
+  /** The credit its licence requires, in French (engine v1.15.0): shown in the app. */
+  attribution?: string | null;
   engine: string | null;
   /** The engine's profiles that need it (the retained chain: « chaine-retenue »)… */
   required_by: string[];
@@ -219,6 +228,10 @@ export interface MissingPiece {
   /** For a missing environment: what it is for, in French, said by the engine (v1.9.0). */
   label: string | null;
   message: string;
+  /** The room it will take, without the network (engine v1.15.0): a model's catalog size;
+   *  for an environment, an order of magnitude measured by the engine, said « environ ».
+   *  Absent from an older engine, null when unknown. */
+  announced_bytes?: number | null;
 }
 
 export interface Readiness {
@@ -1028,7 +1041,6 @@ export const api = {
       espace: spaceId,
     }),
   resumeRecording: () => send<RecordingState>("POST", "/api/enregistrement/reprise"),
-  stopRecording: () => send<StopResult>("POST", "/api/enregistrement/arret"),
   /** Paused at once, stopped a moment later unless resumed (ADR 0058). */
   stopRecordingSoon: () =>
     send<{ state: RecordingState; delay_s: number }>("POST", "/api/enregistrement/arret-differe"),
@@ -1136,11 +1148,6 @@ export const api = {
   createSpace: (name: string, template: SpaceTemplate) =>
     send<Space>("POST", "/api/espaces", { name, template }),
   spaceActions: (spaceId: number) => getJson<SpaceAction[]>(`/api/espaces/${spaceId}/actions`),
-  setSpaceAction: (spaceId: number, ref: string, autoRun: boolean, model: string | null) =>
-    send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/actions/${encodeURIComponent(ref)}`, {
-      auto_run: autoRun,
-      model,
-    }),
   setOfferedAction: (spaceId: number, ref: string | null) =>
     send<SpaceAction[]>("PUT", `/api/espaces/${spaceId}/resume-propose`, { action_ref: ref }),
   models: () => getJson<ModelsInfo>("/api/modeles"),

@@ -1,6 +1,6 @@
 # 0049 — Une fenêtre au lancement pour les mises à jour qui attendent une action
 
-Statut : Acceptée (2026-10-19, choix de l'utilisateur : ouverture au lancement et point sur « Réglages », même fenêtre au premier lancement, une mise à jour à la fois avec ses sorties en boutons, gains chiffrés publiés par le moteur v1.11.0, ADR 0050 du moteur). Précise 0036. Point repris sur l'onglet « Transcription » : précisé par 0051.
+Statut : Acceptée (2026-10-19, choix de l'utilisateur : ouverture au lancement et point sur « Réglages », même fenêtre au premier lancement, une mise à jour à la fois avec ses sorties en boutons, gains chiffrés publiés par le moteur v1.11.0, ADR 0050 du moteur). Précise 0036. Point repris sur l'onglet « Transcription » : précisé par 0051. Premier lancement : un onboarding en étapes, précisé par 0079.
 
 ## Contexte
 Le moteur v1.10.0 transcrit avec un autre modèle (ADR 0048 du moteur). Chez un ami, l'ancien reste installé à côté du nouveau tant qu'il ne le supprime pas : deux modèles pour un même travail, 4,7 Go perdus. Le moteur v1.8 avait déjà demandé un nouvel environnement. Jusqu'ici, seule la section « Modèles » des Réglages le montrait (ADR 0036), sans dire qu'un modèle est remplacé ni pourquoi. Le moteur le dit pourtant : `readiness().missing`, `installed()` (`replaced_by` sur un modèle installé qui n'est plus exigé, environnements à `current` faux, `label`), `catalog()` (`replacement_note`, en français). Une première forme, une liste de gestes avec un bouton chacun, a été jugée peu claire par l'utilisateur. Principes : P1 (téléchargement sur demande), P6 (rien de codé en dur), P8 (suppression explicite).
@@ -25,7 +25,7 @@ Le moteur v1.10.0 transcrit avec un autre modèle (ADR 0048 du moteur). Chez un 
   |---|---|---|
   | Le nouveau modèle manque | « Remplacer l'ancien par le nouveau » : télécharge le nouveau, puis supprime l'ancien une fois le nouveau installé | « Garder l'ancien pour l'instant » : rien ne change ; les séances ne peuvent pas être traitées, et la question revient au prochain lancement |
   | Le nouveau modèle est déjà là | « Supprimer l'ancien modèle » | « Garder l'ancien modèle » : écarté pour de bon |
-  | Il manque de quoi traiter | « Télécharger » (« Tout télécharger » au premier lancement) | « Plus tard » : la question revient au prochain lancement |
+  | Il manque de quoi traiter | « Télécharger » (au premier lancement : l'onboarding en étapes ; ensuite : la fenêtre « Ce qui manque », précisé par 0079) | « Plus tard » : la question revient au prochain lancement |
   | Un ancien composant du moteur (environnement) est resté | « La supprimer » | « La garder » : écartée pour de bon |
 
   Rester sur l'ancien modèle n'est pas possible : le moteur n'en exige qu'un (un seul profil), et l'app ne choisit pas de modèle (P6).

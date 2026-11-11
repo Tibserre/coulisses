@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
@@ -6,11 +6,16 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
-import { api, type Language } from "../api.ts";
+import { Check } from "lucide-react";
+import { api, type Language, type ModelsView } from "../api.ts";
+import { lastModelsView, onStepsChanged } from "../steps.ts";
 import { gigabytes } from "../models.ts";
 import {
-  canRemoveLanguage,
+  FRENCH,
+  languageCards,
+  offersRemoval,
   downloadPercent,
+  languageSize,
   languageState,
   languageUses,
   languageWord,
@@ -18,9 +23,10 @@ import {
 } from "../languages.ts";
 import { LanguageDownloadDialog, useLanguages } from "./Languages.tsx";
 
-/** « Langues », in Réglages › Transcription (ADR 0072): the languages Coulisses transcribes,
- *  each installed, downloading or to add; removed only while nothing needs it. Its models are
- *  said here, not among the models (outside developer mode). */
+/** « Langues », in Réglages › Transcription (ADR 0072, 0079): a compact card per language on
+ *  this Mac, with its size and the spaces that have it by default; the others to add, one
+ *  at a time. Removed only while nothing needs it. Its models are said here, not among the
+ *  models (outside developer mode). */
 export function LanguagesSection({
   onError,
 }: {
@@ -29,6 +35,8 @@ export function LanguagesSection({
   const { languages, reload } = useLanguages(onError);
   const [adding, setAdding] = useState<Language | null>(null);
   const [removing, setRemoving] = useState<Language | null>(null);
+  /** « Ajouter une langue »: the languages to add, as tiles; one chosen, then confirmed. */
+  const [picking, setPicking] = useState(false);
   const [working, setWorking] = useState(false);
   const act = async (what: () => Promise<unknown>) => {
     setWorking(true);
@@ -43,94 +51,152 @@ export function LanguagesSection({
     }
   };
   const uses = removing ? languageUses(removing) : [];
+  // The catalog's sizes: each language said with its own models' size (ADR 0079).
+  const [view, setView] = useState<ModelsView | null>(lastModelsView);
+  useEffect(() => onStepsChanged(setView), []);
+  const catalog = view?.catalog.models ?? [];
+  const { cards: shown, toAdd } = languageCards(languages ?? []);
+  const french = languages?.find((l) => l.language === FRENCH);
   const capital = (text: string) =>
     `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
   return (
     <section className="cl-settings__section">
       <Heading level={3}>Langues</Heading>
-      <Text color="secondary">
-        Les langues dans lesquelles Coulisses sait transcrire. Le français est
-        inclus ; chaque autre langue demande un modèle, téléchargé une fois.
-      </Text>
       {languages === null ? (
         <Skeleton width={320} height={14} radius={1} />
       ) : (
-        <ul className="cl-models">
-          {languages.map((l) => {
-            const state = languageState(l);
-            const spaces = l.used_by.spaces.filter((s) => !s.archived);
-            return (
-              <li key={l.language} className="cl-models__row">
-                <div className="cl-models__what">
-                  <Text weight="medium">{l.label}</Text>
-                  {spaces.length > 0 && (
+        <>
+          <div className="cl-langcards">
+            {shown.map((l) => {
+              const size = languageSize(l, catalog);
+              const state = languageState(l, false, size);
+              const spaces = l.used_by.spaces;
+              return (
+                <div key={l.language} className="cl-langcard">
+                  <div className="cl-langcard__line">
+                    <Text weight="medium">{l.label}</Text>
                     <Text type="supporting">
-                      Langue de {spaces.map((s) => s.name).join(", ")}
-                    </Text>
-                  )}
-                  {state.kind === "failed" && (
-                    <Text type="supporting" color="primary">
-                      {state.error}
-                    </Text>
-                  )}
-                </div>
-                {state.kind === "downloading" ? (
-                  <div className="cl-models__progress">
-                    <ProgressBar
-                      label={`Téléchargement de ${theLanguage(l.label)}`}
-                      value={downloadPercent(state.done, state.total)}
-                      hasValueLabel
-                    />
-                    <Text type="supporting">
-                      {gigabytes(state.done)} sur {gigabytes(state.total)}
+                      {l.language === FRENCH
+                        ? "Inclus"
+                        : size === null
+                          ? ""
+                          : gigabytes(size)}
                     </Text>
                   </div>
-                ) : state.kind === "installed" ? (
-                  <Text type="supporting">Installé</Text>
-                ) : (
-                  <span />
-                )}
-                <div className="cl-models__actions">
-                  {canRemoveLanguage(l) && (
-                    <Button
-                      label="Supprimer"
-                      size="sm"
-                      variant="ghost"
-                      isDisabled={working}
-                      onClick={() => setRemoving(l)}
-                    />
+                  {state.kind === "downloading" ? (
+                    <div className="cl-langcard__progress">
+                      <ProgressBar
+                        label={`Téléchargement de ${theLanguage(l.label)}`}
+                        value={downloadPercent(state.done, state.total)}
+                        hasValueLabel
+                      />
+                    </div>
+                  ) : (
+                    <div className="cl-langcard__spaces">
+                      {spaces.length > 0 ? (
+                        spaces.map((space) => (
+                          <a
+                            key={space.id}
+                            className="cl-langcard__space"
+                            href={`#/espaces/${space.id}`}
+                            title="Langue par défaut de cet espace"
+                          >
+                            <Check size={10} strokeWidth={2.5} aria-hidden />
+                            {space.archived ? `${space.name} (archivé)` : space.name}
+                          </a>
+                        ))
+                      ) : (
+                        <Text type="supporting">Aucun espace</Text>
+                      )}
+                      {offersRemoval(l) && (
+                        <button
+                          type="button"
+                          className="cl-linkbtn cl-langcard__act"
+                          disabled={working}
+                          onClick={() => setRemoving(l)}
+                        >
+                          Supprimer
+                        </button>
+                      )}
+                    </div>
                   )}
-                  {state.kind === "downloading" && (
-                    <Button
-                      label="Arrêter"
-                      size="sm"
-                      variant="ghost"
-                      isDisabled={working}
-                      onClick={() =>
-                        void act(async () => {
-                          for (const a of l.downloads.filter(
-                            (d) => d.state === "running",
-                          ))
-                            await api.cancelModelAction("model", a.name);
-                        })
-                      }
-                    />
-                  )}
-                  {(state.kind === "missing" || state.kind === "failed") && (
-                    <Button
-                      label={`${state.kind === "failed" ? "Réessayer" : "Ajouter"} · ${gigabytes(l.download_bytes)}`}
-                      size="sm"
-                      isDisabled={working}
-                      onClick={() => setAdding(l)}
-                    />
+                  {state.kind === "failed" && (
+                    <>
+                      <Text type="supporting" color="primary">
+                        {state.error}
+                      </Text>
+                      <button
+                        type="button"
+                        className="cl-linkbtn cl-langcard__act"
+                        disabled={working}
+                        onClick={() => setAdding(l)}
+                      >
+                        Réessayer
+                      </button>
+                    </>
                   )}
                 </div>
-              </li>
-            );
-          })}
-        </ul>
+              );
+            })}
+          </div>
+          {french && !french.installed && (
+            <Text type="supporting">
+              Les autres langues s'ajoutent une fois ce qui manque téléchargé,
+              plus bas.
+            </Text>
+          )}
+          {toAdd.length > 0 && (
+            <div>
+              <Button
+                label="+ Ajouter une langue"
+                size="sm"
+                isDisabled={working}
+                onClick={() => setPicking(true)}
+              />
+            </div>
+          )}
+        </>
       )}
 
+      <Dialog
+        isOpen={picking}
+        onOpenChange={(open) => !open && setPicking(false)}
+        width={560}
+        aria-label="Ajouter une langue"
+      >
+        <div className="cl-onb">
+          <h2 className="cl-onb__title">Ajouter une langue</h2>
+          <p className="cl-onb__text">
+            Pour les séances dans cette langue. Une à la fois ; le français est
+            inclus.
+          </p>
+          <div className="cl-onb__langs">
+            {toAdd.map((l) => (
+              <button
+                key={l.language}
+                type="button"
+                className="cl-onb__lang"
+                onClick={() => {
+                  setPicking(false);
+                  setAdding(l);
+                }}
+              >
+                <span className="cl-onb__name">{l.label}</span>
+                <span className="cl-onb__what">
+                  {l.download_bytes ? gigabytes(l.download_bytes) : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="cl-onb__actions cl-onb__actions--end">
+            <Button
+              label="Annuler"
+              variant="ghost"
+              onClick={() => setPicking(false)}
+            />
+          </div>
+        </div>
+      </Dialog>
       <LanguageDownloadDialog
         language={adding}
         onClose={() => setAdding(null)}

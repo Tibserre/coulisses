@@ -14,13 +14,31 @@ import {
 } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { useLanguages } from "./Languages.tsx";
-import { lastModelsView, stepsChanged } from "../steps.ts";
+import { languageSize } from "../languages.ts";
+import { MissingDialog, MissingPanel } from "./Missing.tsx";
+import { LABELS } from "./pieceWords.ts";
+import {
+  basePieces,
+  lineRunning,
+  lineStarted,
+  progressLines,
+  type Piece,
+} from "../onboarding.ts";
+import {
+  allLackingRunning,
+  coveredByEverything,
+  everythingMissing,
+  lastModelsView,
+  stepsChanged,
+} from "../steps.ts";
 import {
   environmentState,
   interpreterNote,
   missingEnvironments,
+  diskParts,
   gigabytes,
   modelRows,
+  shownByTiles,
   percent,
   quietRows,
   readinessLine,
@@ -42,7 +60,14 @@ type Asking =
  *  network, said before it starts), stop, remove (confirmed). Followed live while something
  *  downloads. Outside developer mode (ADR 0051), what is in use and sound is one line per
  *  step, without names, paths or Python; every other piece keeps its row and its action. */
-export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
+export function ModelsSection({
+  onReplace,
+  onOpenFolder,
+}: {
+  onReplace?: () => void;
+  /** « Ouvrir le dossier »: the models' folder in the Finder. */
+  onOpenFolder?: () => void;
+}) {
   const dev = useDevMode();
   // The last reading at once, read again behind: the skeleton only before the first one.
   const [view, setView] = useState<ModelsView | null>(lastModelsView);
@@ -54,6 +79,10 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
   // The names of the languages, for the models of another one (P6).
   const { languages } = useLanguages(setRefused);
   const [asking, setAsking] = useState<Asking>(null);
+  /** « Voir ce qui manque »: the window a waiting session opens too (ADR 0079). */
+  const [showMissing, setShowMissing] = useState(false);
+  /** What that window follows, fixed when it opens. */
+  const [missingPieces, setMissingPieces] = useState<Piece[]>([]);
   const [working, setWorking] = useState(false);
   const running = useRef(new Set<string>());
 
@@ -129,7 +158,13 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       )
     : null;
   const quiet = view && !dev ? quietRows(rows, view.inventory) : null;
-  const shownRows = quiet ? quiet.apart : rows;
+  // What « Voir ce qui manque » fetches: outside developer mode, the plain rows of what it
+  // covers (missing, nothing to say) give way to it.
+  const everything = view ? everythingMissing(view, actions) : null;
+  const covered = (row: ModelRow) =>
+    !dev &&
+    coveredByEverything(everything, row, !!quiet?.old.get(row.purpose)?.length);
+  const shownRows = (quiet ? quiet.apart : rows).filter((r) => !covered(r));
   const environments = quiet
     ? quiet.apartEnvironments
     : (view?.inventory.environments ?? []);
@@ -235,9 +270,96 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
     </li>
   );
 
+  useEffect(() => {
+    if (showMissing && view) setMissingPieces(basePieces(view));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fixed when it opens
+  }, [showMissing]);
+  const missingDialog = showMissing && view && (
+    <MissingDialog
+      view={view}
+      pieces={missingPieces.length ? missingPieces : basePieces(view)}
+      chosen={[]}
+      startedAlready={progressLines(
+        missingPieces.length ? missingPieces : basePieces(view),
+        [],
+        LABELS,
+      ).some((line) => lineStarted(line, actions))}
+      onStarted={() => void load()}
+      onClose={() => {
+        setShowMissing(false);
+        setMissingPieces([]);
+      }}
+    />
+  );
+
+  // Outside developer mode, what is on this Mac in one bar, by what it is for (ADR 0079,
+  // proposal B): the transcription, each language, who speaks when, the calculation tools.
+  const parts =
+    view && quiet
+      ? diskParts(
+          quiet.steps,
+          (languages ?? [])
+            .filter((l) => l.installed)
+            .map((l) => ({
+              language: l.language,
+              label: l.label,
+              bytes: languageSize(l, view.catalog.models),
+            })),
+          quiet.tools,
+        )
+      : [];
+  const partsTotal = parts.reduce((sum, p) => sum + p.bytes, 0);
+  // Every download is needed: they are followed and stopped together, never one apart.
+  const runningNow = actions.filter((a) => a.state === "running");
+  // A share only when every running download says its size: never one too high.
+  const sized = runningNow.every((a) => a.total_bytes !== null);
+  const runningDone = runningNow.reduce((sum, a) => sum + a.done_bytes, 0);
+  const runningKnown = sized
+    ? runningNow.reduce((sum, a) => sum + (a.total_bytes ?? 0), 0)
+    : 0;
+  // Outside developer mode, what the processing lacks shows right here as tiles, then their
+  // progress; the pieces stay the same while they download (one done keeps its tile).
+  const [followed, setFollowed] = useState<Piece[] | null>(null);
+  const lackingPieces = view && !dev ? basePieces(view) : [];
+  const chainRunning =
+    view !== null &&
+    progressLines(followed ?? lackingPieces, [], LABELS).some((line) =>
+      lineRunning(line, actions),
+    );
+  useEffect(() => {
+    if (chainRunning && !followed) setFollowed(lackingPieces);
+    if (!chainRunning && !lackingPieces.length && followed) setFollowed(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follows the reading
+  }, [chainRunning, lackingPieces.length]);
+  const inlinePieces =
+    !dev && view && (followed?.length || lackingPieces.length)
+      ? (followed ?? lackingPieces)
+      : null;
+  // What the tiles show is not said again in rows below them.
+  const inPanel = new Set(
+    inlinePieces ? inlinePieces.flatMap((p) => [...p.models, ...p.environments]) : [],
+  );
+  const inlineStarted =
+    inlinePieces !== null &&
+    progressLines(inlinePieces, [], LABELS).some((line) =>
+      lineStarted(line, actions),
+    );
+  const stopAll = () =>
+    void act(async () => {
+      for (const a of runningNow) await api.cancelModelAction(a.kind, a.name);
+    });
+
   return (
     <section className="cl-settings__section">
-      <Heading level={3}>Traitement des séances</Heading>
+      {missingDialog}
+      <div className="cl-disk__head">
+        <Heading level={3}>{dev ? "Traitement des séances" : "Sur ce Mac"}</Heading>
+        {onOpenFolder && (
+          <button type="button" className="cl-linkbtn" onClick={onOpenFolder}>
+            Ouvrir le dossier
+          </button>
+        )}
+      </div>
       {unreadable && (
         <Banner
           status="error"
@@ -257,28 +379,130 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
       {view === null && !unreadable && <ModelsSkeleton dev={dev} />}
       {view && (
         <>
-          {lacking ? (
+          {/* What lacks, then its progress, right here: no click to see it (ADR 0079). */}
+          {inlinePieces ? (
+              <MissingPanel
+                view={view}
+                pieces={inlinePieces}
+                chosen={[]}
+                startedAlready={inlineStarted}
+                onStarted={() => void load()}
+                actions={actions}
+              />
+          ) : !dev && runningNow.length > 0 && !everything ? (
+            <div className="cl-ask cl-ask--row">
+              <div className="cl-models__what">
+                <Text weight="medium">Téléchargement en cours</Text>
+                <Text type="supporting">
+                  {runningKnown > 0
+                    ? `${Math.min(100, Math.round((runningDone / runningKnown) * 100))} % · `
+                    : ""}
+                  les séances seront traitées une fois fini.
+                </Text>
+              </div>
+              <div className="cl-disk__acts">
+                <Button
+                  label="Tout arrêter"
+                  variant="ghost"
+                  isDisabled={working}
+                  onClick={stopAll}
+                />
+              </div>
+            </div>
+          ) : everything ? (
+            <div className="cl-ask cl-ask--row">
+              <div className="cl-models__what">
+                <Text weight="medium">
+                  Il manque de quoi écouter vos séances
+                </Text>
+                {/* What lacks, by what it is for (ADR 0036): one short line. */}
+                <Text type="supporting">
+                  {readinessLine(
+                    view.readiness,
+                    view.inventory,
+                    dev ? undefined : purposeOfKey,
+                    true,
+                  ) ?? "Tout ce qu'il faut, téléchargé une fois."}
+                </Text>
+              </div>
+              <Button
+                label="Voir ce qui manque"
+                variant="primary"
+                onClick={() => setShowMissing(true)}
+              />
+            </div>
+          ) : lacking && view && allLackingRunning(view, actions) ? (
+            <div className="cl-ask cl-ask--row">
+              <Text color="secondary">
+                Le téléchargement est en cours : les séances seront traitées
+                une fois fini.
+              </Text>
+              <Button
+                label="Voir l'avancement"
+                onClick={() => setShowMissing(true)}
+              />
+            </div>
+          ) : lacking && dev ? (
             <Banner
               status="warning"
               title="Il manque de quoi traiter"
               description={lacking}
             />
-          ) : (
+          ) : lacking ? (
+            // No alert here (the user's choice): one line in the page, the rows below say
+            // what is wrong and what to do.
+            <Text color="secondary">{lacking}</Text>
+          ) : dev ? (
             <Text color="secondary">
               Tout est prêt pour traiter les séances :{" "}
               {gigabytes(view.inventory.total_bytes)} sur ce Mac. Rien ne se
               télécharge sans que vous le demandiez.
             </Text>
+          ) : (
+            <div className="cl-disk__total">
+              <span className="cl-disk__big">{gigabytes(partsTotal)}</span>
+              <Text color="secondary">prêt à traiter vos séances</Text>
+            </div>
+          )}
+          {!dev && parts.length > 0 && (
+            <>
+              <div
+                className="cl-disk__bar"
+                role="img"
+                aria-label="Ce que compte la place prise"
+              >
+                {parts.map((p, i) => (
+                  <i
+                    key={p.key}
+                    data-part={i % 5}
+                    style={{ flexGrow: Math.max(p.bytes, partsTotal / 100) }}
+                  />
+                ))}
+              </div>
+              <ul className="cl-disk__legend">
+                {parts.map((p, i) => (
+                  <li key={p.key}>
+                    <b data-part={i % 5} aria-hidden />
+                    {p.label}
+                    <em>{gigabytes(p.bytes)}</em>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           <ul className="cl-models">
             {/* In the catalog's order: a step's line, or its own rows when it lacks something. */}
             {[...new Set(rows.map((r) => r.purpose))].flatMap((purpose) => [
-              ...(quiet?.steps.filter((s) => s.purpose === purpose) ?? []).map(
-                stepLine,
-              ),
-              ...shownRows.filter((r) => r.purpose === purpose).map(modelRow),
+              // Outside developer mode, the bar says the sound steps: only one with an
+              // old model left keeps its line, for « Supprimer l'ancien ».
+              ...(quiet?.steps.filter(
+                (s) => s.purpose === purpose && oldOf(s.purpose).length > 0,
+              ) ?? []).map(stepLine),
+              ...shownRows
+                .filter((r) => r.purpose === purpose && !shownByTiles(r, inPanel))
+                .map(modelRow),
             ])}
-            {environments.map((env) => (
+            {environments.filter((env) => dev || !inPanel.has(env.name)).map((env) => (
               <li key={env.path} className="cl-models__row">
                 <div className="cl-models__what">
                   <Text weight="medium">
@@ -334,6 +558,10 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
               const action = actions.find(
                 (a) => a.kind === "environment" && a.name === name,
               );
+              // Covered by « Voir ce qui manque », with nothing of its own to say, or
+              // shown by the tiles above.
+              if (!dev && ((everything?.install.includes(name) && !action) || inPanel.has(name)))
+                return null;
               return (
                 <li key={`manque-${name}`} className="cl-models__row">
                   <div className="cl-models__what">
@@ -389,18 +617,6 @@ export function ModelsSection({ onReplace }: { onReplace?: () => void }) {
                 </li>
               );
             })}
-            {quiet && quiet.tools !== null && (
-              <li className="cl-models__row">
-                <div className="cl-models__what">
-                  <Text weight="medium">Outils de calcul</Text>
-                </div>
-                <Text type="supporting">
-                  Installés · {gigabytes(quiet.tools)}
-                </Text>
-                <div className="cl-models__actions" />
-              </li>
-            )}
-
           </ul>
         </>
       )}

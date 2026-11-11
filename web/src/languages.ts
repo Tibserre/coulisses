@@ -45,21 +45,40 @@ export type LanguageState =
   | { kind: "failed"; error: string }
   | { kind: "missing"; bytes: number };
 
-/** Where a language stands on this Mac, from its models and their downloads. */
-export function languageState(language: Language): LanguageState {
+/** Where a language stands on this Mac, from its own models and their downloads: the
+ *  transcription, shared by every language, downloading says nothing of one (it is the
+ *  « Transcription » line). `whole`: every model it needs, the shared one too (a session
+ *  waiting in this language waits on it as well). */
+export function languageState(
+  language: Language,
+  whole = false,
+  /** Its own models' announced size (`languageSize`): what is still queued counts in the
+   *  bar when the shared model lacks too. */
+  ownBytes: number | null = null,
+): LanguageState {
   if (language.installed) return { kind: "installed" };
-  const running = language.downloads.filter((a) => a.state === "running");
+  const downloads = whole
+    ? language.downloads
+    : language.downloads.filter((a) => language.own_models.includes(a.name));
+  const running = downloads.filter((a) => a.state === "running");
   if (running.length) {
     const done = running.reduce((sum, a) => sum + a.done_bytes, 0);
     const known = running.reduce((sum, a) => sum + (a.total_bytes ?? 0), 0);
     // What is still to fetch counts too: one bar for the language, never one per model.
+    // Its own models only: what it lacks is all its own, or its size is not known here.
+    const ownLack = language.missing_models.every((k) =>
+      language.own_models.includes(k),
+    );
     return {
       kind: "downloading",
       done,
-      total: Math.max(known, language.download_bytes),
+      total:
+        whole || ownLack
+          ? Math.max(known, language.download_bytes)
+          : Math.max(known, ownBytes ?? 0),
     };
   }
-  const failed = language.downloads.find((a) => a.state === "failed");
+  const failed = downloads.find((a) => a.state === "failed");
   if (failed)
     return {
       kind: "failed",
@@ -87,6 +106,46 @@ export function rerunLanguageMissing(
   chosen: string | null,
 ): boolean {
   return stage !== "diarize" && shown === null && chosen === null;
+}
+
+/** The languages as Réglages › Transcription shows them (ADR 0079): a card for French
+ *  (included), for each on this Mac (or coming, or failed), and for each a space has by
+ *  default; a tile « + » for the others, once French is there. */
+export function languageCards(languages: Language[]): {
+  cards: Language[];
+  toAdd: Language[];
+} {
+  const card = (l: Language) =>
+    l.language === FRENCH ||
+    languageState(l).kind !== "missing" ||
+    l.used_by.spaces.length > 0;
+  const french = languages.find((l) => l.language === FRENCH);
+  return {
+    cards: languages.filter(card),
+    toAdd: french?.installed ? languages.filter((l) => !card(l)) : [],
+  };
+}
+
+/** « Supprimer » on a card: removable, and no space has it by default (they are named on
+ *  the card; a waiting session is said by the window). */
+export function offersRemoval(language: Language): boolean {
+  return canRemoveLanguage(language) && language.used_by.spaces.length === 0;
+}
+
+/** A language's own size on this Mac (or to add): its own models, as the catalog announces
+ *  them; the transcription, shared by all, is not counted. Null when one is not announced. */
+export function languageSize(
+  language: Language,
+  catalog: { key: string; announced_bytes: number }[],
+): number | null {
+  if (!language.own_models.length) return null;
+  let sum = 0;
+  for (const key of language.own_models) {
+    const size = catalog.find((m) => m.key === key)?.announced_bytes;
+    if (!size) return null;
+    sum += size;
+  }
+  return sum;
 }
 
 /** The share downloaded, 0 to 100. */
@@ -159,7 +218,7 @@ export function waitWords(
       downloading: null,
     };
   const word = languageWord(wait.label);
-  const state = language ? languageState(language) : null;
+  const state = language ? languageState(language, true) : null;
   if (state?.kind === "downloading")
     return {
       title: `En attente du modèle ${word}`,

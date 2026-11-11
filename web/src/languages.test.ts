@@ -4,6 +4,9 @@ import { test } from "node:test";
 import type { Language, ModelAction, ProcessingWait } from "./api.ts";
 import {
   canRemoveLanguage,
+  languageCards,
+  languageSize,
+  offersRemoval,
   inLanguage,
   languageNote,
   languageState,
@@ -100,6 +103,26 @@ test("one bar for a language, whatever the number of its models", () => {
   });
 });
 
+test("the shared transcription downloading: no language says it downloads, but a waiting session does", () => {
+  const english = language({
+    missing_models: ["asr", "wav2vec2-ctc-english"],
+    downloads: [action({ name: "asr", done_bytes: 1_000_000_000, total_bytes: 2_470_000_000 })],
+  });
+  assert.equal(languageState(english).kind, "missing");
+  assert.equal(languageNote(english), "à télécharger · 1,3 Go");
+  assert.equal(languageCards([french, english]).cards.length, 1);
+  // A session waiting in English waits on it too.
+  assert.deepEqual(languageState(english, true), { kind: "downloading", done: 1_000_000_000, total: 2_470_000_000 });
+  // Its own model downloading: it does; with the shared one lacking too, its own size
+  // (from the catalog) makes the bar's total.
+  const own = language({ missing_models: ["asr", "wav2vec2-ctc-english"], downloads: [action({ done_bytes: 100, total_bytes: null })] });
+  assert.deepEqual(languageState(own, false, 1_260_000_000), { kind: "downloading", done: 100, total: 1_260_000_000 });
+  // The shared one failing is the « Transcription » line's to say, not each language's.
+  const failedShared = language({ missing_models: ["asr", "wav2vec2-ctc-english"], downloads: [action({ name: "asr", state: "failed", error: "Réseau coupé." })] });
+  assert.equal(languageState(failedShared).kind, "missing");
+  assert.equal(languageState(failedShared, true).kind, "failed");
+});
+
 test("all in French, the language is not shown above the title", () => {
   assert.equal(languageWorthShowing([french, language({})], "fr"), false);
   assert.equal(
@@ -191,4 +214,36 @@ test("a rerun of a version without a language waits for it to be chosen", () => 
   assert.equal(rerunLanguageMissing("all", null, "en"), false);
   // The voices alone keep the text, and with it its language: nothing to choose.
   assert.equal(rerunLanguageMissing("diarize", null, null), false);
+});
+
+test("a language's size: its own models only, unknown when one is not announced", () => {
+  const catalog = [{ key: "wav2vec2-ctc-english", announced_bytes: 1_260_000_000 }];
+  assert.equal(languageSize(language({}), catalog), 1_260_000_000);
+  assert.equal(languageSize(language({}), []), null);
+  assert.equal(languageSize(french, catalog), null);
+});
+
+test("Réglages: French and what is on this Mac in cards, the rest to add once French is there", () => {
+  const english = language({ installed: true });
+  const spanish = language({ language: "es", label: "Espagnol" });
+  const german = language({
+    language: "de",
+    label: "Allemand",
+    used_by: { spaces: [{ id: 2, name: "Berlin", archived: false }], waiting_sessions: [] },
+  });
+  const { cards, toAdd } = languageCards([french, english, spanish, german]);
+  // A language a space has by default is a card, even not downloaded: its space is named.
+  assert.deepEqual(cards.map((l) => l.language), ["fr", "en", "de"]);
+  assert.deepEqual(toAdd.map((l) => l.language), ["es"]);
+  const fresh = languageCards([{ ...french, installed: false }, spanish]);
+  assert.deepEqual(fresh.toAdd, []);
+});
+
+test("« Supprimer » only where no space has the language by default", () => {
+  assert.equal(offersRemoval(language({ installed: true })), true);
+  assert.equal(
+    offersRemoval(language({ installed: true, used_by: { spaces: [{ id: 1, name: "Réunions", archived: true }], waiting_sessions: [] } })),
+    false,
+  );
+  assert.equal(offersRemoval(french), false);
 });

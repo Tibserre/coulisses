@@ -1,22 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Check } from "lucide-react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@astryxdesign/core/Dialog";
-import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Text } from "@astryxdesign/core/Text";
 import { api, type ModelAction, type ModelsView } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { gigabytes, percent } from "../models.ts";
+import { Onboarding } from "./Onboarding.tsx";
+
 import {
   onStepsChanged,
   pendingNotices,
   settleReplacements,
   stepsChanged,
+  stillAsked,
+  takesUpLacking,
   updateNotices,
+  lastModelsView,
   type Choice,
+  type InstallNotice,
   type Replacing,
   type UpdateNotice,
 } from "../steps.ts";
+import { basePieces, lineStarted, progressLines } from "../onboarding.ts";
+import { MissingDialog } from "./Missing.tsx";
+import { ICON, LABELS } from "./pieceWords.ts";
+
+/** The ring's length (r = 20), as in the progress tiles. */
+const RING = 2 * Math.PI * 20;
+const capital = (text: string) =>
+  text.charAt(0).toLocaleUpperCase("fr") + text.slice(1);
 
 /** The updates the engine's state asks about (ADR 0049): read once at launch, kept up to
  *  date by whoever reads the models' view again. `open`: the window, opened at launch when
@@ -277,15 +291,28 @@ export function UpdateNoticesDialog({
 
   // The one being done stays the same while it changes form (a replacement whose new
   // model is installed, its old one being removed).
-  const queue = notices
-    .filter(
-      (n) =>
-        (n.id === asked || !passed.includes(n.id)) &&
-        !(working && sameUpdate(n, working)),
-    )
-    .sort((a, b) => Number(b.id === asked) - Number(a.id === asked));
+  /** « Ce qui manque » closed: « later » for this session, whatever lacks by then. */
+  const [lackingLater, setLackingLater] = useState(false);
+  const queue = stillAsked(notices, passed, asked, lackingLater).filter(
+    (n) => !(working && sameUpdate(n, working)),
+  );
   const shown = working ?? queue[0] ?? null;
   const next = queue[0] ?? null;
+
+  // The first launch: its own steps (ADR 0079), kept until closed, even once what it
+  // downloads is there and the update itself is gone.
+  const [welcoming, setWelcoming] = useState(false);
+  const welcome = shown?.kind === "install" && shown.welcome;
+  useEffect(() => {
+    if (isOpen && welcome) setWelcoming(true);
+  }, [isOpen, welcome]);
+  // Later, what the processing lacks: the « Ce qui manque » window (ADR 0079), kept until
+  // closed, even once it is all there.
+  const [lacking, setLacking] = useState<InstallNotice | null>(null);
+  useEffect(() => {
+    if (takesUpLacking(isOpen, shown, welcoming, lackingLater))
+      setLacking((current) => current ?? (shown as InstallNotice));
+  }, [isOpen, shown, welcoming, lackingLater]);
 
   // A removal that failed after a replacement: back to the choices, the error said.
   useEffect(() => {
@@ -296,7 +323,49 @@ export function UpdateNoticesDialog({
     if (isOpen && shown === null && passed.length) onClose();
   }, [isOpen, shown, passed.length, onClose]);
 
-  if (!shown) return null;
+  if (welcoming || (isOpen && welcome))
+    return (
+      <Onboarding
+        isOpen={isOpen}
+        actions={actions}
+        onClose={() => {
+          // Closed: everything waits for the next launch. What still downloads goes on,
+          // followed in Réglages › Transcription; no other window opens behind it.
+          setWelcoming(false);
+          setLackingLater(true);
+          setLacking(null);
+          onClose();
+        }}
+      />
+    );
+  const view = lastModelsView();
+  if (lacking && view && isOpen)
+    return (
+      <MissingDialog
+        view={view}
+        pieces={basePieces(view)}
+        chosen={[]}
+        startedAlready={progressLines(basePieces(view), [], LABELS).some(
+          (line) => lineStarted(line, actions),
+        )}
+        onStarted={() =>
+          void api
+            .engineModels()
+            .then(stepsChanged)
+            .catch((e: Error) =>
+              // The service gone: the frame says it; the window follows the downloads.
+              console.warn("updates: reading the models again:", e.message),
+            )
+        }
+        onClose={() => {
+          // Closed: « later », asked again at the next launch.
+          setLackingLater(true);
+          setLacking(null);
+          if (!queue.some((n) => n.kind !== "install")) onClose();
+        }}
+      />
+    );
+  if (!shown || shown.kind === "install") return null;
 
   const pick = async (choice: Choice) => {
     setChoosing(true);
@@ -325,23 +394,32 @@ export function UpdateNoticesDialog({
   const done = working !== null && live === null && running.length === 0;
   const error = failed ?? refused;
 
+  const [primary, other] = [...shown.choices].sort(
+    (a, b) => Number(b.recommended) - Number(a.recommended),
+  );
+  const progressOf = (key: string) =>
+    actions.find(
+      (a) => a.kind === "model" && a.name === key && a.state === "running",
+    ) ?? null;
+
   return (
     <Dialog
       isOpen={isOpen}
       onOpenChange={(open) => !open && onClose()}
-      width={480}
-      aria-label={`${shown.eyebrow} : ${shown.title}`}
+      width={560}
+      aria-label={shown.title}
     >
-      <div className="cl-update">
-        <Text type="supporting" color="secondary">
-          {shown.eyebrow}
-        </Text>
-        <h2 className="cl-update__title">
+      {/* The same window as the onboarding and « Ce qui manque » (ADR 0079): a title,
+          tiles, the buttons at the bottom; it keeps its size from the choice to the end. */}
+      <div className="cl-onb cl-update">
+        <h2 className="cl-onb__title">
           {working === null
             ? shown.title
             : done
               ? "C'est fait"
-              : "C'est en cours"}
+              : shown.kind === "replacement" && shown.download.length
+                ? "Remplacement en cours"
+                : "C'est en cours"}
         </h2>
         {error && (
           <Banner
@@ -352,96 +430,152 @@ export function UpdateNoticesDialog({
             onDismiss={() => (failed ? onFailedRead() : setRefused(null))}
           />
         )}
-        {working === null ? (
-          <>
-            <Text as="p" color="secondary">
-              {shown.explanation}
-            </Text>
-            {shown.gains.length > 0 && (
-              <dl className="cl-gains">
-                {shown.gains.map((gain) => (
-                  <div key={gain.label} className="cl-gains__item">
-                    <dt>{gain.label}</dt>
-                    <dd>{gain.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            {shown.note && <Text type="supporting">{shown.note}</Text>}
-            {dev && (
-              <Text type="supporting">
-                {[
-                  shown.evidence,
-                  [...shown.download, ...shown.install, ...shown.remove].join(
-                    ", ",
-                  ),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </Text>
-            )}
-            <div className="cl-choices">
-              {shown.choices.map((choice) => (
-                <button
-                  key={choice.kind}
-                  type="button"
-                  className="cl-choice"
-                  data-recommended={choice.recommended || undefined}
-                  disabled={choosing}
-                  onClick={() => void pick(choice)}
-                >
-                  <span className="cl-choice__label">
-                    {choice.label}
-                    {choice.recommended ? " (recommandé)" : ""}
+        {working === null && <p className="cl-onb__text">{shown.explanation}</p>}
+        <div
+          className="cl-update__tiles"
+          data-swap={shown.kind === "replacement" && shown.tiles.length === 2 || undefined}
+        >
+          {shown.tiles.map((tile, i) => {
+            const Icon = ICON[tile.piece];
+            const running = working !== null && tile.role === "new" ? progressOf(tile.key) : null;
+            const measured = running ? percent(running) : null;
+            const halted =
+              working !== null && tile.role === "new"
+                ? (stopped.find((a) => a.kind === "model" && a.name === tile.key) ?? null)
+                : null;
+            const share = done ? 100 : (measured ?? 0);
+            return (
+              <Fragment key={tile.key}>
+                {i > 0 && shown.kind === "replacement" && (
+                  <span className="cl-update__arrow" aria-hidden>
+                    <ArrowRight size={20} strokeWidth={2} />
                   </span>
-                  <span className="cl-choice__description">
-                    {choice.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            {!done && running.length > 0 && (
-              <Text as="p" color="secondary">
-                {shown.kind === "replacement"
-                  ? "Le nouveau modèle se télécharge. L'ancien sera supprimé ensuite. Vous pouvez fermer cette fenêtre."
-                  : "Le téléchargement continue si vous fermez cette fenêtre."}
-              </Text>
-            )}
-            {running.map((action) => {
-              const share = percent(action);
-              return (
-                <div
-                  key={`${action.kind}:${action.name}`}
-                  className="cl-update__progress"
-                >
-                  <ProgressBar
-                    label={`${gigabytes(action.done_bytes)}${action.total_bytes ? ` sur ${gigabytes(action.total_bytes)}` : ""}`}
-                    value={share ?? 0}
-                    hasValueLabel={share !== null}
-                  />
-                  <Button
-                    label="Arrêter"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void onStop(action)}
-                  />
+                )}
+                <div className="cl-onb__tile" data-old={tile.role === "old" || undefined}>
+                  {working !== null && tile.role === "new" ? (
+                    <span className="cl-ring" data-done={done || undefined}>
+                      <svg viewBox="0 0 44 44" aria-hidden>
+                        <circle className="cl-ring__track" cx="22" cy="22" r="20" />
+                        <circle
+                          className="cl-ring__value"
+                          cx="22"
+                          cy="22"
+                          r="20"
+                          style={{
+                            strokeDasharray: RING,
+                            strokeDashoffset: RING * (1 - share / 100),
+                          }}
+                        />
+                      </svg>
+                      <span className="cl-ring__icon">
+                        {done ? (
+                          <Check size={16} strokeWidth={2.5} aria-hidden />
+                        ) : (
+                          <Icon size={18} strokeWidth={1.75} aria-hidden />
+                        )}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="cl-onb__icon">
+                      <Icon size={20} strokeWidth={1.75} aria-hidden />
+                    </span>
+                  )}
+                  <span className="cl-onb__name">{tile.name}</span>
+                  <span className="cl-onb__what">{tile.what}</span>
+                  {working === null ? (
+                    <span className="cl-onb__size">
+                      {tile.bytes === null ? "" : gigabytes(tile.bytes)}
+                    </span>
+                  ) : (
+                    <div className="cl-missing__foot">
+                      <div className="cl-missing__row">
+                        {running ? (
+                          <button
+                            type="button"
+                            className="cl-linkbtn cl-missing__act"
+                            onClick={() => void onStop(running)}
+                          >
+                            Arrêter
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <span className="cl-onb__pct">
+                          {tile.role === "new"
+                            ? done
+                              ? "Prêt"
+                              : running
+                                ? measured === null
+                                  ? "En cours"
+                                  : `${measured} %`
+                                : halted
+                                  ? halted.state === "failed"
+                                    ? "Échoué"
+                                    : "Arrêté"
+                                  : "En attente"
+                            : done
+                              ? "Supprimé"
+                              : "En attente"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              );
-            })}
-            {stopped.map((action) => (
-              <Text
-                key={`${action.kind}:${action.name}`}
-                as="p"
-                color="secondary"
-              >
-                {action.error}
-                {dev && action.detail ? ` (${action.detail})` : ""}
-              </Text>
+              </Fragment>
+            );
+          })}
+        </div>
+        {working === null && shown.gains.length > 0 && (
+          <dl className="cl-update__gains">
+            {shown.gains.map((gain) => (
+              <div key={gain.label}>
+                <dd>{capital(gain.value)}</dd>
+                <dt>{gain.label}</dt>
+              </div>
             ))}
-            <div className="cl-update__buttons">
+          </dl>
+        )}
+        {working === null && shown.note && (
+          <p className="cl-onb__text">{shown.note}</p>
+        )}
+        {dev && working === null && (shown.evidence || shown.tiles.length) && (
+          <Text type="supporting">
+            {[shown.evidence, shown.tiles.map((t) => t.key).join(", ")]
+              .filter(Boolean)
+              .join(" · ")}
+          </Text>
+        )}
+        {working !== null && !done && running.length > 0 && (
+          <p className="cl-onb__text">
+            Vous pouvez fermer cette fenêtre : le remplacement continue.
+          </p>
+        )}
+        {stopped.map((action) => (
+          <p key={`${action.kind}:${action.name}`} className="cl-onb__failed">
+            {action.error}
+            {dev && action.detail ? ` (${action.detail})` : ""}
+          </p>
+        ))}
+        {working === null ? (
+          <div className="cl-onb__actions cl-onb__actions--end">
+            <div className="cl-onb__right">
+              <Button
+                label={other.label}
+                variant="ghost"
+                isDisabled={choosing}
+                onClick={() => void pick(other)}
+              />
+              <Button
+                label={primary.label}
+                variant="primary"
+                isLoading={choosing}
+                onClick={() => void pick(primary)}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="cl-onb__actions cl-onb__actions--end">
+            <div className="cl-onb__right">
               {stopped.length > 0 && running.length === 0 && (
                 <Button
                   label="Revenir aux choix"
@@ -454,11 +588,11 @@ export function UpdateNoticesDialog({
               )}
               <Button
                 label={next ? "Suivant" : "Fermer"}
-                variant={done ? "primary" : "secondary"}
+                variant="primary"
                 onClick={() => (next ? setWorking(null) : onClose())}
               />
             </div>
-          </>
+          </div>
         )}
       </div>
     </Dialog>

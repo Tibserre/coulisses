@@ -25,7 +25,11 @@ interface AppMessages {
 }
 
 interface AppWindow {
-  coulissesApp?: { updates?: Partial<UpdatesState>; notifications?: string };
+  coulissesApp?: {
+    updates?: Partial<UpdatesState>;
+    notifications?: string;
+    systemAudio?: string;
+  };
   webkit?: { messageHandlers?: { coulisses?: AppMessages } };
 }
 
@@ -91,6 +95,35 @@ export function useAppNotifications(): NotificationsState | null {
   const [state, setState] = useState(() => appNotifications());
   useEffect(() => {
     const read = () => setState(appNotifications());
+    window.addEventListener(UPDATES_CHANGED, read);
+    return () => window.removeEventListener(UPDATES_CHANGED, read);
+  }, []);
+  return state;
+}
+
+/** Whether macOS lets the app in the Dock record the computer's sound (ADR 0077): read by the
+ *  app at launch and when it comes to the front. `unknown` until macOS has asked, or when
+ *  the app cannot tell. Null where there is no app (a browser), or for a value the page
+ *  does not know: nothing is guessed. */
+export type SystemAudioState = "allowed" | "denied" | "unknown";
+
+export function appSystemAudio(win: unknown = globalThis): SystemAudioState | null {
+  const given = (win as AppWindow).coulissesApp?.systemAudio;
+  return given === "allowed" || given === "denied" || given === "unknown" ? given : null;
+}
+
+/** « Autoriser »: the app asks macOS if it has not yet, else opens System Settings. */
+export function requestSystemAudio(win: unknown = globalThis): void {
+  (win as AppWindow).webkit?.messageHandlers?.coulisses?.postMessage({
+    action: "demander-son-ordinateur",
+  });
+}
+
+/** The same, followed while the page is open (the app sends its event on each change). */
+export function useSystemAudio(): SystemAudioState | null {
+  const [state, setState] = useState(() => appSystemAudio());
+  useEffect(() => {
+    const read = () => setState(appSystemAudio());
     window.addEventListener(UPDATES_CHANGED, read);
     return () => window.removeEventListener(UPDATES_CHANGED, read);
   }, []);

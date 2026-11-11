@@ -60,6 +60,21 @@ function forLanguage(model: CatalogModel, readiness: Readiness, languages: Langu
   return label ? `${purpose} (${languageWord(label)})` : `${purpose} (autre langue)`;
 }
 
+/** A download over within the last few seconds: the disk may not have been read since. */
+export function justEnded(action: ModelAction, now = Date.now()): boolean {
+  if (!action.finished_at) return false;
+  return now - Date.parse(action.finished_at) < 15_000;
+}
+
+/** Whether a row gives way to the tiles shown above it (ADR 0079): only what they say
+ *  already, missing or downloading; anything else (interrupted, damaged, failed) keeps its
+ *  row and its words (P8). */
+export function shownByTiles(row: ModelRow, inPanel: Set<string>): boolean {
+  if (!inPanel.has(row.key)) return false;
+  if (row.state.kind !== "missing" && row.state.kind !== "running") return false;
+  return row.last === null || row.last.state === "done";
+}
+
 function stateOf(
   key: string,
   inventory: Inventory,
@@ -77,6 +92,9 @@ function stateOf(
       outdated: there.outdated,
       replacement: there.replaced_by ? { by: there.replaced_by, note: model?.replacement_note ?? null } : null,
     };
+  // Its download just ended well, the disk not read again yet: finishing, not interrupted.
+  // Only for a few seconds: a partial folder left after that is said as it is (P8).
+  if (partial && action?.state === "done" && justEnded(action)) return { kind: "running", action };
   if (partial) return { kind: "partial", done: partial.size_bytes };
   return { kind: "missing" };
 }
@@ -170,6 +188,8 @@ export function readinessLine(
   readiness: Readiness,
   inventory: Inventory,
   purposeOfKey?: (key: string) => string | undefined,
+  /** Under « Coulisses n'est pas encore prêt… »: only what lacks. */
+  short = false,
 ): string | null {
   if (readiness.ready) return null;
   const parts = readiness.missing.map((piece) => {
@@ -189,8 +209,16 @@ export function readinessLine(
       ? `${said} (abîmé)`
       : said;
   });
-  // An environment several stages need is said once.
-  return `Les séances ne peuvent pas être traitées : il manque ${[...new Set(parts)].join(", ")}.`;
+  // An environment several stages need is said once. Nothing to name (the engine said not
+  // ready without saying why): said all the same, never « il manque . » (P8).
+  if (!parts.length)
+    return short
+      ? "Il manque une pièce du traitement."
+      : "Les séances ne peuvent pas être traitées.";
+  const lacking = [...new Set(parts)].join(", ");
+  return short
+    ? `Il manque ${lacking}.`
+    : `Les séances ne peuvent pas être traitées : il manque ${lacking}.`;
 }
 
 /** The environments the chain lacks (not installed), once each however many stages need
@@ -206,6 +234,13 @@ export function missingEnvironments(
     found.set(name, found.get(name) || piece.label || "");
   }
   return [...found];
+}
+
+/** An environment's announced size (engine v1.15.0): an order of magnitude, null when the
+ *  engine does not say it. */
+export function environmentBytes(readiness: Readiness, name: string): number | null {
+  const piece = readiness.missing.find((p) => p.environment === name);
+  return piece?.announced_bytes ?? null;
 }
 
 /** A step whose models are all there and sound: said in one line, outside developer mode. */
@@ -237,11 +272,14 @@ export function quietRows(
   const steps: StepLine[] = [];
   const apart: ModelRow[] = [];
   const old = new Map<string, ModelRow[]>();
+  // A download that ended well says nothing more: the model is as sound as one installed
+  // before (it no longer keeps its own row until the next launch).
+  const quietLast = (row: ModelRow) => row.last === null || row.last.state === "done";
   const sound = (row: ModelRow) =>
     row.required &&
     row.state.kind === "installed" &&
     row.state.replacement === null &&
-    row.last === null;
+    quietLast(row);
   const needed = new Set(rows.filter((r) => r.required).map((r) => r.purpose));
   // A step folds only when every model it needs is sound: never two lines of one name.
   const unsoundStep = new Set(rows.filter((r) => r.required && !sound(r)).map((r) => r.purpose));
@@ -249,7 +287,7 @@ export function quietRows(
     // Another language's model is said in « Langues » (installed, downloading, to add);
     // damaged or interrupted, it keeps its row here, with the space it takes.
     if (row.otherLanguage !== null && row.state.kind !== "altered" && row.state.kind !== "partial") continue;
-    if (!row.required && row.last === null) {
+    if (!row.required && quietLast(row)) {
       if (row.state.kind === "missing") continue; // not on the disk: nothing to say
       // Replaced by another (engine v1.10.0): an old one. An optional one keeps its row.
       if (row.state.kind === "installed" && row.state.replacement !== null && needed.has(row.purpose)) {
@@ -287,4 +325,36 @@ export function quietRows(
 /** The size of models, as one number. */
 export function sizeOf(rows: ModelRow[]): number {
   return rows.reduce((sum, r) => sum + ("size" in r.state ? r.state.size : 0), 0);
+}
+
+/** A part of the space the processing takes on this Mac, for the bar of Réglages ›
+ *  Transcription (ADR 0079, proposal B): by what it is for, never by a model's name (P6). */
+export interface DiskPart {
+  key: string;
+  label: string;
+  bytes: number;
+}
+
+/** The bar's parts, in the order of the processing: the transcription, each language on this
+ *  Mac (its own models), who speaks when, the calculation tools. The words' alignment is
+ *  said by the languages, whose own models it is. */
+export function diskParts(
+  steps: StepLine[],
+  languages: { language: string; label: string; bytes: number | null }[],
+  tools: number | null,
+): DiskPart[] {
+  const step = (purpose: string) =>
+    steps.filter((s) => s.purpose === purpose).map((s) => ({ key: purpose, label: purpose, bytes: s.size }));
+  const others = steps.filter(
+    (s) => !["Transcription", "Alignement des mots", "Qui parle quand"].includes(s.purpose),
+  );
+  return [
+    ...step("Transcription"),
+    ...languages
+      .filter((l): l is { language: string; label: string; bytes: number } => l.bytes !== null && l.bytes > 0)
+      .map((l) => ({ key: `langue-${l.language}`, label: l.label, bytes: l.bytes })),
+    ...step("Qui parle quand"),
+    ...others.map((s) => ({ key: s.purpose, label: s.purpose, bytes: s.size })),
+    ...(tools ? [{ key: "outils", label: "Outils de calcul", bytes: tools }] : []),
+  ];
 }
