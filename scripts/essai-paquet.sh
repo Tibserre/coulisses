@@ -130,6 +130,12 @@ BUILT_WITH=$($RES/bin/ffmpeg -version)
 PROTOCOLS=$($RES/bin/ffmpeg -hide_banner -protocols | awk '/Input:/{on=1; next} /Output:/{on=0} on {print $1}' | sort -u | tr '\n' ' ')
 [[ $PROTOCOLS == "file pipe " ]] || fail "protocoles en entrée de ffmpeg : $PROTOCOLS"
 print "   signature valide ($SIGNER) ; outils autonomes ; ffmpeg LGPL, sans réseau, protocoles : $PROTOCOLS"
+# The computer's sound: the private TCC calls the app reads its permission with (ADR 0077).
+TCC=$(swift $ROOT/scripts/verifier-son-ordinateur.swift) || {
+  [[ -n $TCC ]] || TCC="la vérification du son de l'ordinateur n'a pas pu tourner (swift absent ?)"
+  fail "${TCC#ÉCHEC : }"
+}
+print "   $TCC"
 
 print "2. Le ffmpeg de l'app lit chaque format…"
 say -v Thomas -o $WORK/voix.aiff "Bonjour à tous. On reprend la scène du marché, avec plus d'énergie au début."
