@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
+- nomme « Espace 1 » l'espace d'une installation neuve (espaces)
 - garde « Mettre à jour » dans la colonne après « Plus tard » (mises-a-jour)
 
 ## v0.38.3 — 2026-11-06
