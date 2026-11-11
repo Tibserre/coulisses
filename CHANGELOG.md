@@ -10,37 +10,20 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
-- montre ce qui manque et son avancement sans clic (premier-lancement)
-- montre la place prise « Sur ce Mac » et arrête les téléchargements ensemble (reglages)
-- cite les auteurs des modèles dans « Avancé » (reglages)
-- dit la taille annoncée de chaque environnement manquant (modeles)
-- dit la taille des outils de calcul quand le moteur l'annonce (premier-lancement)
-- fait entrer chaque étape de l'onboarding par un glissement (premier-lancement)
-- lit l'onde de la bienvenue en continu (premier-lancement)
-- fait de la bienvenue une réplique qui s'écrit (premier-lancement)
-- anime la bienvenue et suit les téléchargements par un anneau (premier-lancement)
-- les langues en cartes compactes, et le traitement en une ligne quand tout est prêt (reglages)
-- une page « il manque » pour la séance qui attend, et un Résumé sans Ollama en page (premier-lancement)
-- remplace la bienvenue par un onboarding en six étapes (premier-lancement)
-- dit écouter et rédiger à la bienvenue, et « Tout télécharger » (premier-lancement)
-- rend Ollama facultatif, les rédactions l'attendent (redaction)
-- lit et demande l'autorisation dès le début (son-ordinateur)
-- nomme « Espace 1 » l'espace d'une installation neuve (espaces)
-- garde « Mettre à jour » dans la colonne après « Plus tard » (mises-a-jour)
+- Un premier lancement en quelques étapes. Coulisses se présente, montre ce qu'il faut télécharger pour écouter les séances, avec la taille de chaque chose, vous laisse choisir les langues, puis télécharge sur votre accord. L'avancement se suit sans rien ouvrir, et « Plus tard » vous le repropose au lancement suivant.
+- Plus besoin de compte Hugging Face. Le modèle qui sépare les voix est livré avec l'app. Ses auteurs sont cités dans Réglages › Avancé, section « Crédits ».
+- Ollama devient facultatif. Sans lui, une séance est quand même transcrite, avec qui a dit quoi ; seuls le titre, les chapitres et les résumés attendent qu'il soit installé.
+- Le son de l'ordinateur (Zoom, Teams, Meet…) s'autorise dès le premier lancement, au lieu de se découvrir muet après un premier enregistrement.
+- Une séance à qui il manque quelque chose pour être traitée le dit en grand et propose de tout télécharger d'un coup, au lieu d'échouer.
+- Réglages › Transcription montre la place prise sur ce Mac, les langues en cartes, et un seul bouton pour arrêter ou reprendre les téléchargements.
+- Une installation neuve commence avec un espace nommé « Espace 1 ».
+- « Mettre à jour » reste visible dans la colonne après « Plus tard ».
 
 ### Corrections
 
-- retire l'alerte vide de l'onglet Transcription (reglages)
-- n'ouvre plus « Ce qui manque » à la fermeture de l'onboarding (premier-lancement)
-- ne dit plus toutes les langues en téléchargement pendant la transcription (langues)
-- redessine la fenêtre de remplacement et de nettoyage (mises-a-jour)
-- remplace l'ancienne fenêtre d'installation par « Ce qui manque » et retire les styles morts (mises-a-jour)
-- ouvre l'accueil malgré le modèle livré avec l'application (premier-lancement)
-- des tuiles de suivi sur la base de l'étape 2, et le Résumé sans Ollama remonté (premier-lancement)
-- un seul style de suivi, en tuiles, et une taille fixe pour les fenêtres (premier-lancement)
-- une fenêtre garde sa taille du début à la fin de son parcours (premier-lancement)
-- garde la page « il manque » pendant le téléchargement (premier-lancement)
-- fait attendre et télécharger tout ce qui manque à la chaîne (modeles)
+- La fenêtre qui propose de remplacer un ancien modèle ou de supprimer d'anciens composants est redessinée.
+- Pendant le téléchargement de la transcription, les langues ne se disent plus toutes en téléchargement.
+- Plus d'alerte vide dans Réglages › Transcription.
 
 ## v0.38.3 — 2026-11-06
 
