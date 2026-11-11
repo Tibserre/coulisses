@@ -7,7 +7,9 @@ CREATE TABLE troupe (
     created_at TEXT NOT NULL
 );
 
-INSERT INTO troupe (name, created_at) VALUES ('Ma troupe', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
+-- The space of a new install (« Ma troupe » in bases made before this change): a base already
+-- migrated never runs this file again (user_version), so its space keeps the name it has.
+INSERT INTO troupe (name, created_at) VALUES ('Espace 1', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
 
 CREATE TABLE session (
     id TEXT PRIMARY KEY,

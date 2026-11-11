@@ -105,7 +105,7 @@ def test_an_import_keeps_the_file_exactly_and_queues_its_processing(
     assert session is not None
     assert session.unnamed_attendees == 4
     assert session.min_voices == 4
-    assert session.space_name == "Ma troupe"
+    assert session.space_name == "Espace 1"
     assert session.job_state == "queued"
     assert session.title is None  # generated later (step 3), never the folder name
 
