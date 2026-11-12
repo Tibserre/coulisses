@@ -11,8 +11,9 @@ L'onglet Réglages › Séances alignait des lignes « libellé · compteur » t
 - **L'onglet Séances** (maquette R3) : la durée sur une ligne ; « Bientôt supprimés » en carte, avec les rappels en une ligne et chaque séance annoncée, la plus proche d'abord : sa date, une pastille « dans N jours » (pleine à 3 jours ou moins) et « Garder » ; une phrase dit combien de séances n'ont déjà plus leur audio, « Voir » ouvre le journal. Les réglages d'enregistrement en deux cartes (« Silence », « Rappel »), le dossier d'export en carte.
 
 ## Conséquences
-- Service : refuser une durée au-delà de 90 jours ; faire le second rappel (sans doute une colonne de plus : changement de schéma, à valider) ; donner `reminder_days` dans `GET /api/conservation`. Relais écrit le 2026-11-12.
-- Interface : tant que le Service ne donne pas `reminder_days`, l'onglet ne dit que le préavis réel (« Rappel 7 jours avant ») : jamais un rappel qui n'existe pas. Le préavis gardé est renvoyé tel quel, jamais au-dessus de la durée.
+- Service : le second rappel passe par le bandeau (`coming`) et la notification macOS, avec le même texte que le premier ; `GET /api/conservation` donne `reminder_days`, les rappels réellement faits ([7, 3], ou le préavis seul s'il fait 3 jours ou moins).
+- Seul le premier rappel retient la purge (0029) : une application fermée pendant les 3 derniers jours purge à sa vérification suivante, sans second rappel. Le second rappel est un confort, pas une garantie.
+- Interface : sans `reminder_days` (un service plus ancien), l'onglet ne dit que le préavis réel (« Rappel 7 jours avant ») : jamais un rappel qui n'existe pas. Le préavis gardé est renvoyé tel quel, jamais au-dessus de la durée.
 - **Ouvert, à trancher par l'utilisateur** : une durée déjà réglée au-delà de 90 jours. En attendant, elle s'ajoute aux cinq choix pour rester visible, et rien n'est changé à l'existant.
 - « Prolonger » reste dans le menu de la séance ; l'onglet ne propose que « Garder ».
 
