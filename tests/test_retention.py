@@ -186,7 +186,9 @@ def test_the_purge_is_announced_first_and_happens_after_the_notice(
     assert [a.session_id for a in retention.coming(data, NOW)] == [session_id]
 
     again = retention.check(data, NOW + timedelta(days=6, hours=23))
-    assert (again.announced, again.purged) == ([], [])  # announced once, not yet due
+    # The second reminder (3 days before, ADR 0083), not due yet.
+    assert ([a.session_id for a in again.announced], again.purged) == ([session_id], [])
+    assert retention.check(data, NOW + timedelta(days=6, hours=23, minutes=30)).announced == []
     assert sources(data, session_id)
 
     due = retention.check(data, NOW + timedelta(days=7))
@@ -295,10 +297,14 @@ def test_the_service_keeps_extends_removes_and_lists(data: DataDir, recording: P
     removed = client.post(f"/api/seances/{session_id}/supprimer-audio").json()
     assert (removed["session"]["audio"]["state"], removed["problems"]) == ("removed", [])
     info = client.get("/api/conservation").json()
-    assert info["settings"] == {"retention_days": 90, "notice_days": 7}
+    assert info["settings"] == {"retention_days": 90, "notice_days": 7, "reminder_days": [7, 3]}
     assert [e["kind"] for e in info["journal"]] == ["audio_deletion"]
     changed = client.put("/api/conservation", json={"retention_days": 60, "notice_days": 5})
-    assert changed.json()["settings"] == {"retention_days": 60, "notice_days": 5}
+    assert changed.json()["settings"] == {
+        "retention_days": 60,
+        "notice_days": 5,
+        "reminder_days": [5, 3],
+    }
     refused = client.put("/api/conservation", json={"retention_days": 5, "notice_days": 9})
     assert refused.status_code == 422
     too_long = client.put("/api/conservation", json={"retention_days": 120, "notice_days": 7})
@@ -632,3 +638,74 @@ def test_the_copy_kept_by_a_repatriation_is_never_pruned(data: DataDir) -> None:
 
     assert brought.exists()
     assert len(list(data.backups.glob("coulisses-avant-0*.db"))) == 3
+
+
+def test_a_purge_is_reminded_once_three_days_before(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)  # due in 5 days; announced now, purged in 7
+    first = retention.check(data, NOW).announced
+    assert [a.purge_on for a in first] == ["2026-10-14T12:00:00Z"]
+    assert retention.check(data, NOW + timedelta(days=3)).announced == []  # 4 days left
+    second = retention.check(data, NOW + timedelta(days=4, hours=1))
+    assert [(a.session_id, a.purge_on) for a in second.announced] == [
+        (session_id, "2026-10-14T12:00:00Z")
+    ]
+    # Given once: a later check (or one after a restart) says nothing more.
+    assert retention.check(data, NOW + timedelta(days=5)).announced == []
+    assert retention.check(data, NOW + timedelta(days=7)).purged == [session_id]
+
+
+def test_a_notice_of_three_days_or_less_has_one_reminder(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    conn = connect(data)
+    try:
+        retention.set_settings(conn, 90, 3)
+        assert retention.get_settings(conn).reminder_days == [3]
+    finally:
+        conn.close()
+    assert retention.check(data, NOW + timedelta(days=2)).announced  # 3 days before
+    assert retention.check(data, NOW + timedelta(days=4)).announced == []
+    assert retention.check(data, NOW + timedelta(days=5)).purged == [session_id]
+
+
+def test_extending_clears_the_second_reminder_too(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    assert retention.check(data, NOW).announced
+    assert retention.check(data, NOW + timedelta(days=4, hours=1)).announced
+    retention.extend(data, session_id, NOW + timedelta(days=5))  # kept 90 days from then
+    later = NOW + timedelta(days=5 + 90 - 7)
+    assert [a.session_id for a in retention.check(data, later).announced] == [session_id]
+    assert retention.check(data, later + timedelta(days=3)).announced == []
+    reminded = retention.check(data, later + timedelta(days=4, hours=1)).announced
+    assert [a.session_id for a in reminded] == [session_id]
+
+
+def test_a_closed_application_purges_without_the_second_reminder(
+    data: DataDir, recording: Path
+) -> None:
+    """Only the first reminder holds the purge (ADR 0029, kept by 0083)."""
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    assert retention.check(data, NOW).announced
+    late = retention.check(data, NOW + timedelta(days=8))
+    assert (late.announced, late.purged) == ([], [session_id])
+
+
+def test_a_new_delay_gives_both_reminders_again(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    assert retention.check(data, NOW).announced
+    assert retention.check(data, NOW + timedelta(days=4, hours=1)).announced
+    conn = connect(data)
+    try:
+        retention.set_settings(conn, 60, 7)
+    finally:
+        conn.close()
+    after = NOW + timedelta(days=5)
+    first = retention.check(data, after).announced
+    assert [a.purge_on for a in first] == ["2026-10-19T12:00:00Z"]
+    assert retention.check(data, after + timedelta(days=3)).announced == []
+    second = retention.check(data, after + timedelta(days=4, hours=1)).announced
+    assert [a.session_id for a in second] == [session_id]
