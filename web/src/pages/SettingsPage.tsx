@@ -3,11 +3,15 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Popover } from "@astryxdesign/core/Popover";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Text } from "@astryxdesign/core/Text";
-import { ChevronDown } from "lucide-react";
+import { Bell, Mic } from "lucide-react";
 import {
   api,
   type AppInfo,
@@ -25,16 +29,24 @@ import { WritingModels } from "../components/WritingModels.tsx";
 import { useAppNotifications } from "../appBridge.ts";
 import { setDevMode, useDevMode } from "../devMode.ts";
 import { formatBytes, formatDate, formatDateTime, plural } from "../format.ts";
-import { LOG_KIND, formatDay } from "../retention.ts";
+import {
+  LOG_KIND,
+  daysUntil,
+  formatDay,
+  retentionChoices,
+  retentionWrite,
+  remindersLine,
+  sessionsWithoutAudio,
+  untilWords,
+} from "../retention.ts";
 import { CreditsSection } from "../components/ModelCredits.tsx";
 import { buildShown, PARTS, partOf, type Part } from "../settingsParts.ts";
 
 /** Lists that only grow (the deletion log, the backups): the latest first, the rest on
  *  demand. */
 const SHOWN_ROWS = 5;
-/** The usual values the steppers go through: a week, two, a month, a season, a year… */
-const RETENTION_STEPS = [7, 14, 30, 60, 90, 120, 180, 270, 365, 730];
-const NOTICE_STEPS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 60];
+/** A purge this close is said in full colour: three days or less (the second reminder). */
+const CLOSE_DAYS = 3;
 /** The service gives the latest 200 entries of the log (retention.journal). */
 const JOURNAL_LIMIT = 200;
 
@@ -63,7 +75,6 @@ export function SettingsPage({
   const [allBackups, setAllBackups] = useState(false);
   const [info, setInfo] = useState<RetentionInfo | null>(null);
   const [days, setDays] = useState<number | null>(null);
-  const [notice, setNotice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [folders, setFolders] = useState<Folders | null>(null);
   useEffect(() => {
@@ -91,75 +102,31 @@ export function SettingsPage({
     }
   };
 
-  const shownDays = days ?? info?.settings.retention_days ?? 90;
-  const shownNotice = notice ?? info?.settings.notice_days ?? 7;
+  const shownDays = days ?? info?.settings.retention_days ?? null;
+  const reminders = info
+    ? (info.settings.reminder_days ?? [info.settings.notice_days])
+    : [];
 
-  // Changed in place (ADR 0051), kept once one leaves the line, the tab or the page: one
-  // write per decision, so the coming purges are announced again once, for the delay chosen
-  // (each write announces them anew). Writes go one after the other; a refusal is said, and
-  // the values shown go back to those kept.
-  type Retention = { retention_days: number; notice_days: number };
-  const pending = useRef<Retention | null>(null);
-  const kept = useRef<RetentionInfo["settings"] | null>(null);
-  kept.current = info?.settings ?? null;
+  // One click, one decision, written at once (each write announces the coming purges anew).
+  // Writes go one after the other; the value chosen shows meanwhile, and a refusal is said,
+  // the value kept shown again. The notice is no longer chosen here: it is kept as it is,
+  // never above the keeping.
   const queue = useRef<Promise<void>>(Promise.resolve());
-  const change = (next: { days?: number; notice?: number }) => {
-    if (next.days !== undefined) setDays(next.days);
-    if (next.notice !== undefined) setNotice(next.notice);
-    pending.current = {
-      retention_days: next.days ?? shownDays,
-      notice_days: next.notice ?? shownNotice,
-    };
+  const setRetentionDays = (value: number) => {
+    if (info === null || value === shownDays) return;
+    setDays(value);
+    const settings = retentionWrite(value, info.settings.notice_days);
+    queue.current = queue.current.then(async () => {
+      try {
+        await api.setRetention(settings);
+        setError(null);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+      await load();
+      setDays((shown) => (shown === value ? null : shown));
+    });
   };
-  const flush = useCallback(
-    (leaving = false) => {
-      const value = pending.current;
-      pending.current = null;
-      if (
-        value === null ||
-        (kept.current?.retention_days === value.retention_days &&
-          kept.current?.notice_days === value.notice_days)
-      ) {
-        if (value !== null) {
-          setDays(null);
-          setNotice(null);
-        }
-        return;
-      }
-      // The page goes away (closed, reloaded): sent at once, and finished by the browser. No
-      // page is left to say a refusal; the next opening shows the values kept, as they are.
-      if (leaving) {
-        void api.setRetention(value, true).catch(() => undefined);
-        return;
-      }
-      queue.current = queue.current.then(async () => {
-        try {
-          await api.setRetention(value);
-          setError(null);
-        } catch (e) {
-          setError((e as Error).message);
-        }
-        await load();
-        // A change made meanwhile stays shown, to be kept in its turn.
-        if (pending.current === null) {
-          setDays(null);
-          setNotice(null);
-        }
-      });
-    },
-    [load],
-  );
-  useEffect(() => {
-    const leave = () => flush(true);
-    window.addEventListener("pagehide", leave);
-    return () => {
-      window.removeEventListener("pagehide", leave);
-      flush();
-    };
-  }, [flush]);
-  useEffect(() => {
-    if (part !== "seances") flush();
-  }, [part, flush]);
 
   const name = (c: PurgeAnnouncement) =>
     c.title ?? `Séance du ${formatDate(c.recorded_at).toLowerCase()}`;
@@ -211,106 +178,93 @@ export function SettingsPage({
           <>
             <section className="cl-settings__section">
               <Heading level={3}>L'audio des séances</Heading>
-              <Text color="secondary">
-                L'audio d'une séance traitée est supprimé après ce délai, avec
-                un préavis ; le texte, les noms et les résumés restent. Une
-                séance peut garder son audio depuis son menu « … ».
-              </Text>
-              <div
-                className="cl-settings__steppers"
-                onMouseLeave={() => flush()}
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node | null))
-                    flush();
-                }}
-              >
-                <DayStepper
-                  label="Garder l'audio"
-                  description="Depuis son entrée dans Coulisses."
-                  value={shownDays}
-                  steps={RETENTION_STEPS}
-                  min={Math.max(1, shownNotice)}
-                  isDisabled={info === null}
-                  onChange={(v) => change({ days: v })}
-                />
-                <DayStepper
-                  label="Prévenir avant"
-                  description="Un bandeau et une notification."
-                  value={shownNotice}
-                  steps={NOTICE_STEPS}
-                  max={shownDays}
-                  isDisabled={info === null}
-                  onChange={(v) => change({ notice: v })}
-                />
-                {/* Always their lines, so nothing moves once read. */}
-                <div className="cl-settings__row">
-                  <span className="cl-settings__text">
-                    <Text>Bientôt supprimés</Text>
-                  </span>
-                  <span className="cl-settings__value">
-                    {info === null ? (
-                      <Skeleton width={60} height={14} radius={1} />
-                    ) : (
-                      <Text color="secondary">
-                        {info.coming.length === 0
-                          ? "Aucun"
-                          : plural(info.coming.length, "séance", "séances")}
-                      </Text>
-                    )}
-                  </span>
-                </div>
-                <div className="cl-settings__row">
-                  <span className="cl-settings__text">
-                    <Text>Déjà supprimés</Text>
-                    <Text type="supporting">
-                      Chaque suppression et chaque passage en FLAC, avec ses
-                      fichiers et leur taille ; jamais le texte d'une séance
-                      supprimée.
-                    </Text>
-                  </span>
-                  <span className="cl-settings__value">
-                    {info === null ? (
-                      <Skeleton width={60} height={14} radius={1} />
-                    ) : info.journal.length === 0 ? (
-                      <Text color="secondary">Aucun</Text>
-                    ) : (
-                      <DeletedPanel journal={info.journal} />
-                    )}
-                  </span>
-                </div>
+              <div className="cl-retention__keep">
+                <Text>Garder l'audio</Text>
+                {shownDays === null ? (
+                  <Skeleton width={380} height={36} radius={2} />
+                ) : (
+                  <SegmentedControl
+                    label="Garder l'audio"
+                    value={String(shownDays)}
+                    onChange={(v) => setRetentionDays(Number(v))}
+                  >
+                    {retentionChoices(shownDays).map((d) => (
+                      <SegmentedControlItem
+                        key={d}
+                        value={String(d)}
+                        label={`${d} jours`}
+                      />
+                    ))}
+                  </SegmentedControl>
+                )}
               </div>
-              {info && info.coming.length > 0 && (
-                <ul className="cl-settings__list">
-                  {info.coming.map((c) => (
-                    <li key={c.session_id}>
-                      <span className="cl-settings__text">
-                        <a
-                          href={`#/seance/${encodeURIComponent(c.session_id)}`}
-                        >
-                          {name(c)}
-                        </a>
-                        <Text type="supporting">
-                          suppression de l'audio le {formatDay(c.purge_on)}
-                        </Text>
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        label="Prolonger"
-                        clickAction={() =>
-                          act(() => api.extendAudio(c.session_id))
-                        }
-                      />
-                      <Button
-                        size="sm"
-                        label="Garder l'audio"
-                        clickAction={() =>
-                          act(() => api.keepAudio(c.session_id, true))
-                        }
-                      />
-                    </li>
-                  ))}
-                </ul>
+              <div className="cl-retention__coming">
+                <div className="cl-retention__head">
+                  <Text weight="medium">Bientôt supprimés</Text>
+                  {info && (
+                    <span className="cl-retention__reminders">
+                      <Bell size={14} strokeWidth={1.75} aria-hidden />
+                      {remindersLine(reminders)}
+                    </span>
+                  )}
+                </div>
+                {info === null ? (
+                  <RowsSkeleton rows={2} />
+                ) : info.coming.length === 0 ? (
+                  <Text color="secondary">
+                    Aucune séance ne perd son audio d'ici{" "}
+                    {Math.max(...reminders, 1)} jours.
+                  </Text>
+                ) : (
+                  <ul className="cl-retention__list">
+                    {[...info.coming]
+                      .sort((x, y) => x.purge_on.localeCompare(y.purge_on))
+                      .map((c) => {
+                        const left = daysUntil(c.purge_on);
+                        return (
+                          <li key={c.session_id}>
+                            <span className="cl-settings__text">
+                              <a
+                                href={`#/seance/${encodeURIComponent(c.session_id)}`}
+                              >
+                                {name(c)}
+                              </a>
+                              <Text type="supporting">
+                                Audio supprimé le {formatDay(c.purge_on)}
+                              </Text>
+                            </span>
+                            <span
+                              className="cl-retention__left"
+                              data-close={left <= CLOSE_DAYS || undefined}
+                            >
+                              {untilWords(left)}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              label="Garder"
+                              clickAction={() =>
+                                act(() => api.keepAudio(c.session_id, true))
+                              }
+                            />
+                          </li>
+                        );
+                      })}
+                  </ul>
+                )}
+              </div>
+              {info && (
+                <div className="cl-retention__gone">
+                  <Text color="secondary">
+                    {goneLine(
+                      sessionsWithoutAudio(info.journal),
+                      info.journal.length >= JOURNAL_LIMIT,
+                    )}
+                  </Text>
+                  {info.journal.length > 0 && (
+                    <DeletedPanel journal={info.journal} />
+                  )}
+                </div>
               )}
             </section>
 
@@ -434,6 +388,16 @@ export function SettingsPage({
   );
 }
 
+/** « 3 séances n'ont déjà plus leur audio ; leur texte est toujours là. » The log read is
+ *  the latest only: when it is full, the count is a least. */
+function goneLine(count: number, more: boolean): string {
+  if (count === 0) return "Aucune séance n'a encore perdu son audio.";
+  const least = more ? "Au moins " : "";
+  return count === 1
+    ? `${least}1 séance n'a déjà plus son audio ; son texte est toujours là.`
+    : `${least}${count} séances n'ont déjà plus leur audio ; leur texte est toujours là.`;
+}
+
 /** What went, opened from « Déjà supprimés »: a list floating under its trigger, the latest
  *  first, the rest on demand; nothing below moves. */
 function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
@@ -495,15 +459,10 @@ function DeletedPanel({ journal }: { journal: RetentionInfo["journal"] }) {
     >
       <button
         type="button"
-        className="cl-modelpick"
-        aria-label={`Déjà supprimés : ${journal.length}. Voir`}
+        className="cl-retention__see"
+        aria-label={`Déjà supprimés : ${journal.length >= JOURNAL_LIMIT ? `${JOURNAL_LIMIT} et plus` : journal.length}. Voir`}
       >
-        <span className="cl-modelpick__name">
-          {journal.length >= JOURNAL_LIMIT
-            ? `${JOURNAL_LIMIT} et plus`
-            : journal.length}
-        </span>
-        <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
+        Voir
       </button>
     </Popover>
   );
@@ -571,11 +530,6 @@ function RemindersSection() {
   return (
     <section className="cl-settings__section">
       <Heading level={3}>Pendant un enregistrement</Heading>
-      <Text color="secondary">
-        Coulisses vous demande si la réunion est finie ; il n'arrête jamais
-        l'enregistrement de lui-même. La barre des menus montre qu'il
-        enregistre.
-      </Text>
       {error && (
         <Banner status="error" title={error.title} description={error.text} />
       )}
@@ -583,18 +537,22 @@ function RemindersSection() {
       {kept === null ? (
         !error && <RowsSkeleton rows={2} />
       ) : (
-        <div className="cl-settings__steppers">
+        <div className="cl-settings__cards">
           <DayStepper
-            label="Prévenir après un silence de"
-            description="Personne ne parle, au micro comme dans le son de l'ordinateur."
+            title="Silence"
+            icon={<Mic size={16} strokeWidth={1.75} aria-hidden />}
+            label="« C'est fini ? » après un silence de"
+            description="Il n'arrête jamais l'enregistrement de lui-même."
             value={kept.silence_min}
             steps={SILENCE_STEPS}
             say={minutes}
             onChange={(v) => void change({ ...kept, silence_min: v })}
           />
           <DayStepper
-            label="Rappeler toutes les"
-            description="Que l'enregistrement tourne toujours."
+            title="Rappel"
+            icon={<Bell size={16} strokeWidth={1.75} aria-hidden />}
+            label="« Ça enregistre toujours » toutes les"
+            description="La barre des menus le montre aussi."
             value={kept.duration_min}
             steps={DURATION_STEPS}
             say={minutes}

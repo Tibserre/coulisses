@@ -1,6 +1,6 @@
 # 0029 — Garder ou purger l'audio, supprimer une séance pour de bon
 
-Statut : Acceptée (2026-10-07, choix de l'utilisateur). Remplace, dans l'ADR 0018, la règle selon laquelle les sauvegardes de la base gardent le texte d'une séance supprimée.
+Statut : Acceptée (2026-10-07, choix de l'utilisateur). Durée sans plafond et préavis réglable : remplacés par 0083 (90 jours au plus, rappels fixes 7 puis 3 jours avant). Remplace, dans l'ADR 0018, la règle selon laquelle les sauvegardes de la base gardent le texte d'une séance supprimée.
 
 ## Contexte
 La spec veut que l'audio soit gardé une durée choisie puis supprimé, avec un préavis, et que le texte ne disparaisse que par une suppression explicite de la séance (§7.10, P5, P8). L'ADR 0018 prévoyait qu'une séance supprimée reste dans les copies de sauvegarde de la base, que l'utilisateur supprime lui-même. L'utilisateur veut au contraire qu'une séance supprimée le soit vraiment, partout. Il juge aussi que « épingler » ne dit pas ce que fait l'option : garder l'audio.

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Minus, Plus } from "lucide-react";
 import { plural } from "../format.ts";
 import { nextStep } from "../retention.ts";
@@ -13,6 +14,8 @@ export function DayStepper({
   max = Number.POSITIVE_INFINITY,
   isDisabled = false,
   say = (n: number) => plural(n, "jour", "jours"),
+  title,
+  icon,
   onChange,
 }: {
   label: string;
@@ -25,12 +28,21 @@ export function DayStepper({
   isDisabled?: boolean;
   /** The value as said: days unless told otherwise. */
   say?: (value: number) => string;
+  /** Shown as a card: its name and icon on top, the label then the control under. */
+  title?: string;
+  icon?: ReactNode;
   onChange: (value: number) => void;
 }) {
   const down = nextStep(steps, value, false, min, max);
   const up = nextStep(steps, value, true, min, max);
   return (
-    <div className="cl-stepper">
+    <div className={title ? "cl-stepper cl-stepper--card" : "cl-stepper"}>
+      {title && (
+        <div className="cl-stepper__title">
+          {icon && <span className="cl-icon-disc">{icon}</span>}
+          <span>{title}</span>
+        </div>
+      )}
       <div className="cl-stepper__what">
         <span className="cl-stepper__label">{label}</span>
         {description && (

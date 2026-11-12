@@ -5954,3 +5954,148 @@ button.cl-tree__more:hover {
   gap: var(--spacing-4);
   text-align: left;
 }
+
+/* Réglages › Séances (R3): the keeping in one line, then what is about to go, each with its
+   days left, then what went. */
+.cl-retention__keep {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  flex-wrap: wrap;
+}
+
+.cl-retention__coming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-surface);
+}
+
+.cl-retention__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.cl-retention__reminders {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-retention__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-retention__list li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) 0;
+}
+
+.cl-retention__list li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+/* The days left: a soft pill, in full colour once the last reminder is given. */
+.cl-retention__left {
+  flex: none;
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--color-background-muted);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-retention__left[data-close] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.cl-retention__gone {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+.cl-retention__see {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.cl-retention__see:hover {
+  text-decoration: underline;
+}
+
+/* Two settings side by side, each a card: its icon and name, what it does, its control. */
+.cl-settings__cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-3);
+}
+
+.cl-stepper--card {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-surface);
+}
+
+.cl-stepper__title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-weight: 500;
+  width: 100%;
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cl-icon-disc {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-background-muted);
+  color: var(--color-accent);
+}
+
+.cl-folder-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-container, 10px);
+  background: var(--color-background-surface);
+}
