@@ -301,6 +301,27 @@ def test_the_service_keeps_extends_removes_and_lists(data: DataDir, recording: P
     assert changed.json()["settings"] == {"retention_days": 60, "notice_days": 5}
     refused = client.put("/api/conservation", json={"retention_days": 5, "notice_days": 9})
     assert refused.status_code == 422
+    too_long = client.put("/api/conservation", json={"retention_days": 120, "notice_days": 7})
+    assert too_long.status_code == 422
+    assert "90 jours au plus" in too_long.json()["detail"]
+
+
+def test_a_longer_delay_set_before_stays_but_no_new_one_goes_above_90(data: DataDir) -> None:
+    conn = connect(data)
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO app_setting (key, value) VALUES (?, '180')", (retention.RETENTION_KEY,)
+            )
+        retention.set_settings(conn, 180, 7)  # unchanged: kept as it is (ADR 0083)
+        assert retention.get_settings(conn).retention_days == 180
+        with pytest.raises(SpaceError):
+            retention.set_settings(conn, 120, 7)
+        retention.set_settings(conn, 90, 7)
+        with pytest.raises(SpaceError):
+            retention.set_settings(conn, 180, 7)  # once left, never set again
+    finally:
+        conn.close()
 
 
 def test_a_waiting_rerun_holds_the_purge_and_the_deletion_of_the_audio(

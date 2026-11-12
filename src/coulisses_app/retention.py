@@ -43,6 +43,9 @@ RETENTION_KEY = "conservation_jours"
 NOTICE_KEY = "preavis_jours"
 DEFAULT_RETENTION_DAYS = 90
 DEFAULT_NOTICE_DAYS = 7
+MAX_RETENTION_DAYS = 90
+"""The audio is kept 90 days at most (ADR 0083). A longer delay set before stays as it is
+until the user decides its fate: only a new choice is refused above it."""
 BACKUPS_KEPT = 3
 """Copies of the database kept, the one just made among them (ADR 0052)."""
 
@@ -111,6 +114,9 @@ def get_settings(conn: sqlite3.Connection) -> RetentionSettings:
 def set_settings(conn: sqlite3.Connection, retention_days: int, notice_days: int) -> None:
     if retention_days < 1:
         raise SpaceError("L'audio se garde au moins un jour.")
+    kept = _setting(conn, RETENTION_KEY, DEFAULT_RETENTION_DAYS)
+    if retention_days > MAX_RETENTION_DAYS and retention_days != kept:
+        raise SpaceError(f"L'audio se garde {MAX_RETENTION_DAYS} jours au plus.")
     if not 1 <= notice_days <= retention_days:
         raise SpaceError("Le préavis va d'un jour à la durée de conservation.")
     with conn:
