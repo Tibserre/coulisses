@@ -27,11 +27,9 @@ Sur un Mac géré par une entreprise, macOS peut refuser d'ouvrir Coulisses sans
 curl -fsSL https://raw.githubusercontent.com/Tibserre/coulisses/main/installer.sh | sh
 ```
 
-Cette commande contourne Gatekeeper, le contrôle de macOS. Si votre Mac est géré, ce blocage est un choix de son administrateur : vérifiez que vous avez le droit d'installer une app de cette façon.
+Le script télécharge la dernière version, vérifie qu'elle est bien signée par Coulisses, puis l'installe. Il ne demande aucun mot de passe, et une ancienne version part à la Corbeille.
 
-Le script ([`installer.sh`](installer.sh), à lire avant de le lancer) remplace ce contrôle par le sien. Il télécharge la dernière version confirmée, vérifie que sa signature est intacte et qu'elle vient bien du certificat de Coulisses, et refuse sinon. Cette vérification vaut ce que vaut ce dépôt : le script et l'app viennent tous deux d'ici. Une ancienne Coulisses n'est mise de côté qu'une fois la nouvelle vérifiée : elle part à la Corbeille, ou dans `~/Coulisses/Anciennes versions`. Le script ne demande aucun mot de passe.
-
-Pour une Coulisses déjà installée que macOS refuse d'ouvrir : `xattr -cr /Applications/Coulisses.app`. Celle-ci ne vérifie rien : ne la lancez que sur une app téléchargée depuis cette page.
+Cette méthode passe outre le contrôle de macOS (Gatekeeper). Sur un Mac géré, assurez-vous d'en avoir le droit. Le [script](installer.sh) est court : vous pouvez le lire avant de le lancer.
 
 ![La bienvenue de Coulisses](docs/captures/bienvenue.png)
 
