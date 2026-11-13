@@ -19,6 +19,20 @@ Il faut un Mac Apple Silicon, sous macOS 14.4 ou plus récent.
 3. Coulisses vous guide : il montre ce qu'il faut télécharger pour écouter vos séances (quelques Go, une seule fois), vous choisissez les langues, et il s'en occupe.
 4. Les mises à jour arrivent d'elles-mêmes si vous l'acceptez, et ne s'installent jamais sans un clic.
 
+### Si macOS bloque l'ouverture
+
+Sur un Mac géré par une entreprise, macOS peut refuser d'ouvrir Coulisses sans proposer « Ouvrir quand même ». Installez-la alors depuis le Terminal :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Tibserre/coulisses/main/installer.sh | sh
+```
+
+Cette commande contourne Gatekeeper, le contrôle de macOS. Si votre Mac est géré, ce blocage est un choix de son administrateur : vérifiez que vous avez le droit d'installer une app de cette façon.
+
+Le script ([`installer.sh`](installer.sh), à lire avant de le lancer) remplace ce contrôle par le sien. Il télécharge la dernière version confirmée, vérifie que sa signature est intacte et qu'elle vient bien du certificat de Coulisses, et refuse sinon. Cette vérification vaut ce que vaut ce dépôt : le script et l'app viennent tous deux d'ici. Une ancienne Coulisses n'est mise de côté qu'une fois la nouvelle vérifiée : elle part à la Corbeille, ou dans `~/Coulisses/Anciennes versions`. Le script ne demande aucun mot de passe.
+
+Pour une Coulisses déjà installée que macOS refuse d'ouvrir : `xattr -cr /Applications/Coulisses.app`. Celle-ci ne vérifie rien : ne la lancez que sur une app téléchargée depuis cette page.
+
 ![La bienvenue de Coulisses](docs/captures/bienvenue.png)
 
 Les auteurs des modèles utilisés sont cités dans Réglages › Avancé.
