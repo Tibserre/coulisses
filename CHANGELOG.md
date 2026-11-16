@@ -14,6 +14,7 @@ la publication lit celle de `main`.
 - rend lisible la ligne d'avertissement d'arrêt (seance)
 - dit sous les disques ce qu'a signalé l'arrêt (seance)
 - installe aussi sous une locale qui n'est pas UTF-8 (distribution)
+- passe au moteur v1.15.1, un signe isolé prend la voix de son mot (moteur)
 
 ## v0.39.0 — 2026-11-11
 
