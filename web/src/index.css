@@ -2801,7 +2801,7 @@ a.cl-iconbtn {
 }
 
 .cl-audio-note[data-announced] {
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
   font-weight: var(--font-weight-medium);
 }
 
@@ -3868,7 +3868,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-modelpick__missing {
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
@@ -4116,7 +4116,7 @@ button.cl-tree__more:hover {
 
 .cl-mics__lost {
   flex: none;
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
 }
 
 .cl-mics__pop {
@@ -4169,7 +4169,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-mics__src > svg.cl-mics__lost {
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
 }
 
 .cl-mics__src[data-muted] {
