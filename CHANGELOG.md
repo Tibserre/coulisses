@@ -8,6 +8,12 @@ la publication lit celle de `main`.
 
 ## Non publié
 
+### Nouveautés
+
+- rappelle une purge une seconde fois, 3 jours avant (conservation)
+- refuse une durée de conservation au-delà de 90 jours (conservation)
+- refait l'onglet Séances d'après la maquette R3 (reglages)
+
 ### Corrections
 
 - rend lisibles les autres textes et icônes d'avertissement (interface)
