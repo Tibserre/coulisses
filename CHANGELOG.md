@@ -10,6 +10,9 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- rend lisibles les autres textes et icônes d'avertissement (interface)
+- rend lisible la ligne d'avertissement d'arrêt (seance)
+- dit sous les disques ce qu'a signalé l'arrêt (seance)
 - installe aussi sous une locale qui n'est pas UTF-8 (distribution)
 
 ## v0.39.0 — 2026-11-11
