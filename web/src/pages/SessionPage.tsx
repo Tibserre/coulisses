@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import {
   ProcessingOutline,
+  StopNote,
   RerunRunning,
 } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
@@ -1111,17 +1112,6 @@ export function SessionPage({
               />
             </div>
           )}
-          {stopProblem && (
-            <div className="cl-review__notice">
-              <Banner
-                status="warning"
-                title="À l'arrêt de l'enregistrement"
-                description={stopProblem}
-                isDismissable
-                onDismiss={() => setStopProblem(null)}
-              />
-            </div>
-          )}
           {menuError && (
             <div className="cl-review__notice">
               <Banner
@@ -1137,6 +1127,7 @@ export function SessionPage({
             <ProcessingPanel
               detail={detail}
               people={people}
+              stopProblem={stopProblem}
               onAskStop={() => setMenuRequest("stop")}
               onAskDelete={() => setMenuRequest("session")}
               onSaveAttendees={async (ids, unnamed) => {
@@ -1683,6 +1674,7 @@ function ImportLanguage({
 function ProcessingPanel({
   detail,
   people,
+  stopProblem,
   onAskStop,
   onAskDelete,
   onSaveAttendees,
@@ -1698,6 +1690,8 @@ function ProcessingPanel({
 }: {
   detail: SessionDetail;
   people: Person[];
+  /** What the stop of the recording said: under the discs (also said under the title). */
+  stopProblem: string | null;
   /** The confirmations of « ⋯ »: stop the processing (ADR 0070), delete the session. */
   onAskStop: () => void;
   onAskDelete: () => void;
@@ -1753,6 +1747,11 @@ function ProcessingPanel({
     : "Une erreur de Coulisses a arrêté le traitement : ce n'est pas votre enregistrement. Reprenez ; si elle revient, son détail est en mode développeur.";
   return (
     <main className="cl-processing">
+      {/* Under the discs while they turn; here when there are none (on battery, waiting
+          for a language, stopped). */}
+      {stopProblem && !(running && !session.processing_waits_for) && (
+        <StopNote problem={stopProblem} />
+      )}
       {gone && (
         <Banner
           status="info"
@@ -1793,7 +1792,9 @@ function ProcessingPanel({
           onStopped={onLanguagesChanged}
         />
       )}
-      {running && !session.processing_waits_for && <ProcessingOutline detail={detail} />}
+      {running && !session.processing_waits_for && (
+        <ProcessingOutline detail={detail} stopProblem={stopProblem} />
+      )}
       {/* Waiting for what this Mac lacks: the page is that, stopping stays in « … ». */}
       {running && !session.processing_waits_for && (
         <div className="cl-processing__stop">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Text } from "@astryxdesign/core/Text";
-import { FileText, PenLine, Star, Users } from "lucide-react";
+import { FileText, PenLine, Star, TriangleAlert, Users } from "lucide-react";
 import { api, type Preview, type Rerun, type SessionDetail } from "../api.ts";
 import { formatClock } from "../format.ts";
 import { outlineRows } from "../outline.ts";
@@ -48,15 +48,31 @@ function Disc({
   );
 }
 
+/** What the stop of a recording said about its tracks (the computer's sound stayed
+ *  silent, a second microphone's file unreadable…): a line, not a banner, there from the
+ *  page's first display, never dismissed, so that nothing moves under it (P8). */
+export function StopNote({ problem }: { problem: string }) {
+  return (
+    <p className="cl-stopnote" role="status">
+      <TriangleAlert size={16} strokeWidth={1.75} aria-hidden />
+      <span>{problem}</span>
+    </p>
+  );
+}
+
 /** The two discs and the sentence under them, read from the engine's stages: for the
  *  first processing, and for a rerun above the text shown (ADR 0066). A disc never goes
  *  back. In a rerun, the part kept is said so, full. */
 function ProcessingDiscs({
   detail,
   rerun = null,
+  stopProblem = null,
 }: {
   detail: SessionDetail;
   rerun?: Rerun | null;
+  /** What the stop of the recording said (the computer's sound stayed silent…): under
+   *  the discs, there from the page's first display, so that nothing moves (P8). */
+  stopProblem?: string | null;
 }) {
   // What the discs showed last, so that they never go back (the page is remounted for
   // another session).
@@ -105,6 +121,7 @@ function ProcessingDiscs({
                   ? `${left}la version affichée reste en place, vos corrections seront reportées`
                   : `${left}vous pouvez fermer Coulisses`}
       </Text>
+      {stopProblem && <StopNote problem={stopProblem} />}
     </div>
   );
 }
@@ -130,7 +147,13 @@ export function RerunRunning({
  *  transcribed, grey, with what was marked during the recording at its time. The names
  *  come with « who said what », then the review opens. Read again every few seconds;
  *  nothing is kept: the review reads the engine's runs. */
-export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
+export function ProcessingOutline({
+  detail,
+  stopProblem = null,
+}: {
+  detail: SessionDetail;
+  stopProblem?: string | null;
+}) {
   const [outline, setOutline] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const id = detail.session.id;
@@ -185,7 +208,7 @@ export function ProcessingOutline({ detail }: { detail: SessionDetail }) {
       className="cl-outline"
       aria-label="La séance en cours de traitement"
     >
-      <ProcessingDiscs detail={detail} />
+      <ProcessingDiscs detail={detail} stopProblem={stopProblem} />
       {error && (
         <Text type="supporting">L'aperçu n'a pas pu être lu : {error}</Text>
       )}
