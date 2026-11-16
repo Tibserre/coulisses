@@ -2801,7 +2801,7 @@ a.cl-iconbtn {
 }
 
 .cl-audio-note[data-announced] {
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
   font-weight: var(--font-weight-medium);
 }
 
@@ -3868,7 +3868,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-modelpick__missing {
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
@@ -4116,7 +4116,7 @@ button.cl-tree__more:hover {
 
 .cl-mics__lost {
   flex: none;
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
 }
 
 .cl-mics__pop {
@@ -4169,7 +4169,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-mics__src > svg.cl-mics__lost {
-  color: var(--color-warning);
+  color: var(--color-text-yellow);
 }
 
 .cl-mics__src[data-muted] {
@@ -4502,6 +4502,31 @@ button.cl-tree__more:hover {
   align-items: center;
   gap: var(--spacing-4);
   padding: var(--spacing-6) 0 var(--spacing-4);
+}
+
+/* What the stop of the recording said: one line under the discs' sentence, no frame
+   and no side bar; never dismissed, so nothing moves. The text in the text colour and
+   the icon in the theme's yellow for text (not the yellow fill, unreadable on white). */
+.cl-stopnote {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+  max-width: 36rem;
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.cl-stopnote > svg {
+  flex: none;
+  margin-top: 0.15em;
+  color: var(--color-text-yellow);
+}
+
+.cl-processing > .cl-stopnote {
+  align-self: center;
 }
 
 .cl-outline__pair {
