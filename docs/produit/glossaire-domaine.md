@@ -80,7 +80,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Journal des suppressions | `deletion_log` | Trace de chaque purge et de chaque suppression : quand, quoi, quelle séance. Il dit aussi chaque passage en FLAC (des WAV supprimés une fois prouvés identiques, ADR 0046). |
 | Gardé en FLAC | `lossless` | Une piste enregistrée par l'app, gardée sans perte en FLAC une fois l'enregistrement fini : les mêmes échantillons, deux fois moins de place (ADR 0046). |
 | Audio gardé | `keep_audio` | Option d'une séance : son audio n'est jamais purgé (ADR 0029). Remplace « épinglée ». |
-| Préavis | `notice` | Délai entre l'annonce d'une purge et la purge elle-même (7 jours par défaut). |
+| Préavis | `notice` | Délai entre l'annonce d'une purge et la purge elle-même : 7 jours, le premier des deux rappels de purge (ADR 0083). |
+| Rappel de purge | `reminder_days` | Chacun des deux avertissements fixes avant une purge, 7 puis 3 jours avant (ADR 0083). Distinct des rappels d'enregistrement (`reminders`, ADR 0054). |
 | Annonce de purge | `purge_announcement` | Avertissement (bandeau, notification macOS) qu'une purge aura lieu ; le préavis court à partir de lui. |
 | Prolonger | `extend` | Garder l'audio d'une séance une durée de conservation entière à partir d'aujourd'hui. |
 | Banc d'essai | `bench` | Outillage de mesure des moteurs sur mes données (`evaluation.md`). |

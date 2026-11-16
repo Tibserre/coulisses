@@ -291,6 +291,9 @@ export interface AudioStatus {
 export interface RetentionSettings {
   retention_days: number;
   notice_days: number;
+  /** The reminders before a purge, in days, once the service gives them (7 then 3, spec
+   *  §7.10); until then, the notice alone. Never sent. */
+  reminder_days?: number[];
 }
 
 export interface PurgeAnnouncement {

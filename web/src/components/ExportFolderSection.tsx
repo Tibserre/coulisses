@@ -4,12 +4,13 @@ import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
+import { Folder } from "lucide-react";
 import { api, type ExportFolder } from "../api.ts";
 import { useDevMode } from "../devMode.ts";
 import { folderName } from "../settingsParts.ts";
 
 /** The export folder (Q7, ADR 0030): chosen once with the Finder's own window, often a
- *  folder that Google Drive keeps in sync. Coulisses only writes files there. One line: the
+ *  folder that Google Drive keeps in sync. Coulisses only writes files there. A card: the
  *  folder by its name (its path in developer mode), and what changes it. */
 export function ExportFolderSection() {
   const dev = useDevMode();
@@ -34,19 +35,15 @@ export function ExportFolderSection() {
   return (
     <section className="cl-settings__section">
       <Heading level={3}>Comptes rendus</Heading>
-      <div className="cl-settings__row">
-        <span className="cl-settings__text">
-          <Text>Dossier d'export</Text>
-          <Text type="supporting">
-            « Exporter vers le dossier », dans le menu « … » d'une séance, y
-            dépose son compte rendu. Coulisses n'envoie rien lui-même.
-          </Text>
+      <div className="cl-folder-card">
+        <span className="cl-icon-disc">
+          <Folder size={18} strokeWidth={1.75} aria-hidden />
         </span>
-        <span className="cl-settings__value">
+        <span className="cl-settings__text">
           {folder === null && !error ? (
-            <Skeleton width={120} height={14} radius={1} />
+            <Skeleton width={160} height={14} radius={1} />
           ) : chosen ? (
-            <Text>
+            <Text weight="medium">
               {dev ? (
                 <span className="cl-path">{chosen}</span>
               ) : (
@@ -55,21 +52,14 @@ export function ExportFolderSection() {
               {!folder?.present && " (introuvable pour l'instant)"}
             </Text>
           ) : (
-            <Text color="secondary">Aucun</Text>
+            <Text weight="medium">Aucun dossier d'export</Text>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            label={
-              choosing
-                ? "Choix dans le Finder…"
-                : chosen
-                  ? "Changer"
-                  : "Choisir"
-            }
-            isDisabled={choosing || (folder === null && !error)}
-            clickAction={choose}
-          />
+          <Text type="supporting">
+            « Exporter vers le dossier », dans le menu « … » d'une séance, y
+            dépose son compte rendu.
+          </Text>
+        </span>
+        <span className="cl-settings__value">
           {chosen && (
             <Button
               size="sm"
@@ -85,6 +75,18 @@ export function ExportFolderSection() {
               }}
             />
           )}
+          <Button
+            size="sm"
+            label={
+              choosing
+                ? "Choix dans le Finder…"
+                : chosen
+                  ? "Changer"
+                  : "Choisir"
+            }
+            isDisabled={choosing || (folder === null && !error)}
+            clickAction={choose}
+          />
         </span>
       </div>
       {chosen && !folder?.present && (
