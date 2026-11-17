@@ -194,10 +194,9 @@ _asked: set[str] = set()
 _asked_lock = threading.Lock()
 
 
-def listening_path(data: DataDir, session_id: str, *, prepare: bool = True) -> Path | None:
+def listening_path(data: DataDir, session_id: str) -> Path | None:
     """What to play back: the listening mix once made, else the plain mix, else the
-    reference. A mix made before the listening one existed gets it, in the background
-    (unless `prepare` is false: only read)."""
+    reference. A mix made before the listening one existed gets it, in the background."""
     folder = data.sources_dir(session_id)
     facts = read_facts(data, session_id)
     if facts is not None and facts.listening_mix is not None:
@@ -207,10 +206,9 @@ def listening_path(data: DataDir, session_id: str, *, prepare: bool = True) -> P
     mix = folder / (facts.file if facts is not None else MIX_FILE)
     if facts is not None and mix.is_file():
         with _asked_lock:  # once per service: the player asks for the file many times
-            first = prepare and session_id not in _asked
-            if prepare:
-                _asked.add(session_id)
-        if first and prepare:
+            first = session_id not in _asked
+            _asked.add(session_id)
+        if first:
             prepare_in_background(data, session_id)
         return mix
     return sessions.reference_audio_path(data, session_id)
@@ -231,10 +229,6 @@ def processing_input(data: DataDir, session_id: str) -> tuple[Path | None, MixFa
         if system is None or not ref_path.is_file():
             return ref_path, None
         return _ensure_mix(data, session_id, reference, system)
-
-
-def processing_path(data: DataDir, session_id: str) -> Path | None:
-    return processing_input(data, session_id)[0]
 
 
 def _audio_removed(data: DataDir, session_id: str) -> bool:

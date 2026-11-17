@@ -229,6 +229,23 @@ def test_removing_is_refused_while_it_downloads_and_said_when_absent(engine: Fak
         models.remove("asr")
 
 
+def test_a_removal_that_fails_otherwise_is_said_not_a_500(
+    engine: FakeEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The engine raises more than its coded errors (a folder it cannot delete…)."""
+    models = engine.models()
+
+    def refuses(key: str, root: Path | None = None) -> None:
+        raise OSError("Permission denied")
+
+    monkeypatch.setattr(models, "_discard", refuses)
+    with pytest.raises(ModelsError, match="journal du service"):
+        models.remove("asr")
+    monkeypatch.setattr(models, "_discard_environment", refuses)
+    with pytest.raises(ModelsError, match="journal du service"):
+        models.remove_environment("/ailleurs/ancien")
+
+
 def test_the_service_shows_them_and_stops_every_download_when_it_stops(
     data: DataDir, engine: FakeEngine
 ) -> None:

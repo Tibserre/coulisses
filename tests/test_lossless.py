@@ -81,7 +81,7 @@ def test_a_meeting_keeps_its_tracks_and_mixes_in_flac_without_mixing_again(
 ) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
     folder = data.sources_dir(session_id)
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
     assert path == folder / mixing.MIX_FILE
     before = mixing.read_facts(data, session_id)
     assert before is not None and before.listening_mix is not None
@@ -117,20 +117,20 @@ def test_a_meeting_keeps_its_tracks_and_mixes_in_flac_without_mixing_again(
     assert lossless.decoded_pcm_sha256(folder / "listening.m4a") == heard_samples
     # The engine is given the mix in FLAC, never made again; the page plays the listening one.
     made = (folder / "mix.m4a").stat().st_mtime_ns
-    assert mixing.processing_path(data, session_id) == folder / "mix.m4a"
+    assert mixing.processing_input(data, session_id)[0] == folder / "mix.m4a"
     assert (folder / "mix.m4a").stat().st_mtime_ns == made
     assert mixing.listening_path(data, session_id) == folder / "listening.m4a"
 
 
 def test_a_mix_made_again_from_flac_tracks_reads_them_without_loss(data: DataDir) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     lossless.convert_session(data, session_id)
     folder = data.sources_dir(session_id)
     first = lossless.decoded_pcm_sha256(folder / "mix.m4a")
     (folder / mixing.MIX_FACTS).unlink()  # lost: the mix is made again, from the FLAC tracks
 
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
 
     assert path is not None and path == folder / mixing.MIX_FILE
     assert wav.pcm_sha256(path) == first  # the same samples as from the WAV tracks
@@ -149,7 +149,7 @@ def test_a_mix_made_again_from_flac_tracks_reads_them_without_loss(data: DataDir
 
 def test_mixes_made_again_replace_those_kept_in_flac(data: DataDir) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     lossless.convert_session(data, session_id)
     folder = data.sources_dir(session_id)
     conn = connect(data)
@@ -160,7 +160,7 @@ def test_mixes_made_again_replace_those_kept_in_flac(data: DataDir) -> None:
         )
     conn.close()
 
-    assert mixing.processing_path(data, session_id) == folder / mixing.MIX_FILE
+    assert mixing.processing_input(data, session_id)[0] == folder / mixing.MIX_FILE
 
     assert not (folder / "mix.m4a").exists() and not (folder / "listening.m4a").exists()
     assert (folder / mixing.LISTENING_FILE).is_file()
@@ -389,7 +389,7 @@ def test_a_flac_made_again_has_its_own_fingerprint_in_the_base(data: DataDir) ->
 
 def test_a_mix_conversion_cut_short_is_finished(data: DataDir) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     folder = data.sources_dir(session_id)
     kept = (folder / mixing.MIX_FILE).read_bytes()
     lossless.convert_session(data, session_id)
@@ -502,7 +502,7 @@ def test_without_an_ffmpeg_writing_mp4_tracks_stay_in_raw_flac(
     monkeypatch.setattr(lossless, "mp4_available", lambda: "pas de MP4")
     alone = recorded(data, tone(1.0, 0.3), None)
     meeting = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, meeting)
+    mixing.processing_input(data, meeting)[0]
 
     lossless.convert_session(data, alone)
     lossless.convert_session(data, meeting)
@@ -527,7 +527,7 @@ def older(data: DataDir, monkeypatch: pytest.MonkeyPatch, system: bool) -> str:
         before.setattr(lossless, "mp4_available", lambda: "avant l'ADR 0073")
         session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1) if system else None)
         if system:
-            mixing.processing_path(data, session_id)
+            mixing.processing_input(data, session_id)[0]
         lossless.convert_session(data, session_id)
     return session_id
 
@@ -646,7 +646,7 @@ def test_asked_older_tracks_are_put_in_an_mp4_one_file_for_each_sound(
     )
     assert facts.listening_mix.pcm_sha256 == facts_before.listening_mix.pcm_sha256
     made = (folder / "mix.m4a").stat().st_mtime_ns
-    assert mixing.processing_path(data, meeting) == folder / "mix.m4a"
+    assert mixing.processing_input(data, meeting)[0] == folder / "mix.m4a"
     assert (folder / "mix.m4a").stat().st_mtime_ns == made
     # Each raw FLAC removed is journaled, with its fingerprints.
     [entry] = journal(data, meeting)[entries:]
@@ -789,7 +789,7 @@ def test_the_audio_cannot_go_while_its_tracks_are_put_in_an_mp4(
 
 def test_a_listening_mix_conversion_cut_short_is_finished(data: DataDir) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     folder = data.sources_dir(session_id)
     kept = (folder / mixing.LISTENING_FILE).read_bytes()
     lossless.convert_session(data, session_id)
@@ -884,7 +884,7 @@ def heard_like_the_mix(data: DataDir, session_id: str) -> None:
 
 def test_a_listening_mix_the_same_as_the_mix_is_heard_from_the_mix(data: DataDir) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     heard_like_the_mix(data, session_id)
     folder = data.sources_dir(session_id)
 
@@ -907,7 +907,7 @@ def test_a_listening_mix_the_same_as_the_mix_is_heard_from_the_mix(data: DataDir
     )
     # Nothing mixed again for it, nothing left to do.
     made = (folder / "mix.m4a").stat().st_mtime_ns
-    assert mixing.processing_path(data, session_id) == folder / "mix.m4a"
+    assert mixing.processing_input(data, session_id)[0] == folder / "mix.m4a"
     assert (folder / "mix.m4a").stat().st_mtime_ns == made
     assert lossless.pending(data) == []
 
@@ -918,7 +918,7 @@ def test_an_older_listening_mix_the_same_as_the_mix_goes_at_start(
     with monkeypatch.context() as before:
         before.setattr(lossless, "mp4_available", lambda: "avant l'ADR 0073")
         meeting = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-        mixing.processing_path(data, meeting)
+        mixing.processing_input(data, meeting)[0]
         heard_like_the_mix(data, meeting)
         lossless.convert_session(data, meeting)
     # In raw FLAC, both stay: the mix will still move into an MP4.
@@ -937,7 +937,7 @@ def test_a_listening_mix_left_beside_the_mix_it_equals_goes_once_proven(
     data: DataDir,
 ) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     heard_like_the_mix(data, session_id)
     lossless.convert_session(data, session_id)
     folder = data.sources_dir(session_id)
@@ -953,7 +953,7 @@ def test_a_listening_mix_left_beside_the_mix_it_equals_goes_once_proven(
 
 def test_a_listening_mix_of_its_own_stays(data: DataDir) -> None:
     session_id = recorded(data, tone(1.0, 0.3), tone(1.0, 0.1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     lossless.convert_session(data, session_id)
     facts = mixing.read_facts(data, session_id)
     assert facts is not None and facts.listening_mix is not None
@@ -983,6 +983,6 @@ def test_a_listening_mix_heard_from_the_mix_follows_it_into_an_mp4(
     assert after.listening_mix.sha256 == after.sha256
     assert names(data, meeting) == ["mix.json", "mix.m4a", "ref.m4a", "system.m4a"]
     made = (folder / "mix.m4a").stat().st_mtime_ns
-    assert mixing.processing_path(data, meeting) == folder / "mix.m4a"
+    assert mixing.processing_input(data, meeting)[0] == folder / "mix.m4a"
     assert (folder / "mix.m4a").stat().st_mtime_ns == made
     assert not (folder / mixing.LISTENING_FILE).exists()  # nothing made again

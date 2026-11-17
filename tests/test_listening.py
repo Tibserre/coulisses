@@ -80,7 +80,7 @@ def test_the_page_hears_the_listening_mix_the_engine_the_plain_one(data: DataDir
     mic = np.concatenate([typing(2.0), voice(1.0)]).reshape(-1, 1)
     computer = np.concatenate([silence(2.0), silence(1.0)]).reshape(-1, 1)
     session_id = recorded(data, mic, computer)
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
     folder = data.sources_dir(session_id)
     assert path == folder / mixing.MIX_FILE
     plain = wav_reader.read(folder / mixing.MIX_FILE)
@@ -102,7 +102,7 @@ def test_the_page_hears_the_listening_mix_the_engine_the_plain_one(data: DataDir
 
 def test_a_mix_made_before_gets_its_listening_mix(data: DataDir) -> None:
     session_id = recorded(data, voice(0.5).reshape(-1, 1), voice(0.5).reshape(-1, 1))
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     folder = data.sources_dir(session_id)
     engine_input = (folder / mixing.MIX_FILE).read_bytes()
     # As a mix made before ADR 0037: no listening mix.

@@ -350,6 +350,12 @@ class EngineModels:
         except ModelActionError as exc:
             log.warning("removing %s: %s %s", name, exc.code, exc)
             raise ModelsError(said(exc)) from exc
+        except Exception as exc:
+            # Beyond its coded errors (a folder it cannot delete…): said, not a 500 (P8).
+            log.exception("removing %s failed", name)
+            raise ModelsError(
+                "Ce modèle n'a pas pu être supprimé (le détail est dans le journal du service)."
+            ) from exc
         with self._lock:
             self._tasks.pop(("model", name), None)
 
@@ -365,6 +371,12 @@ class EngineModels:
         except ModelActionError as exc:
             log.warning("removing the environment %s: %s %s", path, exc.code, exc)
             raise ModelsError(said(exc)) from exc
+        except Exception as exc:
+            log.exception("removing the environment %s failed", path)
+            raise ModelsError(
+                "Cet environnement n'a pas pu être supprimé (le détail est dans le journal du "
+                "service)."
+            ) from exc
 
     def forget(self, kind: Kind, name: str) -> None:
         """A finished task, put away (its message read)."""

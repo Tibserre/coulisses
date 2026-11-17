@@ -228,7 +228,7 @@ def recorded(data: DataDir, mic: NDArray[np.float32], system: NDArray[np.float32
 def test_the_mix_is_turned_down_never_to_saturate(data: DataDir) -> None:
     loud = np.full((4800, 1), 0.8, np.float32)
     session_id = recorded(data, loud, loud)
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
     assert path is not None and path == data.sources_dir(session_id) / mixing.MIX_FILE
     mix = read(path)
     assert np.max(np.abs(mix)) == pytest.approx(mixing.CEILING, abs=1e-5)
@@ -240,7 +240,7 @@ def test_a_stereo_microphone_is_mixed_down_and_a_shorter_track_padded(data: Data
     mic = np.stack([np.full(9600, 0.2, np.float32), np.full(9600, 0.4, np.float32)], axis=1)
     system = np.full((4800, 1), 0.1, np.float32)
     session_id = recorded(data, mic, system)
-    mix = read(mixing.processing_path(data, session_id))  # type: ignore[arg-type]
+    mix = read(mixing.processing_input(data, session_id)[0])  # type: ignore[arg-type]
     assert mix.shape == (9600, 1)
     assert mix[0, 0] == pytest.approx(0.4, abs=1e-5)  # (0.2 + 0.4) / 2 + 0.1
     assert mix[-1, 0] == pytest.approx(0.3, abs=1e-5)  # the computer's sound ended
@@ -248,10 +248,10 @@ def test_a_stereo_microphone_is_mixed_down_and_a_shorter_track_padded(data: Data
 
 def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
     session_id = recorded(data, tone(0.2, 0.3), tone(0.2, 0.1))
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
     assert path is not None
     made = path.stat().st_mtime_ns
-    assert mixing.processing_path(data, session_id) == path
+    assert mixing.processing_input(data, session_id)[0] == path
     assert path.stat().st_mtime_ns == made  # the same sources: kept
     conn = connect(data)
     with conn:
@@ -260,7 +260,7 @@ def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
             "UPDATE audio_source SET sha256 = 'fichier' WHERE session_id = ? AND source_id = ?",
             (session_id, "system"),
         )
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     assert path.stat().st_mtime_ns == made
     with conn:
         conn.execute(
@@ -268,24 +268,24 @@ def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
             (session_id, "system"),
         )
     conn.close()
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     facts = json.loads(path.with_name(mixing.MIX_FACTS).read_text(encoding="utf-8"))
     assert facts["made_from"]["system"] == "autre"
 
 
 def test_without_the_computers_sound_the_reference_is_processed(data: DataDir) -> None:
     alone = recorded(data, tone(0.2, 0.3), None)
-    assert mixing.processing_path(data, alone) == data.sources_dir(alone) / "ref.wav"
+    assert mixing.processing_input(data, alone)[0] == data.sources_dir(alone) / "ref.wav"
     # Recorded empty (the tap stopped at once): the microphone alone, said on the page.
     empty = recorded(data, tone(0.2, 0.3), np.zeros((0, 1), np.float32))
-    assert mixing.processing_path(data, empty) == data.sources_dir(empty) / "ref.wav"
+    assert mixing.processing_input(data, empty)[0] == data.sources_dir(empty) / "ref.wav"
 
 
 def test_a_missing_computers_sound_is_said_never_skipped(data: DataDir) -> None:
     session_id = recorded(data, tone(0.2, 0.3), tone(0.2, 0.1))
     (data.sources_dir(session_id) / "system.wav").unlink()
     with pytest.raises(mixing.MixError, match="personnes à distance"):
-        mixing.processing_path(data, session_id)
+        mixing.processing_input(data, session_id)[0]
     # Heard meanwhile: the microphone, never nothing.
     assert mixing.listening_path(data, session_id) == data.sources_dir(session_id) / "ref.wav"
 

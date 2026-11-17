@@ -392,14 +392,11 @@ def _journal(
         conn.close()
 
 
-def convert_session(
-    data: DataDir, session_id: str, *, rewrap: bool = False
-) -> list[Converted] | None:
+def convert_session(data: DataDir, session_id: str) -> list[Converted] | None:
     """Converts what is left to convert in this session; None when it is not the time (a
-    processing waits or runs, a recording runs, the audio is gone). `rewrap`: its tracks
-    kept in raw FLAC are put in an MP4 too (asked by the user, ADR 0046). Problems are
-    logged and written in the journal, never raised."""
-    found = _convert(data, session_id, rewrap)
+    processing waits or runs, a recording runs, the audio is gone). Problems are logged and
+    written in the journal, never raised."""
+    found = _convert(data, session_id, False)
     return None if found is None else found[0]
 
 

@@ -257,9 +257,9 @@ class Processor:
 
     # -- the language model, optional ---------------------------------------------------
 
-    def writer_wait(self, model: str) -> jobs.WriterWait | None:
-        """Whether a generation with `model` must wait for the language model: Ollama does
-        not answer, or has no model at all. None: it may go (a model chosen but absent while
+    def writer_wait(self) -> jobs.WriterWait | None:
+        """Whether a generation must wait for the language model: Ollama does not answer,
+        or has no model at all. None: it may go (a model chosen but absent while
         others are there fails as before, saying so: ADR 0039). Only 127.0.0.1 (P1)."""
         try:
             installed = self.model_client.models()
@@ -343,14 +343,12 @@ class Processor:
         finally:
             conn.close()
 
-    def stop_processing(
-        self, session_id: str, *, wait_s: float | None = None
-    ) -> Literal["stopped", "stopping", "nothing"]:
+    def stop_processing(self, session_id: str) -> Literal["stopped", "stopping", "nothing"]:
         """The user stops the session's processing (« Arrêter »), waiting or running: no
         stage of it starts any more, and those running are cancelled by the engine (their
         runs stay as it closed them, P5); the stages made are kept, « Reprendre » goes on.
-        Returns once it is no longer running (stopped), or after `wait_s` (`STOP_WAIT_S`;
-        stopping: it ends when its running stages do); nothing: nothing to stop."""
+        Returns once it is no longer running (stopped), or after `STOP_WAIT_S`
+        (stopping: it ends when its running stages do); nothing: nothing to stop."""
         conn = connect(self.data)
         try:
             job = jobs.latest_job(conn, session_id)
@@ -362,8 +360,7 @@ class Processor:
             # Running, or claimed a moment ago: stopped where it runs.
             with self._stopped_lock:
                 self._stopped_by_user.add(job.id)
-            wait_s = STOP_WAIT_S if wait_s is None else wait_s
-            deadline = time.monotonic() + wait_s
+            deadline = time.monotonic() + STOP_WAIT_S
             while True:
                 state = conn.execute("SELECT state FROM job WHERE id = ?", (job.id,)).fetchone()
                 if state is None or state["state"] != "running":
@@ -372,7 +369,9 @@ class Processor:
                         self._stopped_by_user.discard(job.id)
                     return "stopped"
                 if time.monotonic() > deadline:
-                    log.warning("job %s: still running %.0f s after being stopped", job.id, wait_s)
+                    log.warning(
+                        "job %s: still running %.0f s after being stopped", job.id, STOP_WAIT_S
+                    )
                     return "stopping"
                 # Again each time: a stage may have started between two looks.
                 for row in conn.execute(
@@ -463,7 +462,7 @@ class Processor:
     def _run_generation_job(self, job: jobs.Job, params: jobs.GenerationParams) -> ChainJobResult:
         log.info("job %s: %s for session %s", job.id, params.action_ref, job.session_id)
         # No language model on this Mac: it waits for one, not a failure (Ollama is optional).
-        waits = self.writer_wait(params.model)
+        waits = self.writer_wait()
         if waits is not None:
             conn = connect(self.data)
             try:
