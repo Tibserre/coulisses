@@ -4,9 +4,11 @@ of synthetic sound pushed by the test; no real device is opened."""
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -196,6 +198,51 @@ def test_on_battery_the_processing_waits_for_the_user(
     assert sessions.get_session(data, stopped.session_id).job_state == "queued"  # type: ignore[union-attr]
     with pytest.raises(sessions.AlreadyProcessedError):
         sessions.start_processing(data, stopped.session_id, profile="essai")
+
+
+def test_process_clicked_twice_queues_one_processing(
+    data: DataDir,
+    mic: FakeMic,
+    awake: CountingAwake,
+    clock: Clock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two « Traiter » at once: the second waits for the first, then finds it asked."""
+    rec = recorder(data, mic, awake, clock, battery=True)
+    start(rec)
+    mic.push(tone(0.5, 0.3))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 0.5)  # type: ignore[union-attr]
+    session_id = rec.stop(profile="essai").session_id
+    refusals: list[Exception] = []
+
+    def second_click() -> None:
+        try:
+            sessions.start_processing(data, session_id, profile="essai")
+        except sessions.AlreadyProcessedError as exc:
+            refusals.append(exc)
+
+    attendee_ids = sessions.spaces.attendee_ids
+    other = threading.Thread(target=second_click)
+
+    def checked_then_second_click(conn: Any, sid: str) -> Any:
+        # The first click has checked that nothing is asked: the second comes now.
+        if other.ident is None:
+            other.start()
+            other.join(0.5)
+        return attendee_ids(conn, sid)
+
+    monkeypatch.setattr(sessions.spaces, "attendee_ids", checked_then_second_click)
+    sessions.start_processing(data, session_id, profile="essai")
+    other.join()
+    conn = connect(data)
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM job WHERE session_id = ? AND kind = 'chain'", (session_id,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 1
+    assert len(refusals) == 1
 
 
 def test_too_quiet_and_saturation_are_said(

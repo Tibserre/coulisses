@@ -824,9 +824,13 @@ def create_app(
                         detail="Le nombre de présents ne peut changer qu'après une diarisation "
                         "refusée pour trop peu de voix.",
                     )
-                jobs.resume_with_attendees(conn, job, demande.presents)
+                resumed = jobs.resume_with_attendees(conn, job, demande.presents)
             else:
-                jobs.requeue(conn, job.id)
+                resumed = jobs.requeue(conn, job.id, only_failed=True)
+            if not resumed:  # resumed by another click meanwhile
+                raise HTTPException(
+                    status_code=409, detail="Le traitement de cette séance a déjà repris."
+                )
         finally:
             conn.close()
         if processor is not None:

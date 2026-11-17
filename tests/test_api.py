@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import bundle, jobs, sessions
+from coulisses_app import bundle, jobs, retention, sessions
 from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
@@ -120,6 +120,52 @@ def test_only_a_failed_processing_can_be_resumed(
     resumed = client.post(f"/api/seances/{session_id}/reprendre")
     assert resumed.status_code == 200
     assert resumed.json()["job_state"] == "queued"
+
+
+def test_a_processing_claimed_meanwhile_is_not_put_back_in_the_queue(
+    client: TestClient, data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two « Reprendre » at once: the first resumes, the processing takes the job, the
+    second must not put the running job back in the queue."""
+    session_id = upload(client, recording)
+    (data.sources_dir(session_id) / "ref.wav").unlink()
+    process_next(data)
+    audio_status = retention.audio_status
+
+    def claimed_meanwhile(data: DataDir, sid: str) -> Any:
+        conn = connect(data)
+        try:
+            job = jobs.latest_job(conn, sid)
+            assert job is not None
+            jobs.requeue(conn, job.id)  # the first click
+            assert jobs.claim_next(conn) is not None  # the processing takes it
+        finally:
+            conn.close()
+        return audio_status(data, sid)
+
+    monkeypatch.setattr(retention, "audio_status", claimed_meanwhile)
+    second = client.post(f"/api/seances/{session_id}/reprendre")
+    assert second.status_code == 409
+    assert client.get(f"/api/seances/{session_id}").json()["session"]["job_state"] == "running"
+
+
+def test_attendees_are_not_changed_on_a_job_claimed_meanwhile(
+    data: DataDir, recording: Path
+) -> None:
+    client = local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    )
+    session_id = upload(client, recording, non_nommes="3")
+    conn = connect(data)
+    try:
+        job = jobs.claim_next(conn)
+        assert job is not None
+        assert not jobs.resume_with_attendees(conn, job, 1)  # running, not failed
+        running = jobs.latest_job(conn, session_id)
+    finally:
+        conn.close()
+    assert running is not None and running.state == "running"
+    assert isinstance(running.params, jobs.ChainParams) and running.params.attendees == 3
 
 
 def test_unknown_things_are_404_in_french(client: TestClient) -> None:
