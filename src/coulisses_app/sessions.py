@@ -704,6 +704,8 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
     or repaired after a crash), with its attendees and its space's glossary."""
     conn = connect(data)
     try:
+        # Checked and queued under the lock: two « Traiter » at once queue one processing.
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT s.space_id, s.unnamed_attendees, s.audio_removed_at, s.language,"
             " a.capture_state, a.duration_s FROM session s"
@@ -729,16 +731,17 @@ def start_processing(data: DataDir, session_id: str, *, profile: str) -> None:
             raise AlreadyProcessedError("Le traitement de cette séance est déjà demandé.")
         present = spaces.attendee_ids(conn, session_id)
         minimum = spaces.attendee_minimum(len(present), row["unnamed_attendees"])
-        with conn:
-            jobs.enqueue_chain(
-                conn,
-                session_id,
-                profile=profile,
-                attendees=minimum,
-                glossary=spaces.glossary_terms(conn, row["space_id"]),
-                language=row["language"],
-            )
+        jobs.enqueue_chain(
+            conn,
+            session_id,
+            profile=profile,
+            attendees=minimum,
+            glossary=spaces.glossary_terms(conn, row["space_id"]),
+            language=row["language"],
+        )
+        conn.commit()
     finally:
+        conn.rollback()  # nothing left open after a refusal (no effect after the commit)
         conn.close()
 
 

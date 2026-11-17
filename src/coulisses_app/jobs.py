@@ -270,16 +270,19 @@ def finish(conn: sqlite3.Connection, job_id: int, *, error: str | None) -> None:
         )
 
 
-def requeue(conn: sqlite3.Connection, job_id: int) -> None:
+def requeue(conn: sqlite3.Connection, job_id: int, *, only_failed: bool = False) -> bool:
     """Put a job back in the queue: it resumes, reusing the runs that succeeded. Stopped by
     the user, it is no longer said so. What it waited for is seen again when claimed (a
-    model installed meanwhile, ADR 0072)."""
+    model installed meanwhile, ADR 0072). Returns whether it was put back (`only_failed`:
+    not if it was resumed and claimed meanwhile)."""
     with conn:
-        conn.execute(
+        cursor = conn.execute(
             "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL,"
-            " params = json_remove(params, '$.stopped_at', '$.waits_for_models') WHERE id = ?",
+            " params = json_remove(params, '$.stopped_at', '$.waits_for_models') WHERE id = ?"
+            + (" AND state = 'failed'" if only_failed else ""),
             (job_id,),
         )
+    return cursor.rowcount == 1
 
 
 def record_stopped_run(conn: sqlite3.Connection, job_id: int, run_id: str) -> None:
@@ -334,16 +337,19 @@ def _update_params(conn: sqlite3.Connection, job_id: int, **changes: Any) -> Non
         conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job_id))
 
 
-def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> None:
+def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> bool:
     """Resume a failed job asking for another minimum of voices, only after a diarization
     refused with `too_few_speakers` (checked by the caller). The former minimum stays in
     that run's provenance (`error.details.expected`): nothing is lost. Who was present is
-    not changed: people can be present without speaking."""
+    not changed: people can be present without speaking. Returns whether it was resumed
+    (not if it was resumed and claimed meanwhile)."""
     with conn:
         conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute("SELECT params FROM job WHERE id = ?", (job.id,)).fetchone()
+        row = conn.execute(
+            "SELECT params FROM job WHERE id = ? AND state = 'failed'", (job.id,)
+        ).fetchone()
         if row is None:
-            return
+            return False
         params = ChainParams.model_validate_json(row["params"]).model_copy(
             update={"attendees": attendees, "waits_for_models": None}
         )
@@ -352,6 +358,7 @@ def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) ->
             " WHERE id = ?",
             (params.model_dump_json(), job.id),
         )
+    return True
 
 
 def take_attendees(conn: sqlite3.Connection, session_id: str, attendees: int | None) -> bool:
