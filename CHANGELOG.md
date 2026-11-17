@@ -6,6 +6,12 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- ne perd plus les annonces d'une purge en échec, ni le mix pendant une suppression (conservation)
+
 ## v0.40.0 — 2026-11-17
 
 ### Nouveautés
