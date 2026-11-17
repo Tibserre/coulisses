@@ -11,7 +11,9 @@ la publication lit celle de `main`.
 ### Corrections
 
 - dit en français l'échec d'une suppression au lieu d'une erreur 500 (modeles)
+- rafraîchit la page quand la reprise est refusée (seance)
 - ne met plus en file deux traitements, ni ne relance une tâche en cours (traitement)
+- corrige les points de l'audit de la v0.40.0 (interface)
 - ne perd plus les annonces d'une purge en échec, ni le mix pendant une suppression (conservation)
 
 ## v0.40.0 — 2026-11-17
