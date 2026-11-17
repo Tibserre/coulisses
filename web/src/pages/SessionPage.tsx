@@ -218,6 +218,14 @@ export function SessionPage({
       setError((e as Error).message);
     }
   }, [id]);
+  // Refreshed even when refused: a 409 means it already resumed, and only a running job is followed.
+  const resume = async (attendees?: number) => {
+    try {
+      await api.resume(id, attendees);
+    } finally {
+      await refresh();
+    }
+  };
 
   const jobState = detail?.session.job_state;
   const spaceId = detail?.session.space_id;
@@ -1147,10 +1155,7 @@ export function SessionPage({
                 await refresh();
               }}
               transcriptError={transcriptError}
-              onResume={async (attendees) => {
-                await api.resume(id, attendees);
-                await refresh();
-              }}
+              onResume={resume}
               onProcess={async () => {
                 await api.processSession(id);
                 await refresh();
@@ -1186,10 +1191,7 @@ export function SessionPage({
                   <RerunNotices
                     detail={detail}
                     view={view}
-                    onResume={async (attendees) => {
-                      await api.resume(id, attendees);
-                      await refresh();
-                    }}
+                    onResume={resume}
                     onShowList={() => openVersions("non-reportees")}
                   />
                 </div>
@@ -1529,6 +1531,7 @@ function RerunNotices({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSeen(carryoverSeen(view.run_id)), [view.run_id]);
   const { session, rerun } = detail;
+  useEffect(() => setError(null), [session.job_state]);
   const notices: ReactNode[] = [];
 
   if (
@@ -1733,6 +1736,8 @@ function ProcessingPanel({
   const proposed =
     attendees ?? (Number.isFinite(found) && found >= 1 ? found : 1);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  // Said for the try it answers: gone once the job moves (resumed elsewhere, failed again).
+  useEffect(() => setResumeError(null), [session.job_state]);
   // The audio deleted (by hand, or never processed and deleted): nothing can be resumed.
   const gone = session.audio.state === "removed";
   const resume = async (withAttendees?: number) => {
