@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- ne met plus en file deux traitements, ni ne relance une tâche en cours (traitement)
 - ne perd plus les annonces d'une purge en échec, ni le mix pendant une suppression (conservation)
 
 ## v0.40.0 — 2026-11-17
