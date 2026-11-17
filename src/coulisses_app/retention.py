@@ -742,6 +742,14 @@ def check(data: DataDir, now: datetime | None = None) -> CheckResult:
             # Busy (recording, processing) or a file that would not go: tried again at the
             # next check, and said (P8).
             problems.append(f"Purge de l'audio de {name} : {exc}")
+        except Exception as exc:
+            # Anything else stops this purge only: the announcements of this check are
+            # already marked and must still be notified; retried at the next check (P8).
+            log.exception("purge of %s failed: %s", session_id, exc)
+            problems.append(
+                f"Purge de l'audio de {name} : erreur inattendue (le détail est dans le "
+                "journal du service). Elle sera réessayée."
+            )
     return CheckResult(announced=announced, purged=purged, problems=problems)
 
 
