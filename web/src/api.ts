@@ -51,9 +51,9 @@ export interface ProcessingWait {
   missing_models: string[];
   download_bytes: number;
   /** The environments the chain lacks (ADR 0080). */
-  missing_environments?: { name: string; label: string | null }[];
+  missing_environments: { name: string; label: string | null }[];
   /** Damaged models: to remove in Réglages before downloading them again (ADR 0080). */
-  altered_models?: string[];
+  altered_models: string[];
 }
 
 /** GET /api/langues: a language the chain transcribes (contrat-langue.md). */
@@ -131,30 +131,29 @@ export interface CatalogModel {
   licence: string;
   /** Its terms must be accepted on this page before downloading. */
   terms_url: string | null;
-  /** Shipped inside the application, installed without the network (engine v1.15.0,
-   *  ADR 0081 of the engine). Absent from an older engine. */
-  bundled?: boolean;
-  /** The credit its licence requires, in French (engine v1.15.0): shown in the app. */
-  attribution?: string | null;
+  /** Shipped inside the application, installed without the network (ADR 0081 of the
+   *  engine). */
+  bundled: boolean;
+  /** The credit its licence requires, in French: shown in the app. */
+  attribution: string | null;
   engine: string | null;
   /** The engine's profiles that need it (the retained chain: « chaine-retenue »)… */
   required_by: string[];
-  /** …for the sessions of this language only, when set (an aligner, engine v1.14.0;
-   *  ISO 639-1). */
-  language?: string | null;
+  /** …for the sessions of this language only, when set (an aligner; ISO 639-1). */
+  language: string | null;
   /** The model that does this one's job in the retained chain now (engine v1.10.0). */
   replaced_by: string | null;
   /** Why, in French, written by the engine for the user: shown as it is (engine v1.10.0). */
   replacement_note: string | null;
   /** For a replaced model, measured at the engine's bench (engine v1.11.0), null when not
    *  measured: how many times faster its successor is… */
-  replacement_speedup?: number | null;
+  replacement_speedup: number | null;
   /** …how right it is compared with this one (`same`: within the measure's noise)… */
-  replacement_quality?: "same" | "better" | "worse" | null;
+  replacement_quality: "same" | "better" | "worse" | null;
   /** …the peak memory it saves… */
-  replacement_memory_saved_bytes?: number | null;
+  replacement_memory_saved_bytes: number | null;
   /** …and where these figures come from (developer mode). */
-  replacement_evidence?: string | null;
+  replacement_evidence: string | null;
 }
 
 /** model-inventory.schema.json */
@@ -228,16 +227,16 @@ export interface MissingPiece {
   /** For a missing environment: what it is for, in French, said by the engine (v1.9.0). */
   label: string | null;
   message: string;
-  /** The room it will take, without the network (engine v1.15.0): a model's catalog size;
-   *  for an environment, an order of magnitude measured by the engine, said « environ ».
-   *  Absent from an older engine, null when unknown. */
-  announced_bytes?: number | null;
+  /** The room it will take, without the network: a model's catalog size; for an
+   *  environment, an order of magnitude measured by the engine, said « environ ». Null
+   *  when unknown. */
+  announced_bytes: number | null;
 }
 
 export interface Readiness {
   profile: string;
-  /** The session language checked (engine v1.14.0): only its models are required. */
-  language?: string;
+  /** The session language checked: only its models are required. */
+  language: string;
   ready: boolean;
   missing: MissingPiece[];
 }
@@ -291,9 +290,8 @@ export interface AudioStatus {
 export interface RetentionSettings {
   retention_days: number;
   notice_days: number;
-  /** The reminders before a purge, in days, once the service gives them (7 then 3, spec
-   *  §7.10); until then, the notice alone. Never sent. */
-  reminder_days?: number[];
+  /** The reminders before a purge, in days (7 then 3, spec §7.10). Never sent. */
+  reminder_days: number[];
 }
 
 export interface PurgeAnnouncement {
@@ -648,7 +646,13 @@ export interface AppInfo {
   app_build: string;
   profile: string;
   recovery_problems: string[];
-  processing_error: string | null;
+  /** Said in French by the service, each with its technical detail (developer mode). */
+  loop_error: string | null;
+  loop_error_detail: string | null;
+  waiting_release_error: string | null;
+  waiting_release_error_detail: string | null;
+  writer_release_error: string | null;
+  writer_release_error_detail: string | null;
 }
 
 /** The corrected view: the engine's « who said what » with the user's corrections
@@ -1111,7 +1115,7 @@ export const api = {
       resume: generationId,
       remplacer: replace,
     }),
-  setRetention: (settings: RetentionSettings, leaving = false) =>
+  setRetention: (settings: Omit<RetentionSettings, "reminder_days">, leaving = false) =>
     send<RetentionInfo>("PUT", "/api/conservation", settings, leaving),
   keepAudio: (id: string, keep: boolean) =>
     send<Session>("PUT", `${sessionPath(id)}/garder-audio`, { keep }),

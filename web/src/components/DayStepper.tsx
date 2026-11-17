@@ -10,9 +10,6 @@ export function DayStepper({
   description,
   value,
   steps,
-  min = 1,
-  max = Number.POSITIVE_INFINITY,
-  isDisabled = false,
   say = (n: number) => plural(n, "jour", "jours"),
   title,
   icon,
@@ -22,10 +19,6 @@ export function DayStepper({
   description?: string;
   value: number;
   steps: readonly number[];
-  min?: number;
-  max?: number;
-  /** Not read yet: shown, not changed. */
-  isDisabled?: boolean;
   /** The value as said: days unless told otherwise. */
   say?: (value: number) => string;
   /** Shown as a card: its name and icon on top, the label then the control under. */
@@ -33,8 +26,8 @@ export function DayStepper({
   icon?: ReactNode;
   onChange: (value: number) => void;
 }) {
-  const down = nextStep(steps, value, false, min, max);
-  const up = nextStep(steps, value, true, min, max);
+  const down = nextStep(steps, value, false);
+  const up = nextStep(steps, value, true);
   return (
     <div className={title ? "cl-stepper cl-stepper--card" : "cl-stepper"}>
       {title && (
@@ -53,7 +46,7 @@ export function DayStepper({
         <button
           type="button"
           aria-label={`${label} : moins`}
-          disabled={isDisabled || down >= value}
+          disabled={down >= value}
           onClick={() => onChange(down)}
         >
           <Minus size={14} strokeWidth={1.75} aria-hidden />
@@ -62,7 +55,7 @@ export function DayStepper({
         <button
           type="button"
           aria-label={`${label} : plus`}
-          disabled={isDisabled || up <= value}
+          disabled={up <= value}
           onClick={() => onChange(up)}
         >
           <Plus size={14} strokeWidth={1.75} aria-hidden />

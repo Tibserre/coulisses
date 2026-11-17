@@ -109,7 +109,7 @@ export function AttendeesAsk({
       <Text color="secondary">
         Au moins autant de voix seront cherchées. {waitLeft(left, count)}
       </Text>
-      <div className="cl-stepper" role="group" aria-label="Nombre de présents">
+      <div className="cl-attendeesask__stepper" role="group" aria-label="Nombre de présents">
         <IconButton
           label="Un présent de moins"
           icon={<Minus size={16} strokeWidth={1.75} />}
@@ -118,7 +118,7 @@ export function AttendeesAsk({
           isDisabled={count <= ids.length}
           onClick={() => change((was) => ({ ...was, count: was.count - 1 }))}
         />
-        <span className="cl-stepper__value" aria-live="polite">
+        <span className="cl-attendeesask__value" aria-live="polite">
           {count ? plural(count, "présent", "présents") : "Aucun présent"}
         </span>
         <IconButton

@@ -166,6 +166,8 @@ test("a waiting processing says what it waits for", () => {
     label: "Anglais",
     missing_models: ["wav2vec2-ctc-english"],
     download_bytes: 1_260_000_000,
+    missing_environments: [],
+    altered_models: [],
   };
   assert.equal(
     waitWords(wait, language({})).title,

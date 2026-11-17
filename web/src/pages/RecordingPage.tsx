@@ -129,6 +129,9 @@ export function RecordingPage({
   );
 
   useEffect(() => {
+    // Left for another page while the stop is awaited: what it said is still kept, but
+    // the user is not taken back to the session.
+    let cancelled = false;
     api.recording().then(setState, (e: Error) => setError(e.message));
     // The service sends the state ten times a second; the stream ends with the recording.
     const source = new EventSource(api.levelsUrl);
@@ -144,6 +147,13 @@ export function RecordingPage({
         // Stopped (here, from the menu bar, after the delay): to its session, with what
         // the stop said. Waited for as long as it is under way; never left unsaid (P8).
         const mine = latest.current?.session_id ?? null;
+        // The page left meanwhile: said on the session's page instead.
+        // shortcut: with no session known and the page left, the error goes with the page;
+        // the service's journal keeps it.
+        const say = (message: string) => {
+          if (cancelled && mine) keepStopProblem(mine, message);
+          else setError(message);
+        };
         const until = Date.now() + 60_000;
         while (Date.now() < until) {
           try {
@@ -156,36 +166,41 @@ export function RecordingPage({
                     mine,
                     `L'arrêt a signalé un problème : ${outcome.error}`,
                   );
+                  if (!cancelled)
                   window.location.hash = `#/seance/${encodeURIComponent(mine)}`;
                   return;
                 }
-                setError(outcome.error);
+                say(outcome.error);
                 break;
               }
               const stopped = outcome.stopped;
               if (stopped?.session_id === mine && stopped.second_problem)
                 keepStopProblem(stopped.session_id, stopped.second_problem);
               if (mine) {
-                window.location.hash = `#/seance/${encodeURIComponent(mine)}`;
+                if (!cancelled)
+                  window.location.hash = `#/seance/${encodeURIComponent(mine)}`;
                 return;
               }
               break;
             }
           } catch (e) {
-            setError((e as Error).message);
+            say((e as Error).message);
             break;
           }
           await new Promise((r) => window.setTimeout(r, 200));
         }
         if (Date.now() >= until)
-          setError(
+          say(
             "L'arrêt n'a pas répondu à temps. La séance est dans la colonne ; si elle n'y paraît pas arrêtée, quittez puis rouvrez Coulisses.",
           );
         setStoppingSince(null);
         setState(null);
       })();
     });
-    return () => source.close();
+    return () => {
+      cancelled = true;
+      source.close();
+    };
   }, []);
 
   /** Runs a request; true if it went through (its refusal is shown, never hidden). */

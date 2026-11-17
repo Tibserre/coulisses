@@ -59,21 +59,14 @@ export const LOG_KIND: Record<DeletionLogEntry["kind"], string> = {
   backup_pruning: "Anciennes copies de la base",
 };
 
-/** The value after `value` in `steps` (or before it), within `min` and `max`: a value
- *  set elsewhere, between two steps, goes to the next one. */
-export function nextStep(
-  steps: readonly number[],
-  value: number,
-  up: boolean,
-  min: number,
-  max: number,
-): number {
+/** The value after `value` in `steps` (or before it): a value set elsewhere, between
+ *  two steps, goes to the next one. */
+export function nextStep(steps: readonly number[], value: number, up: boolean): number {
   const sorted = [...steps].sort((a, b) => a - b);
   const next = up
     ? sorted.find((s) => s > value)
     : [...sorted].reverse().find((s) => s < value);
-  if (next === undefined) return value;
-  return Math.min(max, Math.max(min, next));
+  return next ?? value;
 }
 
 /** The keepings offered (spec §7.10): a week at least, three months at most. */

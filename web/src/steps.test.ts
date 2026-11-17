@@ -18,6 +18,13 @@ const model = (key: string, over: Partial<CatalogModel> = {}): CatalogModel => (
   required_by: ["chaine-retenue"],
   replaced_by: null,
   replacement_note: null,
+  bundled: false,
+  attribution: null,
+  language: null,
+  replacement_speedup: null,
+  replacement_quality: null,
+  replacement_memory_saved_bytes: null,
+  replacement_evidence: null,
   ...over,
 });
 
@@ -56,6 +63,7 @@ const lacking = (over: Partial<MissingPiece>): MissingPiece => ({
   environment: null,
   label: null,
   message: "",
+  announced_bytes: null,
   ...over,
 });
 
@@ -75,7 +83,7 @@ const view = (
     total_bytes: 0,
     ...inventory,
   },
-  readiness: { profile: "chaine-retenue", ready: missing.length === 0, missing },
+  readiness: { profile: "chaine-retenue", language: "fr", ready: missing.length === 0, missing },
   actions: [],
 });
 

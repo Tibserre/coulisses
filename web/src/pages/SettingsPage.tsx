@@ -103,9 +103,7 @@ export function SettingsPage({
   };
 
   const shownDays = days ?? info?.settings.retention_days ?? null;
-  const reminders = info
-    ? (info.settings.reminder_days ?? [info.settings.notice_days])
-    : [];
+  const reminders = info?.settings.reminder_days ?? [];
 
   // One click, one decision, written at once (each write announces the coming purges anew).
   // Writes go one after the other; the value chosen shows meanwhile, and a refusal is said,

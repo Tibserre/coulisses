@@ -6,18 +6,8 @@ export const PARTS: [Part, string][] = [
   ["transcription", "Transcription"],
   ["avance", "Avancé"],
 ];
-/** Tabs of earlier versions, still in links and in older messages. */
-const FORMER: Record<string, Part> = {
-  general: "seances",
-  historique: "seances",
-  modeles: "transcription",
-  mac: "transcription",
-  donnees: "avance",
-};
-
 /** The tab asked in the address (« #/reglages?onglet=avance »), else the first. */
 export function partOf(asked: string | null): Part {
-  if (asked && Object.hasOwn(FORMER, asked)) return FORMER[asked];
   return PARTS.some(([key]) => key === asked) ? (asked as Part) : "seances";
 }
 
