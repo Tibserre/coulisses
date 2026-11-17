@@ -292,17 +292,23 @@ export function SessionPage({
   }, [attributeRun, loadPhases]);
   const phasesWaiting =
     phasesStatus?.state === "queued" || phasesStatus?.state === "running";
+  // Over: the transcript gets its chapters, read once no line is being typed into.
+  const [chaptersDue, setChaptersDue] = useState(false);
   useEffect(() => {
     if (!phasesWaiting) return;
     const timer = window.setInterval(() => void loadPhases(), 3000);
     return () => {
       window.clearInterval(timer);
-      // Over: the transcript gets its chapters.
-      api
-        .transcript(id)
-        .then(setView, (e: Error) => setTranscriptError(e.message));
+      setChaptersDue(true);
     };
-  }, [phasesWaiting, loadPhases, id]);
+  }, [phasesWaiting, loadPhases]);
+  useEffect(() => {
+    if (!chaptersDue || typing) return;
+    setChaptersDue(false);
+    api
+      .transcript(id)
+      .then(setView, (e: Error) => setTranscriptError(e.message));
+  }, [chaptersDue, typing, id]);
 
   // The title is proposed on demand, from the chapters (ADR 0026): asked, then followed
   // until it is there. A failure says why, next to the title.
@@ -798,7 +804,6 @@ export function SessionPage({
                       <Attendees
                         session={session}
                         people={people}
-                        inline
                         onSave={async (ids, unnamed) => {
                           await api.setAttendees(id, ids, unnamed);
                           await refresh();

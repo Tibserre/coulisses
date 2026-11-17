@@ -22,6 +22,13 @@ const model = (
   required_by: ["chaine-retenue"],
   replaced_by: null,
   replacement_note: null,
+  bundled: false,
+  attribution: null,
+  language: null,
+  replacement_speedup: null,
+  replacement_quality: null,
+  replacement_memory_saved_bytes: null,
+  replacement_evidence: null,
 });
 
 const view = (
@@ -41,6 +48,7 @@ const view = (
   },
   readiness: {
     profile: "chaine-retenue",
+    language: "fr",
     ready: missing.length === 0,
     missing,
   },
@@ -122,6 +130,7 @@ test("what the chain lacks is said in one sentence", () => {
       environment: null,
       label: null,
       message: "",
+      announced_bytes: null,
     },
     {
       code: "environment_missing",
@@ -130,6 +139,7 @@ test("what the chain lacks is said in one sentence", () => {
       environment: "diarizen",
       label: "Diarisation DiariZen : qui parle quand",
       message: "",
+      announced_bytes: null,
     },
     {
       code: "environment_missing",
@@ -138,6 +148,7 @@ test("what the chain lacks is said in one sentence", () => {
       environment: "diarizen",
       label: "Diarisation DiariZen : qui parle quand",
       message: "",
+      announced_bytes: null,
     },
   ]);
   assert.equal(
@@ -244,6 +255,7 @@ test("an environment several stages need is listed once, with its role", async (
     environment: "torch",
     label,
     message: "",
+    announced_bytes: null,
   });
   const lacking = view({}, [piece("transcribe", "Calcul des modèles"), piece("align", null)]);
   assert.deepEqual(missingEnvironments(lacking.readiness, lacking.inventory), [
@@ -324,8 +336,8 @@ test("outside developer mode, what the processing uses and is sound is one line 
 test("outside developer mode, what the chain lacks is said by what it is for", () => {
   const line = readinessLine(
     view({}, [
-      { stage: "transcribe", code: "model_missing", model: "qwen-xyz", environment: null, label: null, message: "" },
-      { stage: "diarize", code: "environment_missing", model: null, environment: "diarizen", label: "DiariZen", message: "" },
+      { stage: "transcribe", code: "model_missing", model: "qwen-xyz", environment: null, label: null, message: "", announced_bytes: null },
+      { stage: "diarize", code: "environment_missing", model: null, environment: "diarizen", label: "DiariZen", message: "", announced_bytes: null },
     ]).readiness,
     view().inventory,
     (key) => (key === "qwen-xyz" ? "Transcription" : undefined),
@@ -365,7 +377,7 @@ test("a step folds only when every model it needs is sound", async () => {
 
 test("outside developer mode, a model it cannot place is never said by its key", () => {
   const line = readinessLine(
-    view({}, [{ stage: "transcribe", code: "model_missing", model: "qwen-xyz", environment: null, label: null, message: "" }]).readiness,
+    view({}, [{ stage: "transcribe", code: "model_missing", model: "qwen-xyz", environment: null, label: null, message: "", announced_bytes: null }]).readiness,
     view().inventory,
     () => undefined,
   );
@@ -486,9 +498,6 @@ test("an aligner for another language is needed only by its own sessions", async
   );
   // Its name not read yet: said so, never a name the application would make up (P6).
   assert.equal(modelRows(v, [])[1].purpose, "Alignement des mots (autre langue)");
-  // An older engine says no language: French, as before.
-  const older = modelRows({ ...v, readiness: { ...v.readiness, language: undefined } }, []);
-  assert.equal(older[1].required, false);
 });
 
 test("the bar of « Sur ce Mac »: by what it is for, the alignment said by each language", async () => {
@@ -536,7 +545,7 @@ test("a download just over: finishing for a few seconds, then said as it is (P8)
 });
 
 test("not ready without a reason: said all the same, never « il manque . »", () => {
-  const empty = { profile: "chaine-retenue", ready: false, missing: [] };
+  const empty = { profile: "chaine-retenue", language: "fr", ready: false, missing: [] };
   const inventory = view({}).inventory;
   assert.equal(readinessLine(empty, inventory, () => undefined), "Les séances ne peuvent pas être traitées.");
   assert.equal(readinessLine(empty, inventory, () => undefined, true), "Il manque une pièce du traitement.");

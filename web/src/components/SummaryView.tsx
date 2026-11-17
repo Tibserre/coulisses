@@ -209,7 +209,7 @@ export function SummaryView({
       {note ? (
         // The note after the session (ADR 0062): read and written here, beside the
         // summaries, which read it.
-        <NotesSection sessionId={sessionId} heading={false} />
+        <NotesSection sessionId={sessionId} />
       ) : tab ? (
         <SummaryTabBody
           key={tab.ref}

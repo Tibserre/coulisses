@@ -44,81 +44,31 @@ export function Attendees({
   session,
   people,
   onSave,
-  inline = false,
 }: {
   session: Session;
   people: Person[];
   onSave: (ids: number[], unnamed: number | null) => Promise<void>;
-  /** In its own small menu (ADR 0062): the list at once, without its heading. */
-  inline?: boolean;
 }) {
   const [ids, setIds] = useState<number[]>(session.attendee_ids);
   const [unnamed, setUnnamed] = useState<number | null>(
     session.unnamed_attendees,
   );
   const [error, setError] = useState<string | null>(null);
+  // Read again every 2 s during a processing: reset only when what is saved changed,
+  // not at each new array, so that boxes being checked are not undone.
+  const saved = session.attendee_ids.slice().sort().join();
   useEffect(() => {
     setIds(session.attendee_ids);
     setUnnamed(session.unnamed_attendees);
-  }, [session.attendee_ids, session.unnamed_attendees]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `saved` stands for the ids
+  }, [saved, session.unnamed_attendees]);
   const changed =
-    ids.slice().sort().join() !== session.attendee_ids.slice().sort().join() ||
-    unnamed !== session.unnamed_attendees;
+    ids.slice().sort().join() !== saved || unnamed !== session.unnamed_attendees;
   const shown = people.filter(
     (p) => !p.archived || session.attendee_ids.includes(p.id),
   );
-  const [open, setOpen] = useState(false);
-  const count = session.attendee_ids.length + (session.unnamed_attendees ?? 0);
-  const names = people
-    .filter((p) => session.attendee_ids.includes(p.id))
-    .map((p) => p.name);
-  // People not read yet (or gone): said by their number, never left out silently.
-  const known = names.length === session.attendee_ids.length;
-  const unnamedText = session.unnamed_attendees
-    ? `${session.unnamed_attendees} non ${session.unnamed_attendees > 1 ? "nommés" : "nommé"}`
-    : null;
-  const listed = known ? [...names, ...(unnamedText ? [unnamedText] : [])] : [];
-  const sentence =
-    listed.length > 1
-      ? `${listed.slice(0, -1).join(", ")} et ${listed[listed.length - 1]}`
-      : listed[0];
-  if (!open && !changed && !inline) {
-    return (
-      <section>
-        <div className="cl-side__line">
-          <Heading level={3}>Présents</Heading>
-          <Button
-            size="sm"
-            variant="ghost"
-            label="Modifier"
-            onClick={() => setOpen(true)}
-          />
-        </div>
-        <Text type="supporting">
-          {count === 0
-            ? "Personne n'a été coché."
-            : known
-              ? sentence
-              : `${count} ${count > 1 ? "présents" : "présent"}`}
-        </Text>
-      </section>
-    );
-  }
   return (
     <section>
-      {!inline && (
-        <div className="cl-side__line">
-          <Heading level={3}>Présents</Heading>
-          {!changed && (
-            <Button
-              size="sm"
-              variant="ghost"
-              label="Fermer"
-              onClick={() => setOpen(false)}
-            />
-          )}
-        </div>
-      )}
       {shown.length === 0 ? (
         <Text type="supporting">
           Aucune personne dans l'espace « {session.space_name} » : ajoutez-en

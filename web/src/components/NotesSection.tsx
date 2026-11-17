@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { api } from "../api.ts";
 import { clearDraft, readDraft, writeDraft } from "../drafts.ts";
@@ -11,11 +10,8 @@ import { formatDateTime } from "../format.ts";
  *  window, it is saved; if that fails too, it is kept in this browser and offered back. */
 export function NotesSection({
   sessionId,
-  heading = true,
 }: {
   sessionId: string;
-  /** Its own heading; not in the « Ma note » tab, which names it. */
-  heading?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const saved = useRef<string>("");
@@ -103,7 +99,6 @@ export function NotesSection({
 
   return (
     <section className="cl-notes">
-      {heading && <Heading level={3}>Notes</Heading>}
       <div
         ref={ref}
         className="cl-notes__text"

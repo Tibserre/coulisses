@@ -2847,15 +2847,6 @@ a.cl-iconbtn {
   gap: var(--spacing-3);
 }
 
-.cl-settings__steppers {
-  display: flex;
-  flex-direction: column;
-}
-
-.cl-settings__steppers > * + * {
-  border-top: 1px solid var(--color-border);
-}
-
 /* A number of days, with − and +: the label on the left, the value between its buttons. */
 .cl-stepper {
   display: flex;
@@ -2941,15 +2932,6 @@ a.cl-iconbtn {
   flex-direction: column;
 }
 
-/* A setting on one line: what it is on the left, its value and what changes it on the right
-   (ADR 0051). */
-.cl-settings__row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-4);
-  padding: var(--spacing-3) 0;
-}
-
 .cl-settings__value {
   display: inline-flex;
   align-items: center;
@@ -3022,15 +3004,6 @@ a.cl-iconbtn {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-3);
-}
-
-/* What is marked while recording: the strip as it grows, the switch, the moment, a note. */
-.cl-live {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-4);
-  padding-top: var(--spacing-5);
-  border-top: 1px solid var(--color-border);
 }
 
 .cl-live__bar {
@@ -3145,33 +3118,6 @@ a.cl-iconbtn {
   color: var(--color-accent);
 }
 
-.cl-live kbd {
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-secondary);
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--color-background-surface);
-}
-
-.cl-marks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.cl-marks li {
-  display: grid;
-  grid-template-columns: 4rem 1fr auto;
-  align-items: baseline;
-  gap: var(--spacing-3);
-  padding: var(--spacing-1) 0;
-  font-size: var(--font-size-sm);
-}
-
 .cl-marks__remove {
   border: 0;
   background: none;
@@ -3182,7 +3128,6 @@ a.cl-iconbtn {
   transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
-.cl-marks li:hover .cl-marks__remove,
 .cl-marks__remove:focus-visible {
   opacity: 1;
 }
@@ -4968,14 +4913,14 @@ button.cl-tree__more:hover {
   margin-bottom: var(--spacing-6);
 }
 
-.cl-stepper {
+.cl-attendeesask__stepper {
   display: inline-flex;
   align-self: flex-start;
   align-items: center;
   gap: var(--spacing-3);
 }
 
-.cl-stepper__value {
+.cl-attendeesask__value {
   min-width: 8ch;
   text-align: center;
   font-variant-numeric: tabular-nums;

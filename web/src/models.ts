@@ -47,7 +47,7 @@ export function purposeOf(model: CatalogModel): string {
 
 /** For the sessions of another language than the one checked (French by default). */
 function otherLanguage(model: CatalogModel, readiness: Readiness): boolean {
-  return model.language != null && model.language !== (readiness.language ?? "fr");
+  return model.language != null && model.language !== readiness.language;
 }
 
 /** Its purpose, with its language when it is for another one: never two lines of the same
@@ -114,7 +114,7 @@ export function modelRows(view: ModelsView, actions: ModelAction[], languages: L
       purpose: forLanguage(model, readiness, languages),
       // A model for one language is needed only by the sessions of that language.
       required: model.required_by.includes(readiness.profile) && !otherLanguage(model, readiness),
-      otherLanguage: otherLanguage(model, readiness) ? (model.language ?? null) : null,
+      otherLanguage: otherLanguage(model, readiness) ? model.language : null,
       state: stateOf(model.key, inventory, action, model),
       last: action && action.state !== "running" ? action : null,
     };

@@ -73,7 +73,7 @@ test("a group shows its latest sessions, and keeps in sight those that must be",
 });
 
 test("the settings open on the tab the address asks for", () => {
-  assert.deepEqual(parseRoute("#/reglages?onglet=modeles"), { page: "settings", part: "modeles" });
+  assert.deepEqual(parseRoute("#/reglages?onglet=transcription"), { page: "settings", part: "transcription" });
   assert.deepEqual(parseRoute("#/reglages"), { page: "settings", part: null });
 });
 

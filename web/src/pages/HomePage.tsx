@@ -11,6 +11,7 @@ import { PurgeBanner } from "../components/PurgeBanner.tsx";
 import { formatClock, formatDate, formatDuration, plural } from "../format.ts";
 import { rememberSpace, rememberedSpace, sessionHref, sessionName, startSpace } from "../library.ts";
 import { formatDay, takeMessage } from "../retention.ts";
+import { useDevMode } from "../devMode.ts";
 
 const RECENT = 6;
 /** What the main pane shows with no session open. First what one comes for: record a
@@ -18,6 +19,17 @@ const RECENT = 6;
  *  Then what needs attention (the service, an interrupted recording, a purge coming), the
  *  sessions being recorded or processed (or whose processing failed), and the latest few:
  *  the rest is in the side column. */
+/** The service's own background errors (not a session's): each said in French, with its
+ *  title; the technical detail in developer mode only. */
+function backgroundErrors(info: AppInfo): [string, string, string | null][] {
+  const all: [string, string | null, string | null][] = [
+    ["Traitement des séances arrêté", info.loop_error, info.loop_error_detail],
+    ["Séances en attente d'un modèle", info.waiting_release_error, info.waiting_release_error_detail],
+    ["Rédaction en attente", info.writer_release_error, info.writer_release_error_detail],
+  ];
+  return all.filter((e): e is [string, string, string | null] => e[1] !== null);
+}
+
 export function HomePage({
   sessions,
   spaces,
@@ -38,6 +50,7 @@ export function HomePage({
   /** The Finder's window; the file chosen is sent into this space at once. */
   onImport: (spaceId: number | null) => void;
 }) {
+  const dev = useDevMode();
   // Left by a session page that just deleted its session (what stayed on the disk).
   const [message, setMessage] = useState<string | null>(() => takeMessage());
   const sorted = [...(sessions ?? [])].sort((a, b) => b.recorded_at.localeCompare(a.recorded_at));
@@ -55,13 +68,15 @@ export function HomePage({
   return (
     <main className="cl-home">
       {error && <Banner status="error" title="Le service ne répond pas" description={error} />}
-      {info?.processing_error && (
-        <Banner
-          status="error"
-          title="Le traitement en tâche de fond a rencontré une erreur"
-          description={`${info.processing_error}. Il réessaie toutes les deux secondes ; si le message reste, relancez Coulisses.`}
-        />
-      )}
+      {info &&
+        backgroundErrors(info).map(([title, said, detail]) => (
+          <Banner
+            key={title}
+            status="error"
+            title={title}
+            description={dev && detail ? `${said} (${detail})` : said}
+          />
+        ))}
       {message && (
         <Banner status="warning" title="Suppression incomplète" description={message} isDismissable onDismiss={() => setMessage(null)} />
       )}

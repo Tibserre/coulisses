@@ -18,7 +18,13 @@ const model = (key: string, attribution?: string | null): CatalogModel => ({
   required_by: [],
   replaced_by: null,
   replacement_note: null,
-  ...(attribution === undefined ? {} : { attribution }),
+  bundled: false,
+  attribution: attribution ?? null,
+  language: null,
+  replacement_speedup: null,
+  replacement_quality: null,
+  replacement_memory_saved_bytes: null,
+  replacement_evidence: null,
 });
 
 test("the credits: one per model that has one, each once, as the catalog writes it", () => {

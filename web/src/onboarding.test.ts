@@ -31,6 +31,13 @@ const model = (key: string, stage: CatalogModel["stage"], bytes: number): Catalo
   required_by: ["chaine-retenue"],
   replaced_by: null,
   replacement_note: null,
+  bundled: false,
+  attribution: null,
+  language: null,
+  replacement_speedup: null,
+  replacement_quality: null,
+  replacement_memory_saved_bytes: null,
+  replacement_evidence: null,
 });
 
 const lacking = (over: Partial<MissingPiece>): MissingPiece => ({
@@ -40,6 +47,7 @@ const lacking = (over: Partial<MissingPiece>): MissingPiece => ({
   environment: null,
   label: null,
   message: "",
+  announced_bytes: null,
   ...over,
 });
 
@@ -60,7 +68,7 @@ const fresh = (missing: MissingPiece[] = [
 ]): ModelsView => ({
   catalog: { models: CATALOG },
   inventory: { models_dir: "", envs_dir: "", models: [], partial_downloads: [], environments: [], uv_stores: [], total_bytes: 0 },
-  readiness: { profile: "chaine-retenue", ready: false, missing },
+  readiness: { profile: "chaine-retenue", language: "fr", ready: false, missing },
   actions: [],
 });
 
