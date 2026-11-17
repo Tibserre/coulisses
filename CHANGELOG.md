@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- dit en français l'échec d'une suppression au lieu d'une erreur 500 (modeles)
 - ne met plus en file deux traitements, ni ne relance une tâche en cours (traitement)
 - ne perd plus les annonces d'une purge en échec, ni le mix pendant une suppression (conservation)
 
