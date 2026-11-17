@@ -8,6 +8,7 @@ import json
 import stat
 import sys
 import textwrap
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -296,6 +297,34 @@ def test_files_cannot_go_while_the_mix_is_made(data: DataDir) -> None:
         retention.delete_session(data, session_id)
     retention.delete_session(data, session_id)
     assert not data.session_dir(session_id).exists()
+
+
+def test_a_removal_under_way_is_over_before_the_mix_is_made(data: DataDir) -> None:
+    """Audit S2: a removal of the audio that has not committed yet is waited for, then
+    seen; the mix is never written back into a session whose audio is gone."""
+    session_id = recorded(data, tone(0.2, 0.3), tone(0.2, 0.1))
+    removal = connect(data)
+    removal.execute("BEGIN IMMEDIATE")
+    removal.execute(
+        "UPDATE session SET audio_removed_at = '2026-11-17T00:00:00Z' WHERE id = ?",
+        (session_id,),
+    )
+    outcome: list[object] = []
+
+    def mix() -> None:
+        try:
+            outcome.append(mixing.processing_input(data, session_id))
+        except mixing.MixError as exc:
+            outcome.append(exc)
+
+    worker = threading.Thread(target=mix)
+    worker.start()
+    time.sleep(0.5)
+    removal.commit()
+    removal.close()
+    worker.join(timeout=10)
+    assert [type(o) for o in outcome] == [mixing.MixError]
+    assert not (data.sources_dir(session_id) / mixing.MIX_FILE).exists()
 
 
 # -- the program ---------------------------------------------------------------------------

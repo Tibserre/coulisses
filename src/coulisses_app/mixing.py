@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import sqlite3
 import struct
 import subprocess
 import tempfile
@@ -31,7 +32,7 @@ from pydantic import BaseModel, ValidationError
 
 from coulisses_app import disk, listening, sessions, wav
 from coulisses_app.paths import DataDir
-from coulisses_app.storage.db import now_iso
+from coulisses_app.storage.db import connect, now_iso
 
 log = logging.getLogger(__name__)
 
@@ -236,6 +237,29 @@ def processing_path(data: DataDir, session_id: str) -> Path | None:
     return processing_input(data, session_id)[0]
 
 
+def _audio_removed(data: DataDir, session_id: str) -> bool:
+    """Read under the base's write lock, as `lossless._may_convert`: a removal under way is
+    over first, and one that starts after sees this mix being made (`busy`)."""
+    conn = connect(data)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT audio_removed_at FROM session WHERE id = ?", (session_id,)
+            ).fetchone()
+        finally:
+            conn.rollback()
+    except sqlite3.OperationalError as exc:  # the base held by another writer past its wait
+        log.exception("mixing %s: the base stayed busy", session_id)
+        raise MixError(
+            "La base de Coulisses est restée occupée : le micro et le son de l'ordinateur "
+            "n'ont pas pu être réunis. Réessayez dans un instant."
+        ) from exc
+    finally:
+        conn.close()
+    return row is None or row["audio_removed_at"] is not None
+
+
 def _ensure_mix(
     data: DataDir,
     session_id: str,
@@ -257,8 +281,7 @@ def _ensure_mix(
     ):
         return folder / known.file, known
     # Never after the audio was removed (a purge, a deletion): nothing is written back.
-    session = sessions.get_session(data, session_id)
-    if session is None or session.audio.state == "removed":
+    if _audio_removed(data, session_id):
         raise MixError("L'audio de cette séance a été supprimé.")
     # A mix made before ADR 0037, from the same sources: only its listening mix is made;
     # the engine's input stays as it was, byte for byte.

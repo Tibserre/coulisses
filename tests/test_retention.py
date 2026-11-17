@@ -756,3 +756,24 @@ def test_a_new_delay_gives_both_reminders_again(data: DataDir, recording: Path) 
     assert retention.check(data, after + timedelta(days=3)).announced == []
     second = retention.check(data, after + timedelta(days=4, hours=1)).announced
     assert [a.session_id for a in second] == [session_id]
+
+
+def test_a_purge_that_fails_keeps_the_announcements_of_its_check(
+    data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit S1: an unexpected error in one purge never loses the announcements already
+    marked by the same check (they would never be notified)."""
+    overdue = processed(data, recording)
+    entered(data, overdue, days_ago=200)
+    assert retention.check(data, NOW).announced  # purged from NOW + 7 days
+    coming = processed(data, recording)
+    entered(data, coming, days_ago=80)  # due in 3 days at NOW + 7: announced then
+
+    def broken(*_: object, **__: object) -> list[str]:
+        raise OSError("disque débranché")
+
+    monkeypatch.setattr(retention, "remove_audio", broken)
+    later = retention.check(data, NOW + timedelta(days=7))
+    assert [a.session_id for a in later.announced] == [coming]
+    assert later.purged == []
+    assert len(later.problems) == 1 and "journal du service" in later.problems[0]
