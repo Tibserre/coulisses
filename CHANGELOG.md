@@ -16,6 +16,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- ramène à 90 jours une durée de conservation plus longue (conservation)
 - rend lisibles les autres textes et icônes d'avertissement (interface)
 - rend lisible la ligne d'avertissement d'arrêt (seance)
 - dit sous les disques ce qu'a signalé l'arrêt (seance)
