@@ -10,18 +10,15 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
-- rappelle une purge une seconde fois, 3 jours avant (conservation)
-- refuse une durée de conservation au-delà de 90 jours (conservation)
-- refait l'onglet Séances d'après la maquette R3 (reglages)
+- Réglages › Séances est refait. La durée de conservation de l'audio se choisit d'un clic : 7, 14, 30, 60 ou 90 jours. « Bientôt supprimés » liste les séances dont l'audio va partir, avec les jours qui restent et « Garder ». Les réglages d'enregistrement et le dossier d'export passent en cartes.
+- Un second rappel avant que l'audio d'une séance soit supprimé : 7 jours avant, puis 3 jours avant, chacun par un bandeau et une notification.
+- L'audio se garde 90 jours au plus. Une durée réglée plus longue redescend à 90 jours, et les suppressions proches sont annoncées de nouveau, avec tout leur préavis. Le texte des séances, lui, n'est jamais supprimé.
 
 ### Corrections
 
-- ramène à 90 jours une durée de conservation plus longue (conservation)
-- rend lisibles les autres textes et icônes d'avertissement (interface)
-- rend lisible la ligne d'avertissement d'arrêt (seance)
-- dit sous les disques ce qu'a signalé l'arrêt (seance)
-- installe aussi sous une locale qui n'est pas UTF-8 (distribution)
-- passe au moteur v1.15.1, un signe isolé prend la voix de son mot (moteur)
+- Ce que signale l'arrêt d'un enregistrement s'affiche sous les disques, au lieu d'un bandeau à refermer.
+- Les avertissements (audio bientôt supprimé, modèle manquant, micro perdu) sont écrits dans un jaune lisible.
+- Un signe de ponctuation isolé est attribué à la voix du mot qu'il accompagne.
 
 ## v0.39.0 — 2026-11-11
 
