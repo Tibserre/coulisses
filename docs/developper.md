@@ -33,6 +33,8 @@ uv run coulisses-app --dev
 
 Le service écoute alors sur le port 8766, sur `~/Coulisses/Données-dev` (ou le dossier donné par `COULISSES_DATA_DIR`), et refuse le dossier des données réelles. `scripts/installer-lanceur.sh --dev` installe l'app « Coulisses (dév) », icône graphite, qui le lance depuis le dépôt ; elle vit à côté de Coulisses sans partager ni service, ni données, ni permissions.
 
+Chaque tâche a son worktree (`.claude/worktrees/…`), avec son propre `.venv` et son propre `web/node_modules` (environ 350 Mo). Après une fusion dans `main`, `scripts/nettoyer-worktrees.sh` dit ce qu'il retirerait : les worktrees dont tout est dans `main`, sans modification, sans fichier ignoré à garder et sans processus en cours, puis les branches fusionnées. `scripts/nettoyer-worktrees.sh --retirer` le fait.
+
 Pendant le développement de l'interface : `cd web && npm run dev` (port 5173, l'API passe par le service de dév ; `COULISSES_PORT` en vise un autre).
 
 ## Construire l'app à donner
