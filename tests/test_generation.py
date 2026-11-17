@@ -762,7 +762,7 @@ def test_a_model_chosen_but_absent_while_others_are_there_does_not_wait(
         json={"action_ref": "compte-rendu-reunion", "model": "absent"},
     )
     processor = Processor(data, FAKE_CHAIN, model_client=fake_model)
-    assert processor.writer_wait("absent") is None  # Ollama has a model: no wait
+    assert processor.writer_wait() is None  # Ollama has a model: no wait
     run_all(data, fake_model)
     # It went to Ollama with that model, which refuses it in its own words (`ollama.py`).
     assert fake_model.calls[-1][0] == "absent"

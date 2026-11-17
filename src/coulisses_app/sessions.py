@@ -402,14 +402,12 @@ def interrupted_imports(data: DataDir) -> list[str]:
 # -- recording in the application (step 6, ADR 0005) -------------------------------------
 
 CAPTURE_FILE = f"{REFERENCE_SOURCE_ID}.wav"
-SECOND_SOURCE_ID = "mic2"
-"""The first microphone added beside the reference (often the iPhone, through Continuity):
-kept as a source of its own; the processing uses the reference only, for now (ADR 0031,
-0033). The next ones are `mic3`, `mic4`…"""
 
 
 def extra_source_id(position: int) -> str:
-    """The source id of the microphone added at `position` (0 for the first: `mic2`)."""
+    """The source id of the microphone added at `position` (0 for the first: `mic2`, often
+    the iPhone through Continuity; then `mic3`…): kept as a source of its own; the
+    processing uses the reference only, for now (ADR 0031, 0033)."""
     return f"mic{position + 2}"
 
 
