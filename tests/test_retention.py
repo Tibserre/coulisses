@@ -15,6 +15,7 @@ from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.spaces import SpaceError
+from coulisses_app.storage import db
 from coulisses_app.storage.db import connect
 
 from .conftest import FAKE_CHAIN, local_client
@@ -312,20 +313,66 @@ def test_the_service_keeps_extends_removes_and_lists(data: DataDir, recording: P
     assert "90 jours au plus" in too_long.json()["detail"]
 
 
-def test_a_longer_delay_set_before_stays_but_no_new_one_goes_above_90(data: DataDir) -> None:
+def _before_0012(tmp_path: Path, name: str, retention_days: int, notice_days: int) -> DataDir:
+    """A database migrated up to 0011, with these settings and an announced purge."""
+    shipped = db.migrations()
+    older = DataDir(tmp_path / name)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(db, "migrations", lambda: [m for m in shipped if m[0] <= 11])
+        db.migrate(older)
+    conn = db.connect(older)
+    with conn:
+        conn.executemany(
+            "INSERT INTO app_setting (key, value) VALUES (?, ?)",
+            [
+                (retention.RETENTION_KEY, str(retention_days)),
+                (retention.NOTICE_KEY, str(notice_days)),
+            ],
+        )
+        conn.execute(
+            "INSERT INTO session (id, space_id, recorded_at, created_at, reference_source_id,"
+            " purge_announced_at) VALUES ('s', 1, 'x', 'x', 'ref', '2026-10-01T00:00:00Z')"
+        )
+        conn.execute(
+            "INSERT INTO session (id, space_id, recorded_at, created_at, reference_source_id,"
+            " purge_announced_at) VALUES ('t', 1, 'x', 'x', 'ref', '2026-10-02T00:00:00Z')"
+        )
+    conn.close()
+    return older
+
+
+def test_a_delay_above_90_days_comes_down_to_90_and_is_announced_again(
+    tmp_path: Path,
+) -> None:
+    """The user's choice (ADR 0083): a delay set before above 90 days comes down to 90."""
+    cases = (
+        (_before_0012(tmp_path, "longue", 365, 120), (90, 90), None),  # announced again
+        (_before_0012(tmp_path, "un-an", 365, 7), (90, 7), None),  # its notice kept
+        (_before_0012(tmp_path, "courte", 60, 7), (60, 7), "2026-10-01T00:00:00Z"),  # as was
+    )
+    for data, settings, announced in cases:
+        assert len(db.migrate(data)) == 1
+        conn = db.connect(data)
+        try:
+            got = retention.get_settings(conn)
+            assert (got.retention_days, got.notice_days) == settings
+            row = conn.execute(
+                "SELECT purge_announced_at, purge_reminded_at FROM session WHERE id = 's'"
+            ).fetchone()
+            assert (row[0], row[1]) == (announced, None)
+            # The other session, announced too: the same, never only one of them.
+            other = conn.execute("SELECT purge_announced_at FROM session WHERE id = 't'")
+            assert (other.fetchone()[0] is None) == (announced is None)
+        finally:
+            conn.close()
+
+
+def test_no_delay_goes_above_90_days(data: DataDir) -> None:
     conn = connect(data)
     try:
-        with conn:
-            conn.execute(
-                "INSERT INTO app_setting (key, value) VALUES (?, '180')", (retention.RETENTION_KEY,)
-            )
-        retention.set_settings(conn, 180, 7)  # unchanged: kept as it is (ADR 0083)
-        assert retention.get_settings(conn).retention_days == 180
-        with pytest.raises(SpaceError):
+        with pytest.raises(SpaceError, match="90 jours au plus"):
             retention.set_settings(conn, 120, 7)
         retention.set_settings(conn, 90, 7)
-        with pytest.raises(SpaceError):
-            retention.set_settings(conn, 180, 7)  # once left, never set again
     finally:
         conn.close()
 

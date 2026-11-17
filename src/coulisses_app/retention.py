@@ -45,8 +45,8 @@ NOTICE_KEY = "preavis_jours"
 DEFAULT_RETENTION_DAYS = 90
 DEFAULT_NOTICE_DAYS = 7
 MAX_RETENTION_DAYS = 90
-"""The audio is kept 90 days at most (ADR 0083). A longer delay set before stays as it is
-until the user decides its fate: only a new choice is refused above it."""
+"""The audio is kept 90 days at most (ADR 0083); a longer delay set before came down to 90
+days with the migration 0012."""
 SECOND_REMINDER_DAYS = 3
 """The second reminder, given that many days before the purge (ADR 0083); the first one is
 the announcement, `notice_days` before. Only the first one holds the purge (ADR 0029, kept by
@@ -129,8 +129,7 @@ def get_settings(conn: sqlite3.Connection) -> RetentionSettings:
 def set_settings(conn: sqlite3.Connection, retention_days: int, notice_days: int) -> None:
     if retention_days < 1:
         raise SpaceError("L'audio se garde au moins un jour.")
-    kept = _setting(conn, RETENTION_KEY, DEFAULT_RETENTION_DAYS)
-    if retention_days > MAX_RETENTION_DAYS and retention_days != kept:
+    if retention_days > MAX_RETENTION_DAYS:
         raise SpaceError(f"L'audio se garde {MAX_RETENTION_DAYS} jours au plus.")
     if not 1 <= notice_days <= retention_days:
         raise SpaceError("Le préavis va d'un jour à la durée de conservation.")

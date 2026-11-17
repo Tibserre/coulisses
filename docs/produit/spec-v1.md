@@ -173,7 +173,7 @@ Ces principes priment sur toute autre considération (performance, simplicité, 
 
 ### 7.10 Conservation de l'audio
 
-- **Durée au choix parmi 7, 14, 30, 60 et 90 jours** (90 jours au plus, choix de l'utilisateur ; 90 par défaut), comptés depuis l'entrée de la séance dans l'app (import ou enregistrement), jamais depuis la date du fichier (ADR 0029).
+- **Durée au choix parmi 7, 14, 30, 60 et 90 jours** (90 jours au plus, choix de l'utilisateur ; 90 par défaut), comptés depuis l'entrée de la séance dans l'app (import ou enregistrement), jamais depuis la date du fichier (ADR 0029). Une durée plus longue, réglée avant, descend à 90 jours, et les purges proches sont annoncées de nouveau avec tout leur préavis (ADR 0083).
 - À échéance, l'audio est supprimé : l'original **et** toutes ses versions dérivées (rééchantillonnée, déréverbérée…). Les sorties textuelles de chaque étape sont gardées, ainsi que les empreintes vocales que le moteur a écrites dans ses exécutions. Elles ne servent à reconnaître les voix que dans un espace qui l'a activé.
 - **Aucune purge** d'une séance dont le traitement n'a pas abouti (transcription, alignement quand il est requis, diarisation et attribution réussis).
 - **« Garder l'audio »**, option de chaque séance, la soustrait à la purge (extrait annoté pour l'évaluation, séance charnière).
