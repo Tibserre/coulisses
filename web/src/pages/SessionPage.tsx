@@ -259,6 +259,14 @@ export function SessionPage({
     const timer = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(timer);
   }, [jobState, refresh]);
+  // Out of « en cours » (stopped from the menu, which hands back the session alone): read
+  // once more, so that its stages show how they ended, not as at the last poll.
+  const lastJobState = useRef(jobState);
+  useEffect(() => {
+    const was = lastJobState.current;
+    lastJobState.current = jobState;
+    if ((was === "queued" || was === "running") && jobState !== was) void refresh();
+  }, [jobState, refresh]);
 
   // The version on screen. A new one (a rerun completed, another shown) is read once no
   // line is being typed into: never pulled from under the cursor. A correction typed for
