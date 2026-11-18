@@ -5,7 +5,7 @@ Statut : Acceptée (2026-10-21). Choix de l'utilisateur pour la fin du parcours 
 - la variante C, « la relecture se construit » ;
 - la question « un présent n'a pas parlé » ;
 - l'erreur dite en français ;
-- l'attente sur batterie, « à peu près esthétique ».
+- l'attente sur batterie, « à peu près esthétique ». L'écran d'arrêt (l'icône dans un disque, la barre de 3 s) : remplacé par 0089 (le même écran, un anneau autour d'« Arrêter »).
 
 Choix de mise en œuvre : l'arrêt différé est fait par le service, la pause tient pendant le délai, le temps restant est estimé à environ 10 min par heure d'audio, l'aperçu est relu toutes les 4 s. Précise 0005 (l'arrêt) ; respecte 0027 (sur batterie, le traitement attend un clic). L'écran de traitement (deux disques, l'arrivée des voix) : précisé par 0060.
 

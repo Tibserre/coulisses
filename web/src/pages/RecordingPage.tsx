@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
-import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
@@ -75,21 +74,22 @@ export function RecordingPage({
   const pausedBeforeStop = useRef(false);
   const stoppingRef = useRef(false);
   stoppingRef.current = stoppingSince !== null;
-  /** The veil is in front (paused, or stopping): what is under it is out of reach. */
-  const veilRef = useRef(false);
-  veilRef.current = state?.state === "paused" || stoppingSince !== null;
-  const veilBody = useRef<HTMLDivElement>(null);
-  const veilShown =
+  /** Held (paused, or stopping; ADR 0089): the same screen, the wave dimmed behind, what
+   *  is cut said in large, two round buttons; the rest is out of reach. */
+  const heldRef = useRef(false);
+  heldRef.current = state?.state === "paused" || stoppingSince !== null;
+  const pairRef = useRef<HTMLDivElement>(null);
+  const held =
     Boolean(state) && (state?.state === "paused" || stoppingSince !== null);
-  // Shown: the focus on the veil itself, not on « Reprendre » (which would show a ring
-  // after a click): the screen readers read it, Space resumes, Tab reaches « Reprendre ».
+  // Held: the focus on the pair itself, not on a button (which would show a ring after a
+  // click): the screen readers read it, Space resumes, Tab reaches the buttons.
   useEffect(() => {
-    if (!veilShown) return;
+    if (!held) return;
     const timer = window.setTimeout(() =>
-      veilBody.current?.focus({ preventScroll: true }),
+      pairRef.current?.focus({ preventScroll: true }),
     );
     return () => window.clearTimeout(timer);
-  }, [veilShown, stoppingSince]);
+  }, [held, stoppingSince]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (stoppingSince === null) return;
@@ -299,9 +299,11 @@ export function RecordingPage({
       const target = e.target as HTMLElement | null;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const key = e.key.toLowerCase();
-      // Paused or stopping, the veil in front (ADR 0059): Space (or Escape while it
-      // stops) takes it back; nothing else is marked or typed under it.
-      if (veilRef.current) {
+      // Paused or stopping (ADR 0089): Space (or Escape while it stops) takes it back;
+      // nothing else is marked or typed meanwhile.
+      if (heldRef.current) {
+        // Space on a button reached by Tab presses that button (« Arrêter » stops).
+        if (key === " " && target?.closest("button")) return;
         if (key === " " || (key === "escape" && stoppingRef.current)) {
           e.preventDefault();
           void toggle();
@@ -420,8 +422,12 @@ export function RecordingPage({
       )}
       {state && (
         <>
-          <header inert={veilShown || undefined} className="cl-rec__bar">
-            <MicsControl mics={mics} act={act} />
+          <header inert={held || undefined} className="cl-rec__bar">
+            {/* Held, every microphone is cut (ADR 0059): shown so, the levels flat. */}
+            <MicsControl
+              mics={held ? mics.map((m) => ({ ...m, muted: true })) : mics}
+              act={act}
+            />
             {system && (
               <>
                 <span className="cl-rec__sep" aria-hidden />
@@ -430,7 +436,7 @@ export function RecordingPage({
                 <button
                   type="button"
                   className="cl-rec__system"
-                  data-muted={system.muted || undefined}
+                  data-muted={held || system.muted || undefined}
                   title={
                     system.muted
                       ? "Rétablir le son de l'ordinateur"
@@ -446,16 +452,16 @@ export function RecordingPage({
                     void act(() => api.muteSystem(!system.muted));
                   }}
                 >
-                  {system.muted ? (
+                  {held || system.muted ? (
                     <MonitorOff size={16} strokeWidth={1.75} aria-hidden />
                   ) : (
                     <Monitor size={16} strokeWidth={1.75} aria-hidden />
                   )}
                   <span className="cl-rec__meter">
                     <LevelMeter
-                      level={system.muted ? 0 : meterValue(system.levels.rms_db)}
-                      peak={system.muted ? 0 : meterValue(system.levels.peak_db)}
-                      clipping={!system.muted && system.clipping}
+                      level={held || system.muted ? 0 : meterValue(system.levels.rms_db)}
+                      peak={held || system.muted ? 0 : meterValue(system.levels.peak_db)}
+                      clipping={!held && !system.muted && system.clipping}
                     />
                   </span>
                 </button>
@@ -502,8 +508,8 @@ export function RecordingPage({
           </header>
 
           {/* Over the screen, under the bar: nothing below moves when one comes. */}
+          {/* At the front even when held: what goes wrong is never hidden (P8). */}
           <div
-            inert={veilShown || undefined}
             className="cl-rec__alerts"
             aria-live="polite"
           >
@@ -580,25 +586,50 @@ export function RecordingPage({
           </div>
 
           <main
-            inert={veilShown || undefined}
             className="cl-rec__stage"
+            data-held={held || undefined}
             aria-label="Enregistrement"
           >
             <div className="cl-rec__head">
-              <span className="cl-rec__status" data-paused={paused || undefined}>
-                <span className="cl-recording__dot" aria-hidden />
-                {paused ? "En pause" : "Enregistrement en cours"}
-              </span>
-              {/* A width kept for its digits: nothing moves while the time goes by. */}
-              <span
-                className="cl-rec__time"
-                aria-live="off"
-                style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
-              >
-                {formatClock(elapsed)}
-              </span>
+              {held ? (
+                <>
+                  <span className="cl-rec__status">{formatClock(elapsed)}</span>
+                  <h2 className="cl-rec__time" id="cl-rec-held">
+                    {stopLeft !== null ? "Arrêt" : "En pause"}
+                  </h2>
+                </>
+              ) : (
+                <>
+                  <span className="cl-rec__status">
+                    <span className="cl-recording__dot" aria-hidden />
+                    Enregistrement en cours
+                  </span>
+                  {/* A width kept for its digits: nothing moves while the time goes by. */}
+                  <span
+                    className="cl-rec__time"
+                    aria-live="off"
+                    style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
+                  >
+                    {formatClock(elapsed)}
+                  </span>
+                </>
+              )}
+              <div className="cl-rec__where">
+              {held && (
+                // What is cut, in large, in the place of who is there (nothing moves).
+                <p className="cl-rec__cut">
+                  <span role="img" aria-label={micsCut}>
+                    <MicOff size={38} strokeWidth={1.75} aria-hidden />
+                  </span>
+                  {system && (
+                    <span role="img" aria-label="Son de l'ordinateur coupé">
+                      <MonitorOff size={38} strokeWidth={1.75} aria-hidden />
+                    </span>
+                  )}
+                </p>
+              )}
               {session && attendees && people && (
-                <div className="cl-rec__who">
+                <div className="cl-rec__who" inert={held || undefined}>
                   <Counter attendees={attendees} size="lg" />
                   <Tooltip
                     content={
@@ -621,6 +652,7 @@ export function RecordingPage({
                 </div>
               )}
               {session && (
+                <div className="cl-rec__places" inert={held || undefined}>
                 <RecordingContext
                   session={session}
                   spaces={spaces}
@@ -631,10 +663,12 @@ export function RecordingPage({
                   }}
                   onError={setError}
                 />
+                </div>
               )}
+              </div>
             </div>
 
-            <div className="cl-rec__wave">
+            <div className="cl-rec__wave" inert={held || undefined}>
               <LiveWave
                 elapsed={elapsed}
                 rmsDb={state.levels.rms_db}
@@ -690,6 +724,78 @@ export function RecordingPage({
               )}
             </div>
 
+            {held ? (
+              // Two round buttons on the axis: the filled one is what counts now.
+              <div
+                className="cl-rec__pair"
+                ref={pairRef}
+                tabIndex={-1}
+                role="group"
+                aria-labelledby="cl-rec-held"
+                aria-describedby={stopLeft !== null ? "cl-rec-held-desc" : undefined}
+              >
+                {stopLeft !== null && (
+                  <p className="cl-sr" id="cl-rec-held-desc">
+                    La séance s'ouvre dans un instant.
+                  </p>
+                )}
+                <span className="cl-rec__gesture">
+                  <span className="cl-rec__ring">
+                    {stopLeft !== null && (
+                      // Fills in the service's delay; then the session opens.
+                      <svg aria-hidden width="108" height="108" viewBox="0 0 108 108">
+                        <circle cx="54" cy="54" r="51" className="cl-rec__track" />
+                        <circle
+                          cx="54"
+                          cy="54"
+                          r="51"
+                          className="cl-rec__arc"
+                          style={
+                            {
+                              animationDuration: `${stopDelayMs}ms`,
+                              "--cl-rec-steps": Math.max(1, Math.round(stopDelayMs / 1000)),
+                            } as React.CSSProperties
+                          }
+                        />
+                      </svg>
+                    )}
+                    <button
+                      type="button"
+                      className="cl-rec__round"
+                      data-kind={stopLeft !== null ? "stop" : "line"}
+                      aria-label="Arrêter l'enregistrement"
+                      aria-disabled={stopLeft !== null || undefined}
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        if (stopLeft === null) void stop();
+                      }}
+                    >
+                      <Square size={27} fill="currentColor" stroke="none" aria-hidden />
+                    </button>
+                  </span>
+                  <span className="cl-rec__strong">Arrêter</span>
+                </span>
+                <span className="cl-rec__gesture">
+                  <span className="cl-rec__ring">
+                    <button
+                      type="button"
+                      className="cl-rec__round"
+                      data-kind={stopLeft !== null ? "line" : "fill"}
+                      aria-label="Reprendre l'enregistrement"
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        void toggle();
+                      }}
+                    >
+                      <Play size={29} fill="currentColor" stroke="none" aria-hidden />
+                    </button>
+                  </span>
+                  <span className="cl-rec__strong">
+                    Reprendre<kbd>{stopLeft !== null ? "Échap" : "Espace"}</kbd>
+                  </span>
+                </span>
+              </div>
+            ) : (
             <div className="cl-rec__gestures">
               <span className="cl-rec__gesture">
                 <button
@@ -745,6 +851,7 @@ export function RecordingPage({
                 </span>
               </span>
             </div>
+            )}
           </main>
           {session && attendees && people && (
             <AttendeesSheet
@@ -759,112 +866,6 @@ export function RecordingPage({
             />
           )}
         </>
-      )}
-      {state && (paused || stopLeft !== null) && (
-        // Paused, or stopping: said to the whole room, the session blurred behind (ADR
-        // 0059). Every microphone and the computer's sound are cut while it is shown.
-        <div
-          className="cl-rec__veil"
-          data-kind={stopLeft !== null ? "stop" : "pause"}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cl-rec-veil-title"
-          aria-describedby={stopLeft !== null ? "cl-rec-veil-desc" : undefined}
-          ref={veilBody}
-          tabIndex={-1}
-        >
-          <div className="cl-rec__veilbody">
-            {/* What goes wrong comes to the front too: never hidden under the veil (P8). */}
-            <div className="cl-rec__veilalerts" aria-live="polite">
-              {lost && (
-                <Banner
-                  status="error"
-                  title="Connexion au service perdue"
-                  description="Coulisses ne répond plus : ce qui est affiché n'est peut-être plus à jour."
-                />
-              )}
-              {state.error && (
-                <Banner
-                  status="error"
-                  title="Le micro"
-                  description={state.error}
-                />
-              )}
-              {system?.error && (
-                <Banner
-                  status="warning"
-                  title="Le son de l'ordinateur"
-                  description={system.error}
-                />
-              )}
-              {state.extra.map((track) => (
-                <ExtraAlerts key={track.device} track={track} />
-              ))}
-              {error && (
-                <Banner status="error" title="Refusé" description={error} />
-              )}
-            </div>
-            {stopLeft !== null ? (
-              <>
-                <span className="cl-rec__disc" aria-hidden>
-                  <Square size={34} strokeWidth={1.75} />
-                </span>
-                <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">
-                  Arrêt
-                </h2>
-                <p className="cl-sr" id="cl-rec-veil-desc">
-                  La séance s'ouvre dans un instant.
-                </p>
-                <div className="cl-rec__veiltrack" aria-hidden>
-                  <i style={{ animationDuration: `${stopDelayMs}ms` }} />
-                </div>
-                <Button
-                  label="Reprendre"
-                  icon={<Play size={16} strokeWidth={1.75} />}
-                  clickAction={async () => void (await toggle())}
-                />
-              </>
-            ) : (
-              <>
-                <span className="cl-rec__disc" aria-hidden>
-                  <Pause size={40} strokeWidth={1.75} />
-                </span>
-                <h2 className="cl-rec__veiltitle" id="cl-rec-veil-title">
-                  En pause
-                </h2>
-                {/* What is cut, said by its icons; read out by their labels. */}
-                <p className="cl-rec__veilcut">
-                  <span role="img" aria-label={micsCut} title={micsCut}>
-                    <MicOff size={20} strokeWidth={1.75} aria-hidden />
-                  </span>
-                  {system && (
-                    <span
-                      role="img"
-                      aria-label="Son de l'ordinateur coupé"
-                      title="Son de l'ordinateur coupé"
-                    >
-                      <MonitorOff size={20} strokeWidth={1.75} aria-hidden />
-                    </span>
-                  )}
-                </p>
-                <Button
-                  label="Reprendre"
-                  variant="primary"
-                  size="lg"
-                  icon={<Play size={18} strokeWidth={1.75} />}
-                  clickAction={async () => void (await toggle())}
-                />
-                <button
-                  type="button"
-                  className="cl-linkbtn"
-                  onClick={() => void stop()}
-                >
-                  Arrêter
-                </button>
-              </>
-            )}
-          </div>
-        </div>
       )}
       {!state && error && (
         <Banner status="error" title="Refusé" description={error} />

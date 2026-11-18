@@ -5418,131 +5418,150 @@ button.cl-tree__more:hover {
 }
 
 /* ------------------------------------------------- Paused, stopping: said to the room --- */
-/* ADR 0059: the session blurred behind what is put forward; opaque if macOS reduces the
-   transparency. The microphones and the computer's sound are cut while it shows. */
+/* ADR 0089: the same screen, nothing else moves. « En pause » or « Arrêt » takes the
+   time's place, what is cut is said in large where the people are, the wave dims behind,
+   and two round buttons sit on the axis: the filled one is what counts now. */
 
 .cl-rec {
   position: relative;
 }
 
-.cl-rec__veil {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  justify-content: center;
-  background: color-mix(in srgb, var(--color-background-body) 70%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  animation: cl-veil-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.cl-rec__head h2.cl-rec__time {
+  margin: 0;
 }
 
-.cl-rec__veil:focus {
-  outline: none;
-}
-
-.cl-rec__veilbody {
-  position: sticky;
-  top: 18vh;
-  align-self: flex-start;
+.cl-rec__where {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-3);
-  max-width: 32rem;
-  padding: var(--spacing-8) var(--spacing-6);
-  text-align: center;
+  gap: 10px;
 }
 
-/* The big icon of the veil, in its disc: seen from across the room. */
-.cl-rec__disc {
-  display: inline-flex;
+.cl-rec__stage[data-held] .cl-rec__where > :not(.cl-rec__cut) {
+  visibility: hidden;
+}
+
+.cl-rec__cut {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
+  gap: 20px;
+}
+
+.cl-rec__cut span {
   width: 84px;
   height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   background: var(--color-background-muted);
   color: var(--color-text-primary);
 }
 
-.cl-rec__veiltitle {
+.cl-rec__stage[data-held] .cl-rec__wave {
+  filter: blur(5px);
+  opacity: 0.34;
+}
+
+/* Both rows keep one height: the wave above does not move when held. */
+.cl-rec__gestures,
+.cl-rec__pair {
+  min-height: 146px;
+}
+
+.cl-rec__pair {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 44px;
+  margin-top: -10px;
+  outline: none;
+}
+
+/* The same width each, the labels overflowing: the pair sits on the axis. */
+.cl-rec__pair .cl-rec__gesture {
+  width: 108px;
+  white-space: nowrap;
+  font-size: var(--font-size-base);
+}
+
+/* The ring's room is kept around the button: it never touches the label. */
+.cl-rec__ring {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cl-rec__ring > svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.cl-rec__track {
+  stroke: var(--color-border);
+}
+
+.cl-rec__arc {
+  stroke: var(--color-accent);
+  stroke-dasharray: 320.4;
+  animation: cl-rec-arc linear both;
+}
+
+@keyframes cl-rec-arc {
+  from {
+    stroke-dashoffset: 320.4;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.cl-rec__pair .cl-rec__round {
+  width: 80px;
+  height: 80px;
   margin: 0;
-  font-family: var(--font-family-heading);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-3xl);
-  letter-spacing: -0.03em;
+}
+
+.cl-rec__round[data-kind="line"] {
+  color: var(--color-accent);
+}
+
+.cl-rec__round[data-kind="line"] svg[class*="play"] {
   color: var(--color-text-primary);
 }
 
-.cl-rec__veilcut {
-  margin: 0 0 var(--spacing-2);
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--spacing-5);
-  color: var(--color-text-secondary);
-}
-
-.cl-rec__veilcut span {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.cl-rec__veiltrack {
-  width: 16rem;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--color-background-muted);
-  overflow: hidden;
-}
-
-.cl-rec__veiltrack i {
-  display: block;
-  height: 100%;
-  width: 100%;
+.cl-rec__round[data-kind="fill"],
+.cl-rec__pair .cl-rec__round[data-kind="stop"] {
+  border: 0;
   background: var(--color-accent);
-  transform-origin: left;
-  animation: cl-veil-fill linear both;
+  color: #fff;
+  box-shadow:
+    0 2px 4px rgba(26, 26, 26, 0.08),
+    0 16px 30px -14px color-mix(in srgb, var(--color-accent) 55%, transparent);
 }
 
-@keyframes cl-veil-in {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes cl-veil-fill {
-  from {
-    transform: scaleX(0);
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .cl-rec__veil {
-    background: var(--color-background-body);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
+.cl-rec__round[aria-disabled] {
+  cursor: default;
+  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-rec__veil {
-    animation: none;
+  /* A second at a time. */
+  .cl-rec__arc {
+    animation-timing-function: steps(var(--cl-rec-steps, 3), end);
   }
-}
-
-.cl-rec__veilalerts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-  width: 100%;
-  text-align: left;
-}
-
-.cl-rec__veilalerts:empty {
-  display: none;
 }
 
 /* Read out, not shown. */
