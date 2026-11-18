@@ -10,22 +10,17 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
-- grise le temps en pause, « En pause » au-dessus (enregistrement)
-- dit la pause et l'arrêt dans l'écran même, sans rien estomper (enregistrement)
-- met la pause et l'arrêt dans l'écran, sans voile (enregistrement)
-- ajoute une personne par une ligne pleine largeur (enregistrement)
-- refait l'écran d'après la maquette D5a (enregistrement)
+- L'écran d'enregistrement est refait. L'onde suit le son réel et défile plus vite. La pause et l'arrêt se font dans l'écran même : en pause, le temps se grise et « En pause » s'affiche au-dessus. Une ligne pleine largeur sert à ajouter une personne.
 
 ### Corrections
 
-- relit les étapes quand le traitement s'arrête (seance)
-- fait suivre le son réel à l'onde et la fait défiler plus vite (enregistrement)
-- retire processing_error de /api/etat (etat)
-- dit en français l'échec d'une suppression au lieu d'une erreur 500 (modeles)
-- rafraîchit la page quand la reprise est refusée (seance)
-- ne met plus en file deux traitements, ni ne relance une tâche en cours (traitement)
-- corrige les points de l'audit de la v0.40.0 (interface)
-- ne perd plus les annonces d'une purge en échec, ni le mix pendant une suppression (conservation)
+- Cliquer deux fois sur « Traiter » ou « Reprendre » ne lance plus deux fois le même traitement.
+- La page d'une séance se met à jour quand son traitement s'arrête ou que sa reprise est refusée.
+- Après l'arrêt d'un enregistrement, la page qu'on vient de quitter n'emmène plus vers la séance.
+- Les présents en train d'être cochés ne se décochent plus pendant un traitement.
+- L'accueil dit chaque panne du service par une phrase claire.
+- L'échec de la suppression d'un modèle est expliqué en français.
+- Une suppression d'audio qui échoue ne fait plus perdre ses rappels, et l'écoute d'une séance ne se prépare plus pendant que son audio est supprimé.
 
 ## v0.40.0 — 2026-11-17
 
