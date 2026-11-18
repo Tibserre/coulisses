@@ -16,7 +16,7 @@ Avec l'écran D5a (0088), le voile flouté de la pause et de l'arrêt couvrait t
 
 ## Décision
 - **Rien n'est voilé ni estompé.** L'écran reste net et rien ne change de place.
-- **Le titre.** « En pause » ou « Arrêt » prend la place du temps, à sa taille. Le temps arrêté passe en petit au-dessus, à la place de « Enregistrement en cours ».
+- **Le titre.** Le temps reste en grand, mais grisé. « En pause » ou « Arrêt » s'écrit en petit au-dessus, à la place de « Enregistrement en cours » (demande de l'utilisateur à l'essai, 2026-11-18 ; la première version mettait « En pause » en grand à la place du temps).
 - **Présents, langue et espace** sont inchangés et restent réglables.
 - **L'onde s'arrête.** Elle reste nette, sans barres vives, et sa tête passe du brique au gris. Sur la tête, deux disques sombres de 56 px sont empilés : le micro barré au-dessus, le son de l'ordinateur barré dessous. Dans la barre du haut, les mêmes icônes sont barrées et les niveaux à plat ; la barre est hors d'atteinte.
 - **Les trois boutons gardent leur place et leur taille.**

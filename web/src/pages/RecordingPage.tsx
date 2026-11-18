@@ -585,29 +585,26 @@ export function RecordingPage({
             aria-label="Enregistrement"
           >
             <div className="cl-rec__head">
-              {held ? (
-                <>
-                  <span className="cl-rec__status">{formatClock(elapsed)}</span>
-                  <h2 className="cl-rec__time" id="cl-rec-held">
-                    {stopLeft !== null ? "Arrêt" : "En pause"}
-                  </h2>
-                </>
-              ) : (
-                <>
-                  <span className="cl-rec__status">
+              {/* Held: said in small above the time, the time greyed (ADR 0089). */}
+              <span className="cl-rec__status" data-held={held || undefined} aria-live="polite">
+                {held ? (
+                  stopLeft !== null ? "Arrêt" : "En pause"
+                ) : (
+                  <>
                     <span className="cl-recording__dot" aria-hidden />
                     Enregistrement en cours
-                  </span>
-                  {/* A width kept for its digits: nothing moves while the time goes by. */}
-                  <span
-                    className="cl-rec__time"
-                    aria-live="off"
-                    style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
-                  >
-                    {formatClock(elapsed)}
-                  </span>
-                </>
-              )}
+                  </>
+                )}
+              </span>
+              {/* A width kept for its digits: nothing moves while the time goes by. */}
+              <span
+                className="cl-rec__time"
+                data-held={held || undefined}
+                aria-live="off"
+                style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
+              >
+                {formatClock(elapsed)}
+              </span>
               {session && attendees && people && (
                 <div className="cl-rec__who">
                   <Counter attendees={attendees} size="lg" />
