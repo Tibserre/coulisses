@@ -3006,42 +3006,6 @@ a.cl-iconbtn {
   gap: var(--spacing-3);
 }
 
-.cl-live__bar {
-  position: relative;
-  height: 10px;
-  border-radius: var(--radius-full);
-  background: var(--color-background-muted);
-}
-
-.cl-live__segment {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: var(--radius-full);
-  background: var(--coulisses-chapter-quiet);
-  /* Only the colour eases: the place is set at each frame. */
-  transition: background var(--duration-medium) var(--ease-standard);
-}
-
-.cl-live__segment[data-kind="scene"] {
-  background: var(--coulisses-chapter-main-ink);
-}
-
-.cl-live__segment[data-kind="discussion"] {
-  background: var(--coulisses-chapter-side-ink);
-}
-
-.cl-live__moment {
-  position: absolute;
-  top: -6px;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  border-radius: 50%;
-  background: var(--color-background-surface);
-  box-shadow: 0 0 0 1.75px var(--color-accent);
-}
-
 .cl-mode {
   display: inline-flex;
   align-items: center;
@@ -3081,8 +3045,7 @@ a.cl-iconbtn {
 }
 
 /* Quiet buttons: a soft fill that rises on hover, the shortcut shown beside. */
-.cl-mode__switch,
-.cl-moment {
+.cl-mode__switch {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -3099,37 +3062,17 @@ a.cl-iconbtn {
     transform var(--duration-fast) var(--ease-standard);
 }
 
-.cl-mode__switch:hover,
-.cl-moment:hover {
+.cl-mode__switch:hover {
   transform: translateY(-1px);
   background: var(--coulisses-chapter-quiet);
 }
 
-.cl-mode__switch:active,
-.cl-moment:active {
+.cl-mode__switch:active {
   transform: translateY(1px);
 }
 
 .cl-mode__switch[data-kind="scene"] {
   color: var(--coulisses-chapter-main-ink);
-}
-
-.cl-moment {
-  color: var(--color-accent);
-}
-
-.cl-marks__remove {
-  border: 0;
-  background: none;
-  padding: 2px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-standard);
-}
-
-.cl-marks__remove:focus-visible {
-  opacity: 1;
 }
 
 /* Moments and notes from the recording, between the lines: an attenuated line, in
@@ -3926,17 +3869,6 @@ button.cl-tree__more:hover {
   border-bottom: 1px solid var(--color-border);
 }
 
-.cl-rec__now {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.cl-rec__now[data-paused] .cl-recording__dot {
-  background: var(--color-text-secondary);
-}
-
-/* The text's font: its digits all have the same width (the headings' do not). */
 .cl-rec__time {
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-lg);
@@ -4242,10 +4174,6 @@ button.cl-tree__more:hover {
   color: var(--color-text-secondary);
 }
 
-.cl-rec__line[data-kind="micro"] .cl-rec__what {
-  color: var(--color-text-secondary);
-}
-
 .cl-rec__spacer {
   flex: 1;
 }
@@ -4259,16 +4187,6 @@ button.cl-tree__more:hover {
 
 .cl-rec__alerts:not(:empty) {
   padding-top: var(--spacing-3);
-}
-
-.cl-rec__top {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-  width: 100%;
-  max-width: 50rem;
-  margin: 0 auto;
-  padding: var(--spacing-4) var(--spacing-6) 0;
 }
 
 .cl-rec__context {
@@ -4309,87 +4227,6 @@ button.cl-tree__more:hover {
   color: var(--color-text-secondary);
 }
 
-.cl-rec__flow {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3);
-  width: 100%;
-  max-width: 50rem;
-  margin: 0 auto;
-  padding: var(--spacing-5) var(--spacing-6) var(--spacing-10);
-}
-
-.cl-rec__lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-}
-
-.cl-rec__line,
-.cl-rec__annotate {
-  display: grid;
-  grid-template-columns: 4.5rem 1fr auto;
-  align-items: baseline;
-  gap: var(--spacing-3);
-}
-
-.cl-rec__at {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.cl-rec__what {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--spacing-2);
-  font-size: var(--text-large-size);
-  line-height: 1.6;
-}
-
-.cl-rec__line[data-kind="note"] .cl-rec__what {
-  color: var(--color-text-secondary);
-  font-style: italic;
-}
-
-.cl-rec__line[data-kind="key_moment"] .cl-rec__what,
-.cl-rec__line[data-kind="scene"] .cl-rec__what,
-.cl-rec__line[data-kind="discussion"] .cl-rec__what {
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-}
-
-.cl-rec__line:hover .cl-marks__remove,
-.cl-rec__line .cl-marks__remove:focus-visible {
-  opacity: 1;
-}
-
-/* The line to annotate: no box (direct editing), only the caret shows where one writes. */
-.cl-rec__annotate {
-  grid-template-columns: 4.5rem 1fr;
-  padding-top: var(--spacing-3);
-  border-top: 1px solid var(--color-border);
-}
-
-.cl-rec__annotate input {
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--color-text-primary);
-  font: inherit;
-  font-size: var(--font-size-base);
-  caret-color: var(--color-accent);
-}
-
-.cl-rec__annotate input::placeholder {
-  color: var(--color-text-secondary);
-}
-
 .cl-rec__none {
   display: flex;
   flex-direction: column;
@@ -4399,35 +4236,836 @@ button.cl-tree__more:hover {
   padding: 0 var(--spacing-6);
 }
 
-@media (max-width: 700px) {
-  .cl-rec__bar,
-  .cl-rec__alerts,
-  .cl-rec__top,
-  .cl-rec__flow {
-    padding-inline: var(--spacing-4);
-  }
-
-  .cl-rec__line,
-  .cl-rec__annotate {
-    grid-template-columns: 3.5rem 1fr auto;
-  }
-}
-
-/* In the thin bar: the same switches, compact, square cornered (no pill, ADR 0017). */
-.cl-rec__bar .cl-mode {
-  gap: var(--spacing-2);
-}
-
-.cl-rec__bar .cl-mode__switch,
-.cl-rec__bar .cl-moment {
-  height: 28px;
-  padding: 0 var(--spacing-2);
-  border-radius: var(--radius-element);
+/* D5a: the bar thin and quiet, the screen around its centre (the time, who is there, where
+   it goes), the wave going by, three gestures. */
+.cl-rec__bar {
+  position: relative;
+  height: 48px;
+  flex: none;
+  flex-wrap: nowrap;
+  gap: var(--spacing-1);
+  padding: 0 var(--spacing-4);
+  border-bottom: 0;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+.cl-rec__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--spacing-2);
+  background: var(--color-border);
+}
+
+.cl-rec__bar .cl-mode {
+  gap: var(--spacing-3);
 }
 
 .cl-rec__bar .cl-mode__now {
+  align-items: center;
+  font-family: inherit;
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__bar .cl-mode__now .cl-mode__dot {
+  color: var(--cl-mode-ink);
+  opacity: 0.6;
+  transform: none;
+}
+
+.cl-rec__bar .cl-mode__switch {
+  height: 28px;
+  padding: 0 var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-element);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+}
+
+.cl-rec__bar .cl-mode__switch:hover {
+  transform: none;
+  background: var(--color-background-muted);
+}
+
+.cl-rec kbd {
+  font: inherit;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0 5px;
+  line-height: 18px;
+}
+
+/* Over the screen, under the bar, at the left under the microphones: nothing moves. */
+.cl-rec__alerts {
+  position: absolute;
+  top: 48px;
+  left: var(--spacing-4);
+  z-index: 3;
+  width: min(22rem, calc(100% - 2 * var(--spacing-4)));
+  padding: 0;
+}
+
+.cl-rec__alerts:not(:empty) {
+  padding-top: 0;
+}
+
+.cl-rec__alerts .cl-undo {
+  align-self: flex-start;
+  box-shadow: 0 8px 24px -10px rgba(26, 26, 26, 0.25);
+}
+
+.cl-rec__stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-8, 32px);
+  padding: var(--spacing-4) var(--spacing-4) var(--spacing-10);
+  min-width: 0;
+}
+
+.cl-rec__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.cl-rec__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__status .cl-recording__dot {
+  animation: cl-rec-beat 1.8s ease-in-out infinite;
+}
+
+.cl-rec__status[data-paused] .cl-recording__dot {
+  background: var(--color-text-secondary);
+  animation: none;
+}
+
+@keyframes cl-rec-beat {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.cl-rec__head .cl-rec__time {
+  font-family: var(--font-family-heading);
+  font-size: 64px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-align: center;
+}
+
+.cl-rec__who {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: var(--spacing-4);
+}
+
+.cl-rec__faces {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  margin-top: 6px;
+  padding: 0 var(--spacing-2);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: none;
+  cursor: pointer;
+}
+
+.cl-rec__faces:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-rec__tip small {
+  display: block;
+  font-size: var(--font-size-xs);
+  opacity: 0.75;
+}
+
+.cl-rec__context {
+  justify-content: center;
+  gap: 2px;
+}
+
+.cl-rec__mid {
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+.cl-chip--quiet {
+  gap: var(--spacing-2);
+  height: 30px;
+  background: none;
+  color: var(--color-text-secondary);
+}
+
+.cl-spacepick__item[data-indent] {
+  padding-left: var(--spacing-6);
+}
+
+/* The number of people there: − N +, « présents » under it. */
+.cl-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cl-counter__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.cl-counter__num {
+  font-family: var(--font-family-heading);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  width: 84px;
+  font-size: 48px;
+}
+
+.cl-counter[data-size="md"] .cl-counter__num {
+  width: 52px;
+  font-size: 30px;
+}
+
+.cl-counter__step {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.cl-counter[data-size="md"] .cl-counter__step {
+  width: 28px;
+  height: 28px;
+}
+
+.cl-counter__step:hover:not(:disabled) {
+  background: var(--color-background-muted);
+}
+
+.cl-counter__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cl-counter__cap {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.2;
+}
+
+/* A person's disc, or an empty place (dashed). */
+.cl-faces {
+  display: inline-flex;
+}
+
+.cl-faces .cl-face + .cl-face {
+  margin-left: -6px;
+}
+
+.cl-face {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  box-shadow: 0 0 0 2px var(--color-background-body);
+}
+
+.cl-face[data-size="md"] {
+  width: 30px;
+  height: 30px;
+  font-size: var(--font-size-sm);
+}
+
+.cl-face[data-size="lg"] {
+  width: 44px;
+  height: 44px;
+  font-size: var(--font-size-base);
+  box-shadow: none;
+}
+
+.cl-face[data-empty] {
+  background: var(--color-background-body);
+  border: 1px dashed color-mix(in srgb, var(--color-text-primary) 40%, transparent);
+  color: var(--color-text-secondary);
+}
+
+.cl-face[data-over] {
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+}
+
+/* The wave: the present at 760 px, the future dotted after it, the oldest fading left. */
+.cl-rec__wave {
+  position: relative;
+  width: 840px;
+  max-width: 100%;
+  height: 204px;
+}
+
+.cl-wave {
+  --cl-wave-ink: color-mix(in srgb, var(--color-text-primary) 32%, transparent);
+  --cl-wave-mark: color-mix(in srgb, var(--color-accent) 75%, transparent);
+  position: absolute;
+  inset: 0;
+}
+
+.cl-wave__clip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 760px;
+  height: 204px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 140px);
+  mask-image: linear-gradient(to right, transparent, #000 140px);
+}
+
+.cl-wave__canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 760px;
+  height: 184px;
+}
+
+.cl-wave__mode {
+  position: absolute;
+  top: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--coulisses-chapter-side-ink) 45%, transparent);
+}
+
+.cl-wave__mode[data-kind="scene"] {
+  background: color-mix(in srgb, var(--color-accent) 50%, transparent);
+}
+
+.cl-wave__modelabel {
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Placed by their left edge at their time (translateX set at each frame). */
+.cl-wave__moment,
+.cl-wave__note,
+.cl-wave__event {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.cl-wave__moment {
+  top: 81px;
+  margin-left: -11px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-background-body);
+  color: var(--color-accent);
+}
+
+.cl-wave__event {
+  top: 32px;
+  margin-left: -8px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-background-body);
+  color: var(--color-text-secondary);
+}
+
+.cl-wave__bead {
+  position: absolute;
+  left: -3.5px;
+  top: 88.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-primary);
+  box-shadow: 0 0 0 3px var(--color-background-body);
+}
+
+.cl-wave__note[data-draft] .cl-wave__bead {
+  background: var(--color-accent);
+}
+
+.cl-wave__stem {
+  position: absolute;
+  left: 0;
+  top: 92px;
+  width: 1px;
+  height: 106px;
+  background: color-mix(in srgb, var(--color-text-primary) 30%, transparent);
+}
+
+/* Right-aligned on its stem: the text reaches back into the past. */
+.cl-wave__label {
+  position: absolute;
+  right: 10px;
+  top: 178px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.cl-wave__label b {
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+  margin-right: var(--spacing-2);
+}
+
+/* The cross that takes it back, on hovering what it takes back. */
+.cl-wave__remove {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  margin-left: -9px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.cl-wave__note .cl-wave__remove {
+  left: 0;
+  top: 70px;
+}
+
+.cl-wave__moment:hover .cl-wave__remove,
+.cl-wave__note:hover .cl-wave__remove,
+.cl-wave__remove:focus-visible {
+  opacity: 1;
+}
+
+.cl-wave__live {
+  position: absolute;
+  left: 743px;
+  top: 32px;
+  width: 15px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-background-body);
+}
+
+.cl-wave__live i {
+  display: block;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  animation: cl-wave-live 0.5s ease-in-out infinite alternate;
+}
+
+.cl-wave__live i:nth-child(1) {
+  height: 64px;
+}
+.cl-wave__live i:nth-child(2) {
+  height: 96px;
+  animation-duration: 0.38s;
+}
+.cl-wave__live i:nth-child(3) {
+  height: 48px;
+  animation-duration: 0.62s;
+}
+.cl-wave__live i:nth-child(4) {
+  height: 80px;
+  animation-duration: 0.44s;
+}
+
+@keyframes cl-wave-live {
+  from {
+    transform: scaleY(0.35);
+  }
+}
+
+.cl-wave__now {
+  position: absolute;
+  left: 760px;
+  top: 26px;
+  width: 1.5px;
+  height: 172px;
+  background: var(--color-accent);
+}
+
+.cl-wave[data-paused] .cl-wave__now {
+  background: var(--color-text-secondary);
+}
+
+.cl-wave__future {
+  position: absolute;
+  left: 770px;
+  top: 92px;
+  width: 70px;
+  border-top: 1.5px dotted color-mix(in srgb, var(--color-text-primary) 25%, transparent);
+}
+
+/* « Annoter… » at the present, right-aligned on it; typed, a field with no box. */
+.cl-rec__annotate {
+  position: absolute;
+  right: 88px;
+  top: 172px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: text;
+}
+
+.cl-rec__annotate input {
+  max-width: 560px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  text-align: right;
+  caret-color: var(--color-accent);
+}
+
+.cl-rec__annotate input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.cl-rec__at {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The three gestures: a key moment, stop (the largest, in the accent), pause. */
+.cl-rec__gestures {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.cl-rec__gesture {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 88px;
+  font-size: var(--font-size-sm);
+}
+
+.cl-rec__gesture kbd {
+  margin-left: 4px;
+  border: 0;
+  padding: 0;
+}
+
+.cl-rec__strong {
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-rec__round {
+  width: 52px;
+  height: 52px;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  box-shadow:
+    0 1px 1px rgba(26, 26, 26, 0.04),
+    0 8px 24px -10px rgba(26, 26, 26, 0.16);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.cl-rec__round:hover {
+  transform: translateY(-1px);
+}
+
+.cl-rec__round:active {
+  transform: translateY(1px);
+}
+
+.cl-rec__round[data-kind="moment"] {
+  color: var(--color-accent);
+}
+
+.cl-rec__round[data-kind="stop"] {
+  width: 68px;
+  height: 68px;
+  margin: 0;
+  border: 0;
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.08),
+    0 14px 28px -12px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+/* « Qui est là ? » */
+.cl-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  font-size: var(--font-size-sm);
+}
+
+.cl-sheet__count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.cl-sheet__count .cl-faces {
+  gap: 8px;
+}
+
+.cl-sheet__count .cl-faces .cl-face + .cl-face {
+  margin-left: 0;
+}
+
+.cl-sheet__rule {
+  width: 100%;
+  margin: var(--spacing-1) 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-sheet__say {
+  display: flex;
+  justify-content: space-between;
+}
+
+.cl-sheet__title {
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-sheet__opt,
+.cl-sheet__why {
+  color: var(--color-text-secondary);
+}
+
+.cl-sheet__why {
+  margin: calc(-1 * var(--spacing-2)) 0 0;
+}
+
+.cl-sheet__find {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  height: 36px;
+  padding: 0 var(--spacing-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-element);
+  background: var(--color-background-muted);
+  color: var(--color-text-secondary);
+}
+
+.cl-sheet__find:focus-within {
+  border-color: var(--color-accent);
+  background: var(--color-background-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.cl-sheet__find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.cl-sheet__clear {
+  display: flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cl-sheet__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px 4px;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.cl-sheet__cell {
+  position: relative;
+}
+
+.cl-sheet__tile {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: var(--radius-element);
+  background: none;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.cl-sheet__tile:hover {
+  background: var(--color-background-muted);
+}
+
+.cl-sheet__disc {
+  position: relative;
+}
+
+.cl-sheet__tile[data-on] .cl-face {
+  box-shadow:
+    0 0 0 2px var(--color-background-surface),
+    0 0 0 4px var(--color-accent);
+}
+
+.cl-sheet__ok {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--color-background-surface);
+}
+
+.cl-sheet__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+.cl-sheet__add {
+  border: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+  color: var(--color-text-secondary);
+}
+
+/* A guest: « Passer membre », at the top right of their disc. */
+.cl-sheet__member {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 12px);
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.cl-sheet__tipnote {
+  display: block;
+  font-size: var(--font-size-xs);
+  opacity: 0.75;
+}
+
+.cl-sheet__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-rec__status .cl-recording__dot,
+  .cl-wave__live i {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .cl-rec__wave {
+    transform: scale(0.8);
+    transform-origin: top center;
+  }
 }
 
 /* ---------------------------------------------- After the stop: the review builds itself --- */
@@ -6068,4 +6706,12 @@ button.cl-tree__more:hover {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-container, 10px);
   background: var(--color-background-surface);
+}
+
+/* Said quietly, over the screen: a ground so that it reads over the wave. */
+.cl-rec__quiet {
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-element);
+  background: var(--color-background-body);
 }

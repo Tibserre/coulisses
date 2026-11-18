@@ -108,3 +108,21 @@ export function attendeesOf(
   const unnamed = total - ids.length;
   return { ids, count: total, unnamed: unnamed > 0 ? unnamed : null };
 }
+
+type Present = { ids: number[]; count: number };
+
+/** One fewer (D5a): an unnamed one first; when all have a name, the last one checked. */
+export function fewerAttendees(was: Present): Present {
+  if (was.count === 0) return was;
+  return was.count > was.ids.length
+    ? { ...was, count: was.count - 1 }
+    : { ids: was.ids.slice(0, -1), count: was.count - 1 };
+}
+
+/** Checked or unchecked: unchecked leaves an unnamed place; checked when every place has a
+ *  name, the number goes up (`attendeesOf`). */
+export function toggleAttendee(was: Present, id: number): Present {
+  return was.ids.includes(id)
+    ? { ids: was.ids.filter((x) => x !== id), count: was.count }
+    : { ids: [...was.ids, id], count: was.count };
+}

@@ -3,31 +3,39 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
 import {
-  ArrowRight,
   MicOff,
   Monitor,
   MonitorOff,
   Pause,
-  PenLine,
   Play,
   Square,
   Star,
-  X,
 } from "lucide-react";
 import {
   api,
+  type Marker,
   type MarkerKind,
+  type Person,
   type Project,
   type RecordingState,
   type Session,
   type Space,
+  type TimedNote,
   type TrackState,
 } from "../api.ts";
+import {
+  AttendeesSheet,
+  Counter,
+  Faces,
+  useAttendees,
+  type Attendees,
+} from "../components/AttendeesSheet.tsx";
+import { LiveWave } from "../components/LiveWave.tsx";
 import { LevelMeter } from "../components/LevelMeter.tsx";
 import { MicsControl } from "../components/MicsControl.tsx";
 import { keepStopProblem } from "../stopNotice.ts";
-import { LiveStrip } from "../components/LiveStrip.tsx";
 import { RecordingContext } from "../components/RecordingContext.tsx";
 import { formatClock } from "../format.ts";
 import { currentMode, type Mode } from "../liveStrip.ts";
@@ -38,12 +46,12 @@ import { KIND_LABEL } from "../transcript.ts";
 const OTHER: Record<Mode, Mode> = { scene: "discussion", discussion: "scene" };
 const KEY: Record<Mode, string> = { scene: "J", discussion: "D" };
 
-/** While recording (spec §7.2, ADR 0056): a thin bar (the time, the level, the computer's
- *  sound to cut or bring back, play or discussion, a key moment, pause, stop), the alerts
- *  when there are some, where it goes and who is there (changed in place), then what is
- *  marked as it goes, at its time, like the transcript it will become: annotations, key
- *  moments, play and discussion. The recording is made by the service: leaving or closing
- *  this page does not stop it. */
+/** While recording (spec §7.2, ADR 0056, D5a): a thin bar (the microphones, the computer's
+ *  sound, play or discussion), the alerts over the screen when there are some; at the
+ *  centre, that it records, the time, who is there (a number, the names if one wants), its
+ *  language and where it goes; then the wave going by, with what is marked on it, and the
+ *  three gestures: a key moment, stop, pause. The recording is made by the service:
+ *  leaving or closing this page does not stop it. */
 export function RecordingPage({
   spaces,
   projects,
@@ -94,6 +102,10 @@ export function RecordingPage({
   /** Recorded time of the note's first letter: where it belongs. */
   const [noteAt, setNoteAt] = useState<number | null>(null);
   const noteInput = useRef<HTMLInputElement>(null);
+  /** « Annoter… » turned into its field (N, or a click). */
+  const [annotating, setAnnotating] = useState(false);
+  /** « Qui est là ? » open. */
+  const [sheet, setSheet] = useState(false);
   /** What was just taken back, offered back for a few seconds (nothing lost to a slip). */
   const [undo, setUndo] = useState<{
     label: string;
@@ -122,7 +134,19 @@ export function RecordingPage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: text.trim(), at_s: at }),
           keepalive: true,
-        }).catch(() => undefined); // the recording ended meanwhile: nothing to attach it to
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error(String(r.status));
+          })
+          .catch(() => {
+            // Refused or lost: said on the session's page, with its text (P8).
+            const mine = latest.current?.session_id;
+            if (mine)
+              keepStopProblem(
+                mine,
+                `Une annotation n'a pas pu être envoyée en quittant l'enregistrement (elle datait de ${formatClock(at)}) : « ${text.trim()} ». Copiez-la dans les notes de la séance.`,
+              );
+          });
       }
     },
     [],
@@ -251,6 +275,21 @@ export function RecordingPage({
       (e: Error) => setError(e.message),
     );
   }, [sessionId]);
+  const [people, setPeople] = useState<Person[] | null>(null);
+  const spaceId = session?.space_id ?? null;
+  const loadPeople = useCallback(async () => {
+    if (spaceId === null) return;
+    try {
+      setPeople((await api.people(spaceId)).filter((p) => !p.archived));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [spaceId]);
+  useEffect(() => {
+    setPeople(null);
+    void loadPeople();
+  }, [loadPeople]);
+  const attendees = useAttendees(session, setSession, setError);
 
   // Space: pause or resume. J, D: play or discussion. M: a key moment. N: write a note.
   // In a field or a list, keys keep their own meaning (rules/web.md); on a button just
@@ -282,7 +321,10 @@ export function RecordingPage({
       else if (key === "d" && mode?.mode !== "discussion")
         void mark("discussion");
       else if (key === "m") void mark("key_moment");
-      else if (key === "n") noteInput.current?.focus();
+      else if (key === "n") {
+        setAnnotating(true);
+        noteInput.current?.focus();
+      }
       else return;
       e.preventDefault();
     };
@@ -335,33 +377,29 @@ export function RecordingPage({
       : "Micro coupé";
   const elapsed = state?.elapsed_s ?? 0;
   const mics = state ? microphones(state) : [];
-  const marks = state
-    ? [
-        ...state.markers.map((m) => ({
-          key: `m${m.id}`,
-          at: m.at_s,
-          marker: m,
-          note: null,
-          said: null,
-        })),
-        ...state.notes.map((n) => ({
-          key: `n${n.id}`,
-          at: n.at_s,
-          marker: null,
-          note: n,
-          said: null,
-        })),
-        ...micEvents(timelineMics(state)).map((e) => ({
-          key: `micro-${e.key}`,
-          at: e.at,
-          marker: null,
-          note: null,
-          said: e.text,
-        })),
-      ].sort((a, b) => a.at - b.at)
-    : [];
 
   const system = state?.system ?? null;
+  const space = spaces.find((s) => s.id === session?.space_id);
+
+  /** Taken back by its cross, offered back for a few seconds (nothing lost to a slip). */
+  const removeMarker = (marker: Marker) =>
+    void act(() => api.unmark(marker.id)).then(
+      (done) =>
+        done &&
+        setUndo({
+          label: `${marker.kind === "key_moment" ? "Moment clé" : KIND_LABEL[marker.kind]} à ${formatClock(marker.at_s)} retiré`,
+          restore: () => api.mark(marker.kind, marker.at_s),
+        }),
+    );
+  const removeNote = (taken: TimedNote) =>
+    void act(() => api.removeTimedNote(taken.id)).then(
+      (done) =>
+        done &&
+        setUndo({
+          label: `Annotation de ${formatClock(taken.at_s)} retirée`,
+          restore: () => api.addTimedNote(taken.text, taken.at_s),
+        }),
+    );
 
   return (
     <div className="cl-page cl-rec">
@@ -383,63 +421,52 @@ export function RecordingPage({
       {state && (
         <>
           <header inert={veilShown || undefined} className="cl-rec__bar">
-            <span className="cl-rec__now" data-paused={paused || undefined}>
-              <span className="cl-recording__dot" aria-hidden />
-              {/* A width kept for its digits: nothing moves while the time goes by. */}
-              <span
-                className="cl-rec__time"
-                aria-live="off"
-                style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
-              >
-                {formatClock(elapsed)}
-              </span>
-            </span>
             <MicsControl mics={mics} act={act} />
             {system && (
-              // The computer's sound: its icon and its level are one button (ADR 0056);
-              // cut, the icon is crossed and the level greyed and flat.
-              <button
-                type="button"
-                className="cl-rec__system"
-                data-muted={system.muted || undefined}
-                title={
-                  system.muted
-                    ? "Rétablir le son de l'ordinateur"
-                    : "Couper le son de l'ordinateur"
-                }
-                aria-label={
-                  system.muted
-                    ? "Son de l'ordinateur coupé. Le rétablir"
-                    : "Son de l'ordinateur. Le couper"
-                }
-                onClick={(e) => {
-                  e.currentTarget.blur();
-                  void act(() => api.muteSystem(!system.muted));
-                }}
-              >
-                {system.muted ? (
-                  <MonitorOff size={18} strokeWidth={1.75} aria-hidden />
-                ) : (
-                  <Monitor size={18} strokeWidth={1.75} aria-hidden />
-                )}
-                <span className="cl-rec__meter">
-                  <LevelMeter
-                    level={system.muted ? 0 : meterValue(system.levels.rms_db)}
-                    peak={system.muted ? 0 : meterValue(system.levels.peak_db)}
-                    clipping={!system.muted && system.clipping}
-                  />
-                </span>
-              </button>
+              <>
+                <span className="cl-rec__sep" aria-hidden />
+                {/* The computer's sound: its icon and its level are one button (ADR 0056);
+                    cut, the icon is crossed and the level greyed and flat. */}
+                <button
+                  type="button"
+                  className="cl-rec__system"
+                  data-muted={system.muted || undefined}
+                  title={
+                    system.muted
+                      ? "Rétablir le son de l'ordinateur"
+                      : "Couper le son de l'ordinateur"
+                  }
+                  aria-label={
+                    system.muted
+                      ? "Son de l'ordinateur coupé. Le rétablir"
+                      : "Son de l'ordinateur. Le couper"
+                  }
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    void act(() => api.muteSystem(!system.muted));
+                  }}
+                >
+                  {system.muted ? (
+                    <MonitorOff size={16} strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <Monitor size={16} strokeWidth={1.75} aria-hidden />
+                  )}
+                  <span className="cl-rec__meter">
+                    <LevelMeter
+                      level={system.muted ? 0 : meterValue(system.levels.rms_db)}
+                      peak={system.muted ? 0 : meterValue(system.levels.peak_db)}
+                      clipping={!system.muted && system.clipping}
+                    />
+                  </span>
+                </button>
+              </>
             )}
             <span className="cl-rec__spacer" />
             {mode ? (
               <span className="cl-mode" data-kind={mode.mode}>
                 <span className="cl-mode__now">
                   <span className="cl-mode__dot" aria-hidden />
-                  {KIND_LABEL[mode.mode]}
-                  <span className="cl-mode__since">
-                    depuis {formatClock(mode.since)}
-                  </span>
+                  {KIND_LABEL[mode.mode]} depuis {formatClock(mode.since)}
                 </span>
                 <button
                   type="button"
@@ -450,7 +477,6 @@ export function RecordingPage({
                   }}
                 >
                   {KIND_LABEL[OTHER[mode.mode]]}
-                  <ArrowRight size={14} strokeWidth={1.75} aria-hidden />
                   <kbd>{KEY[OTHER[mode.mode]]}</kbd>
                 </button>
               </span>
@@ -473,40 +499,9 @@ export function RecordingPage({
                 ))}
               </span>
             )}
-            <button
-              type="button"
-              className="cl-moment"
-              onClick={(e) => {
-                e.currentTarget.blur();
-                void mark("key_moment");
-              }}
-              title="Marquer ce moment (M)"
-            >
-              <Star size={16} strokeWidth={1.75} aria-hidden />
-              Moment
-              <kbd>M</kbd>
-            </button>
-            <Button
-              label={paused ? "Reprendre" : "Pause"}
-              size="sm"
-              icon={
-                paused ? (
-                  <Play size={14} strokeWidth={1.75} />
-                ) : (
-                  <Pause size={14} strokeWidth={1.75} />
-                )
-              }
-              clickAction={async () => void (await toggle())}
-            />
-            <Button
-              label="Arrêter"
-              variant="primary"
-              size="sm"
-              icon={<Square size={12} strokeWidth={1.75} />}
-              clickAction={stop}
-            />
           </header>
 
+          {/* Over the screen, under the bar: nothing below moves when one comes. */}
           <div
             inert={veilShown || undefined}
             className="cl-rec__alerts"
@@ -519,12 +514,9 @@ export function RecordingPage({
                 description="Coulisses ne répond plus : si le service a été arrêté, l'enregistrement a été fermé avec ce qui était enregistré. Rechargez la page quand il est relancé."
               />
             )}
+            {error && <Banner status="error" title="Refusé" description={error} />}
             {state.error && (
-              <Banner
-                status="error"
-                title="Le micro"
-                description={state.error}
-              />
+              <Banner status="error" title="Le micro" description={state.error} />
             )}
             {state.dropouts > 0 && (
               <Banner
@@ -552,7 +544,7 @@ export function RecordingPage({
               !system.muted &&
               system.too_quiet &&
               !system.error && (
-                <Text type="supporting" as="p">
+                <Text type="supporting" as="p" className="cl-rec__quiet">
                   Rien du son de l'ordinateur depuis un moment. Si des personnes
                   parlent à distance, autorisez l'audio du système dans Réglages
                   Système, Confidentialité et sécurité, Enregistrement de
@@ -569,112 +561,6 @@ export function RecordingPage({
                 description="Presque rien n'arrive depuis un moment : est-ce le bon micro, est-il assez près, et l'accès au micro est-il autorisé (Réglages Système, Confidentialité et sécurité, Micro) ?"
               />
             )}
-          </div>
-
-          <div inert={veilShown || undefined} className="cl-rec__top">
-            {session && (
-              <RecordingContext
-                session={session}
-                spaces={spaces}
-                projects={projects}
-                onChanged={(next) => {
-                  setSession(next);
-                  onMoved();
-                }}
-                onError={setError}
-              />
-            )}
-            <LiveStrip
-              markers={state.markers}
-              elapsed={elapsed}
-              paused={paused}
-            />
-          </div>
-
-          <main
-            inert={veilShown || undefined}
-            className="cl-rec__flow"
-            aria-label="Déroulé de la séance"
-          >
-            {marks.length === 0 && (
-              <Text color="secondary" as="p">
-                Les annotations et les moments s'affichent ici, à leur heure.
-              </Text>
-            )}
-            <ol className="cl-rec__lines">
-              {marks.map((item) => (
-                <li
-                  key={item.key}
-                  className="cl-rec__line"
-                  data-kind={
-                    item.marker?.kind ?? (item.note ? "note" : "micro")
-                  }
-                >
-                  <span className="cl-rec__at">{formatClock(item.at)}</span>
-                  <span className="cl-rec__what">
-                    {item.marker ? (
-                      item.marker.kind === "key_moment" ? (
-                        <>
-                          <Star size={13} strokeWidth={1.75} aria-hidden />{" "}
-                          Moment clé
-                        </>
-                      ) : (
-                        <>
-                          <span className="cl-mode__dot" aria-hidden />{" "}
-                          {KIND_LABEL[item.marker.kind]}
-                        </>
-                      )
-                    ) : item.note ? (
-                      <>
-                        <PenLine size={13} strokeWidth={1.75} aria-hidden />{" "}
-                        {item.note.text}
-                      </>
-                    ) : (
-                      item.said
-                    )}
-                  </span>
-                  {(item.marker || item.note) && (
-                    <button
-                      type="button"
-                      className="cl-marks__remove"
-                      aria-label="Retirer"
-                      title="Retirer"
-                      onClick={(e) => {
-                        e.currentTarget.blur();
-                        const marker = item.marker;
-                        const taken = item.note;
-                        void act(() =>
-                          marker
-                            ? api.unmark(marker.id)
-                            : api.removeTimedNote(taken!.id),
-                        ).then(
-                          (done) =>
-                            done &&
-                            setUndo(
-                              marker
-                                ? {
-                                    label: `${marker.kind === "key_moment" ? "Moment clé" : KIND_LABEL[marker.kind]} à ${formatClock(marker.at_s)} retiré`,
-                                    restore: () =>
-                                      api.mark(marker.kind, marker.at_s),
-                                  }
-                                : {
-                                    label: `Annotation de ${formatClock(taken!.at_s)} retirée`,
-                                    restore: () =>
-                                      api.addTimedNote(
-                                        taken!.text,
-                                        taken!.at_s,
-                                      ),
-                                  },
-                            ),
-                        );
-                      }}
-                    >
-                      <X size={13} strokeWidth={1.75} />
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ol>
             {undo && (
               <div className="cl-notice cl-undo" role="status">
                 {undo.label}
@@ -691,41 +577,187 @@ export function RecordingPage({
                 </button>
               </div>
             )}
-            <label className="cl-rec__annotate">
-              <span className="cl-rec__at">
-                {noteAt !== null && note ? formatClock(noteAt) : "N"}
+          </div>
+
+          <main
+            inert={veilShown || undefined}
+            className="cl-rec__stage"
+            aria-label="Enregistrement"
+          >
+            <div className="cl-rec__head">
+              <span className="cl-rec__status" data-paused={paused || undefined}>
+                <span className="cl-recording__dot" aria-hidden />
+                {paused ? "En pause" : "Enregistrement en cours"}
               </span>
-              <input
-                ref={noteInput}
-                type="text"
-                value={note}
-                placeholder="Annoter… l'annotation prend l'heure de sa première lettre"
-                aria-label="Annotation horodatée"
-                onChange={(e) => {
-                  const typed = e.target.value;
-                  if (!note && typed) setNoteAt(latest.current?.elapsed_s ?? 0);
-                  if (!typed) setNoteAt(null);
-                  setNote(typed);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void saveNote();
-                  } else if (e.key === "Escape") {
-                    e.currentTarget.blur(); // it stays, to be sent or erased by hand
-                  }
-                }}
+              {/* A width kept for its digits: nothing moves while the time goes by. */}
+              <span
+                className="cl-rec__time"
+                aria-live="off"
+                style={{ minWidth: elapsed >= 3600 ? "7ch" : "5ch" }}
+              >
+                {formatClock(elapsed)}
+              </span>
+              {session && attendees && people && (
+                <div className="cl-rec__who">
+                  <Counter attendees={attendees} size="lg" />
+                  <Tooltip
+                    content={
+                      <span className="cl-rec__tip">
+                        Dire qui est là
+                        <small>{whoSaid(attendees, people)}</small>
+                      </span>
+                    }
+                    placement="below"
+                  >
+                    <button
+                      type="button"
+                      className="cl-rec__faces"
+                      aria-label={`Dire qui est là : ${whoSaid(attendees, people)}`}
+                      onClick={() => setSheet(true)}
+                    >
+                      <Faces attendees={attendees} people={people} max={6} />
+                    </button>
+                  </Tooltip>
+                </div>
+              )}
+              {session && (
+                <RecordingContext
+                  session={session}
+                  spaces={spaces}
+                  projects={projects}
+                  onChanged={(next) => {
+                    setSession(next);
+                    onMoved();
+                  }}
+                  onError={setError}
+                />
+              )}
+            </div>
+
+            <div className="cl-rec__wave">
+              <LiveWave
+                elapsed={elapsed}
+                rmsDb={state.levels.rms_db}
+                paused={paused}
+                markers={state.markers}
+                notes={state.notes}
+                events={micEvents(timelineMics(state))}
+                draftAt={note ? noteAt : null}
+                onRemoveMarker={removeMarker}
+                onRemoveNote={removeNote}
               />
-            </label>
-            {error && (
-              <Banner status="error" title="Refusé" description={error} />
-            )}
-            <Text type="supporting" as="p">
-              Espace : pause. J, D : jeu ou discussion. M : moment clé. N :
-              annoter. Vous pouvez quitter cette page : l'enregistrement
-              continue.
-            </Text>
+              {annotating || note ? (
+                <label className="cl-rec__annotate">
+                  {noteAt !== null && note && (
+                    <span className="cl-rec__at">{formatClock(noteAt)}</span>
+                  )}
+                  <input
+                    ref={noteInput}
+                    type="text"
+                    value={note}
+                    // As wide as what is typed: its time stays beside it.
+                    size={Math.max(note.length + 1, 44)}
+                    autoFocus
+                    placeholder="Annoter… elle prend l'heure de sa première lettre"
+                    aria-label="Annotation horodatée"
+                    onBlur={() => {
+                      if (!note) setAnnotating(false);
+                    }}
+                    onChange={(e) => {
+                      const typed = e.target.value;
+                      if (!note && typed) setNoteAt(latest.current?.elapsed_s ?? 0);
+                      if (!typed) setNoteAt(null);
+                      setNote(typed);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void saveNote();
+                      } else if (e.key === "Escape") {
+                        e.currentTarget.blur(); // it stays, to be sent or erased by hand
+                      }
+                    }}
+                  />
+                </label>
+              ) : (
+                <button
+                  type="button"
+                  className="cl-rec__annotate"
+                  onClick={() => setAnnotating(true)}
+                >
+                  Annoter… <kbd>N</kbd>
+                </button>
+              )}
+            </div>
+
+            <div className="cl-rec__gestures">
+              <span className="cl-rec__gesture">
+                <button
+                  type="button"
+                  className="cl-rec__round"
+                  aria-label="Marquer un moment"
+                  data-kind="moment"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    void mark("key_moment");
+                  }}
+                >
+                  <Star size={20} fill="currentColor" stroke="none" aria-hidden />
+                </button>
+                <span>
+                  Moment<kbd>M</kbd>
+                </span>
+              </span>
+              <span className="cl-rec__gesture">
+                <button
+                  type="button"
+                  className="cl-rec__round"
+                  data-kind="stop"
+                  aria-label="Arrêter l'enregistrement"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    void stop();
+                  }}
+                >
+                  <Square size={22} fill="currentColor" stroke="none" aria-hidden />
+                </button>
+                <span className="cl-rec__strong">Arrêter</span>
+              </span>
+              <span className="cl-rec__gesture">
+                <button
+                  type="button"
+                  className="cl-rec__round"
+                  aria-label={paused ? "Reprendre" : "Mettre en pause"}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    void toggle();
+                  }}
+                >
+                  {paused ? (
+                    <Play size={20} fill="currentColor" stroke="none" aria-hidden />
+                  ) : (
+                    <Pause size={20} fill="currentColor" stroke="none" aria-hidden />
+                  )}
+                </button>
+                <span>
+                  {paused ? "Reprendre" : "Pause"}
+                  <kbd>Espace</kbd>
+                </span>
+              </span>
+            </div>
           </main>
+          {session && attendees && people && (
+            <AttendeesSheet
+              isOpen={sheet}
+              onClose={() => setSheet(false)}
+              session={session}
+              spaceName={space?.name ?? "l'espace"}
+              people={people}
+              attendees={attendees}
+              onPeopleChanged={loadPeople}
+              onError={setError}
+            />
+          )}
         </>
       )}
       {state && (paused || stopLeft !== null) && (
@@ -839,6 +871,17 @@ export function RecordingPage({
       )}
     </div>
   );
+}
+
+/** Who is named, and how many are not: « Marie, Paul · 2 sans nom ». */
+function whoSaid(attendees: Attendees, people: Person[]): string {
+  const names = attendees.ids
+    .map((id) => people.find((p) => p.id === id)?.name)
+    .filter(Boolean)
+    .join(", ");
+  const unnamed = attendees.count - attendees.ids.length;
+  const rest = unnamed > 0 ? `${unnamed} sans nom` : "";
+  return [names, rest].filter(Boolean).join(" · ") || "Personne pour l'instant";
 }
 
 /** The alerts of a microphone added: it never stops the main recording. */
