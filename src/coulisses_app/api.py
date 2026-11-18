@@ -86,10 +86,6 @@ class AppInfo(BaseModel):
     """The service's process: the app in the Dock takes back one left running alone."""
     profile: str
     recovery_problems: list[str]
-    processing_error: str | None
-    """As before, for the interface of today: the technical detail of the loop's own last
-    error, or else of the failure to release the sessions waiting for a model. Replaced by
-    `loop_error` and `waiting_release_error`, said apart and in French."""
     loop_error: str | None = None
     """Said in French: the processing loop's own last error (not a job's); the queue may be
     stuck, the loop tries again every two seconds."""
@@ -532,9 +528,6 @@ def create_app(
             pid=os.getpid(),
             profile=profile,
             recovery_problems=problems,
-            processing_error=(processor.loop_error or processor.release_error)
-            if processor
-            else None,
             loop_error=LOOP_ERROR if processor and processor.loop_error else None,
             loop_error_detail=processor.loop_error if processor else None,
             waiting_release_error=RELEASE_ERROR if processor and processor.release_error else None,
