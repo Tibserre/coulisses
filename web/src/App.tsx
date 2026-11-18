@@ -429,8 +429,9 @@ function Shell({ route }: { route: Route }) {
           <span>Coulisses</span>
         </a>
         <SearchBox sessions={sessions ?? []} />
+        {/* Neutral while recording: the gesture takes back to it, Stop is the one to see. */}
         <Button
-          variant="primary"
+          variant={recording ? "secondary" : "primary"}
           size="sm"
           label="Nouvelle note"
           icon={<Plus size={16} strokeWidth={1.75} />}
