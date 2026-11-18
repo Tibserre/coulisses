@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { ArrowUp, Check, Minus, Plus, Search, User, X } from "lucide-react";
+import { Check, Minus, Plus, Search, User, X } from "lucide-react";
 import { api, type Person, type Session } from "../api.ts";
 import { plural } from "../format.ts";
 import { attendeesOf, fewerAttendees, toggleAttendee } from "../processing.ts";
@@ -80,13 +80,17 @@ const initial = (name: string) => name.trim().charAt(0).toLocaleUpperCase("fr");
 const bare = (s: string) =>
   s.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("fr").trim();
 
-/** A person's disc: their initial in their colour, or an empty place. */
+/** A person's disc: their initial in their colour (a guest's outlined), or an empty place. */
 export function Face({ person, size = "md" }: { person?: Person; size?: "sm" | "md" | "lg" }) {
   return person ? (
     <span
       className="cl-face"
       data-size={size}
-      style={{ background: speakerTint(person.color_slot), color: speakerInk(person.color_slot) }}
+      data-guest={person.kind === "guest" || undefined}
+      style={{
+        background: person.kind === "guest" ? undefined : speakerTint(person.color_slot),
+        color: speakerInk(person.color_slot),
+      }}
       aria-hidden
     >
       {initial(person.name)}
@@ -261,7 +265,8 @@ export function AttendeesSheet({
             </button>
           )}
         </label>
-        <ul className="cl-sheet__grid" aria-label="Personnes de l'espace">
+        <div className="cl-sheet__scroll">
+          <ul className="cl-sheet__grid" aria-label="Personnes de l'espace">
           {found.map((p) => {
             const on = attendees.ids.includes(p.id);
             return (
@@ -298,24 +303,30 @@ export function AttendeesSheet({
                       aria-label={`Passer ${p.name} membre de ${spaceName}`}
                       onClick={() => void makeMember(p)}
                     >
-                      <ArrowUp size={11} strokeWidth={2.25} aria-hidden />
+                      <Plus size={12} strokeWidth={2.25} aria-hidden />
                     </button>
                   </Tooltip>
                 )}
               </li>
             );
           })}
-          {q && !exact && (
-            <li className="cl-sheet__cell">
-              <button type="button" className="cl-sheet__tile" onClick={() => void addGuest()}>
-                <span className="cl-face cl-sheet__add" data-size="lg" aria-hidden>
-                  <Plus size={16} strokeWidth={1.75} />
-                </span>
-                <span className="cl-sheet__name">Ajouter « {query.trim()} »</span>
-              </button>
-            </li>
+          </ul>
+          {q && found.length === 0 && (
+            <p className="cl-sheet__opt cl-sheet__none">Aucune personne de ce nom dans {spaceName}.</p>
           )}
-        </ul>
+          {q && !exact && (
+            <button type="button" className="cl-sheet__new" onClick={() => void addGuest()}>
+              <span className="cl-face" data-size="md" data-empty aria-hidden>
+                <Plus size={14} strokeWidth={1.75} />
+              </span>
+              <span className="cl-sheet__newtext">
+                <b>Ajouter « {query.trim()} »</b>
+                <small>Nouvelle personne, en invité</small>
+              </span>
+              <kbd>Entrée</kbd>
+            </button>
+          )}
+        </div>
         <div className="cl-sheet__foot">
           {said ? (
             <span role="status">
