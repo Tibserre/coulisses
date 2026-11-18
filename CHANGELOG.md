@@ -18,6 +18,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- relit les étapes quand le traitement s'arrête (seance)
 - fait suivre le son réel à l'onde et la fait défiler plus vite (enregistrement)
 - retire processing_error de /api/etat (etat)
 - dit en français l'échec d'une suppression au lieu d'une erreur 500 (modeles)
