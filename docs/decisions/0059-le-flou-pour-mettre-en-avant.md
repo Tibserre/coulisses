@@ -1,6 +1,6 @@
 # 0059 — Le flou, pour mettre une information au premier plan
 
-Statut : Acceptée (2026-10-21, choix de l'utilisateur : « un flou peut vraiment donner du cachet s'il est bien maîtrisé, autorise pour mettre en valeur des infos en avant »). Précise l'ADR 0017 et la direction artistique, qui excluaient tout « effet de matière » et le verre dépoli. Pour la pause et l'arrêt de l'enregistrement : précisé par 0089 (plus de voile, seule l'onde est floutée et estompée).
+Statut : Acceptée (2026-10-21, choix de l'utilisateur : « un flou peut vraiment donner du cachet s'il est bien maîtrisé, autorise pour mettre en valeur des infos en avant »). Précise l'ADR 0017 et la direction artistique, qui excluaient tout « effet de matière » et le verre dépoli. Pour la pause et l'arrêt de l'enregistrement : remplacé par 0089 (plus de voile ni de flou : l'écran d'enregistrement lui-même le dit).
 
 ## Contexte
 La direction artistique (0017) interdit grain, verre dépoli, halo et dégradé de fond, après l'écart de la finition « Lumière », jugée trop chargée et trop « IA ». Pour la pause de l'enregistrement, l'utilisateur veut un état visible de loin par les personnes présentes, qui les mette en confiance : tout est coupé, et ce qui est derrière n'est plus actif. Il juge qu'un flou bien maîtrisé donne du cachet quand il sert à mettre en avant.

@@ -5418,9 +5418,9 @@ button.cl-tree__more:hover {
 }
 
 /* ------------------------------------------------- Paused, stopping: said to the room --- */
-/* ADR 0089: the same screen, nothing else moves. « En pause » or « Arrêt » takes the
-   time's place, what is cut is said in large where the people are, the wave dims behind,
-   and two round buttons sit on the axis: the filled one is what counts now. */
+/* ADR 0089: no veil, nothing dimmed: the recording screen itself says it. Its title takes
+   the time's place, the wave stops (its head grey) with what is cut on it, the three
+   buttons keep their place. */
 
 .cl-rec {
   position: relative;
@@ -5430,77 +5430,41 @@ button.cl-tree__more:hover {
   margin: 0;
 }
 
-.cl-rec__where {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.cl-rec__stage[data-held] .cl-rec__where > :not(.cl-rec__cut) {
-  visibility: hidden;
-}
-
-.cl-rec__cut {
+/* On the wave's head: the microphones cut, then the computer's sound. */
+.cl-rec__cutd {
   position: absolute;
-  inset: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-}
-
-.cl-rec__cut span {
-  width: 84px;
-  height: 84px;
+  left: 732px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--color-background-muted);
-  color: var(--color-text-primary);
+  background: var(--color-text-primary);
+  color: var(--color-background-body);
+  box-shadow: 0 0 0 5px var(--color-background-body);
 }
 
-.cl-rec__stage[data-held] .cl-rec__wave {
-  filter: blur(5px);
-  opacity: 0.34;
+.cl-rec__cutd[data-at="mics"] {
+  top: 30px;
 }
 
-/* Both rows keep one height: the wave above does not move when held. */
-.cl-rec__gestures,
-.cl-rec__pair {
-  min-height: 146px;
+.cl-rec__cutd[data-at="system"] {
+  top: 98px;
 }
 
-.cl-rec__pair {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 44px;
-  margin-top: -10px;
-  outline: none;
+.cl-rec__round:disabled {
+  opacity: 0.38;
+  cursor: default;
+  transform: none;
 }
 
-/* The same width each, the labels overflowing: the pair sits on the axis. */
-.cl-rec__pair .cl-rec__gesture {
-  width: 108px;
-  white-space: nowrap;
-  font-size: var(--font-size-base);
-}
-
-/* The ring's room is kept around the button: it never touches the label. */
-.cl-rec__ring {
+/* The seconds of the stop: a white ring inside « Arrêter », nothing overflows. */
+.cl-rec__round[data-kind="stop"] {
   position: relative;
-  width: 108px;
-  height: 108px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.cl-rec__ring > svg {
+.cl-rec__ring {
   position: absolute;
   inset: 0;
   transform: rotate(-90deg);
@@ -5510,51 +5474,22 @@ button.cl-tree__more:hover {
 }
 
 .cl-rec__track {
-  stroke: var(--color-border);
+  stroke: rgba(255, 255, 255, 0.28);
 }
 
 .cl-rec__arc {
-  stroke: var(--color-accent);
-  stroke-dasharray: 320.4;
+  stroke: #fff;
+  stroke-dasharray: 175.9;
   animation: cl-rec-arc linear both;
 }
 
 @keyframes cl-rec-arc {
   from {
-    stroke-dashoffset: 320.4;
+    stroke-dashoffset: 175.9;
   }
   to {
     stroke-dashoffset: 0;
   }
-}
-
-.cl-rec__pair .cl-rec__round {
-  width: 80px;
-  height: 80px;
-  margin: 0;
-}
-
-.cl-rec__round[data-kind="line"] {
-  color: var(--color-accent);
-}
-
-.cl-rec__round[data-kind="line"] svg[class*="play"] {
-  color: var(--color-text-primary);
-}
-
-.cl-rec__round[data-kind="fill"],
-.cl-rec__pair .cl-rec__round[data-kind="stop"] {
-  border: 0;
-  background: var(--color-accent);
-  color: #fff;
-  box-shadow:
-    0 2px 4px rgba(26, 26, 26, 0.08),
-    0 16px 30px -14px color-mix(in srgb, var(--color-accent) 55%, transparent);
-}
-
-.cl-rec__round[aria-disabled] {
-  cursor: default;
-  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

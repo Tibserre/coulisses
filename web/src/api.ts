@@ -1051,6 +1051,8 @@ export const api = {
   /** Paused at once, stopped a moment later unless resumed (ADR 0058). */
   stopRecordingSoon: () =>
     send<{ state: RecordingState; delay_s: number }>("POST", "/api/enregistrement/arret-differe"),
+  /** Stopped now (« Arrêter » pressed again during the wait, ADR 0089). */
+  stopRecordingNow: () => send<StopResult>("POST", "/api/enregistrement/arret"),
   /** The stop taken back, the recording left paused (it was paused before « Arrêter »). */
   cancelStop: () => send<RecordingState>("POST", "/api/enregistrement/arret-annule"),
   /** How the last stop went: still under way, done (where to go), or failed. */

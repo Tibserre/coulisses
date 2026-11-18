@@ -1,27 +1,36 @@
 # 0089 — La pause et l'arrêt dans l'écran d'enregistrement, sans voile
 
-Statut : Acceptée (2026-11-18, planches EnregD5aPauseA et EnregD5aArretA validées par l'utilisateur sur la toile de maquettes, transmises par le rôle Design). Remplace l'écran d'arrêt de 0058 (« une grande icône stop dans un disque », la barre de 3 s) et l'écran de pause décrit en spec §7.2 d'après 0059 ; précise la mesure du flou de 0059 pour ces deux états. Le reste de 0058 (pas de confirmation, 3 s pour reprendre, la relecture qui se construit) et le principe de 0059 tiennent.
+Statut : Acceptée (2026-11-18). Consignes de l'utilisateur transmises par le rôle Design :
+- aucun voile, rien d'estompé ;
+- l'écran lui-même dit la pause ;
+- les trois boutons restent en place, « Pause » devient « Reprendre » ;
+- l'anneau fait le tour d'« Arrêter » ;
+- un second appui sur « Arrêter » arrête tout de suite.
+
+Les planches EnregD5aPause et EnregD5aArret ont ensuite été validées. Une première version, en paire de ronds sur une onde floutée, a été écartée par l'utilisateur.
+
+Cette décision remplace l'écran d'arrêt de 0058 (la grande icône stop dans un disque, la barre de 3 s) et l'écran de pause décrit en spec §7.2 d'après 0059. Le reste de 0058 tient : pas de confirmation, 3 s pour reprendre, la relecture qui se construit.
 
 ## Contexte
-Avec l'écran D5a (0088), le voile flouté de la pause et de l'arrêt couvrait tout l'écran et changeait toute sa disposition. L'utilisateur veut voir de loin que c'est en pause ou que ça s'arrête, et que tout est coupé, sans que la page change de forme. Principes : P8 (les alertes ne sont jamais cachées).
+Avec l'écran D5a (0088), le voile flouté de la pause et de l'arrêt couvrait tout l'écran et en changeait la forme. L'utilisateur veut voir clairement que l'enregistrement est en pause, sur l'écran d'enregistrement lui-même et sans rien estomper. Principe concerné : P8 (les alertes ne sont jamais cachées).
 
 ## Décision
-- **Le même écran**, sans voile : rien d'autre ne change de place.
-- **Le titre** : « En pause » ou « Arrêt » prend la place du temps, à sa taille. Le temps, arrêté, passe en petit au-dessus, sans le point rouge.
-- **Ce qui est coupé, en grand** : deux disques gris de 84 px (le micro barré, le son de l'ordinateur barré) prennent la place des présents, de la langue et de l'espace, à la même hauteur. Dans la barre du haut, les mêmes icônes sont barrées et les niveaux à plat ; la barre est hors d'atteinte.
-- **L'onde** reste derrière, floutée (5 px) et estompée (opacité 0,34). Elle ne défile plus et ne se manipule plus.
-- **Deux ronds de 80 px**, de part et d'autre du centre : « Arrêter » à gauche, « Reprendre » à droite. « Moment » disparaît.
-  - Le rond plein, couleur brique, est ce qui compte maintenant.
-  - En pause, « Reprendre » est plein (Espace).
-  - À l'arrêt, « Arrêter » est plein et « Reprendre » est clair (Espace, Échap).
-  - Les libellés sont sous les ronds. Il n'y a aucune phrase visible : « La séance s'ouvre dans un instant » est seulement lu par les lecteurs d'écran.
-- **Les secondes de l'arrêt** : un anneau brique de 4 px se remplit autour du rond « Arrêter » pendant le délai du service. Il a une marge réservée de 14 px, pour ne jamais toucher le libellé. Avec moins d'animations, il avance par paliers d'une seconde.
+- **Rien n'est voilé ni estompé.** L'écran reste net et rien ne change de place.
+- **Le titre.** « En pause » ou « Arrêt » prend la place du temps, à sa taille. Le temps arrêté passe en petit au-dessus, à la place de « Enregistrement en cours ».
+- **Présents, langue et espace** sont inchangés et restent réglables.
+- **L'onde s'arrête.** Elle reste nette, sans barres vives, et sa tête passe du brique au gris. Sur la tête, deux disques sombres de 56 px sont empilés : le micro barré au-dessus, le son de l'ordinateur barré dessous. Dans la barre du haut, les mêmes icônes sont barrées et les niveaux à plat ; la barre est hors d'atteinte.
+- **Les trois boutons gardent leur place et leur taille.**
+  - « Moment » est grisé et inactif.
+  - « Arrêter » ne change pas.
+  - « Pause » devient « Reprendre » (triangle), avec Espace en pause, et Espace ou Échap à l'arrêt.
+- **L'arrêt.** Un anneau blanc de 4 px fait le tour à l'intérieur du rond « Arrêter » pendant le délai du service, sans rien qui dépasse ; puis la séance s'ouvre. Un second appui sur « Arrêter » arrête tout de suite (`POST /api/enregistrement/arret`, la route de la barre des menus) ; les lecteurs d'écran le lisent « Arrêter tout de suite ». Si macOS demande moins d'animations, l'anneau avance par paliers d'une seconde.
 - **Les alertes** restent au premier plan, comme pendant l'enregistrement.
 
 ## Conséquences
-- Il n'y a plus de voile, donc plus de repli opaque pour `prefers-reduced-transparency` : l'onde estompée reste lisible comme un fond. Le flou de 0059 ne s'applique plus qu'à l'onde.
-- Pendant la pause, les présents, la langue et l'espace ne se changent plus. Ils redeviennent accessibles à la reprise.
-- Pendant l'arrêt, « Arrêter » ne fait rien de plus : l'arrêt est déjà en route.
+- Le flou de 0059 n'a plus d'usage dans l'enregistrement.
+- Rien à l'écran n'annonce le second appui : seul le libellé d'accessibilité le dit.
+- Les présents se changent aussi en pause, ce qui est utile quand quelqu'un arrive.
 
 ## Alternatives écartées
-- **Garder le voile de 0059 par-dessus D5a** : il cachait l'écran entier et le faisait changer de forme.
+- **Le voile de 0059 par-dessus D5a** : il cachait tout l'écran.
+- **Une paire de ronds Arrêter et Reprendre sur une onde floutée** (planches EnregD5aPauseA et EnregD5aArretA) : écartée par l'utilisateur, qui ne veut rien d'estompé.

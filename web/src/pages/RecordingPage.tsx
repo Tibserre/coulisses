@@ -41,6 +41,7 @@ import { currentMode, type Mode } from "../liveStrip.ts";
 import { meterValue } from "../meter.ts";
 import { micEvents, microphones, timelineMics } from "../microphones.ts";
 import { KIND_LABEL } from "../transcript.ts";
+import { recordingKey } from "../recordingKeys.ts";
 
 const OTHER: Record<Mode, Mode> = { scene: "discussion", discussion: "scene" };
 const KEY: Record<Mode, string> = { scene: "J", discussion: "D" };
@@ -74,22 +75,13 @@ export function RecordingPage({
   const pausedBeforeStop = useRef(false);
   const stoppingRef = useRef(false);
   stoppingRef.current = stoppingSince !== null;
-  /** Held (paused, or stopping; ADR 0089): the same screen, the wave dimmed behind, what
-   *  is cut said in large, two round buttons; the rest is out of reach. */
+  /** Held (paused, or stopping; ADR 0089): the same screen, sharp; its title says it, the
+   *  wave stops with what is cut on its head, « Pause » becomes « Reprendre ». */
   const heldRef = useRef(false);
   heldRef.current = state?.state === "paused" || stoppingSince !== null;
-  const pairRef = useRef<HTMLDivElement>(null);
   const held =
     Boolean(state) && (state?.state === "paused" || stoppingSince !== null);
-  // Held: the focus on the pair itself, not on a button (which would show a ring after a
-  // click): the screen readers read it, Space resumes, Tab reaches the buttons.
-  useEffect(() => {
-    if (!held) return;
-    const timer = window.setTimeout(() =>
-      pairRef.current?.focus({ preventScroll: true }),
-    );
-    return () => window.clearTimeout(timer);
-  }, [held, stoppingSince]);
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (stoppingSince === null) return;
@@ -298,37 +290,25 @@ export function RecordingPage({
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const key = e.key.toLowerCase();
-      // Paused or stopping (ADR 0089): Space (or Escape while it stops) takes it back;
-      // nothing else is marked or typed meanwhile.
-      if (heldRef.current) {
-        // Space on a button reached by Tab presses that button (« Arrêter » stops).
-        if (key === " " && target?.closest("button")) return;
-        if (key === " " || (key === "escape" && stoppingRef.current)) {
-          e.preventDefault();
-          void toggle();
-        }
-        return;
-      }
-      if (target?.closest("input, select, textarea, [contenteditable]")) return;
-      if (stoppingRef.current) {
-        if (key === " " || key === "escape") {
-          e.preventDefault();
-          void toggle();
-        }
-        return;
-      }
-      if (key === " ") void toggle();
-      else if (key === "j" && mode?.mode !== "scene") void mark("scene");
-      else if (key === "d" && mode?.mode !== "discussion")
-        void mark("discussion");
-      else if (key === "m") void mark("key_moment");
-      else if (key === "n") {
+      const action = recordingKey(
+        e.key.toLowerCase(),
+        {
+          inField: Boolean(
+            target?.closest("input, select, textarea, [contenteditable], [role=dialog]"),
+          ),
+          onButton: Boolean(target?.closest("button")),
+        },
+        { held: heldRef.current, stopping: stoppingRef.current },
+      );
+      if (action === null) return;
+      // On a button just clicked, Space pauses rather than pressing it again.
+      e.preventDefault();
+      if (action === "toggle") void toggle();
+      else if (action === "moment") void mark("key_moment");
+      else if (action === "annotate") {
         setAnnotating(true);
         noteInput.current?.focus();
-      }
-      else return;
-      e.preventDefault();
+      } else if (mode?.mode !== action) void mark(action);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -347,21 +327,35 @@ export function RecordingPage({
     }
   };
 
+  /** An annotation being typed is sent first: it is never lost to a stop (P8). */
+  const sendDraft = async () => {
+    if (note.trim() && noteAt !== null) {
+      setState(await api.addTimedNote(note.trim(), noteAt));
+      setNote("");
+      setNoteAt(null);
+    }
+  };
   /** No confirmation (ADR 0058): paused at once, stopped by the service after a moment
    *  unless taken back; the session's page opens then. */
   const stop = async () => {
     try {
-      // An annotation being typed is sent first: it is never lost to the stop (P8).
-      if (note.trim() && noteAt !== null) {
-        setState(await api.addTimedNote(note.trim(), noteAt));
-        setNote("");
-        setNoteAt(null);
-      }
+      await sendDraft();
       pausedBeforeStop.current = latest.current?.state === "paused";
       const soon = await api.stopRecordingSoon();
       setState(soon.state);
       setStopDelayMs(soon.delay_s * 1000);
       setStoppingSince(Date.now());
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  /** « Arrêter » pressed again while it stops: stopped now; the stream's end then opens
+   *  the session, as after the wait. */
+  const stopNow = async () => {
+    try {
+      await sendDraft();
+      await api.stopRecordingNow();
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -614,22 +608,8 @@ export function RecordingPage({
                   </span>
                 </>
               )}
-              <div className="cl-rec__where">
-              {held && (
-                // What is cut, in large, in the place of who is there (nothing moves).
-                <p className="cl-rec__cut">
-                  <span role="img" aria-label={micsCut}>
-                    <MicOff size={38} strokeWidth={1.75} aria-hidden />
-                  </span>
-                  {system && (
-                    <span role="img" aria-label="Son de l'ordinateur coupé">
-                      <MonitorOff size={38} strokeWidth={1.75} aria-hidden />
-                    </span>
-                  )}
-                </p>
-              )}
               {session && attendees && people && (
-                <div className="cl-rec__who" inert={held || undefined}>
+                <div className="cl-rec__who">
                   <Counter attendees={attendees} size="lg" />
                   <Tooltip
                     content={
@@ -652,7 +632,6 @@ export function RecordingPage({
                 </div>
               )}
               {session && (
-                <div className="cl-rec__places" inert={held || undefined}>
                 <RecordingContext
                   session={session}
                   spaces={spaces}
@@ -663,12 +642,10 @@ export function RecordingPage({
                   }}
                   onError={setError}
                 />
-                </div>
               )}
-              </div>
             </div>
 
-            <div className="cl-rec__wave" inert={held || undefined}>
+            <div className="cl-rec__wave">
               <LiveWave
                 elapsed={elapsed}
                 rmsDb={state.levels.rms_db}
@@ -680,6 +657,18 @@ export function RecordingPage({
                 onRemoveMarker={removeMarker}
                 onRemoveNote={removeNote}
               />
+              {held && (
+                // What is cut, on the wave's head (ADR 0089): the microphones, then the
+                // computer's sound.
+                <span className="cl-rec__cutd" data-at="mics" role="img" aria-label={micsCut}>
+                  <MicOff size={22} strokeWidth={1.75} aria-hidden />
+                </span>
+              )}
+              {held && system && (
+                <span className="cl-rec__cutd" data-at="system" role="img" aria-label="Son de l'ordinateur coupé">
+                  <MonitorOff size={22} strokeWidth={1.75} aria-hidden />
+                </span>
+              )}
               {annotating || note ? (
                 <label className="cl-rec__annotate">
                   {noteAt !== null && note && (
@@ -724,78 +713,6 @@ export function RecordingPage({
               )}
             </div>
 
-            {held ? (
-              // Two round buttons on the axis: the filled one is what counts now.
-              <div
-                className="cl-rec__pair"
-                ref={pairRef}
-                tabIndex={-1}
-                role="group"
-                aria-labelledby="cl-rec-held"
-                aria-describedby={stopLeft !== null ? "cl-rec-held-desc" : undefined}
-              >
-                {stopLeft !== null && (
-                  <p className="cl-sr" id="cl-rec-held-desc">
-                    La séance s'ouvre dans un instant.
-                  </p>
-                )}
-                <span className="cl-rec__gesture">
-                  <span className="cl-rec__ring">
-                    {stopLeft !== null && (
-                      // Fills in the service's delay; then the session opens.
-                      <svg aria-hidden width="108" height="108" viewBox="0 0 108 108">
-                        <circle cx="54" cy="54" r="51" className="cl-rec__track" />
-                        <circle
-                          cx="54"
-                          cy="54"
-                          r="51"
-                          className="cl-rec__arc"
-                          style={
-                            {
-                              animationDuration: `${stopDelayMs}ms`,
-                              "--cl-rec-steps": Math.max(1, Math.round(stopDelayMs / 1000)),
-                            } as React.CSSProperties
-                          }
-                        />
-                      </svg>
-                    )}
-                    <button
-                      type="button"
-                      className="cl-rec__round"
-                      data-kind={stopLeft !== null ? "stop" : "line"}
-                      aria-label="Arrêter l'enregistrement"
-                      aria-disabled={stopLeft !== null || undefined}
-                      onClick={(e) => {
-                        e.currentTarget.blur();
-                        if (stopLeft === null) void stop();
-                      }}
-                    >
-                      <Square size={27} fill="currentColor" stroke="none" aria-hidden />
-                    </button>
-                  </span>
-                  <span className="cl-rec__strong">Arrêter</span>
-                </span>
-                <span className="cl-rec__gesture">
-                  <span className="cl-rec__ring">
-                    <button
-                      type="button"
-                      className="cl-rec__round"
-                      data-kind={stopLeft !== null ? "line" : "fill"}
-                      aria-label="Reprendre l'enregistrement"
-                      onClick={(e) => {
-                        e.currentTarget.blur();
-                        void toggle();
-                      }}
-                    >
-                      <Play size={29} fill="currentColor" stroke="none" aria-hidden />
-                    </button>
-                  </span>
-                  <span className="cl-rec__strong">
-                    Reprendre<kbd>{stopLeft !== null ? "Échap" : "Espace"}</kbd>
-                  </span>
-                </span>
-              </div>
-            ) : (
             <div className="cl-rec__gestures">
               <span className="cl-rec__gesture">
                 <button
@@ -803,6 +720,7 @@ export function RecordingPage({
                   className="cl-rec__round"
                   aria-label="Marquer un moment"
                   data-kind="moment"
+                  disabled={held}
                   onClick={(e) => {
                     e.currentTarget.blur();
                     void mark("key_moment");
@@ -819,14 +737,39 @@ export function RecordingPage({
                   type="button"
                   className="cl-rec__round"
                   data-kind="stop"
-                  aria-label="Arrêter l'enregistrement"
+                  aria-label={stopLeft !== null ? "Arrêter tout de suite" : "Arrêter l'enregistrement"}
+                  aria-describedby={stopLeft !== null ? "cl-rec-held-desc" : undefined}
                   onClick={(e) => {
                     e.currentTarget.blur();
-                    void stop();
+                    // Pressed again while it stops: stopped now, without the wait (ADR 0089).
+                    void (stopLeft !== null ? stopNow() : stop());
                   }}
                 >
+                  {stopLeft !== null && (
+                    // Fills in the service's delay, inside the button; then the session opens.
+                    <svg className="cl-rec__ring" aria-hidden width="68" height="68" viewBox="0 0 68 68">
+                      <circle cx="34" cy="34" r="28" className="cl-rec__track" />
+                      <circle
+                        cx="34"
+                        cy="34"
+                        r="28"
+                        className="cl-rec__arc"
+                        style={
+                          {
+                            animationDuration: `${stopDelayMs}ms`,
+                            "--cl-rec-steps": Math.max(1, Math.round(stopDelayMs / 1000)),
+                          } as React.CSSProperties
+                        }
+                      />
+                    </svg>
+                  )}
                   <Square size={22} fill="currentColor" stroke="none" aria-hidden />
                 </button>
+                {stopLeft !== null && (
+                  <span className="cl-sr" id="cl-rec-held-desc">
+                    La séance s'ouvre dans un instant.
+                  </span>
+                )}
                 <span className="cl-rec__strong">Arrêter</span>
               </span>
               <span className="cl-rec__gesture">
@@ -847,11 +790,10 @@ export function RecordingPage({
                 </button>
                 <span>
                   {paused ? "Reprendre" : "Pause"}
-                  <kbd>Espace</kbd>
+                  <kbd>{stopLeft !== null ? "Échap" : "Espace"}</kbd>
                 </span>
               </span>
             </div>
-            )}
           </main>
           {session && attendees && people && (
             <AttendeesSheet
