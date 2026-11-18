@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- retire processing_error de /api/etat (etat)
 - dit en français l'échec d'une suppression au lieu d'une erreur 500 (modeles)
 - rafraîchit la page quand la reprise est refusée (seance)
 - ne met plus en file deux traitements, ni ne relance une tâche en cours (traitement)
