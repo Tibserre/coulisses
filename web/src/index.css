@@ -5596,6 +5596,25 @@ button.cl-tree__more:hover {
 
 .cl-languagepick > p {
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-1);
+  font-size: var(--font-size-xs);
+}
+
+/* Compact: one line a language, what it needs in small on the right. */
+.cl-languagepick .cl-spacepick__item {
+  padding: calc(1.5 * var(--spacing-1)) var(--spacing-3);
+  font-size: var(--font-size-sm);
+}
+
+.cl-languagepick .cl-modelpick__option {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+}
+
+.cl-languagepick .cl-modelpick__about {
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
 .cl-languageuses {

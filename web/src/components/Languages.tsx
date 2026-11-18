@@ -98,7 +98,7 @@ export function LanguagePick({
       label={title}
       placement="below"
       alignment="start"
-      width={320}
+      width={264}
       padding={1}
       content={
         <div className="cl-languagepick">

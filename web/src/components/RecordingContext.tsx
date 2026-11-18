@@ -78,7 +78,6 @@ export function RecordingContext({
           languages={languages}
           value={session.language}
           title="Langue de la séance"
-          intro="Le traitement partira à l'arrêt, dans cette langue."
           onPick={(l) =>
             void run(() => api.setSessionLanguage(session.id, l.language)).then((done) => {
               if (done && !l.installed) setToDownload(l);
