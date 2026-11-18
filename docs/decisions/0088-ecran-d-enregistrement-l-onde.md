@@ -1,4 +1,4 @@
-# 0086 — L'écran d'enregistrement : le temps, les présents, l'onde et trois gestes
+# 0088 — L'écran d'enregistrement : le temps, les présents, l'onde et trois gestes
 
 Statut : Acceptée (2026-11-18, maquette D5a validée par l'utilisateur sur la toile de maquettes : l'écran, sa colonne, le survol des présents, douze présents, et la feuille « Qui est là ? » en six états ; règles tranchées par l'utilisateur : toucher quelqu'un quand tout est nommé fait monter le nombre, − retire d'abord une place vide, « Passer membre » depuis la feuille, « Nouvelle note » gardé mais neutre). Choix de mise en œuvre proposés par la session des maquettes, non contredits : le projet avec l'espace, la croix au survol pour retirer, l'échelle de l'onde, les alertes par-dessus. Remplace la partie « L'écran » de 0056 et y précise « Le contexte se corrige en enregistrant ».
 
