@@ -5,10 +5,10 @@ import type { MicEvent } from "../microphones.ts";
 import { formatClock } from "../format.ts";
 import { liveSegments, shownElapsed } from "../liveStrip.ts";
 import { KIND_LABEL } from "../transcript.ts";
-import { waveBars, WAVE } from "../liveWave.ts";
+import { liveHeights, waveBars, WAVE } from "../liveWave.ts";
 
-/** The recording as it goes by (D5a): the level heard, two pixels a second, the present at
- *  the right, the past leaving on the left; on it, the mode in force, the key moments and
+/** The recording as it goes by (D5a): the level heard, twenty pixels a second, the present at
+ *  the right (its last four tenths of a second, as heard), the past leaving on the left; on it, the mode in force, the key moments and
  *  the annotations, at their time, leaving with it. Drawn at the screen's pace as the strip
  *  is (LiveStrip): the service gives the time and the level ten times a second, the frame
  *  moves on between two (display only, P2). Paused, or with reduced motion, it stays still.
@@ -39,12 +39,17 @@ export function LiveWave({
   // shortcut: the levels are those heard since this page opened (the service keeps no
   // history of them); left and come back, the wave starts again from there.
   const levels = useRef(new Map<number, number>());
+  /** The last four levels received (one a tenth of a second): the present, as it sounds. */
+  const recent = useRef<number[]>([]);
   const received = useRef({ elapsed, at: performance.now(), paused });
   if (received.current.elapsed !== elapsed || received.current.paused !== paused) {
+    // Paused or resumed: what was heard before is not the present any more.
+    if (received.current.paused !== paused) recent.current = [];
     received.current = { elapsed, at: performance.now(), paused };
     if (!paused) {
       const bar = Math.floor(elapsed / WAVE.secondsPerBar);
       levels.current.set(bar, Math.max(levels.current.get(bar) ?? -Infinity, rmsDb));
+      recent.current = [...recent.current.slice(-3), rmsDb];
     }
   }
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -214,10 +219,9 @@ export function LiveWave({
       </div>
       {!paused && (
         <span className="cl-wave__live" aria-hidden>
-          <i />
-          <i />
-          <i />
-          <i />
+          {liveHeights(recent.current).map((h, k) => (
+            <i key={k} style={{ height: `${h}px` }} />
+          ))}
         </span>
       )}
       <span className="cl-wave__now" aria-hidden />

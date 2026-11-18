@@ -1,21 +1,22 @@
 /**
- * The recording's wave (D5a): one bar for each two seconds of recorded time, its height the
- * loudest level heard in them (measured by the service, never estimated: a stretch with no
- * level heard has no bar). Two pixels a second, the present `nowX` pixels from the left.
+ * The recording's wave (D5a): one bar for each fifth of a second of recorded time, its
+ * height the loudest level heard in it (measured by the service, never estimated: a stretch
+ * with no level heard has no bar). Twenty pixels a second (some 38 s in sight), the present
+ * `nowX` pixels from the left.
  */
 import { meterValue } from "./meter.ts";
 
 export const WAVE = {
-  pxPerSecond: 2,
-  secondsPerBar: 2,
+  pxPerSecond: 20,
+  secondsPerBar: 0.2,
   /** The present, from the left of the wave's box. */
   nowX: 760,
   midY: 92,
   /** Half the tallest bar. */
   maxHalf: 52,
   /** Around a key moment, the bars are marked: from a little before to a little after. */
-  markBefore: 3,
-  markAfter: 11,
+  markBefore: 1,
+  markAfter: 4,
 } as const;
 
 export interface WaveBar {
@@ -48,4 +49,13 @@ export function waveBars(
     });
   }
   return bars;
+}
+
+/** The four live bars, oldest first, from the last four levels received (dBFS): none yet,
+ *  the lowest height (nothing made up). */
+export function liveHeights(recent: readonly number[]): number[] {
+  return [0, 1, 2, 3].map((k) => {
+    const db = recent[recent.length - 4 + k];
+    return Math.max(3, ((db === undefined ? 0 : meterValue(db)) / 100) * 2 * WAVE.maxHalf);
+  });
 }

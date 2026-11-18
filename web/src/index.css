@@ -4711,29 +4711,7 @@ button.cl-tree__more:hover {
   width: 2px;
   border-radius: 1px;
   background: var(--color-accent);
-  animation: cl-wave-live 0.5s ease-in-out infinite alternate;
-}
-
-.cl-wave__live i:nth-child(1) {
-  height: 64px;
-}
-.cl-wave__live i:nth-child(2) {
-  height: 96px;
-  animation-duration: 0.38s;
-}
-.cl-wave__live i:nth-child(3) {
-  height: 48px;
-  animation-duration: 0.62s;
-}
-.cl-wave__live i:nth-child(4) {
-  height: 80px;
-  animation-duration: 0.44s;
-}
-
-@keyframes cl-wave-live {
-  from {
-    transform: scaleY(0.35);
-  }
+  transition: height 90ms linear;
 }
 
 .cl-wave__now {
@@ -5055,9 +5033,12 @@ button.cl-tree__more:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-rec__status .cl-recording__dot,
-  .cl-wave__live i {
+  .cl-rec__status .cl-recording__dot {
     animation: none;
+  }
+
+  .cl-wave__live i {
+    transition: none;
   }
 }
 
