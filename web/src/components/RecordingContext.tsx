@@ -8,7 +8,7 @@ import {
   type Session,
   type Space,
 } from "../api.ts";
-import { inLanguage, languageWorthShowing } from "../languages.ts";
+import { inLanguage, languageReady, languageWorthShowing } from "../languages.ts";
 import { LanguageDownloadDialog, LanguagePick, useLanguages } from "./Languages.tsx";
 
 /** Where a recording goes, changed while it runs (spec §7.2, ADR 0056, D5a): its language
@@ -79,9 +79,10 @@ export function RecordingContext({
           value={session.language}
           title="Langue de la séance"
           onPick={(l) =>
-            void run(() => api.setSessionLanguage(session.id, l.language)).then((done) => {
-              if (done && !l.installed) setToDownload(l);
-            })
+            // Not here: chosen once its download is started; closed before, nothing changes.
+            languageReady(l)
+              ? void run(() => api.setSessionLanguage(session.id, l.language))
+              : setToDownload(l)
           }
         >
           <button
@@ -141,7 +142,11 @@ export function RecordingContext({
         language={toDownload}
         after="Le traitement partira à l'arrêt, dès que le modèle sera là."
         onClose={() => setToDownload(null)}
-        onStarted={() => void reload()}
+        onStarted={(started) => {
+          void reload();
+          const chosen = toDownload;
+          if (chosen && started > 0) void run(() => api.setSessionLanguage(session.id, chosen.language));
+        }}
       />
       {unchecked.length > 0 && (
         <span className="cl-rec__said" role="status">

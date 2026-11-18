@@ -9,6 +9,7 @@ import {
   offersRemoval,
   inLanguage,
   languageNote,
+  languageReady,
   languageState,
   languageUses,
   languageWorthShowing,
@@ -248,4 +249,10 @@ test("« Supprimer » only where no space has the language by default", () => {
     false,
   );
   assert.equal(offersRemoval(french), false);
+});
+
+test("a language is chosen at once only if it is here or coming", () => {
+  assert.equal(languageReady(french), true);
+  assert.equal(languageReady(language({ downloads: [action({})] })), true);
+  assert.equal(languageReady(language({})), false);
 });

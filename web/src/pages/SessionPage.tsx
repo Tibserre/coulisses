@@ -66,7 +66,7 @@ import {
   SessionLanguage,
   useLanguages,
 } from "../components/Languages.tsx";
-import { labelOf, languageWord, languageWorthShowing } from "../languages.ts";
+import { labelOf, languageReady, languageWord, languageWorthShowing } from "../languages.ts";
 import {
   GiveToPanel,
   TranscriptView,
@@ -780,9 +780,17 @@ export function SessionPage({
         language={toDownload}
         after="La séance l'attend : son traitement partira dès que le modèle sera là, sans bloquer les autres."
         onClose={() => setToDownload(null)}
-        onStarted={() => {
+        onStarted={(started) => {
           void reloadLanguages();
-          void refresh();
+          // Picked above the title: the session takes it now that its download is started
+          // (a session already waiting for it is in it).
+          const chosen = toDownload;
+          if (chosen && started > 0 && session && chosen.language !== session.language)
+            void api.setSessionLanguage(id, chosen.language).then(
+              () => refresh(),
+              (e: Error) => setError(e.message),
+            );
+          else void refresh();
         }}
       />
       {/* Read, not yet shown: the session, or the version it has. Its shapes meanwhile, then
@@ -1664,14 +1672,16 @@ function ImportLanguage({
         title="Langue de la séance"
         intro="Le compte à rebours continue : changer la langue ne le relance pas."
         onPick={(l) =>
-          api.setSessionLanguage(session.id, l.language).then(
-            (next) => {
-              setError(null);
-              onChanged(next);
-              if (!l.installed) onDownload(l);
-            },
-            (e: Error) => setError(e.message),
-          )
+          // Not here: chosen once its download is started; closed before, nothing changes.
+          languageReady(l)
+            ? api.setSessionLanguage(session.id, l.language).then(
+                (next) => {
+                  setError(null);
+                  onChanged(next);
+                },
+                (e: Error) => setError(e.message),
+              )
+            : onDownload(l)
         }
       >
         <button type="button" className="cl-linkbtn">

@@ -153,6 +153,13 @@ export function downloadPercent(done: number, total: number): number {
   return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
 }
 
+/** Chosen at once: on this Mac, or coming (its download under way). The others are
+ *  chosen once their download is started (nothing changes if it is not). */
+export function languageReady(language: Language): boolean {
+  const kind = languageState(language).kind;
+  return kind === "installed" || kind === "downloading";
+}
+
 /** What a choice says beside its name: « installé », « à télécharger · 1,3 Go »… */
 export function languageNote(language: Language): string {
   const state = languageState(language);

@@ -5613,8 +5613,18 @@ button.cl-tree__more:hover {
 }
 
 .cl-languagepick .cl-modelpick__about {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-size-xs);
   white-space: nowrap;
+}
+
+/* Those to download, under a rule. */
+.cl-languagepick li[data-first-missing] {
+  margin-top: var(--spacing-1);
+  padding-top: var(--spacing-1);
+  border-top: 1px solid var(--color-border);
 }
 
 .cl-languageuses {
