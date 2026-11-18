@@ -8,8 +8,17 @@ la publication lit celle de `main`.
 
 ## Non publié
 
+### Nouveautés
+
+- grise le temps en pause, « En pause » au-dessus (enregistrement)
+- dit la pause et l'arrêt dans l'écran même, sans rien estomper (enregistrement)
+- met la pause et l'arrêt dans l'écran, sans voile (enregistrement)
+- ajoute une personne par une ligne pleine largeur (enregistrement)
+- refait l'écran d'après la maquette D5a (enregistrement)
+
 ### Corrections
 
+- fait suivre le son réel à l'onde et la fait défiler plus vite (enregistrement)
 - retire processing_error de /api/etat (etat)
 - dit en français l'échec d'une suppression au lieu d'une erreur 500 (modeles)
 - rafraîchit la page quand la reprise est refusée (seance)
