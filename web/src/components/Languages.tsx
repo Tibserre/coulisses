@@ -11,7 +11,7 @@ import { Heading } from "@astryxdesign/core/Heading";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Text } from "@astryxdesign/core/Text";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Download } from "lucide-react";
 import {
   api,
   type Language,
@@ -34,6 +34,7 @@ import {
   inLanguage,
   labelOf,
   languageNote,
+  languageReady,
   languageState,
   languageWord,
   languageWorthShowing,
@@ -98,7 +99,7 @@ export function LanguagePick({
       label={title}
       placement="below"
       alignment="start"
-      width={320}
+      width={264}
       padding={1}
       content={
         <div className="cl-languagepick">
@@ -108,8 +109,17 @@ export function LanguagePick({
             </Text>
           )}
           <ul className="cl-spacepick" aria-label={title}>
-            {languages.map((l) => (
-              <li key={l.language}>
+            {[
+              ...languages.filter(languageReady),
+              ...languages.filter((l) => !languageReady(l)),
+            ].map((l, k, all) => (
+              <li
+                key={l.language}
+                // Here (or coming) first; under a rule, those to download.
+                data-first-missing={
+                  (!languageReady(l) && k > 0 && languageReady(all[k - 1])) || undefined
+                }
+              >
                 <button
                   type="button"
                   className="cl-spacepick__item"
@@ -122,6 +132,9 @@ export function LanguagePick({
                   <span className="cl-modelpick__option">
                     <span>{l.label}</span>
                     <span className="cl-modelpick__about">
+                      {!languageReady(l) && (
+                        <Download size={12} strokeWidth={1.75} aria-hidden />
+                      )}
                       {languageNote(l)}
                     </span>
                   </span>
@@ -154,7 +167,8 @@ export function LanguageDownloadDialog({
   after?: string;
   onClose: () => void;
   /** Read the languages again: what started is shown with its progress. */
-  onStarted: () => void;
+  /** After a try, said or not: how many downloads started (0: none, nothing to choose). */
+  onStarted: (started: number) => void;
 }) {
   const [working, setWorking] = useState(false);
   // Refused: said in the window itself, which stays open (P8), wherever it was opened from.
@@ -177,7 +191,7 @@ export function LanguageDownloadDialog({
       setError(started ? `${started} sur ${language.missing_models.length} ont démarré ; le suivant a été refusé : ${said}` : said);
     } finally {
       setWorking(false);
-      onStarted();
+      onStarted(started);
     }
   };
   return (
@@ -236,12 +250,13 @@ export function SessionLanguage({
           onRedo(l.language);
           return;
         }
-        api.setSessionLanguage(session.id, l.language).then(
-          (next) => {
-            onChanged(next);
-            if (!l.installed) onDownload(l);
-          },
-          (e: Error) => onError(e.message),
+        // Not here: chosen once its download is started; closed before, nothing changes.
+        if (!languageReady(l)) {
+          onDownload(l);
+          return;
+        }
+        api.setSessionLanguage(session.id, l.language).then(onChanged, (e: Error) =>
+          onError(e.message),
         );
       }}
     >

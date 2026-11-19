@@ -19,7 +19,7 @@ import {
 } from "../api.ts";
 import { ChevronDown, Plus } from "lucide-react";
 import { LanguageDownloadDialog, LanguagePick, useLanguages } from "../components/Languages.tsx";
-import { labelOf, languageWord } from "../languages.ts";
+import { labelOf, languageReady, languageWord } from "../languages.ts";
 import { EditableTitle } from "../components/EditableTitle.tsx";
 import { plural } from "../format.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
@@ -232,11 +232,10 @@ function SpaceLanguage({
             value={space.language}
             title="Langue des séances"
             onPick={(l) =>
-              void attempt(() =>
-                api.updateSpace(space.id, { language: l.language }),
-              ).then((done) => {
-                if (done && !l.installed) setToDownload(l);
-              })
+              // Not here: chosen once its download is started; closed before, nothing changes.
+              languageReady(l)
+                ? void attempt(() => api.updateSpace(space.id, { language: l.language }))
+                : setToDownload(l)
             }
           >
             <button type="button" className="cl-modelpick">
@@ -259,11 +258,16 @@ function SpaceLanguage({
         language={toDownload}
         after={
           toDownload
-            ? `L'espace passe en ${languageWord(toDownload.label)} dès maintenant. Une séance traitée avant la fin du téléchargement l'attend, sans bloquer les autres.`
+            ? `L'espace passe en ${languageWord(toDownload.label)} dès le téléchargement lancé. Une séance traitée avant la fin du téléchargement l'attend, sans bloquer les autres.`
             : undefined
         }
         onClose={() => setToDownload(null)}
-        onStarted={() => void reload()}
+        onStarted={(started) => {
+          void reload();
+          const chosen = toDownload;
+          if (chosen && started > 0)
+            void attempt(() => api.updateSpace(space.id, { language: chosen.language }));
+        }}
       />
     </section>
   );
