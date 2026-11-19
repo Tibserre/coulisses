@@ -151,8 +151,9 @@ def create_space(
     try:
         with conn:
             cursor = conn.execute(
-                "INSERT INTO space (name, created_at, language) VALUES (?, ?, ?)",
-                (_clean(name, "Le nom de l'espace"), now_iso(), language),
+                "INSERT INTO space (name, created_at, language, theatre) VALUES (?, ?, ?, ?)",
+                # « Jeu et personnages » on for a troupe (the user's choice, for now: ADR 0091).
+                (_clean(name, "Le nom de l'espace"), now_iso(), language, int(template == "impro")),
             )
             conn.executemany(
                 "INSERT INTO action_preference (space_id, action_ref, auto_run) VALUES (?, ?, 1)",
