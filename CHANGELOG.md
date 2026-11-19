@@ -15,6 +15,10 @@ la publication lit celle de `main`.
 - donne à la page la version du son qu'elle fait entendre (ecoute)
 - ne choisit une langue absente qu'au téléchargement lancé (langues)
 
+### Performances
+
+- prépare en parallèle les tests, la construction et ses essais (publication)
+
 ## v0.41.0 — 2026-11-18
 
 ### Nouveautés
