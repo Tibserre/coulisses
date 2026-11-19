@@ -571,6 +571,10 @@ export interface SessionDetail {
   other_sources: AudioSource[];
   /** The microphone mixed with the computer's sound, once made. */
   mix: MixFacts | null;
+  /** The file /audio serves (« name-mtime_ns-size »): it changes when that file is
+   *  replaced (listening mix, lossless conversion). Null: no audio, a file missing, or a
+   *  reference still being recorded; also for an instant during a conversion. */
+  heard_version: string | null;
 }
 
 /** transcribe: the text (transcription, alignment); diarize: the voices; all: both, from

@@ -47,8 +47,10 @@ export function usePlayback(): Playback {
       stopAt.current = null;
       setExcerpt(null);
     };
-    const onMeta = () =>
+    const onMeta = () => {
       setDuration(Number.isFinite(audio.duration) ? audio.duration : null);
+      setError(null); // read again (its file replaced): what failed before is over
+    };
     const onSeeked = () => setTime(audio.currentTime);
     const onError = () =>
       setError(
