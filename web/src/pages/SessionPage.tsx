@@ -213,8 +213,6 @@ export function SessionPage({
    *  in the audio's address, so that a file replaced under an open page (a conversion
    *  overnight) is loaded anew, not read in pieces of two files (spec §7.2, ADR 0074). */
   const [heardVersion, setHeardVersion] = useState<string | null>(null);
-  /** Where the audio was when its file was replaced: back there once reloaded. */
-  const resumeAt = useRef<number | null>(null);
   const dev = useDevMode();
 
   const refresh = useCallback(async () => {
@@ -267,8 +265,7 @@ export function SessionPage({
   useEffect(() => {
     const next = nextHeardVersion(heardVersion, nextHeard);
     if (next.version === heardVersion) return;
-    const audio = pb.audioRef.current;
-    if (next.reload && audio) resumeAt.current = audio.currentTime;
+    if (next.reload) pb.beforeSwap();
     setHeardVersion(next.version);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on a new version only
   }, [nextHeard]);
@@ -814,11 +811,6 @@ export function SessionPage({
             : `${api.audioUrl(id)}${shownHeard ? `?v=${encodeURIComponent(shownHeard)}` : ""}`
         }
         preload="metadata"
-        onLoadedMetadata={(e) => {
-          const at = resumeAt.current;
-          resumeAt.current = null;
-          if (at !== null) e.currentTarget.currentTime = at;
-        }}
         // A file that cannot be read any more: the session is read again, a new version
         // of its sound reloads it.
         onError={() => void refresh()}

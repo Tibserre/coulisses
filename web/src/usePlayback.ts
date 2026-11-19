@@ -18,6 +18,9 @@ export interface Playback {
   listen: (start: number, end: number) => void;
   /** The start of the excerpt being heard, if one is. */
   excerpt: number | null;
+  /** Called just before the element's source changes for a new version of the same sound
+   *  (ADR 0074): unseen, it goes on where it was, playing if it was, nothing reset. */
+  beforeSwap: () => void;
 }
 
 /** How long an excerpt is heard at most. */
@@ -37,12 +40,17 @@ export function usePlayback(): Playback {
   const stopAt = useRef<number | null>(null);
   /** Where one was before an excerpt: back there once it is heard. */
   const before = useRef<number | null>(null);
+  /** A new file for the same sound being loaded: where it was, and whether it played. */
+  const swap = useRef<{ at: number; playing: boolean } | null>(null);
+  /** The speed chosen: a new source starts at 1, it is given back. */
+  const rateRef = useRef(1);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     const onPlay = () => setPlaying(true);
     const onPause = () => {
+      if (swap.current) return; // the source changing, not the user: nothing shown
       setPlaying(false);
       stopAt.current = null;
       setExcerpt(null);
@@ -50,12 +58,27 @@ export function usePlayback(): Playback {
     const onMeta = () => {
       setDuration(Number.isFinite(audio.duration) ? audio.duration : null);
       setError(null); // read again (its file replaced): what failed before is over
+      const was = swap.current;
+      if (!was) return;
+      audio.currentTime = was.at;
+      audio.playbackRate = rateRef.current;
+      if (was.playing)
+        void audio.play().catch(() => {
+          setPlaying(false);
+          setError("La lecture n'a pas pu reprendre.");
+        });
+      swap.current = null;
     };
-    const onSeeked = () => setTime(audio.currentTime);
-    const onError = () =>
+    const onSeeked = () => {
+      if (!swap.current) setTime(audio.currentTime);
+    };
+    const onError = () => {
+      swap.current = null;
+      setPlaying(false);
       setError(
         "L'audio ne peut pas être lu : fichier introuvable ou format non pris en charge.",
       );
+    };
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onPause);
@@ -77,7 +100,7 @@ export function usePlayback(): Playback {
     let frame = 0;
     const tick = () => {
       const audio = audioRef.current;
-      if (audio) {
+      if (audio && !swap.current) {
         setTime(audio.currentTime);
         if (stopAt.current != null && audio.currentTime >= stopAt.current) {
           const back = before.current;
@@ -98,6 +121,12 @@ export function usePlayback(): Playback {
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    // Pressed while a new file of the sound loads: what it does is kept for when it is in.
+    if (swap.current) {
+      swap.current.playing = !swap.current.playing;
+      setPlaying(swap.current.playing);
+      return;
+    }
     stopAt.current = null;
     before.current = null;
     setExcerpt(null);
@@ -140,7 +169,14 @@ export function usePlayback(): Playback {
     [excerpt, seek],
   );
 
+  const beforeSwap = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || audio.readyState === 0) return; // nothing loaded yet: nothing to keep
+    swap.current = { at: audio.currentTime, playing: !audio.paused };
+  }, []);
+
   const setRate = useCallback((r: number) => {
+    rateRef.current = r;
     if (audioRef.current) audioRef.current.playbackRate = r;
     setRateState(r);
   }, []);
@@ -158,5 +194,6 @@ export function usePlayback(): Playback {
     setRate,
     listen,
     excerpt,
+    beforeSwap,
   };
 }
