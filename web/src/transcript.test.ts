@@ -6,6 +6,7 @@ import {
   changesChapters,
   nearestLine,
   speechWave,
+  waveHeight,
   turnSeconds,
   namingLines,
   askFor,
@@ -688,4 +689,11 @@ test("on the wave: the nearest measured line, and the speech of each slice", () 
     { level: 0, mine: false },
     { level: 0, mine: false },
   ]);
+});
+
+test("a measured peak as a bar's height", () => {
+  assert.equal(waveHeight(0), 1);
+  assert.equal(waveHeight(-30), 0.5);
+  assert.equal(waveHeight(-120), 0);
+  assert.equal(waveHeight(3), 1);
 });

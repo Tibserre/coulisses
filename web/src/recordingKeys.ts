@@ -10,13 +10,15 @@ export function recordingKey(
   key: string,
   where: { inField: boolean; onButton: boolean },
   held: { held: boolean; stopping: boolean },
+  /** « Jeu et personnages » (ADR 0091): without it, J and D do nothing. */
+  theatre = true,
 ): KeyAction {
   if (where.inField) return null;
   if (key === " " && where.onButton && held.held) return null;
   if (held.held) return key === " " || (key === "escape" && held.stopping) ? "toggle" : null;
   if (key === " ") return "toggle";
-  if (key === "j") return "scene";
-  if (key === "d") return "discussion";
+  if (key === "j") return theatre ? "scene" : null;
+  if (key === "d") return theatre ? "discussion" : null;
   if (key === "m") return "moment";
   if (key === "n") return "annotate";
   return null;

@@ -24,6 +24,25 @@ export function VoiceFace({
 }) {
   const person = people.find((p) => p.id === voice.person_id);
   if (person && !voice.character) return <Face person={person} size={size} />;
+  // A character (ADR 0091): who plays it, and its rounded square over it.
+  if (voice.character)
+    return (
+      <span className="cl-double" data-size={size}>
+        {person && <Face person={person} size={size} />}
+        <span
+          className="cl-face"
+          data-size={size}
+          data-role
+          style={{
+            background: speakerTint(voice.color_slot ?? 0),
+            color: speakerInk(voice.color_slot ?? 0),
+          }}
+          aria-hidden
+        >
+          {initial(voice.character)}
+        </span>
+      </span>
+    );
   if (!voice.named) return <Face size={size} />;
   return (
     <span

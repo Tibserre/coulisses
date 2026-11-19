@@ -24,7 +24,10 @@ export function PhaseStrip({
   dev,
   onSeek,
   onDetect,
+  showKind = true,
 }: {
+  /** The genre of each chapter, only in a space with « Jeu et personnages » (ADR 0091). */
+  showKind?: boolean;
   view: CorrectedView;
   /** The chapters shown are being written (ADR 0061): pale, the read part marked. */
   provisional?: boolean;
@@ -49,16 +52,18 @@ export function PhaseStrip({
   const [listing, setListing] = useState(false);
   /** What a chapter says on hover and in the list: its genre, its time, its length. */
   const facts = (s: (typeof spans)[number]) =>
-    `${KIND_LABEL[s.phase.kind]} · à ${formatClock(s.start)} · ${formatDuration(s.end - s.start)}`;
+    `${showKind ? `${KIND_LABEL[s.phase.kind]} · ` : ""}à ${formatClock(s.start)} · ${formatDuration(s.end - s.start)}`;
 
   return (
     <div className="cl-strip">
       <div className="cl-strip__head">
         {current ? (
-          <span className="cl-strip__current" data-kind={current.phase.kind}>
-            <span className="cl-strip__kind">
-              {KIND_LABEL[current.phase.kind]}
-            </span>
+          <span className="cl-strip__current" data-kind={showKind ? current.phase.kind : undefined}>
+            {showKind && (
+              <span className="cl-strip__kind">
+                {KIND_LABEL[current.phase.kind]}
+              </span>
+            )}
             {current.phase.title || "Chapitre sans titre"}
           </span>
         ) : (
@@ -149,7 +154,9 @@ export function PhaseStrip({
                             }}
                           >
                             <span className="cl-chapters__at">{formatClock(sp.start)}</span>
-                            <span className="cl-strip__kind">{KIND_LABEL[sp.phase.kind]}</span>
+                            {showKind && (
+                              <span className="cl-strip__kind">{KIND_LABEL[sp.phase.kind]}</span>
+                            )}
                             <span className="cl-spacepick__what">
                               {sp.phase.title || "Chapitre sans titre"}
                             </span>
@@ -214,10 +221,10 @@ export function PhaseStrip({
             <button
               type="button"
               className="cl-strip__bar"
-              data-kind={s.phase.kind}
+              data-kind={showKind ? s.phase.kind : undefined}
               data-current={s === current || undefined}
               style={{ flexGrow: Math.max(s.end - s.start, 1) }}
-              aria-label={`Chapitre ${s.number}, ${KIND_LABEL[s.phase.kind].toLowerCase()} : ${s.phase.title || "sans titre"}, à ${formatClock(s.start)}`}
+              aria-label={`Chapitre ${s.number}${showKind ? `, ${KIND_LABEL[s.phase.kind].toLowerCase()}` : ""} : ${s.phase.title || "sans titre"}, à ${formatClock(s.start)}`}
               onClick={(e) => {
                 onSeek(s.start);
                 e.currentTarget.blur();

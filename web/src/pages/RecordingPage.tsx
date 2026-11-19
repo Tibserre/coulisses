@@ -283,6 +283,8 @@ export function RecordingPage({
   }, [loadPeople]);
   const attendees = useAttendees(session, setSession, setError);
 
+  // Jeu ⇄ Discussion only in a space that has « Jeu et personnages » (ADR 0091).
+  const theatre = spaces.find((s) => s.id === session?.space_id)?.theatre ?? false;
   // Space: pause or resume. J, D: play or discussion. M: a key moment. N: write a note.
   // In a field or a list, keys keep their own meaning (rules/web.md); on a button just
   // clicked, they still work, and Space pauses rather than pressing it again.
@@ -299,6 +301,7 @@ export function RecordingPage({
           onButton: Boolean(target?.closest("button")),
         },
         { held: heldRef.current, stopping: stoppingRef.current },
+        theatre,
       );
       if (action === null) return;
       // On a button just clicked, Space pauses rather than pressing it again.
@@ -312,7 +315,7 @@ export function RecordingPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggle, mark, mode]);
+  }, [toggle, mark, mode, theatre]);
 
   const saveNote = async () => {
     const text = note.trim();
@@ -462,7 +465,7 @@ export function RecordingPage({
               </>
             )}
             <span className="cl-rec__spacer" />
-            {mode ? (
+            {!theatre ? null : mode ? (
               <span className="cl-mode" data-kind={mode.mode}>
                 <span className="cl-mode__now">
                   <span className="cl-mode__dot" aria-hidden />
@@ -647,7 +650,11 @@ export function RecordingPage({
                 elapsed={elapsed}
                 rmsDb={state.levels.rms_db}
                 paused={paused}
-                markers={state.markers}
+                markers={
+                  theatre
+                    ? state.markers
+                    : state.markers.filter((m) => m.kind === "key_moment")
+                }
                 notes={state.notes}
                 events={micEvents(timelineMics(state))}
                 draftAt={note ? noteAt : null}

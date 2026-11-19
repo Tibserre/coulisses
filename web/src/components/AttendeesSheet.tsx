@@ -338,6 +338,7 @@ export function PeoplePicker({
   columns = 6,
   autoFocus = false,
   onAddGuest,
+  onAddCharacter,
   onMakeMember,
   onEnter,
 }: {
@@ -357,6 +358,9 @@ export function PeoplePicker({
   columns?: 4 | 6;
   autoFocus?: boolean;
   onAddGuest: () => void;
+  /** « Ajouter le personnage « … » » under « Ajouter » (ADR 0091): only with « Jeu et
+   *  personnages ». */
+  onAddCharacter?: () => void;
   onMakeMember: (p: Person) => void;
   /** Entrée with nothing to add: with the one person a name typed leaves, if it does. */
   onEnter?: (only: Person | null) => void;
@@ -431,6 +435,17 @@ export function PeoplePicker({
               <small>Nouvelle personne, en invité</small>
             </span>
             <kbd>Entrée</kbd>
+          </button>
+        )}
+        {q && !exact && onAddCharacter && (
+          <button type="button" className="cl-sheet__new" onClick={onAddCharacter}>
+            <span className="cl-face" data-size="md" data-empty data-role aria-hidden>
+              <Plus size={14} strokeWidth={1.75} />
+            </span>
+            <span className="cl-sheet__newtext">
+              <b>Ajouter le personnage « {query.trim()} »</b>
+              <small>Un rôle, joué par quelqu'un de l'espace</small>
+            </span>
           </button>
         )}
       </div>

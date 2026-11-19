@@ -644,3 +644,8 @@ export function askFor(
   const person = people.find((p) => p.id === speaker.proposal!.person_id);
   return person ? { person, merge: hasVoice(person, speaker, voices) } : null;
 }
+
+/** A measured peak (dBFS) as a bar's height, 0 to 1: the last 60 dB shown, silence flat. */
+export function waveHeight(db: number): number {
+  return Math.min(1, Math.max(0, (db + 60) / 60));
+}

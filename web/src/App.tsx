@@ -532,6 +532,7 @@ function Shell({ route }: { route: Route }) {
                 at={route.at}
                 tab={route.tab}
                 projects={projects}
+                spaces={spaces}
               />
             ) : route.page === "space" ? (
               <SpacePage id={route.id} onChanged={refresh} />

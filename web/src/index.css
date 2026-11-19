@@ -6552,3 +6552,33 @@ button.cl-tree__more:hover {
   width: 6.5em;
   flex: none;
 }
+
+/* A character (ADR 0091): a rounded square, over the face of who plays it (« le double »). */
+.cl-face[data-role] {
+  border-radius: 28%;
+}
+
+.cl-double {
+  display: inline-flex;
+  align-items: center;
+}
+
+.cl-double > .cl-face + .cl-face {
+  margin-left: -30%;
+  box-shadow: 0 0 0 2px var(--color-background-surface);
+}
+
+.cl-who__ring:has(.cl-double > .cl-face + .cl-face) {
+  width: auto;
+  padding: 0 4px;
+  border-radius: 40px;
+}
+
+.cl-who__cast {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin: 0;
+  font-size: 18px;
+  font-weight: var(--font-weight-medium);
+}

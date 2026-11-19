@@ -29,6 +29,7 @@ import {
   type Rerun,
   type Session,
   type SessionDetail,
+  type Space,
   type Speaker,
   type StageView,
 } from "../api.ts";
@@ -123,8 +124,11 @@ export function SessionPage({
   at = null,
   tab: initialTab = null,
   projects = [],
+  spaces = [],
 }: {
   id: string;
+  /** For the space's settings (« Jeu et personnages », ADR 0091). */
+  spaces?: Space[];
   /** A measured time to open at (a search hit). */
   at?: number | null;
   tab?: "summary" | null;
@@ -522,6 +526,8 @@ export function SessionPage({
     [id, viewRun, refused, provisional],
   );
 
+  const theatre =
+    spaces.find((s) => s.id === detail?.session.space_id)?.theatre ?? false;
   const editing: Editing = useMemo(
     () => ({
       people,
@@ -544,6 +550,7 @@ export function SessionPage({
       editingTurn,
       setEditingTurn,
       nameVoice: (label: string) => nameVoiceRef.current(label),
+      theatre,
       selected,
       toggleSelected: (turn: number, extend: boolean) => {
         if (guide) return; // naming, guided: no selection (its bar would be hidden)
@@ -579,6 +586,7 @@ export function SessionPage({
       refused,
       provisional,
       guide,
+      theatre,
     ],
   );
 
@@ -971,6 +979,7 @@ export function SessionPage({
                 time={pb.time}
                 status={phasesStatus}
                 dev={dev}
+                showKind={theatre}
                 onSeek={pb.seek}
                 onDetect={() => {
                   api
@@ -1317,10 +1326,12 @@ export function SessionPage({
           spaceName={session.space_name}
           lines={voiceTurns(unfolded, guided.label!)}
           turns={view.turns}
+          sessionId={id}
           duration={session.duration_s ?? pb.duration ?? 0}
           pb={pb}
           audioGone={audioGone}
           dev={dev}
+          theatre={theatre}
           notice={notice}
           onGo={(label) =>
             goTo(unfolded.speakers.find((s) => s.label === label))

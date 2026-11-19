@@ -30,3 +30,10 @@ test("recording, the shortcuts", () => {
   assert.equal(recordingKey("m", free, recording), "moment");
   assert.equal(recordingKey("n", free, recording), "annotate");
 });
+
+test("without « Jeu et personnages », J and D do nothing", () => {
+  assert.equal(recordingKey("j", free, recording, false), null);
+  assert.equal(recordingKey("d", free, recording, false), null);
+  assert.equal(recordingKey("m", free, recording, false), "moment");
+  assert.equal(recordingKey("j", free, recording), "scene");
+});

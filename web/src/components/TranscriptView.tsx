@@ -52,6 +52,8 @@ export interface Editing {
   setEditingTurn: (turn: number | null) => void;
   /** Opens « Qui parle ? » on this voice (ADR 0090). */
   nameVoice: (label: string) => void;
+  /** The space has « Jeu et personnages » (ADR 0091): the chapters say their genre. */
+  theatre: boolean;
   selected: ReadonlySet<number>;
   toggleSelected: (turn: number, extend: boolean) => void;
   /** Fold or unfold a chapter, by its first line. */
@@ -616,13 +618,17 @@ const PhaseHeading = memo(function PhaseHeading({
   if (editing.chaptersProvisional)
     // Being written (ADR 0061): read, never changed until the chapters are set.
     return (
-      <div className="cl-chapter" data-kind={phase.kind} data-provisional>
+      <div
+        className="cl-chapter"
+        data-kind={editing.theatre ? phase.kind : undefined}
+        data-provisional
+      >
         <div className="cl-turn__margin">
           <TimeLink t={phase.start} isCurrent={false} onSeek={onSeek} />
         </div>
         <div className="cl-chapter__body">
           <span className="cl-chapter__rule" aria-hidden />
-          <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>
+          {editing.theatre && <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>}
           <span className="cl-chapter__title">
             {phase.title || "Chapitre sans titre"}
           </span>
@@ -634,7 +640,7 @@ const PhaseHeading = memo(function PhaseHeading({
   return (
     <div
       className="cl-chapter"
-      data-kind={phase.kind}
+      data-kind={editing.theatre ? phase.kind : undefined}
       data-folded={folded || undefined}
     >
       <div className="cl-turn__margin">
@@ -661,7 +667,7 @@ const PhaseHeading = memo(function PhaseHeading({
               className="cl-chapter__marked"
             />
           )}
-          {KIND_LABEL[phase.kind]}
+          {editing.theatre && KIND_LABEL[phase.kind]}
         </span>
         <PhaseTitle
           turn={phase.turn}
@@ -675,6 +681,7 @@ const PhaseHeading = memo(function PhaseHeading({
           </span>
         )}
         <span className="cl-chapter__rule" aria-hidden />
+        {(editing.theatre || !opensSession) && (
         <Popover
           isOpen={menu}
           onOpenChange={setMenu}
@@ -682,7 +689,7 @@ const PhaseHeading = memo(function PhaseHeading({
           width={260}
           content={
             <ul className="cl-namepanel__list" aria-label="Ce chapitre">
-              {KINDS.map((kind) => (
+              {(editing.theatre ? KINDS : []).map((kind) => (
                 <li key={kind}>
                   <button
                     type="button"
@@ -733,6 +740,7 @@ const PhaseHeading = memo(function PhaseHeading({
             <Ellipsis size={14} strokeWidth={1.75} />
           </button>
         </Popover>
+        )}
       </div>
     </div>
   );
