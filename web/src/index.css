@@ -6643,3 +6643,78 @@ button.cl-tree__more:hover {
   display: inline-flex;
   align-items: center;
 }
+
+.cl-face[data-size="xl"] {
+  width: 80px;
+  height: 80px;
+  font-size: 28px;
+  box-shadow: none;
+}
+
+/* A yes or no in « Qui parle ? »: who it may be, large, the question, two discs. */
+.cl-who__ask {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-4);
+  min-height: min(530px, calc(100vh - 140px));
+}
+
+.cl-who__askfaces {
+  display: flex;
+}
+
+.cl-who__askfaces > * + * {
+  margin-left: -12px;
+  box-shadow: 0 0 0 3px var(--color-background-surface);
+}
+
+.cl-who__askfaces .cl-who__empty {
+  width: 80px;
+  height: 80px;
+  background: var(--color-background-surface);
+}
+
+.cl-who__question {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-who__yesno {
+  display: flex;
+  gap: var(--spacing-6);
+}
+
+.cl-who__no,
+.cl-who__yes {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.cl-who__no {
+  border: 1px solid var(--color-border);
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+}
+
+.cl-who__yes {
+  width: 56px;
+  height: 56px;
+  border: 0;
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.cl-who__no:disabled,
+.cl-who__yes:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

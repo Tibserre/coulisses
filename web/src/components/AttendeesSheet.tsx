@@ -81,7 +81,7 @@ const bare = (s: string) =>
   s.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("fr").trim();
 
 /** A person's disc: their initial in their colour (a guest's outlined), or an empty place. */
-export function Face({ person, size = "md" }: { person?: Person; size?: "sm" | "md" | "lg" }) {
+export function Face({ person, size = "md" }: { person?: Person; size?: "sm" | "md" | "lg" | "xl" }) {
   return person ? (
     <span
       className="cl-face"

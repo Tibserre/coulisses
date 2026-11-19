@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Popover } from "@astryxdesign/core/Popover";
-import { ChevronLeft, ChevronRight, Pause, Play, User } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pause, Play, User, X } from "lucide-react";
 import {
   api,
   type EditRequest,
@@ -116,7 +116,12 @@ export function WhoSpeaks({
   const proposed =
     people.find((p) => p.id === speaker.proposal?.person_id) ?? null;
   const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<Person | null>(proposed);
+  const [picked, setPicked] = useState<Person | null>(null);
+  /** A yes or no first: the recognised voice (« C'est Marie ? »), or someone who already has
+   *  a voice (« C'est aussi Marie ? », the two voices merged on yes). */
+  const [asking, setAsking] = useState<{ person: Person; merge: boolean } | null>(
+    proposed && !speaker.named ? { person: proposed, merge: false } : null,
+  );
   const [at, setAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -125,11 +130,15 @@ export function WhoSpeaks({
   // Each voice starts afresh: its recognised person chosen, its longest line shown.
   useEffect(() => {
     setQuery("");
-    setPicked(proposed);
+    setPicked(null);
+    setAsking(proposed && !speaker.named ? { person: proposed, merge: false } : null);
     setAt(0);
     setError(null);
-    // The cursor in the search, once the dialog has put it on its title (its own effect).
-    const t = window.setTimeout(() => body.current?.querySelector("input")?.focus(), 0);
+    // The cursor in the search (or on « oui »), once the dialog has put it on its title.
+    const t = window.setTimeout(
+      () => body.current?.querySelector<HTMLElement>("input, .cl-who__yes")?.focus(),
+      0,
+    );
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per voice
   }, [label]);
@@ -166,7 +175,6 @@ export function WhoSpeaks({
       setBusy(false);
     }
   };
-  const merges = picked != null && hasVoice(picked, speaker, voices);
   const confirm = (who: Person | null = picked) =>
     who &&
     void run(() =>
@@ -176,17 +184,25 @@ export function WhoSpeaks({
         person_id: who.id,
       }),
     );
-  /** « Ce n'est pas … » (ADR 0057): a correction like another, undone from the corrections. */
-  const reject = () =>
-    proposed &&
+  /** No: to the recognised voice, « Ce n'est pas … » (ADR 0057, a correction like another,
+   *  undone from the corrections); to a merge, back to the list. */
+  const no = () => {
+    if (!asking) return;
+    if (asking.merge) {
+      setAsking(null);
+      return;
+    }
+    const person = asking.person;
     void run(async () => {
-      await onCorrect({
-        kind: "reject_voice_match",
-        speaker: label,
-        person_id: proposed.id,
-      });
-      setPicked(null);
+      await onCorrect({ kind: "reject_voice_match", speaker: label, person_id: person.id });
+      setAsking(null);
     });
+  };
+  /** A tile: someone with a voice asks first; anyone else is chosen (or no longer). */
+  const pick = (p: Person) => {
+    if (hasVoice(p, speaker, voices)) setAsking({ person: p, merge: true });
+    else setPicked((was) => (was?.id === p.id ? null : p));
+  };
   const addGuest = () =>
     void run(async () => {
       const guest = await onAddGuest(query.trim());
@@ -231,7 +247,7 @@ export function WhoSpeaks({
       hear(current);
     } else if (e.key === "Enter" && t.tagName !== "BUTTON") {
       e.preventDefault();
-      confirm();
+      confirm(asking?.person ?? picked);
     }
   };
 
@@ -343,11 +359,6 @@ export function WhoSpeaks({
                   ? ` · distance ${speaker.proposal.distance.toFixed(3)}`
                   : ""}
               </small>
-              {proposed && !speaker.named && (
-                <button type="button" className="cl-linkbtn" onClick={reject}>
-                  Ce n'est pas {proposed.name}
-                </button>
-              )}
             </span>
           </div>
           <p className="cl-who__line">
@@ -440,33 +451,64 @@ export function WhoSpeaks({
             </button>
           )}
         </div>
-        <div className="cl-who__pick cl-sheet">
-          <PeoplePicker
-            query={query}
-            onQuery={setQuery}
-            listed={whoOrder(speaker, people, voices, attendees)}
-            known={people}
-            spaceName={spaceName}
-            columns={4}
-            autoFocus
-            isOn={(p) => p.id === picked?.id}
-            onTile={(p) => setPicked((was) => (was?.id === p.id ? null : p))}
-            badge={(p) =>
-              hasVoice(p, speaker, voices)
-                ? { tip: `${p.name} a déjà une voix dans cette séance`, wave: true }
-                : p.id === proposed?.id && !speaker.named
-                  ? { tip: "Voix reconnue", wave: false }
+        {asking ? (
+          <div className="cl-who__pick cl-who__ask">
+            <span className="cl-who__askfaces">
+              {asking.merge && (
+                <span className="cl-who__empty" aria-hidden>
+                  <User size={26} strokeWidth={1.5} />
+                </span>
+              )}
+              <Face person={asking.person} size="xl" />
+            </span>
+            <p className="cl-who__question">
+              {asking.merge ? `C'est aussi ${asking.person.name} ?` : `C'est ${asking.person.name} ?`}
+            </p>
+            <span className="cl-who__yesno">
+              <button type="button" className="cl-who__no" aria-label="Non" disabled={busy} onClick={no}>
+                <X size={18} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                className="cl-who__yes"
+                aria-label={asking.merge ? "Oui, réunir les deux voix (Entrée)" : "Oui (Entrée)"}
+                disabled={busy}
+                onClick={() => confirm(asking.person)}
+              >
+                <Check size={20} strokeWidth={2.25} />
+              </button>
+            </span>
+          </div>
+        ) : (
+          <div className="cl-who__pick cl-sheet">
+            <PeoplePicker
+              query={query}
+              onQuery={setQuery}
+              listed={whoOrder(speaker, people, voices, attendees)}
+              known={people}
+              spaceName={spaceName}
+              columns={4}
+              autoFocus
+              isOn={(p) => p.id === picked?.id}
+              onTile={pick}
+              badge={(p) =>
+                hasVoice(p, speaker, voices)
+                  ? { tip: `${p.name} a déjà une voix dans cette séance`, wave: true }
                   : null
-            }
-            onAddGuest={addGuest}
-            onMakeMember={makeMember}
-            onEnter={(only) => {
-              // A name typed that leaves one person: that one, not the one chosen before.
-              if (only) setPicked(only);
-              confirm(only ?? picked);
-            }}
-          />
-        </div>
+              }
+              onAddGuest={addGuest}
+              onMakeMember={makeMember}
+              onEnter={(only) => {
+                // A name typed that leaves one person: that one, not the one chosen before.
+                if (only && hasVoice(only, speaker, voices)) setAsking({ person: only, merge: true });
+                else if (only) {
+                  setPicked(only);
+                  confirm(only);
+                } else confirm();
+              }}
+            />
+          </div>
+        )}
       </div>
       <div className="cl-who__foot">
         <Button
@@ -485,19 +527,18 @@ export function WhoSpeaks({
             </span>
           )
         )}
-        <button
-          type="button"
-          className="cl-who__ok"
-          disabled={!picked || busy}
-          onClick={() => confirm()}
-        >
-          {picked
-            ? merges
-              ? `Réunir avec la voix de ${picked.name}`
-              : `C'est ${picked.name}`
-            : "Nommer"}
-          <kbd>Entrée</kbd>
-        </button>
+        {/* While asking, the answer is the two discs: no button jumps under the pointer. */}
+        {!asking && (
+          <button
+            type="button"
+            className="cl-who__ok"
+            disabled={!picked || busy}
+            onClick={() => confirm()}
+          >
+            {picked ? `C'est ${picked.name}` : "Nommer"}
+            <kbd>Entrée</kbd>
+          </button>
+        )}
       </div>
       </div>
     </Dialog>
