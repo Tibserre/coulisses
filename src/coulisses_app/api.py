@@ -168,6 +168,10 @@ class SessionDetail(BaseModel):
     mix: mixing.MixFacts | None = None
     """The microphone mixed with the computer's sound, once made (from the job that used
     it, once the audio is purged); whether the computer's sound held anything."""
+    heard_version: str | None = None
+    """Changes when the file the page plays is replaced (a listening mix made, a track put
+    in an MP4): the player loads it again, its byte ranges being of the former file. None
+    without a sound to play, or while it records."""
 
 
 class RerunRequest(BaseModel):
@@ -721,9 +725,10 @@ def create_app(
             used_mix = jobs.latest_mix(conn, session_id)
         finally:
             conn.close()
+        source = sessions.reference_source(data, session_id)
         return SessionDetail(
             session=session,
-            source=sessions.reference_source(data, session_id),
+            source=source,
             stages=stage_views(data, chain, session_id),
             version=shown["run_id"] if shown else None,
             other_sources=sessions.other_sources(data, session_id),
@@ -733,6 +738,24 @@ def create_app(
             # Once the audio is purged, from the job that used it (P7).
             mix=mixing.read_facts(data, session_id)
             or (mixing.MixFacts.model_validate(used_mix) if used_mix is not None else None),
+            # Not while it records: the file grows at each look.
+            heard_version=None
+            if source is not None and source.capture_state == "recording"
+            else _heard_version(session_id),
+        )
+
+    def _heard_version(session_id: str) -> str | None:
+        if retention.audio_status(data, session_id).state == "removed":
+            return None
+        path = lossless.heard_path(data, session_id)
+        try:
+            facts = path.stat() if path is not None else None
+        except FileNotFoundError:  # moved in the Finder: the player says it
+            return None
+        return (
+            f"{path.name}-{facts.st_mtime_ns}-{facts.st_size}"
+            if path is not None and facts is not None
+            else None
         )
 
     @app.get("/api/seances/{session_id}/versions")

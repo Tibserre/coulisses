@@ -101,6 +101,7 @@ import {
   wordAt,
 } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
+import { nextHeardVersion } from "../heardVersion.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
 
@@ -208,6 +209,10 @@ export function SessionPage({
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
   const pb = usePlayback();
+  /** The version of the file heard, the last one known (a null meanwhile changes nothing):
+   *  in the audio's address, so that a file replaced under an open page (a conversion
+   *  overnight) is loaded anew, not read in pieces of two files (spec §7.2, ADR 0074). */
+  const [heardVersion, setHeardVersion] = useState<string | null>(null);
   const dev = useDevMode();
 
   const refresh = useCallback(async () => {
@@ -251,6 +256,32 @@ export function SessionPage({
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // A new version of the sound heard (never a null): reloaded where it was.
+  const nextHeard = detail?.heard_version ?? null;
+  /** In the address: the version known, or the one just read (the first load has it). */
+  const shownHeard = heardVersion ?? nextHeard;
+  useEffect(() => {
+    const next = nextHeardVersion(heardVersion, nextHeard);
+    if (next.version === heardVersion) return;
+    if (next.reload) pb.beforeSwap();
+    setHeardVersion(next.version);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a new version only
+  }, [nextHeard]);
+  // Back on the page (the Mac woken, the window in front again): read again, once, so that
+  // a file replaced meanwhile is known. Never polled outside a processing (reading the
+  // version may prepare the listening mix again).
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+    };
   }, [refresh]);
 
   // Follow the processing while it runs; nothing to poll once it is over.
@@ -773,8 +804,16 @@ export function SessionPage({
       {/* Once the audio is deleted there is nothing to load (spec §7.10). */}
       <audio
         ref={pb.audioRef}
-        src={audioGone ? undefined : api.audioUrl(id)}
+        src={
+          // Once the session is read: its version is in the address from the first load.
+          audioGone || !detail
+            ? undefined
+            : `${api.audioUrl(id)}${shownHeard ? `?v=${encodeURIComponent(shownHeard)}` : ""}`
+        }
         preload="metadata"
+        // A file that cannot be read any more: the session is read again, a new version
+        // of its sound reloads it.
+        onError={() => void refresh()}
       />
       <LanguageDownloadDialog
         language={toDownload}
