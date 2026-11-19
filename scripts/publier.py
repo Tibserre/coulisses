@@ -10,17 +10,19 @@ Numbering (--numeroter) gives the publication its version, the next one after th
 published (scripts/release.py --publier): version files, the « Non publié » section of
 CHANGELOG.md becomes its own, commit and tag. That section is then rewritten for the users
 and committed, before preparing. Merges into main set no version.
-Preparing, in this order, each step stopping the next:
+Preparing, each step stopping the next:
 1. the tag exists and this repository is clean; the tag is checked out in a worktree of the
    cache: what is published is exactly the tag;
-2. every test of the tag (Python, the slow ones on the real models included, interface,
-   types, lint);
-3. the build, signed with the certificate (`construire.py`), then the package test with
-   --publication (an ad hoc signature, or no update key, fails);
-4. the designated requirement is the previous publication's: otherwise the friends would
-   lose their permissions (without any confirmed publication here, only --premiere goes on);
-5. the previous published app makes a base with a session, the new one opens it
-   (migrations), network cut, with empty models;
+2. the quick checks of the tag (its environments, types, lint, the interface's tests);
+3. side by side (their own ports and folders; they share the machine, so a step may run
+   slower, never silently wrong): the Python tests (the slow ones on the real models
+   included), and the build, signed with the certificate (`construire.py`), followed by
+4. the designated requirement, the previous publication's (otherwise the friends would lose
+   their permissions; without any confirmed publication here, only --premiere goes on),
+5. then side by side the package test with --publication (an ad hoc signature, or no update
+   key, fails) and the migration: the previous published app makes a base with a session,
+   the new one opens it, network cut, with empty models.
+   What runs side by side writes to its log in the worktree, shown on failure;
 6. the DMG (the app inside signed, the image itself not); its EdDSA signature; the notes,
    from this repository's CHANGELOG.md, which must hold the tag (a section written from the
    commits is read again before publishing, and corrected after its tag if need be); the
@@ -51,6 +53,8 @@ import sys
 import tempfile
 import time
 import tomllib
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from email.utils import format_datetime
 from pathlib import Path
@@ -84,11 +88,30 @@ def run(command: list[str | Path], **options: object) -> subprocess.CompletedPro
     return done
 
 
-def shown(command: list[str | Path], cwd: Path) -> None:
-    """A step whose output is long (tests, build): shown as it goes."""
-    say(f"   $ {' '.join(str(c) for c in command)}")
-    if subprocess.run([str(c) for c in command], cwd=cwd, check=False).returncode != 0:
-        fail(f"{' '.join(str(c) for c in command[:3])} a échoué")
+def shown(command: list[str | Path], cwd: Path, log: Path | None = None) -> None:
+    """A step whose output is long (tests, build): shown as it goes, or written to `log`
+    when it runs beside another (its end shown on failure)."""
+    say(f"   $ {' '.join(str(c) for c in command)}" + (f"  (journal : {log.name})" if log else ""))
+    if log is None:
+        code = subprocess.run([str(c) for c in command], cwd=cwd, check=False).returncode
+    else:
+        with log.open("a", encoding="utf-8") as out:
+            code = subprocess.run(
+                [str(c) for c in command], cwd=cwd, stdout=out, stderr=subprocess.STDOUT
+            ).returncode
+    if code != 0:
+        if log is not None:
+            print(log.read_text(encoding="utf-8", errors="replace")[-4000:], file=sys.stderr)
+        where = f" (journal complet : {log})" if log is not None else ""
+        fail(f"{' '.join(str(c) for c in command[:3])} a échoué{where}")
+
+
+def side_by_side(*steps: Callable[[], object]) -> list[object]:
+    """Steps that share nothing run at once; their results in order. A failure (SystemExit)
+    is raised once every step has ended: a step already running is never cut short."""
+    with ThreadPoolExecutor(len(steps)) as pool:
+        futures = [pool.submit(step) for step in steps]
+    return [future.result() for future in futures]
 
 
 def sha256(path: Path) -> str:
@@ -219,20 +242,11 @@ def one_at_a_time() -> object:
     return handle
 
 
-def test_everything(work: Path) -> None:
-    say("2. Tous les tests de l'étiquette…")
+def quick_checks(work: Path) -> None:
+    """Before anything runs side by side: what installs (the build reuses both
+    environments, never installing beside the tests) and what is quick."""
+    say("2. Les vérifications rapides de l'étiquette…")
     shown(["uv", "sync", "--offline", "--all-extras"], work)
-    shown(["uv", "run", "--offline", "pytest", "-q"], work)
-    # And those on the real models of the retained chain (~/Coulisses/Modèles), set aside
-    # from the everyday run: a version is published only if they all ran and passed (one
-    # skipped, for want of `say` or ffmpeg, stops it too).
-    slow = ["uv", "run", "--offline", "pytest", "-q", "-m", "slow", "-rs"]
-    say(f"   $ {' '.join(slow)}")
-    done = run(slow, cwd=work)
-    print(done.stdout[-2000:], end="")
-    summary = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
-    if "skipped" in summary or "passed" not in summary:
-        fail(f"tests lents : tous doivent tourner et passer ({summary or 'aucun résultat'})")
     shown(["uv", "run", "--offline", "ruff", "check", "."], work)
     shown(["uv", "run", "--offline", "pyright"], work)
     web = work / "web"
@@ -241,19 +255,63 @@ def test_everything(work: Path) -> None:
         shown(["npm", "run", "-s", script], web)
 
 
+def python_tests(work: Path) -> None:
+    log = work / "tests.log"
+    shown(["uv", "run", "--offline", "pytest", "-q"], work, log)
+    # And those on the real models of the retained chain (~/Coulisses/Modèles), set aside
+    # from the everyday run: a version is published only if they all ran and passed (one
+    # skipped, for want of `say` or ffmpeg, stops it too).
+    slow = ["uv", "run", "--offline", "pytest", "-q", "-m", "slow", "-rs"]
+    say(f"   $ {' '.join(slow)}")
+    done = run(slow, cwd=work)
+    summary = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
+    if "skipped" in summary or "passed" not in summary:
+        print(done.stdout[-2000:], file=sys.stderr)
+        fail(f"tests lents : tous doivent tourner et passer ({summary or 'aucun résultat'})")
+    say(f"   tests lents : {summary}")
+
+
 def built_as(identifier: str, tag: str) -> None:
     """The app built says it is exactly the tag (ADR 0064), not code around it."""
     if identifier.strip() != tag:
         fail(f"l'app construite se dit « {identifier.strip()} », pas {tag}")
 
 
-def build_and_test(work: Path, tag: str) -> Path:
-    say("3. Construction signée, puis essai du paquet…")
-    shown(["uv", "run", "--offline", "python", "scripts/construire.py"], work)
+def build_and_test(work: Path, tag: str, previous: Path | None) -> tuple[Path, str]:
+    """Steps 3 (the build), 4 and 5: the app and its designated requirement."""
+    shown(
+        ["uv", "run", "--offline", "python", "scripts/construire.py"],
+        work,
+        work / "construction.log",
+    )
     app = work / "dist" / "Coulisses.app"
     built_as((app / "Contents" / "Resources" / "identifiant-de-version").read_text("utf-8"), tag)
-    shown(["scripts/essai-paquet.sh", "--publication", app], work)
-    return app
+
+    say("4. La même exigence désignée que la version publiée avant…")
+    requirement = designated_requirement(app)
+    if previous is None:
+        say("   première publication (--premiere) : rien à comparer")
+    else:
+        before = (previous / "exigence.txt").read_text(encoding="utf-8").strip()
+        if before != requirement:
+            fail(
+                f"exigence désignée changée depuis {previous.name} : "
+                "les amis perdraient leurs permissions"
+            )
+        say(f"   la même que {previous.name}")
+
+    say("5. Essai du paquet, à côté de la migration depuis la version publiée avant…")
+    side_by_side(
+        lambda: shown(
+            ["scripts/essai-paquet.sh", "--publication", app], work, work / "essai-paquet.log"
+        ),
+        lambda: (
+            migration_test(previous, app)
+            if previous is not None
+            else say("   première publication (--premiere) : rien à migrer")
+        ),
+    )
+    return app, requirement
 
 
 def designated_requirement(app: Path) -> str:
@@ -350,6 +408,10 @@ def migration_test(previous: Path, app: Path) -> None:
         fail(f"pas de DMG dans {previous}")
     with tempfile.TemporaryDirectory(prefix="coulisses-migration-") as work_dir:
         work = Path(work_dir)
+        # A copy: the package test, running beside, follows every process of `app` by its
+        # path (essai-paquet.sh, the network proof); this service must not be among them.
+        run(["ditto", app, work / "Coulisses.app"])
+        app = work / "Coulisses.app"
         mount = work / "ancienne"
         run(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mount, dmgs[0]])
         try:
@@ -440,27 +502,11 @@ def prepare(tag: str, first: bool) -> Path:
     say(f"1. L'étiquette {tag}, telle quelle…")
     work = checked_out(tag)
     say(f"   (en cas d'échec, l'étiquette reste dans {work} pour comprendre)")
-    test_everything(work)
-    app = build_and_test(work, tag)
-
-    say("4. La même exigence désignée que la version publiée avant…")
-    requirement = designated_requirement(app)
-    if previous is None:
-        say("   première publication (--premiere) : rien à comparer")
-    else:
-        before = (previous / "exigence.txt").read_text(encoding="utf-8").strip()
-        if before != requirement:
-            fail(
-                f"exigence désignée changée depuis {previous.name} : "
-                "les amis perdraient leurs permissions"
-            )
-        say(f"   la même que {previous.name}")
-
-    say("5. Migration depuis la version publiée avant…")
-    if previous is None:
-        say("   première publication (--premiere) : rien à migrer")
-    else:
-        migration_test(previous, app)
+    quick_checks(work)
+    say("3. Les tests Python, à côté de la construction signée…")
+    _, (app, requirement) = side_by_side(
+        lambda: python_tests(work), lambda: build_and_test(work, tag, previous)
+    )
 
     say("6. DMG, signatures, notes et appcast…")
     if replaced:
