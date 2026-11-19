@@ -16,7 +16,7 @@ Dans une troupe, ce sont presque toujours les mêmes personnes : nommer chaque v
 - **La proposition.** Pour chaque voix non nommée qui a une empreinte, `match_voice` donne le profil le plus proche sous le seuil du moteur. Les personnes archivées et celles que l'utilisateur a refusées pour cette voix sont écartées. La vue la porte (`Speaker.proposal` : la personne, sa couleur, la distance). Elle n'est jamais appliquée seule.
 - **Dans « À nommer »** : sous la voix, « C'est Marie ? », le nom dans la couleur de Marie, puis une coche et une croix.
   - La coche nomme la voix (`assign_speaker`). Le nommage devient une fusion si Marie a déjà une voix dans la séance, comme pour tout nommage.
-  - Un clic sur le nom ouvre le panneau de nommage.
+  - Un clic sur le nom ouvre le panneau de nommage (remplacé par « Qui parle ? », 0090).
   - La croix inscrit le refus.
 - **Dans le panneau de nommage** (dans « Qui parle ? », la question « C'est Marie ? » de 0090 le remplace) : la personne reconnue vient en tête de la liste, avec la note « voix reconnue », séparée des autres par un filet. Elle est déjà choisie : Entrée confirme, et taper filtre comme avant.
 - **« Non » est une correction** : un nouveau genre, `reject_voice_match` (`{speaker, person_id}`), dans le journal `edit`. Il est décrit « Locuteur 3 : pas Marie », s'annule par Cmd-Z, et il est reporté sur une nouvelle version par le temps mesuré, comme un nommage (ADR 0028). Il n'y a pas de migration : `edit.kind` est vérifié dans le code.

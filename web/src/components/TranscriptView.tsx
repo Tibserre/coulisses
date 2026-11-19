@@ -221,6 +221,7 @@ function LineVoices({
                 type="button"
                 className="cl-spacepick__item"
                 aria-current={v.label === speaker.label || undefined}
+                aria-disabled={v.label === speaker.label || undefined}
                 onClick={() => v.label !== speaker.label && onGive(v.label!)}
               >
                 <span className="cl-dot" style={{ background: inkOf(v) }} aria-hidden />
