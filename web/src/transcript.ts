@@ -631,3 +631,16 @@ export function speechWave(
   }
   return bars;
 }
+
+/** What « Qui parle ? » asks first about a voice (ADR 0090): « C'est Marie ? » for the
+ *  person recognised (ADR 0057), « C'est aussi Marie ? » when that person already has a
+ *  voice of the session (yes merges the two, P3); nothing when the voice is named. */
+export function askFor(
+  speaker: Speaker,
+  people: readonly Person[],
+  voices: readonly Speaker[],
+): { person: Person; merge: boolean } | null {
+  if (speaker.named || !speaker.proposal) return null;
+  const person = people.find((p) => p.id === speaker.proposal!.person_id);
+  return person ? { person, merge: hasVoice(person, speaker, voices) } : null;
+}

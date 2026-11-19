@@ -18,7 +18,7 @@ Dans une troupe, ce sont presque toujours les mêmes personnes : nommer chaque v
   - La coche nomme la voix (`assign_speaker`). Le nommage devient une fusion si Marie a déjà une voix dans la séance, comme pour tout nommage.
   - Un clic sur le nom ouvre le panneau de nommage.
   - La croix inscrit le refus.
-- **Dans le panneau de nommage** : la personne reconnue vient en tête de la liste, avec la note « voix reconnue », séparée des autres par un filet. Elle est déjà choisie : Entrée confirme, et taper filtre comme avant.
+- **Dans le panneau de nommage** (dans « Qui parle ? », la question « C'est Marie ? » de 0090 le remplace) : la personne reconnue vient en tête de la liste, avec la note « voix reconnue », séparée des autres par un filet. Elle est déjà choisie : Entrée confirme, et taper filtre comme avant.
 - **« Non » est une correction** : un nouveau genre, `reject_voice_match` (`{speaker, person_id}`), dans le journal `edit`. Il est décrit « Locuteur 3 : pas Marie », s'annule par Cmd-Z, et il est reporté sur une nouvelle version par le temps mesuré, comme un nommage (ADR 0028). Il n'y a pas de migration : `edit.kind` est vérifié dans le code.
 - **Une empreinte illisible** (fichier modifié ou supprimé dans le Finder) n'empêche jamais la relecture. La séance concernée ne compte pas, et « À nommer » dit lesquelles n'ont pas pu être lues (`voices_problem`, P8).
 - **Mode développeur** : la distance de chaque proposition.

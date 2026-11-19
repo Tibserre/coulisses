@@ -137,7 +137,8 @@ export function SessionPage({
   const [editError, setEditError] = useState<string | null>(null);
   const [provenanceOf, setProvenanceOf] = useState<StageView | null>(null);
   const [editingTurn, setEditingTurn] = useState<number | null>(null);
-  const [namingTurn, setNamingTurn] = useState<number | null>(null);
+  /** Opens « Qui parle ? » on a voice; set once the voices are known (below). */
+  const nameVoiceRef = useRef<(label: string) => void>(() => undefined);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [lastSelected, setLastSelected] = useState<number | null>(null);
   const [giving, setGiving] = useState(false);
@@ -310,7 +311,6 @@ export function SessionPage({
     if (shownRun.current !== null && shownRun.current !== viewRun) {
       setFolded(new Set());
       setSelected(new Set());
-      setNamingTurn(null);
     }
     shownRun.current = viewRun;
   }, [viewRun]);
@@ -543,8 +543,7 @@ export function SessionPage({
       },
       editingTurn,
       setEditingTurn,
-      namingTurn,
-      setNamingTurn,
+      nameVoice: (label: string) => nameVoiceRef.current(label),
       selected,
       toggleSelected: (turn: number, extend: boolean) => {
         if (guide) return; // naming, guided: no selection (its bar would be hidden)
@@ -558,10 +557,7 @@ export function SessionPage({
       },
       setTyping,
       chaptersProvisional: provisional,
-      showSpeaker: (label: string) => {
-        setNamingTurn(null);
-        setFocus(label);
-      },
+      showSpeaker: (label: string) => setFocus(label),
       toggleFolded: (turn: number) =>
         setFolded((before) => {
           const next = new Set(before);
@@ -576,7 +572,6 @@ export function SessionPage({
       loadPeople,
       id,
       editingTurn,
-      namingTurn,
       selected,
       lastSelected,
       shown,
@@ -647,7 +642,7 @@ export function SessionPage({
       if (reading !== "transcript") return;
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
-        setNamingTurn(currentRow.turn.index);
+        if (currentRow.speaker.label) nameVoiceRef.current(currentRow.speaker.label);
       } else if (e.key === "e" || e.key === "E") {
         e.preventDefault();
         setEditingTurn(currentRow.turn.index);
@@ -705,11 +700,12 @@ export function SessionPage({
     goTo(toName[guide.at] ?? toName[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on a name given
   }, [guide, guided, toName, unfolded]);
+  nameVoiceRef.current = (label) =>
+    goTo(unfolded?.speakers.find((s) => s.label === label));
   const startNaming = () => {
     if (!toName[0]) return;
     setReading("transcript");
     setFocus(null);
-    setNamingTurn(null);
     setSelected(new Set());
     goTo(toName[0]);
   };
@@ -1187,11 +1183,7 @@ export function SessionPage({
                       shown={shown}
                       pb={pb}
                       current={currentRow}
-                      onName={() => {
-                        const first = shown.rows.find((r) => r.kind === "turn");
-                        if (first?.kind === "turn")
-                          setNamingTurn(first.turn.index);
-                      }}
+                      onName={() => focused.label && nameVoiceRef.current(focused.label)}
                       onClose={() => setFocus(null)}
                     />
                   )}

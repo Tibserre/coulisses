@@ -13,6 +13,7 @@ import {
 import { formatDuration, plural } from "../format.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
 import {
+  askFor,
   hasVoice,
   namingLines,
   nearestLine,
@@ -113,15 +114,11 @@ export function WhoSpeaks({
   onPeopleChanged: () => Promise<void>;
 }) {
   const label = speaker.label!;
-  const proposed =
-    people.find((p) => p.id === speaker.proposal?.person_id) ?? null;
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<Person | null>(null);
   /** A yes or no first: the recognised voice (« C'est Marie ? »), or someone who already has
    *  a voice (« C'est aussi Marie ? », the two voices merged on yes). */
-  const [asking, setAsking] = useState<{ person: Person; merge: boolean } | null>(
-    proposed && !speaker.named ? { person: proposed, merge: false } : null,
-  );
+  const [asking, setAsking] = useState(() => askFor(speaker, people, voices));
   const [at, setAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -131,7 +128,6 @@ export function WhoSpeaks({
   useEffect(() => {
     setQuery("");
     setPicked(null);
-    setAsking(proposed && !speaker.named ? { person: proposed, merge: false } : null);
     setAt(0);
     setError(null);
     // The cursor in the search (or on « oui »), once the dialog has put it on its title.
@@ -142,6 +138,22 @@ export function WhoSpeaks({
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per voice
   }, [label]);
+  // A new proposal (another person, after a « non » or its undoing) asks again.
+  useEffect(() => {
+    setAsking(askFor(speaker, people, voices));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on the proposal only
+  }, [label, speaker.proposal?.person_id]);
+  // The keyboard follows the right side: on « oui » while asking, else in the search.
+  useEffect(() => {
+    const t = window.setTimeout(
+      () =>
+        body.current
+          ?.querySelector<HTMLElement>(asking ? ".cl-who__yes" : ".cl-who__pick input")
+          ?.focus(),
+      0,
+    );
+    return () => window.clearTimeout(t);
+  }, [asking]);
 
   const longest = namingLines(lines, "long");
   const current = longest[Math.min(at, longest.length - 1)] ?? null;
@@ -452,7 +464,11 @@ export function WhoSpeaks({
           )}
         </div>
         {asking ? (
-          <div className="cl-who__pick cl-who__ask">
+          <div
+            className="cl-who__pick cl-who__ask"
+            role="group"
+            aria-labelledby="cl-who-question"
+          >
             <span className="cl-who__askfaces">
               {asking.merge && (
                 <span className="cl-who__empty" aria-hidden>
@@ -461,17 +477,25 @@ export function WhoSpeaks({
               )}
               <Face person={asking.person} size="xl" />
             </span>
-            <p className="cl-who__question">
+            <p id="cl-who-question" className="cl-who__question" aria-live="polite">
               {asking.merge ? `C'est aussi ${asking.person.name} ?` : `C'est ${asking.person.name} ?`}
             </p>
             <span className="cl-who__yesno">
-              <button type="button" className="cl-who__no" aria-label="Non" disabled={busy} onClick={no}>
+              <button
+                type="button"
+                className="cl-who__no"
+                aria-label={asking.merge ? "Non, revenir à la liste" : `Non, ce n'est pas ${asking.person.name}`}
+                title={asking.merge ? "Non, revenir à la liste" : `Non, ce n'est pas ${asking.person.name}`}
+                disabled={busy}
+                onClick={no}
+              >
                 <X size={18} strokeWidth={2} />
               </button>
               <button
                 type="button"
                 className="cl-who__yes"
                 aria-label={asking.merge ? "Oui, réunir les deux voix (Entrée)" : "Oui (Entrée)"}
+                title={asking.merge ? "Oui, réunir les deux voix (Entrée)" : "Oui (Entrée)"}
                 disabled={busy}
                 onClick={() => confirm(asking.person)}
               >

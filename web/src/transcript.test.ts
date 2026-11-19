@@ -8,6 +8,7 @@ import {
   speechWave,
   turnSeconds,
   namingLines,
+  askFor,
   hasVoice,
   whoOrder,
   voiceTurns,
@@ -586,6 +587,15 @@ test("the guided naming: voices in the order heard, the recognised person, then 
   );
   assert.equal(hasVoice(people[0], v1, [v1, v2, ana]), true);
   assert.equal(hasVoice(people[0], ana, [v1, v2, ana]), false);
+  assert.deepEqual(askFor(v1, people, [v1, v2, ana]), { person: people[2], merge: false });
+  const anaAgain = speaker("4", "Voix 4", {
+    proposal: { person_id: 1, name: "Ana", color_slot: 1, distance: 0.1 },
+  });
+  assert.deepEqual(askFor(anaAgain, people, [v1, ana, anaAgain]), {
+    person: people[0],
+    merge: true,
+  });
+  assert.equal(askFor(v2, people, [v1, v2]), null);
 });
 
 test("voices to name come the most talkative first, with their own lines", () => {
