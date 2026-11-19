@@ -496,6 +496,20 @@ def test_the_page_is_served_the_track_itself_in_an_mp4(data: DataDir) -> None:
     assert served(data, session_id) == ((folder / "ref.m4a").read_bytes(), "audio/mp4")
 
 
+def test_the_page_learns_when_the_sound_it_plays_is_replaced(data: DataDir) -> None:
+    """A page left open while its track is put in an MP4 must load it again: its byte ranges
+    are of the former file."""
+    session_id = recorded(data, tone(1.0, 0.3), None)
+    with local_client(
+        create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
+    ) as client:
+        before = client.get(f"/api/seances/{session_id}").json()["heard_version"]
+        assert before == client.get(f"/api/seances/{session_id}").json()["heard_version"]
+        lossless.convert_session(data, session_id)
+        after = client.get(f"/api/seances/{session_id}").json()["heard_version"]
+    assert before is not None and after is not None and after != before
+
+
 def test_without_an_ffmpeg_writing_mp4_tracks_stay_in_raw_flac(
     data: DataDir, monkeypatch: pytest.MonkeyPatch
 ) -> None:

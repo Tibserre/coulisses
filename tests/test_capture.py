@@ -370,6 +370,9 @@ def test_the_interface_drives_the_recording(
     assert started.json()["device"] == "Micro MacBook Pro"
     mic.push(tone(0.5, 0.3))
     wait_for(lambda: client.get("/api/enregistrement").json()["elapsed_s"] >= 0.5)
+    # The file grows at each look: no version of the sound played until it is over.
+    recording = client.get(f"/api/seances/{started.json()['session_id']}").json()
+    assert recording["heard_version"] is None
     assert client.post("/api/enregistrement/pause").json()["state"] == "paused"
     assert client.post("/api/enregistrement/reprise").json()["state"] == "recording"
     assert client.post("/api/enregistrement", json={}).status_code == 422  # one at a time
@@ -380,6 +383,7 @@ def test_the_interface_drives_the_recording(
     session_id = stopped["session_id"]
     detail = client.get(f"/api/seances/{session_id}").json()
     assert detail["source"]["capture_state"] == "complete"
+    assert detail["heard_version"] is not None
     assert client.post(f"/api/seances/{session_id}/traiter").status_code == 202
     assert client.post(f"/api/seances/{session_id}/traiter").status_code == 422
     assert client.post("/api/enregistrement/arret").status_code == 422

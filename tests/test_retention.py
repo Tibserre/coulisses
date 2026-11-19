@@ -77,8 +77,9 @@ def test_removing_the_audio_keeps_the_text_and_says_it(data: DataDir, recording:
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
     )
     assert client.get(f"/api/seances/{session_id}/audio").status_code == 404
-    listed = client.get(f"/api/seances/{session_id}").json()["session"]["audio"]
-    assert listed["state"] == "removed"
+    detail = client.get(f"/api/seances/{session_id}").json()
+    assert detail["session"]["audio"]["state"] == "removed"
+    assert detail["heard_version"] is None  # nothing to play any more
 
 
 def test_nothing_is_removed_while_recording_or_processing(data: DataDir, recording: Path) -> None:
