@@ -434,12 +434,19 @@ def test_while_processed_the_text_shows_before_anyone_is_told_apart(
 
 def test_theatre_is_off_until_turned_on(client: TestClient) -> None:
     """« Jeu et personnages » (ADR 0091): a setting of the space, off at first."""
-    space = client.post("/api/espaces", json={"name": "Les Fous", "template": "impro"}).json()
+    space = client.post("/api/espaces", json={"name": "Les Fous", "template": "reunion"}).json()
     assert space["theatre"] is False
     turned = client.patch(f"/api/espaces/{space['id']}", json={"theatre": True}).json()
     assert turned["theatre"] is True
     renamed = client.patch(f"/api/espaces/{space['id']}", json={"name": "Les Sages"}).json()
     assert renamed["theatre"] is True  # untouched by another change
+
+
+def test_a_new_troupe_has_it_on(client: TestClient) -> None:
+    troupe = client.post("/api/espaces", json={"name": "Les Fous", "template": "impro"}).json()
+    assert troupe["theatre"] is True
+    blank = client.post("/api/espaces", json={"name": "Rien", "template": "vide"}).json()
+    assert blank["theatre"] is False
 
 
 def test_the_spaces_there_before_have_it_off(tmp_path: Path) -> None:
