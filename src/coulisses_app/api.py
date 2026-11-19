@@ -215,6 +215,8 @@ class AttendeesRequest(BaseModel):
 class SpaceRequest(BaseModel):
     name: str | None = None
     voice_recognition: bool | None = None
+    theatre: bool | None = None
+    """« Jeu et personnages » (ADR 0091)."""
     archived: bool | None = None
     template: str = "vide"
     """At creation only: impro, reunion or vide (ADR 0020)."""
@@ -1299,6 +1301,7 @@ def create_app(
             space_id,
             name=demande.name,
             voice_recognition=demande.voice_recognition,
+            theatre=demande.theatre,
             archived=demande.archived,
             language=_language(demande.language),
         )
