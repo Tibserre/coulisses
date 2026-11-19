@@ -15,7 +15,7 @@ Deux façons de nommer cohabitaient, qui ne se ressemblaient pas : la liste sous
 - **L'ordre des voix** : de la plus bavarde à la moins bavarde (plus l'ordre où on les entend).
 - **En bas**, « Passer cette voix » et le bouton « C'est Paul » (Entrée), qui nomme et passe à la voix suivante. Échap ferme.
 
-## L'onde
+## L'onde (remplacée par 0092)
 Le service ne garde pas encore l'enveloppe du son d'une séance. En attendant, l'onde est celle de la parole mesurée : une barre par tranche de temps, haute selon la part de la tranche où quelqu'un parle (temps des répliques du moteur, P2), jamais un niveau inventé. Une vraie enveloppe viendra du Service.
 
 ## Conséquences

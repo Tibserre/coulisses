@@ -263,12 +263,16 @@ def _busy(conn: sqlite3.Connection, session_id: str, *, waiting_counts: bool) ->
     """Why the session cannot lose its files now, if it cannot. `waiting_counts`: a
     processing waiting in the queue needs the audio too (the session's deletion takes its
     queue with it)."""
-    from coulisses_app import lossless, mixing  # they read the sessions, which read this
+    from coulisses_app import lossless, mixing, waveform  # they read the sessions, which read this
 
     if lossless.busy(session_id):
         return (
             "Les pistes de cette séance sont en train d'être gardées en FLAC : réessayez dans "
             "un instant."
+        )
+    if waveform.busy(session_id):
+        return (
+            "L'onde du son de cette séance est en train d'être mesurée : réessayez dans un instant."
         )
     if mixing.busy(session_id):
         return (
@@ -365,7 +369,11 @@ def remove_audio(
     purge is checked once more against the user's latest choice (« Garder l'audio »,
     « Prolonger »). The session says the audio is gone before its files go: a processing
     claimed afterwards finds it so, never a file half deleted."""
+    from coulisses_app import waveform  # it reads the sessions, which read this
+
     now = now or datetime.now(UTC)
+    # Before the lock: measured once, it outlives the purge (decided by the user, ADR 0092).
+    unmeasured = waveform.keep(data, session_id)
     conn = connect(data)
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -405,7 +413,7 @@ def remove_audio(
             raise
     finally:
         conn.close()
-    problems: list[str] = []
+    problems: list[str] = [unmeasured] if unmeasured else []
     for path, _ in files:
         try:
             path.unlink()
