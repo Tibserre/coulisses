@@ -6,6 +6,14 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- rend invisible le rechargement du son (seance)
+- recharge le son quand son fichier est remplacé, page ouverte (seance)
+- donne à la page la version du son qu'elle fait entendre (ecoute)
+
 ## v0.41.0 — 2026-11-18
 
 ### Nouveautés
