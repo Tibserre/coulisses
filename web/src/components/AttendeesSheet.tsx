@@ -186,9 +186,6 @@ export function AttendeesSheet({
     ...order.map((id) => byId.get(id)).filter((p): p is Person => Boolean(p)),
     ...people.filter((p) => !order.includes(p.id)),
   ];
-  const q = bare(query);
-  const found = q ? listed.filter((p) => bare(p.name).includes(q)) : listed;
-  const exact = q !== "" && people.some((p) => bare(p.name) === q);
 
   const run = async (step: () => Promise<void>) => {
     try {
@@ -244,73 +241,16 @@ export function AttendeesSheet({
           <span className="cl-sheet__opt">facultatif</span>
         </div>
         <p className="cl-sheet__why">Les voix seront plus faciles à reconnaître ensuite.</p>
-        <label className="cl-sheet__find" data-typed={query ? true : undefined}>
-          <Search size={14} strokeWidth={1.75} aria-hidden />
-          <input
-            type="text"
-            value={query}
-            placeholder="Chercher ou ajouter un nom"
-            aria-label="Chercher ou ajouter un nom"
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && q && !exact) {
-                e.preventDefault();
-                void addGuest();
-              }
-            }}
-          />
-          {query && (
-            <button type="button" className="cl-sheet__clear" aria-label="Effacer" onClick={() => setQuery("")}>
-              <X size={14} strokeWidth={1.75} />
-            </button>
-          )}
-        </label>
-        <div className="cl-sheet__scroll">
-          <ul className="cl-sheet__grid" aria-label="Personnes de l'espace">
-          {found.map((p) => {
-            const on = attendees.ids.includes(p.id);
-            return (
-              <li key={p.id} className="cl-sheet__cell">
-                <Tile person={p} on={on} onToggle={() => attendees.toggle(p.id)} />
-                {p.kind === "guest" && (
-                  <Tooltip
-                    content={
-                      <>
-                        Passer membre
-                        <small className="cl-sheet__tipnote">{p.name} participe en invité</small>
-                      </>
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="cl-sheet__member"
-                      aria-label={`Passer ${p.name} membre de ${spaceName}`}
-                      onClick={() => void makeMember(p)}
-                    >
-                      <Plus size={12} strokeWidth={2.25} aria-hidden />
-                    </button>
-                  </Tooltip>
-                )}
-              </li>
-            );
-          })}
-          </ul>
-          {q && found.length === 0 && (
-            <p className="cl-sheet__opt cl-sheet__none">Aucune personne de ce nom dans {spaceName}.</p>
-          )}
-          {q && !exact && (
-            <button type="button" className="cl-sheet__new" onClick={() => void addGuest()}>
-              <span className="cl-face" data-size="md" data-empty aria-hidden>
-                <Plus size={14} strokeWidth={1.75} />
-              </span>
-              <span className="cl-sheet__newtext">
-                <b>Ajouter « {query.trim()} »</b>
-                <small>Nouvelle personne, en invité</small>
-              </span>
-              <kbd>Entrée</kbd>
-            </button>
-          )}
-        </div>
+        <PeoplePicker
+          query={query}
+          onQuery={setQuery}
+          listed={listed}
+          spaceName={spaceName}
+          isOn={(p) => attendees.ids.includes(p.id)}
+          onTile={(p) => attendees.toggle(p.id)}
+          onAddGuest={() => void addGuest()}
+          onMakeMember={(p) => void makeMember(p)}
+        />
         <div className="cl-sheet__foot">
           {said ? (
             <span role="status">
@@ -378,8 +318,132 @@ export function Counter({ attendees, size }: { attendees: Attendees; size: "md" 
   );
 }
 
+/** The people of the space to pick from (« Qui est là ? », « Qui parle ? »): the search, the
+ *  big discs (two lines of name at most), a guest outlined with « + » to make them a member,
+ *  and « Ajouter « … » » that adds a guest (Entrée). */
+export function PeoplePicker({
+  query,
+  onQuery,
+  listed,
+  known = listed,
+  spaceName,
+  isOn,
+  onTile,
+  note,
+  columns = 6,
+  autoFocus = false,
+  onAddGuest,
+  onMakeMember,
+  onEnter,
+}: {
+  query: string;
+  onQuery: (query: string) => void;
+  /** In the order shown. */
+  listed: Person[];
+  /** Everyone a typed name is matched against, archived included (no guest in double);
+   *  by default those listed. */
+  known?: Person[];
+  spaceName: string;
+  isOn: (p: Person) => boolean;
+  onTile: (p: Person) => void;
+  /** A word under the name (« a déjà une voix »). */
+  note?: (p: Person) => string | null;
+  columns?: 4 | 6;
+  autoFocus?: boolean;
+  onAddGuest: () => void;
+  onMakeMember: (p: Person) => void;
+  /** Entrée with nothing to add: with the one person a name typed leaves, if it does. */
+  onEnter?: (only: Person | null) => void;
+}) {
+  const q = bare(query);
+  const found = q ? listed.filter((p) => bare(p.name).includes(q)) : listed;
+  const exact = q !== "" && known.some((p) => bare(p.name) === q);
+  const only = q
+    ? (found.find((p) => bare(p.name) === q) ?? (found.length === 1 ? found[0] : null))
+    : null;
+  return (
+    <>
+      <label className="cl-sheet__find" data-typed={query ? true : undefined}>
+        <Search size={14} strokeWidth={1.75} aria-hidden />
+        <input
+          type="text"
+          value={query}
+          autoFocus={autoFocus}
+          placeholder="Chercher ou ajouter un nom"
+          aria-label="Chercher ou ajouter un nom"
+          onChange={(e) => onQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            if (q && !exact) onAddGuest();
+            else onEnter?.(only);
+          }}
+        />
+        {query && (
+          <button type="button" className="cl-sheet__clear" aria-label="Effacer" onClick={() => onQuery("")}>
+            <X size={14} strokeWidth={1.75} />
+          </button>
+        )}
+      </label>
+      <div className="cl-sheet__scroll">
+        <ul className="cl-sheet__grid" data-columns={columns} aria-label="Personnes de l'espace">
+          {found.map((p) => (
+            <li key={p.id} className="cl-sheet__cell">
+              <Tile person={p} on={isOn(p)} note={note?.(p) ?? null} onToggle={() => onTile(p)} />
+              {p.kind === "guest" && (
+                <Tooltip
+                  content={
+                    <>
+                      Passer membre
+                      <small className="cl-sheet__tipnote">{p.name} participe en invité</small>
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    className="cl-sheet__member"
+                    aria-label={`Passer ${p.name} membre de ${spaceName}`}
+                    onClick={() => onMakeMember(p)}
+                  >
+                    <Plus size={12} strokeWidth={2.25} aria-hidden />
+                  </button>
+                </Tooltip>
+              )}
+            </li>
+          ))}
+        </ul>
+        {q && found.length === 0 && (
+          <p className="cl-sheet__opt cl-sheet__none">Aucune personne de ce nom dans {spaceName}.</p>
+        )}
+        {q && !exact && (
+          <button type="button" className="cl-sheet__new" onClick={onAddGuest}>
+            <span className="cl-face" data-size="md" data-empty aria-hidden>
+              <Plus size={14} strokeWidth={1.75} />
+            </span>
+            <span className="cl-sheet__newtext">
+              <b>Ajouter « {query.trim()} »</b>
+              <small>Nouvelle personne, en invité</small>
+            </span>
+            <kbd>Entrée</kbd>
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 /** A person in the sheet's grid: the name holds two lines, then « … »; cut, the whole name comes on hover. */
-function Tile({ person, on, onToggle }: { person: Person; on: boolean; onToggle: () => void }) {
+function Tile({
+  person,
+  on,
+  note,
+  onToggle,
+}: {
+  person: Person;
+  on: boolean;
+  note: string | null;
+  onToggle: () => void;
+}) {
   const name = useRef<HTMLSpanElement>(null);
   const [cut, setCut] = useState(false);
   useLayoutEffect(() => {
@@ -405,6 +469,7 @@ function Tile({ person, on, onToggle }: { person: Person; on: boolean; onToggle:
         <span ref={name} className="cl-sheet__name">
           {person.name}
         </span>
+        {note && <small className="cl-sheet__note">{note}</small>}
       </button>
   );
   // Only a cut name gets the tooltip: otherwise screen readers would hear the name twice.

@@ -5,11 +5,11 @@ import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
   nearestLine,
-  tickWidth,
+  speechWave,
   turnSeconds,
   namingLines,
-  choiceNote,
-  namingChoices,
+  hasVoice,
+  whoOrder,
   voiceTurns,
   voicesToName,
   chaptersWriting,
@@ -579,25 +579,16 @@ test("the guided naming: voices in the order heard, the recognised person, then 
   });
   const v2 = speaker("2", "Voix 2");
   const ana = speaker("3", "Ana", { named: true, person_id: 1 });
-  const choices = namingChoices(v1, people, [v1, v2, ana], [1, 2], "");
+  const order = whoOrder(v1, people, [v1, v2, ana], [1, 2]);
   assert.deepEqual(
-    choices.map((c) => (c.kind === "person" ? c.person.name : c.kind)),
+    order.map((p) => p.name),
     ["Cléo", "Bob", "Ana"],
   );
-  assert.equal(choiceNote(choices[0], v1, [1, 2]), "voix reconnue");
-  assert.equal(choiceNote(choices[1], v1, [1, 2]), "membre · présent");
-  assert.equal(
-    choiceNote(choices[2], v1, [1, 2], [v1, v2, ana]),
-    "a déjà une voix : les réunir",
-  );
-  const typed = namingChoices(v2, people, [v1, v2], [], "Zoé");
-  assert.deepEqual(
-    typed.map((c) => c.kind),
-    ["guest", "free"],
-  );
+  assert.equal(hasVoice(people[0], v1, [v1, v2, ana]), true);
+  assert.equal(hasVoice(people[0], ana, [v1, v2, ana]), false);
 });
 
-test("voices to name come in the order first heard, with their own lines", () => {
+test("voices to name come the most talkative first, with their own lines", () => {
   const line = (index: number, who: string) => ({
     index,
     speaker: who,
@@ -610,15 +601,15 @@ test("voices to name come in the order first heard, with their own lines", () =>
     ...VIEW,
     turns: [line(0, "2"), line(1, "1"), line(2, "2"), line(3, "3")],
     speakers: [
-      speaker("1", "Voix 1"),
-      speaker("2", "Voix 2"),
+      speaker("1", "Voix 1", { seconds: 30 }),
+      speaker("2", "Voix 2", { seconds: 4 }),
       speaker("3", "Marie", { named: true }),
     ],
     phases: [],
   });
   assert.deepEqual(
     voicesToName(model).map((s) => s.label),
-    ["2", "1"],
+    ["1", "2"],
   );
   assert.deepEqual(
     voiceTurns(model, "2").map((r) => r.turn.index),
@@ -651,7 +642,7 @@ test("a voice's lines for naming: the longest first, an unmeasured one last", ()
   assert.equal(turnSeconds(lines[2].turn), null);
 });
 
-test("on the strip: the nearest measured line, and marks as long as the lines", () => {
+test("on the wave: the nearest measured line, and the speech of each slice", () => {
   const row = (index: number, start: number | null, end: number | null) =>
     ({
       kind: "turn",
@@ -663,7 +654,28 @@ test("on the strip: the nearest measured line, and marks as long as the lines", 
   assert.equal(nearestLine(lines, 70)?.turn.index, 2);
   assert.equal(nearestLine(lines, 0)?.turn.index, 0);
   assert.equal(nearestLine([row(1, null, null)], 5), null);
-  assert.equal(tickWidth(lines[0].turn), 3);
-  assert.equal(tickWidth(lines[2].turn), 14);
-  assert.equal(tickWidth(lines[1].turn), 3);
+  const turn = (speaker: string, start: number | null, end: number | null) => ({
+    index: 0,
+    speaker,
+    start,
+    end,
+    edited: false,
+    words: [],
+  });
+  const wave = speechWave(
+    [turn("1", 0, 5), turn("2", 10, 20), turn("2", 30, null)],
+    "1",
+    40,
+    4,
+  );
+  assert.deepEqual(wave, [
+    { level: 0.5, mine: true },
+    { level: 1, mine: false },
+    { level: 0, mine: false },
+    { level: 0, mine: false },
+  ]);
+  assert.deepEqual(speechWave([], "1", 0, 2), [
+    { level: 0, mine: false },
+    { level: 0, mine: false },
+  ]);
 });

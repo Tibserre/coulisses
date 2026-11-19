@@ -554,405 +554,8 @@ body {
   font-size: var(--font-size-sm);
 }
 
-/* The guided naming (ADR 0062): the page under a veil (blurred, as for the pause, ADR
-   0059), out of reach; over it, the card of the voice's lines, and the field of its name,
-   still at the bottom. */
 .cl-review__player {
   display: contents;
-}
-
-.cl-naming {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--spacing-8) var(--spacing-4) var(--spacing-4);
-  gap: var(--spacing-4);
-}
-
-.cl-naming__veil {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--color-background-body) 82%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.cl-namingcard {
-  position: relative;
-  width: min(36rem, 100%);
-  box-sizing: border-box;
-  max-height: calc(100% - 9rem);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2);
-  padding: var(--spacing-4) var(--spacing-4) var(--spacing-3);
-  border-radius: var(--radius-container);
-  background: var(--color-background-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-med);
-  animation: cl-fade-in 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.cl-namingcard__said {
-  margin: 0;
-  padding: var(--spacing-1) var(--spacing-2);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* What a naming did (two voices merged), over the veil, above the field. */
-.cl-naming__notice {
-  z-index: 1;
-  bottom: calc(var(--spacing-4) + 3.5rem);
-}
-
-.cl-namingcard__head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-3);
-}
-
-.cl-namingcard__meta {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.cl-namingcard__dots {
-  display: inline-flex;
-  gap: 4px;
-  margin-inline-start: auto;
-  align-self: center;
-}
-
-.cl-namingcard__dots i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-background-muted);
-}
-
-.cl-namingcard__dots i[data-state="done"] {
-  background: var(--color-text-secondary);
-}
-
-.cl-namingcard__dots i[data-state="now"] {
-  background: var(--color-accent);
-}
-
-/* The line looked at: its own place, large (K1). */
-.cl-namingcard__focus {
-  display: grid;
-  grid-template-columns: 2rem 1fr;
-  gap: var(--spacing-3);
-  align-items: start;
-  /* A set height: a long line or a short one, the strip under it never moves. */
-  height: 7.5rem;
-  box-sizing: border-box;
-  padding: var(--spacing-3);
-  border-radius: var(--radius-element);
-  /* A fine frame, all round: the line is set apart without a coloured ground. */
-  border: 1px solid var(--color-border);
-}
-
-.cl-namingcard__focus .cl-namingcard__said-line {
-  height: 100%;
-  overflow-y: auto;
-}
-
-.cl-namingcard__hear {
-  width: 2rem;
-  height: 2rem;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-background-surface);
-  color: var(--color-accent);
-  cursor: pointer;
-}
-
-.cl-namingcard__hear:disabled {
-  color: var(--color-text-secondary);
-  cursor: default;
-}
-
-.cl-namingcard__said-line {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.cl-namingcard__focus .cl-namingcard__text {
-  font-size: var(--font-size-lg, 1.0625rem);
-  line-height: 1.5;
-}
-
-/* Where it speaks: run over, not aimed at; the line nearest the pointer lit and shown. */
-.cl-namingcard__strip {
-  position: relative;
-  height: 32px;
-  margin-top: var(--spacing-3);
-  border-radius: var(--radius-inner);
-  cursor: pointer;
-  transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cl-namingcard__strip:hover {
-  background: var(--color-background-muted);
-}
-
-.cl-namingcard__track {
-  position: absolute;
-  inset-inline: 0;
-  top: 15px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--color-border);
-}
-
-.cl-namingcard__tick {
-  position: absolute;
-  top: 9px;
-  height: 14px;
-  border-radius: 2px;
-  /* From its measured start (P2). */
-  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
-  pointer-events: none;
-  transition:
-    top 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    height 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cl-namingcard__tick[data-state="near"] {
-  top: 6px;
-  height: 20px;
-  background: color-mix(in srgb, var(--color-accent) 75%, transparent);
-}
-
-.cl-namingcard__tick[data-state="current"] {
-  top: 5px;
-  height: 22px;
-  background: var(--color-accent);
-}
-
-.cl-namingcard__peek {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  transform: translateX(-50%);
-  width: 15rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--spacing-2) var(--spacing-3);
-  border-radius: var(--radius-element);
-  background: var(--color-background-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-med);
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
-  pointer-events: none;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.cl-namingcard__peek .cl-namingcard__meta {
-  display: block;
-}
-
-.cl-namingcard__ends {
-  display: flex;
-  justify-content: space-between;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Its lines in a list, on demand: one line each. */
-.cl-namingcard__lines {
-  list-style: none;
-  margin: var(--spacing-2) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  max-height: 14rem;
-  overflow-y: auto;
-}
-
-.cl-namingcard__line {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 3.2rem 1fr auto;
-  gap: var(--spacing-2);
-  align-items: baseline;
-  padding: var(--spacing-1) var(--spacing-2);
-  border: 0;
-  border-radius: var(--radius-inner);
-  background: none;
-  font: inherit;
-  font-size: var(--font-size-sm);
-  text-align: start;
-  cursor: pointer;
-}
-
-.cl-namingcard__line .cl-namingcard__text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cl-namingcard__line:hover {
-  background: var(--color-background-muted);
-}
-
-.cl-namingcard__line[data-current] {
-  color: var(--color-accent);
-}
-
-.cl-namingcard__time {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.cl-namingcard__tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-2) var(--spacing-5);
-  padding-top: var(--spacing-2);
-  font-size: var(--font-size-sm);
-}
-
-.cl-naming__bar {
-  position: relative;
-  margin-top: auto;
-  width: min(36rem, 100%);
-  display: flex;
-  justify-content: center;
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .cl-naming__veil {
-    background: var(--color-background-body);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cl-naming__veil,
-  .cl-namingcard {
-    animation: none;
-  }
-
-  .cl-namingcard__tick,
-  .cl-namingcard__strip {
-    transition: none;
-  }
-}
-
-.cl-namingbar {
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  /* The names open upwards, over the faded lines: the bar's row stays where it is. */
-  flex-direction: column-reverse;
-  gap: 2px;
-  padding: 4px;
-  border-radius: var(--radius-container);
-  background: var(--color-background-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-med);
-  font-size: var(--font-size-sm);
-}
-
-.cl-namingbar__row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  white-space: nowrap;
-}
-
-.cl-namingbar .cl-iconbtn {
-  width: 30px;
-  height: 30px;
-}
-
-.cl-namingbar__field {
-  flex: 1;
-  min-width: 6rem;
-  width: auto;
-  height: 30px;
-  padding: 0 var(--spacing-3);
-  border: 0;
-  border-radius: var(--radius-inner);
-  background: var(--color-background-muted);
-  font: inherit;
-  color: var(--color-text-primary);
-  caret-color: var(--color-accent);
-  outline: none;
-}
-
-.cl-namingbar__field:focus-visible {
-  box-shadow: 0 0 0 1.5px var(--color-accent);
-}
-
-.cl-namingbar__ok:not(:disabled) {
-  color: var(--color-accent);
-}
-
-.cl-namingbar__list {
-  display: flex;
-  /* The best name against the field. */
-  flex-direction: column-reverse;
-  list-style: none;
-  margin: 0;
-  padding: 0 0 2px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.cl-namingbar__list li {
-  display: flex;
-  align-items: center;
-}
-
-.cl-namingbar__choice {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-3);
-  border: 0;
-  background: none;
-  padding: 5px var(--spacing-3);
-  border-radius: var(--radius-inner);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.cl-namingbar__choice[data-active] {
-  background: var(--color-background-muted);
-}
-
-.cl-namingbar__note {
-  margin-inline-start: auto;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.cl-namingbar__error {
-  margin: 0;
-  padding: 2px var(--spacing-3) 4px;
-  color: var(--color-error, var(--color-accent));
-  font-size: var(--font-size-xs);
 }
 
 .cl-transcript {
@@ -6765,4 +6368,270 @@ button.cl-tree__more:hover {
   padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-element);
   background: var(--color-background-body);
+}
+
+/* « Qui parle ? » (ADR 0090): listen on the left, choose on the right, as in « Qui est là ? ». */
+.cl-sheet__grid[data-columns="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cl-sheet__note {
+  max-width: 100%;
+  margin-top: -4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.cl-sheet kbd,
+.cl-who__foot kbd {
+  font: inherit;
+  font-size: var(--font-size-xs);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0 5px;
+  line-height: 18px;
+}
+
+.cl-who__pile {
+  display: inline-flex;
+  margin-left: var(--spacing-2);
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+}
+
+.cl-who__pile:hover,
+.cl-who__pile:focus-visible {
+  background: var(--color-background-muted);
+}
+
+.cl-who__time {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-who__rule {
+  height: 1px;
+  margin: var(--spacing-1) var(--spacing-3);
+  background: var(--color-border);
+}
+
+.cl-who {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  font-size: var(--font-size-sm);
+}
+
+.cl-who__hear {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  padding-right: var(--spacing-6);
+  border-right: 1px solid var(--color-border);
+}
+
+.cl-who__pick {
+  padding-left: var(--spacing-6);
+}
+
+.cl-who__voice {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+/* The voice to name: one big ring; empty until someone is chosen, then their face. */
+.cl-who__ring {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--color-background-surface),
+    0 0 0 4px var(--color-accent);
+}
+
+.cl-who__ring .cl-face {
+  width: 56px;
+  height: 56px;
+  font-size: var(--font-size-lg, 18px);
+}
+
+.cl-who__empty {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px dashed var(--color-border-emphasized);
+  color: var(--color-text-secondary);
+}
+
+.cl-who__id {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cl-who__id b {
+  font-size: var(--font-size-lg, 18px);
+  font-weight: var(--font-weight-medium);
+}
+
+.cl-who__id small {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.cl-who__line {
+  flex: 1;
+  margin: 0;
+  min-height: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.cl-who__said {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.cl-who__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.cl-who__step {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.cl-who__play {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.cl-who__step:disabled,
+.cl-who__play:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cl-who__count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+/* The session's wave: grey where someone speaks, dark where this voice does. */
+.cl-who__wave {
+  position: relative;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.cl-who__wave i {
+  flex: 1;
+  border-radius: 1px;
+  background: var(--color-border);
+}
+
+.cl-who__wave i[data-mine] {
+  background: var(--color-text-primary);
+}
+
+.cl-who__mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-accent);
+}
+
+.cl-who__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.cl-who__error,
+.cl-who__notice {
+  flex: 1;
+  font-size: var(--font-size-sm);
+}
+
+.cl-who__error {
+  color: var(--color-error, var(--color-accent));
+}
+
+.cl-who__ok {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-height: 36px;
+  padding: 0 var(--spacing-4);
+  border: 0;
+  border-radius: var(--radius-element);
+  background: var(--color-accent);
+  color: #fff;
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.cl-who__ok:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.cl-who__ok kbd {
+  border-color: rgb(255 255 255 / 0.5);
+  color: #fff;
+}
+
+.cl-who__title {
+  display: inline-flex;
+  align-items: center;
 }

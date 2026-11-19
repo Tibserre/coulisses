@@ -511,8 +511,8 @@ export function changesChapters(correction: { kind: string }): boolean {
   return correction.kind === "set_phase" || correction.kind === "remove_phase";
 }
 
-/** The voices still without a name, in the order they are first heard: the guided naming
- *  goes through them one after the other. */
+/** The voices still without a name, the most talkative first (ADR 0090), those that speak
+ *  as long in the order first heard: « Qui parle ? » goes through them one after the other. */
 export function voicesToName(model: ReviewModel): Speaker[] {
   const seen: Speaker[] = [];
   for (const row of model.rows)
@@ -523,7 +523,7 @@ export function voicesToName(model: ReviewModel): Speaker[] {
       !seen.includes(row.speaker)
     )
       seen.push(row.speaker);
-  return seen;
+  return seen.sort((x, y) => y.seconds - x.seconds);
 }
 
 /** A voice's lines, in their order: what « réplique précédente / suivante » goes through. */
@@ -533,54 +533,46 @@ export function voiceTurns(model: ReviewModel, label: string): TurnRow[] {
   );
 }
 
-/** Who a voice may be, for the guided naming: the person whose voice it seems to be first
- *  (ADR 0057), then the people checked present who have no voice yet, then the others;
- *  a name typed and not found becomes a guest or a free name. */
-export function namingChoices(
+/** Who a voice may be, in « Qui parle ? » (ADR 0090): the person whose voice it seems to
+ *  be (ADR 0057), then the people checked present who have no voice yet, then the others,
+ *  and last those who already have a voice (choosing them merges the two voices, P3). The
+ *  archived are left out. */
+export function whoOrder(
   speaker: Speaker,
   people: Person[],
-  voices: Speaker[],
+  voices: readonly Speaker[],
   attendees: readonly number[],
-  typed: string,
-): NameChoice[] {
-  const choices = nameChoices("who", speaker, people, voices, typed);
+): Person[] {
   const proposed = speaker.proposal?.person_id;
-  const voiced = new Set(
-    voices.flatMap((v) =>
-      v.person_id != null && v.named ? [v.person_id] : [],
-    ),
-  );
-  const rank = (c: NameChoice) =>
-    c.kind !== "person"
-      ? 3
-      : c.person.id === proposed
-        ? 0
-        : attendees.includes(c.person.id) && !voiced.has(c.person.id)
+  const rank = (p: Person) =>
+    p.id === proposed
+      ? 0
+      : hasVoice(p, speaker, voices)
+        ? 3
+        : attendees.includes(p.id)
           ? 1
           : 2;
-  return choices
-    .map((c, i) => ({ c, i }))
-    .sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i)
-    .map(({ c }) => c);
+  return people
+    .filter((p) => !p.archived)
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i)
+    .map(({ p }) => p);
 }
 
-/** What the guided naming says of a choice. */
-export function choiceNote(
-  c: NameChoice,
+/** Whether a person already has a voice of the session, other than this one (a character
+ *  played does not count: it stays a voice apart). */
+export function hasVoice(
+  p: Person,
   speaker: Speaker,
-  attendees: readonly number[],
-  voices: readonly Speaker[] = [],
-): string {
-  if (c.kind === "guest") return "nouvel invité";
-  if (c.kind === "free") return "nom libre";
-  if (c.kind === "voice") return "même voix";
-  if (c.person.id === speaker.proposal?.person_id) return "voix reconnue";
-  // Naming it after them makes one voice of the two (the engine had split a person, P3).
-  if (voices.some((v) => v.named && v.person_id === c.person.id))
-    return "a déjà une voix : les réunir";
-  const role =
-    c.person.kind === "guest" ? "invité" : (c.person.role ?? "membre");
-  return attendees.includes(c.person.id) ? `${role} · présent` : role;
+  voices: readonly Speaker[],
+): boolean {
+  return voices.some(
+    (v) =>
+      v.label !== speaker.label &&
+      v.named &&
+      !v.character &&
+      v.person_id === p.id,
+  );
 }
 
 /** A line's measured length in seconds, or null when its start or end was not measured. */
@@ -614,8 +606,28 @@ export function nearestLine(lines: TurnRow[], at: number): TurnRow | null {
   return best;
 }
 
-/** A line's mark on the strip, in pixels: as long as it lasts (half a pixel a second),
- *  3 at least, 14 at most; 3 when its length is not measured. */
-export function tickWidth(turn: Turn): number {
-  return Math.max(3, Math.min(14, (turnSeconds(turn) ?? 0) / 2));
+/** The session's wave in « Qui parle ? » while the service keeps no envelope of the sound
+ *  (ADR 0090): `count` bars over `duration`, each as high as the share of its slice where
+ *  someone speaks (the measured times of the lines, P2), dark where this voice speaks. */
+export function speechWave(
+  turns: readonly Turn[],
+  label: string,
+  duration: number,
+  count: number,
+): { level: number; mine: boolean }[] {
+  const bars = Array.from({ length: count }, () => ({ level: 0, mine: false }));
+  if (duration <= 0) return bars;
+  const slice = duration / count;
+  for (const t of turns) {
+    if (t.start == null || t.end == null || t.end <= t.start) continue;
+    const first = Math.max(0, Math.floor(t.start / slice));
+    const last = Math.min(count - 1, Math.floor(t.end / slice));
+    for (let i = first; i <= last; i++) {
+      const covered =
+        Math.min(t.end, (i + 1) * slice) - Math.max(t.start, i * slice);
+      bars[i].level = Math.min(1, bars[i].level + covered / slice);
+      if (t.speaker === label && covered > 0) bars[i].mine = true;
+    }
+  }
+  return bars;
 }
