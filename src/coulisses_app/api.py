@@ -23,7 +23,7 @@ from coulisses.api import (
     models_dir,
     read_provenance,
 )
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -58,6 +58,7 @@ from coulisses_app import (
     stopping,
     summaries,
     versions,
+    waveform,
 )
 from coulisses_app.bundle import build_identifier
 from coulisses_app.local_only import LocalOnly
@@ -725,10 +726,9 @@ def create_app(
             used_mix = jobs.latest_mix(conn, session_id)
         finally:
             conn.close()
-        source = sessions.reference_source(data, session_id)
         return SessionDetail(
             session=session,
-            source=source,
+            source=sessions.reference_source(data, session_id),
             stages=stage_views(data, chain, session_id),
             version=shown["run_id"] if shown else None,
             other_sources=sessions.other_sources(data, session_id),
@@ -738,25 +738,23 @@ def create_app(
             # Once the audio is purged, from the job that used it (P7).
             mix=mixing.read_facts(data, session_id)
             or (mixing.MixFacts.model_validate(used_mix) if used_mix is not None else None),
-            # Not while it records: the file grows at each look.
-            heard_version=None
-            if source is not None and source.capture_state == "recording"
-            else _heard_version(session_id),
+            heard_version=waveform.heard_version(data, session_id),
         )
 
-    def _heard_version(session_id: str) -> str | None:
-        if retention.audio_status(data, session_id).state == "removed":
-            return None
-        path = lossless.heard_path(data, session_id)
+    @app.get("/api/seances/{session_id}/onde")
+    def waveform_levels(session_id: str, barres: int = Query(ge=1, le=20_000)) -> waveform.Waveform:
+        """The measured waveform of the sound played (ADR 0092), in `barres` levels. 409
+        while it is measured, or while it records: the page draws its own meanwhile."""
+        if sessions.get_session(data, session_id) is None:
+            raise _not_found("Séance introuvable.")
         try:
-            facts = path.stat() if path is not None else None
-        except FileNotFoundError:  # moved in the Finder: the player says it
-            return None
-        return (
-            f"{path.name}-{facts.st_mtime_ns}-{facts.st_size}"
-            if path is not None and facts is not None
-            else None
-        )
+            return waveform.levels(data, session_id, barres)
+        except waveform.NotReady:
+            raise HTTPException(
+                status_code=409, detail="L'onde du son est en préparation."
+            ) from None
+        except waveform.NoWaveform as exc:
+            raise _not_found(str(exc)) from None
 
     @app.get("/api/seances/{session_id}/versions")
     def session_versions(session_id: str) -> versions.Versions:

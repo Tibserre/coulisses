@@ -15,6 +15,8 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
                                       en .flac une fois fini, sans perte (ADR 0046) ; seul contenu purgé
     sources/mix.{wav,flac}, mix.json  le micro et le son de l'ordinateur réunis (ADR 0032), purgés aussi
     sources/listening.{wav,flac}      le mix d'écoute, micro baissé entre les paroles (ADR 0037), purgé aussi
+    onde.json                         l'onde du son entendu : une crête en dBFS toutes les 50 ms, mesurée
+                                      par ffmpeg (ADR 0092) ; refaite quand ce son change, mesurée avant la purge et gardée après
     runs/<run_id>/                    une exécution : spec.json, output.json, provenance.json…
 ```
 
