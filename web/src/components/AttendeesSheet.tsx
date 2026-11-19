@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { Check, Minus, Plus, Search, User, X } from "lucide-react";
+import { AudioLines, Check, Minus, Plus, Search, User, X } from "lucide-react";
 import { api, type Person, type Session } from "../api.ts";
 import { plural } from "../format.ts";
 import { attendeesOf, fewerAttendees, toggleAttendee } from "../processing.ts";
@@ -318,6 +318,11 @@ export function Counter({ attendees, size }: { attendees: Attendees; size: "md" 
   );
 }
 
+/** What a tile says on hover: its whole name when cut, then what its mark says. */
+export function tileTip(cutName: string | null, mark: string | null): string {
+  return [cutName, mark].filter(Boolean).join(" · ");
+}
+
 /** The people of the space to pick from (« Qui est là ? », « Qui parle ? »): the search, the
  *  big discs (two lines of name at most), a guest outlined with « + » to make them a member,
  *  and « Ajouter « … » » that adds a guest (Entrée). */
@@ -329,7 +334,7 @@ export function PeoplePicker({
   spaceName,
   isOn,
   onTile,
-  note,
+  badge,
   columns = 6,
   autoFocus = false,
   onAddGuest,
@@ -346,8 +351,9 @@ export function PeoplePicker({
   spaceName: string;
   isOn: (p: Person) => boolean;
   onTile: (p: Person) => void;
-  /** A word under the name (« a déjà une voix »). */
-  note?: (p: Person) => string | null;
+  /** A small wave on the disc, said on hover (« Marie a déjà une voix dans cette séance »):
+   *  no small text under the name. */
+  badge?: (p: Person) => { tip: string; wave: boolean } | null;
   columns?: 4 | 6;
   autoFocus?: boolean;
   onAddGuest: () => void;
@@ -389,7 +395,7 @@ export function PeoplePicker({
         <ul className="cl-sheet__grid" data-columns={columns} aria-label="Personnes de l'espace">
           {found.map((p) => (
             <li key={p.id} className="cl-sheet__cell">
-              <Tile person={p} on={isOn(p)} note={note?.(p) ?? null} onToggle={() => onTile(p)} />
+              <Tile person={p} on={isOn(p)} badge={badge?.(p) ?? null} onToggle={() => onTile(p)} />
               {p.kind === "guest" && (
                 <Tooltip
                   content={
@@ -436,12 +442,12 @@ export function PeoplePicker({
 function Tile({
   person,
   on,
-  note,
+  badge,
   onToggle,
 }: {
   person: Person;
   on: boolean;
-  note: string | null;
+  badge: { tip: string; wave: boolean } | null;
   onToggle: () => void;
 }) {
   const name = useRef<HTMLSpanElement>(null);
@@ -465,13 +471,19 @@ function Tile({
               <Check size={11} strokeWidth={3} />
             </span>
           )}
+          {badge?.wave && (
+            <span className="cl-sheet__badge" aria-hidden>
+              <AudioLines size={11} strokeWidth={2} />
+            </span>
+          )}
         </span>
         <span ref={name} className="cl-sheet__name">
           {person.name}
         </span>
-        {note && <small className="cl-sheet__note">{note}</small>}
       </button>
   );
-  // Only a cut name gets the tooltip: otherwise screen readers would hear the name twice.
-  return cut ? <Tooltip content={person.name}>{tile}</Tooltip> : tile;
+  // Only a cut name or a wave gets a tooltip: otherwise screen readers would hear the name twice.
+  // The whole name when cut, and what the wave says.
+  const tip = tileTip(cut ? person.name : null, badge?.tip ?? null);
+  return tip ? <Tooltip content={tip}>{tile}</Tooltip> : tile;
 }

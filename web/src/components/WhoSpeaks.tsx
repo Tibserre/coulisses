@@ -451,11 +451,11 @@ export function WhoSpeaks({
             autoFocus
             isOn={(p) => p.id === picked?.id}
             onTile={(p) => setPicked((was) => (was?.id === p.id ? null : p))}
-            note={(p) =>
-              p.id === proposed?.id && !speaker.named
-                ? "voix reconnue"
-                : hasVoice(p, speaker, voices)
-                  ? "a déjà une voix"
+            badge={(p) =>
+              hasVoice(p, speaker, voices)
+                ? { tip: `${p.name} a déjà une voix dans cette séance`, wave: true }
+                : p.id === proposed?.id && !speaker.named
+                  ? { tip: "Voix reconnue", wave: false }
                   : null
             }
             onAddGuest={addGuest}

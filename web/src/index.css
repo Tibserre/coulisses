@@ -6375,12 +6375,20 @@ button.cl-tree__more:hover {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.cl-sheet__note {
-  max-width: 100%;
-  margin-top: -4px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  text-align: center;
+/* Someone who already has a voice: a small wave on their disc, said on hover. */
+.cl-sheet__badge {
+  position: absolute;
+  left: -5px;
+  bottom: -5px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-background-surface);
+  color: var(--color-text-primary);
+  box-shadow: 0 0 0 1px var(--color-border-emphasized);
 }
 
 .cl-sheet kbd,
