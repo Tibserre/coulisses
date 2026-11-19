@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
@@ -271,23 +271,7 @@ export function AttendeesSheet({
             const on = attendees.ids.includes(p.id);
             return (
               <li key={p.id} className="cl-sheet__cell">
-                <button
-                  type="button"
-                  className="cl-sheet__tile"
-                  aria-pressed={on}
-                  data-on={on || undefined}
-                  onClick={() => attendees.toggle(p.id)}
-                >
-                  <span className="cl-sheet__disc">
-                    <Face person={p} size="lg" />
-                    {on && (
-                      <span className="cl-sheet__ok" aria-hidden>
-                        <Check size={11} strokeWidth={3} />
-                      </span>
-                    )}
-                  </span>
-                  <span className="cl-sheet__name">{p.name}</span>
-                </button>
+                <Tile person={p} on={on} onToggle={() => attendees.toggle(p.id)} />
                 {p.kind === "guest" && (
                   <Tooltip
                     content={
@@ -392,4 +376,37 @@ export function Counter({ attendees, size }: { attendees: Attendees; size: "md" 
       <span className="cl-counter__cap">{attendees.count === 1 ? "présent" : "présents"}</span>
     </div>
   );
+}
+
+/** A person in the sheet's grid: the name holds two lines, then « … »; cut, the whole name comes on hover. */
+function Tile({ person, on, onToggle }: { person: Person; on: boolean; onToggle: () => void }) {
+  const name = useRef<HTMLSpanElement>(null);
+  const [cut, setCut] = useState(false);
+  useLayoutEffect(() => {
+    const el = name.current;
+    if (el) setCut(el.scrollHeight > el.clientHeight + 1);
+  }, [person.name]);
+  const tile = (
+      <button
+        type="button"
+        className="cl-sheet__tile"
+        aria-pressed={on}
+        data-on={on || undefined}
+        onClick={onToggle}
+      >
+        <span className="cl-sheet__disc">
+          <Face person={person} size="lg" />
+          {on && (
+            <span className="cl-sheet__ok" aria-hidden>
+              <Check size={11} strokeWidth={3} />
+            </span>
+          )}
+        </span>
+        <span ref={name} className="cl-sheet__name">
+          {person.name}
+        </span>
+      </button>
+  );
+  // Only a cut name gets the tooltip: otherwise screen readers would hear the name twice.
+  return cut ? <Tooltip content={person.name}>{tile}</Tooltip> : tile;
 }

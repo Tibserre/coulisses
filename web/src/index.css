@@ -5007,6 +5007,7 @@ button.cl-tree__more:hover {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: start;
   gap: 14px 4px;
 }
 
@@ -5059,11 +5060,17 @@ button.cl-tree__more:hover {
   box-shadow: 0 0 0 2px var(--color-background-surface);
 }
 
+/* Two lines at most, then « … »: a long name never runs over its neighbours. */
 .cl-sheet__name {
   max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  text-align: center;
+  line-height: 1.25;
   padding: 0 2px;
 }
 
