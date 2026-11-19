@@ -36,6 +36,9 @@ class Space(BaseModel):
     id: int
     name: str
     voice_recognition: bool
+    theatre: bool
+    """« Jeu et personnages » (ADR 0091): Jeu ⇄ Discussion, the genre of the chapters, the
+    characters played. Off at first."""
     archived: bool
     language: str
     """Its default language (ADR 0072), taken by its new sessions."""
@@ -74,6 +77,7 @@ def _space(row: sqlite3.Row) -> Space:
         id=row["id"],
         name=row["name"],
         voice_recognition=bool(row["voice_recognition"]),
+        theatre=bool(row["theatre"]),
         archived=row["archived_at"] is not None,
         language=row["language"],
     )
@@ -166,6 +170,7 @@ def update_space(
     *,
     name: str | None = None,
     voice_recognition: bool | None = None,
+    theatre: bool | None = None,
     archived: bool | None = None,
     language: str | None = None,
 ) -> Space:
@@ -186,6 +191,8 @@ def update_space(
                     "UPDATE space SET voice_recognition = ? WHERE id = ?",
                     (int(voice_recognition), space_id),
                 )
+            if theatre is not None:
+                conn.execute("UPDATE space SET theatre = ? WHERE id = ?", (int(theatre), space_id))
             if archived is not None:
                 conn.execute(
                     "UPDATE space SET archived_at = ? WHERE id = ?",

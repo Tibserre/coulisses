@@ -430,3 +430,32 @@ def test_while_processed_the_text_shows_before_anyone_is_told_apart(
     starts = [line["start"] for line in outline["lines"] if line["start"] is not None]
     assert starts == sorted(starts)
     assert client.get("/api/seances/inconnue/apercu").status_code == 404
+
+
+def test_theatre_is_off_until_turned_on(client: TestClient) -> None:
+    """« Jeu et personnages » (ADR 0091): a setting of the space, off at first."""
+    space = client.post("/api/espaces", json={"name": "Les Fous", "template": "impro"}).json()
+    assert space["theatre"] is False
+    turned = client.patch(f"/api/espaces/{space['id']}", json={"theatre": True}).json()
+    assert turned["theatre"] is True
+    renamed = client.patch(f"/api/espaces/{space['id']}", json={"name": "Les Sages"}).json()
+    assert renamed["theatre"] is True  # untouched by another change
+
+
+def test_the_spaces_there_before_have_it_off(tmp_path: Path) -> None:
+    shipped = db.migrations()
+    older = DataDir(tmp_path / "avant")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(db, "migrations", lambda: [m for m in shipped if m[0] <= 12])
+        db.migrate(older)
+    conn = db.connect(older)
+    with conn:
+        conn.execute("INSERT INTO space (name, created_at) VALUES ('La troupe', 'x')")
+    conn.close()
+    db.migrate(older)
+    conn = db.connect(older)
+    try:
+        rows = conn.execute("SELECT theatre FROM space").fetchall()
+    finally:
+        conn.close()
+    assert rows and all(row["theatre"] == 0 for row in rows)
