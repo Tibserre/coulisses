@@ -10,14 +10,8 @@ la publication lit celle de `main`.
 
 ### Corrections
 
-- rend invisible le rechargement du son (seance)
-- recharge le son quand son fichier est remplacé, page ouverte (seance)
-- donne à la page la version du son qu'elle fait entendre (ecoute)
-- ne choisit une langue absente qu'au téléchargement lancé (langues)
-
-### Performances
-
-- prépare en parallèle les tests, la construction et ses essais (publication)
+- Le son d'une séance se recharge quand son fichier est remplacé, par exemple juste après l'enregistrement, même si sa page est restée ouverte. La lecture ne saute plus.
+- La liste des langues est triée : d'abord celles qui sont sur ce Mac, puis celles à télécharger, avec leur taille. Une langue absente n'est choisie qu'une fois son téléchargement lancé ; « Plus tard » ne change rien.
 
 ## v0.41.0 — 2026-11-18
 
