@@ -517,35 +517,7 @@ body {
   gap: var(--spacing-1) var(--spacing-2);
 }
 
-.cl-voice {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--spacing-1);
-  border: 1px solid transparent;
-  background: var(--color-background-muted);
-  padding: 2px var(--spacing-3);
-  border-radius: 999px;
-  font: inherit;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  transition: border-color 160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cl-voice:hover,
-.cl-voice[aria-pressed="true"] {
-  border-color: var(--color-border);
-}
-
-.cl-voice__share {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.cl-voice[data-todo] {
-  align-items: center;
-  background: none;
-  border: 1px dashed var(--color-accent);
+.cl-voices__merge {
   color: var(--color-accent);
 }
 
@@ -6561,4 +6533,22 @@ button.cl-tree__more:hover {
 .cl-who__yes:focus-visible {
   outline: 2px solid var(--color-text-primary);
   outline-offset: 3px;
+}
+
+/* « 7 chapitres »: each one's time, genre, title and length. */
+.cl-chapters {
+  max-height: 360px;
+}
+
+.cl-chapters__at {
+  width: 3.2em;
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.cl-chapters .cl-strip__kind {
+  width: 6.5em;
+  flex: none;
 }

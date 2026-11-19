@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
+import { Popover } from "@astryxdesign/core/Popover";
 import { Text } from "@astryxdesign/core/Text";
-import { ListTree, RefreshCw } from "lucide-react";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
+import { ChevronDown, ListTree, RefreshCw } from "lucide-react";
 import type { CorrectedView, PhasesStatus } from "../api.ts";
-import { formatClock, plural } from "../format.ts";
+import { formatClock, formatDuration, plural } from "../format.ts";
 import {
   KIND_LABEL,
   chaptersWriting,
@@ -43,6 +46,10 @@ export function PhaseStrip({
   );
   const current = [...spans].reverse().find((s) => s.start <= time) ?? spans[0];
   const waiting = status?.state === "queued" || status?.state === "running";
+  const [listing, setListing] = useState(false);
+  /** What a chapter says on hover and in the list: its genre, its time, its length. */
+  const facts = (s: (typeof spans)[number]) =>
+    `${KIND_LABEL[s.phase.kind]} · à ${formatClock(s.start)} · ${formatDuration(s.end - s.start)}`;
 
   return (
     <div className="cl-strip">
@@ -118,15 +125,58 @@ export function PhaseStrip({
                 clickAction={onDetect}
               />
             ) : (
-              <button
-                type="button"
-                className="cl-iconbtn"
-                aria-label="Détecter les chapitres à nouveau"
-                title="Détecter les chapitres à nouveau (vos changements restent)"
-                onClick={onDetect}
+              // « 7 chapitres » lists them all, over the text; a click goes to one.
+              <Popover
+                isOpen={listing}
+                onOpenChange={setListing}
+                label="Les chapitres"
+                placement="below"
+                alignment="end"
+                width={420}
+                padding={1}
+                content={
+                  <div>
+                    <ul className="cl-spacepick cl-chapters" aria-label="Les chapitres">
+                      {spans.map((sp) => (
+                        <li key={sp.phase.turn}>
+                          <button
+                            type="button"
+                            className="cl-spacepick__item"
+                            aria-current={sp === current || undefined}
+                            onClick={() => {
+                              setListing(false);
+                              onSeek(sp.start);
+                            }}
+                          >
+                            <span className="cl-chapters__at">{formatClock(sp.start)}</span>
+                            <span className="cl-strip__kind">{KIND_LABEL[sp.phase.kind]}</span>
+                            <span className="cl-spacepick__what">
+                              {sp.phase.title || "Chapitre sans titre"}
+                            </span>
+                            <span className="cl-who__time">{formatDuration(sp.end - sp.start)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      className="cl-spacepick__item cl-linevoices__rename"
+                      onClick={() => {
+                        setListing(false);
+                        onDetect();
+                      }}
+                    >
+                      <RefreshCw size={14} strokeWidth={1.75} aria-hidden />
+                      Détecter à nouveau (vos changements restent)
+                    </button>
+                  </div>
+                }
               >
-                <RefreshCw size={14} strokeWidth={1.75} />
-              </button>
+                <button type="button" className="cl-crumbbtn">
+                  {plural(spans.length, "chapitre", "chapitres")}
+                  <ChevronDown size={13} strokeWidth={1.75} aria-hidden />
+                </button>
+              </Popover>
             ))}
         </span>
       </div>
@@ -152,20 +202,28 @@ export function PhaseStrip({
             />
           )}
           {spans.map((s) => (
-            <button
+            <Tooltip
               key={s.phase.turn}
+              content={
+                <>
+                  <b>{s.phase.title || "Chapitre sans titre"}</b>
+                  <small className="cl-sheet__tipnote">{facts(s)}</small>
+                </>
+              }
+            >
+            <button
               type="button"
               className="cl-strip__bar"
               data-kind={s.phase.kind}
               data-current={s === current || undefined}
               style={{ flexGrow: Math.max(s.end - s.start, 1) }}
-              title={`${s.phase.title || "Chapitre sans titre"} · ${formatClock(s.start)}`}
               aria-label={`Chapitre ${s.number}, ${KIND_LABEL[s.phase.kind].toLowerCase()} : ${s.phase.title || "sans titre"}, à ${formatClock(s.start)}`}
               onClick={(e) => {
                 onSeek(s.start);
                 e.currentTarget.blur();
               }}
             />
+            </Tooltip>
           ))}
           {unread > 0 && (
             // Not read yet: room kept, so that each bar stays as long as it lasts.

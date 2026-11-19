@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
-import { Popover } from "@astryxdesign/core/Popover";
 import { Check, ChevronLeft, ChevronRight, Pause, Play, User, X } from "lucide-react";
 import {
   api,
@@ -11,7 +10,6 @@ import {
   type Turn,
 } from "../api.ts";
 import { formatDuration, plural } from "../format.ts";
-import { speakerInk, speakerTint } from "../theme/shared.ts";
 import {
   askFor,
   hasVoice,
@@ -23,43 +21,10 @@ import {
 } from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
 import { Face, PeoplePicker } from "./AttendeesSheet.tsx";
+import { VoiceFace, VoicesMenu } from "./VoicesMenu.tsx";
 
 /** Bars of the session's wave. */
 const BARS = 72;
-/** Named voices shown in the pile; the others go into its « +N ». */
-const PILE = 8;
-
-const initial = (name: string) => name.trim().charAt(0).toLocaleUpperCase("fr");
-
-/** A voice's disc: its person's face, else its initial in its colour (a free name, a
- *  character), else an empty place. */
-function VoiceFace({
-  voice,
-  people,
-  size = "md",
-}: {
-  voice: Speaker;
-  people: Person[];
-  size?: "sm" | "md" | "lg";
-}) {
-  const person = people.find((p) => p.id === voice.person_id);
-  if (person && !voice.character) return <Face person={person} size={size} />;
-  if (!voice.named) return <Face size={size} />;
-  return (
-    <span
-      className="cl-face"
-      data-size={size}
-      style={{
-        background: speakerTint(voice.color_slot ?? 0),
-        color: speakerInk(voice.color_slot ?? 0),
-      }}
-      aria-hidden
-    >
-      {initial(voice.name)}
-    </span>
-  );
-}
-
 /** « Qui parle ? » (ADR 0090): one voice at a time, the most talkative first. On the left,
  *  one listens: the voice's big ring (the face of the person chosen), its line in large with
  *  ▶ and ‹ ›, the session's wave dark where it speaks. On the right, one chooses as in
@@ -122,7 +87,6 @@ export function WhoSpeaks({
   const [at, setAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [listing, setListing] = useState(false);
   const body = useRef<HTMLDivElement>(null);
   // Each voice starts afresh: its recognised person chosen, its longest line shown.
   useEffect(() => {
@@ -197,10 +161,13 @@ export function WhoSpeaks({
       }),
     );
   /** No: to the recognised voice, « Ce n'est pas … » (ADR 0057, a correction like another,
-   *  undone from the corrections); to a merge, back to the list. */
+   *  undone from the corrections); to a merge, back to the list, the refusal kept too when
+   *  the voice had been recognised as that person. */
   const no = () => {
     if (!asking) return;
-    if (asking.merge) {
+    // A merge picked from the list: just back to it. One the voice was recognised as: the
+    // « no » is kept too (ADR 0057), so the same question does not come back.
+    if (asking.merge && speaker.proposal?.person_id !== asking.person.id) {
       setAsking(null);
       return;
     }
@@ -228,9 +195,6 @@ export function WhoSpeaks({
     });
 
   const named = voices.filter((v) => v.named && v.label !== null);
-  const pile = named.slice(0, PILE);
-  // Those left to name, besides the one being named.
-  const over = named.length - pile.length + toName.length - (speaker.named ? 0 : 1);
   const place = toName.indexOf(speaker);
   const number =
     (place < 0 ? 0 : place) + named.length + (speaker.named ? 0 : 1);
@@ -263,24 +227,6 @@ export function WhoSpeaks({
     }
   };
 
-  const voiceRow = (v: Speaker) => (
-    <li key={v.label}>
-      <button
-        type="button"
-        className="cl-spacepick__item"
-        aria-current={v.label === label || undefined}
-        onClick={() => {
-          setListing(false);
-          if (v.label) onGo(v.label);
-        }}
-      >
-        <VoiceFace voice={v} people={people} size="sm" />
-        <span className="cl-spacepick__what">{v.name}</span>
-        <span className="cl-who__time">{formatDuration(v.seconds)}</span>
-      </button>
-    </li>
-  );
-
   return (
     <Dialog
       isOpen
@@ -293,48 +239,13 @@ export function WhoSpeaks({
         title={
           <span className="cl-who__title">
             Qui parle ?
-          <Popover
-            isOpen={listing}
-            onOpenChange={setListing}
-            label="Les voix de la séance"
-            placement="below"
-            alignment="start"
-            width={280}
-            padding={1}
-            content={
-              <ul className="cl-spacepick" aria-label="Les voix de la séance">
-                {[speaker, ...toName.filter((v) => v !== speaker)]
-                  .filter((v) => !v.named)
-                  .map(voiceRow)}
-                {named.length > 0 && toName.length > 0 && (
-                  <li className="cl-who__rule" aria-hidden />
-                )}
-                {named.map(voiceRow)}
-              </ul>
-            }
-          >
-            <button
-              type="button"
-              className="cl-who__pile"
-              aria-label={`${plural(named.length, "voix nommée", "voix nommées")}, ${plural(toName.length, "à nommer", "à nommer")}. Voir les voix`}
-            >
-              <span className="cl-faces">
-                {pile.map((v) => (
-                  <VoiceFace
-                    key={v.label}
-                    voice={v}
-                    people={people}
-                    size="sm"
-                  />
-                ))}
-                {over > 0 && (
-                  <span className="cl-face" data-over aria-hidden>
-                    +{over}
-                  </span>
-                )}
-              </span>
-            </button>
-          </Popover>
+          <VoicesMenu
+            voices={voices}
+            toName={toName}
+            people={people}
+            current={speaker}
+            onPick={(v) => v.label && onGo(v.label)}
+          />
           </span>
         }
         onOpenChange={onClose}

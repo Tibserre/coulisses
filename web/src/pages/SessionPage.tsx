@@ -37,6 +37,7 @@ import { PlayerBar } from "../components/PlayerBar.tsx";
 import { ReviewSkeleton } from "../components/ReviewSkeleton.tsx";
 import { SpeakerFocusBar } from "../components/SpeakerFocus.tsx";
 import { WhoSpeaks } from "../components/WhoSpeaks.tsx";
+import { VoicesMenu } from "../components/VoicesMenu.tsx";
 import { ProvenanceDialog } from "../components/ProvenanceDialog.tsx";
 import {
   CorrectionsHistory,
@@ -47,8 +48,8 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import {
   BatteryMedium,
   ChevronDown,
+  Folder,
   Hourglass,
-  UserRoundSearch,
 } from "lucide-react";
 import {
   ProcessingOutline,
@@ -422,10 +423,9 @@ export function SessionPage({
       : new Set([...folded].filter((t) => t !== heardChapter));
     return shut.size ? buildModel(read, shut) : unfolded;
   }, [read, folded, heardChapter, unfolded, provisional]);
-  // One voice shown only (its lines, the others folded), and the voice pointed at in the
-  // side column: where it speaks is marked on the player bar.
+  // One voice shown only (its lines, the others folded): where it speaks is marked on the
+  // player bar.
   const [focus, setFocus] = useState<string | null>(null);
-  const [pointed, setPointed] = useState<string | null>(null);
   const shown = useMemo(
     () => (focus && unfolded ? focusModel(unfolded, focus) : model),
     [focus, unfolded, model],
@@ -437,7 +437,7 @@ export function SessionPage({
   useEffect(() => {
     if (focus && unfolded && !focused) setFocus(null);
   }, [focus, unfolded, focused]);
-  const marked = pointed ?? focus;
+  const marked = focus;
   const marks = useMemo(
     () => (marked && unfolded ? speakerMarks(unfolded, marked) : []),
     [marked, unfolded],
@@ -672,7 +672,6 @@ export function SessionPage({
     [unfolded],
   );
   const liveEdits = view?.edits.filter((e) => !e.reverted).length ?? 0;
-  const speechTotal = voices.reduce((sum, v) => sum + v.seconds, 0) || 1;
   // Two voices named after the same person (the engine split one person, P3): offered a
   // merge, never done alone.
   const twins: [Speaker, Speaker][] = voices.flatMap((v, i) => {
@@ -700,14 +699,11 @@ export function SessionPage({
     goTo(toName[guide.at] ?? toName[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- on a name given
   }, [guide, guided, toName, unfolded]);
-  nameVoiceRef.current = (label) =>
-    goTo(unfolded?.speakers.find((s) => s.label === label));
-  const startNaming = () => {
-    if (!toName[0]) return;
+  nameVoiceRef.current = (label) => {
     setReading("transcript");
-    setFocus(null);
+    // The selection's bar would be under « Qui parle ? »; a voice shown alone stays so.
     setSelected(new Set());
-    goTo(toName[0]);
+    goTo(unfolded?.speakers.find((s) => s.label === label));
   };
 
   const audioGone = session?.audio.state === "removed";
@@ -778,7 +774,52 @@ export function SessionPage({
               ) : (
                 <span />
               )}
+              {session && languages && (
+                <SessionLanguage
+                  session={session}
+                  languages={languages}
+                  onChanged={sessionChanged}
+                  onRedo={(code) => {
+                    setRerunFrom("transcribe");
+                    setRerunLanguage(code);
+                    setRerunOpen(true);
+                  }}
+                  onDownload={setToDownload}
+                  onError={setMenuError}
+                />
+              )}
               {session && (
+                <SessionMenu
+                  hasTranscript={view != null}
+                  request={menuRequest}
+                  onRequestRead={menuRequestRead}
+                  onVersions={() => openVersions()}
+                  onRerun={() => {
+                    setRerunFrom("all");
+                    setRerunLanguage(null);
+                    setRerunOpen(true);
+                  }}
+                  session={session}
+                  onChanged={sessionChanged}
+                  onError={setMenuError}
+                  onIncomplete={setIncomplete}
+                  onDone={setNotice}
+                />
+              )}
+            </div>
+            {session && (
+              <div>
+                <EditableTitle
+                  title={title}
+                  onSave={async (value) => {
+                    await api.renameSession(id, value);
+                    await refresh();
+                    libraryChanged();
+                  }}
+                />
+                <Text color="secondary">
+                  {formatDate(session.recorded_at)} ·{" "}
+                  {formatDuration(session.duration_s)} ·{" "}
                 <Popover
                   isOpen={attendeesOpen}
                   onOpenChange={setAttendeesOpen}
@@ -829,53 +870,8 @@ export function SessionPage({
                     <ChevronDown size={13} strokeWidth={1.75} aria-hidden />
                   </button>
                 </Popover>
-              )}
-              {session && languages && (
-                <SessionLanguage
-                  session={session}
-                  languages={languages}
-                  onChanged={sessionChanged}
-                  onRedo={(code) => {
-                    setRerunFrom("transcribe");
-                    setRerunLanguage(code);
-                    setRerunOpen(true);
-                  }}
-                  onDownload={setToDownload}
-                  onError={setMenuError}
-                />
-              )}
-              {session && (
-                <SessionMenu
-                  hasTranscript={view != null}
-                  request={menuRequest}
-                  onRequestRead={menuRequestRead}
-                  onVersions={() => openVersions()}
-                  onRerun={() => {
-                    setRerunFrom("all");
-                    setRerunLanguage(null);
-                    setRerunOpen(true);
-                  }}
-                  session={session}
-                  onChanged={sessionChanged}
-                  onError={setMenuError}
-                  onIncomplete={setIncomplete}
-                  onDone={setNotice}
-                />
-              )}
-            </div>
-            {session && (
-              <div>
-                <EditableTitle
-                  title={title}
-                  onSave={async (value) => {
-                    await api.renameSession(id, value);
-                    await refresh();
-                    libraryChanged();
-                  }}
-                />
-                <Text color="secondary">
-                  {formatDate(session.recorded_at)} ·{" "}
-                  {formatDuration(session.duration_s)}
+
+
                   {extra && <span title={extra.title}>{extra.text}</span>}
                   {audioText && (
                     <>
@@ -935,64 +931,31 @@ export function SessionPage({
               </div>
             )}
             {session && voices.length > 0 && (
-              // The voices and their share of the speech; a click shows a voice's lines
-              // only. The ones without a name are named, guided, from here (ADR 0062).
+              // The voices as one pile (ADR 0090): a click lists them; one without a name
+              // opens « Qui parle ? », a named one shows its lines only.
               <div className="cl-voices" aria-label="Participants">
-                {voices
-                  .filter((v) => v.named)
-                  .map((v) => (
-                    <button
-                      key={v.label}
-                      type="button"
-                      className="cl-voice"
-                      aria-pressed={focus === v.label}
-                      title={`N'afficher que les répliques de ${v.name}`}
-                      onClick={() => {
-                        setReading("transcript");
-                        setFocus(focus === v.label ? null : v.label);
-                      }}
-                      onPointerEnter={() => setPointed(v.label)}
-                      onPointerLeave={() => setPointed(null)}
-                    >
-                      <span className="cl-name" style={{ color: inkOf(v) }}>
-                        {v.name}
-                      </span>
-                      <span className="cl-voice__share">
-                        {(100 * v.seconds) / speechTotal < 1
-                          ? "< 1 %"
-                          : `${Math.round((100 * v.seconds) / speechTotal)} %`}
-                      </span>
-                    </button>
-                  ))}
-                {twins.map(([a, b]) => (
-                  <button
-                    key={`${a.label}+${b.label}`}
-                    type="button"
-                    className="cl-voice"
-                    data-merge
-                    title={`Deux voix portent le nom ${a.name} : les réunir en une seule (Cmd-Z pour annuler)`}
-                    onClick={() =>
-                      void correct({
-                        kind: "merge_speakers",
-                        source: b.label!,
-                        target: a.label!,
-                      }).catch(() => undefined)
+                <VoicesMenu
+                  voices={voices}
+                  toName={toName}
+                  people={people}
+                  twins={twins}
+                  tip="Nommer les voix"
+                  onPick={(v) => {
+                    if (!v.label) return;
+                    if (!v.named) nameVoiceRef.current(v.label);
+                    else {
+                      setReading("transcript");
+                      setFocus(v.label);
                     }
-                  >
-                    Fusionner les deux {a.name}
-                  </button>
-                ))}
-                {toName.length > 0 && !guide && (
-                  <button
-                    type="button"
-                    className="cl-voice"
-                    data-todo
-                    onClick={startNaming}
-                  >
-                    <UserRoundSearch size={14} strokeWidth={1.75} aria-hidden />
-                    {plural(toName.length, "voix à nommer", "voix à nommer")}
-                  </button>
-                )}
+                  }}
+                  onMerge={([a, b]) =>
+                    void correct({
+                      kind: "merge_speakers",
+                      source: b.label!,
+                      target: a.label!,
+                    }).catch(() => undefined)
+                  }
+                />
                 {view?.voices_problem && (
                   <span className="cl-voices__problem">
                     {view.voices_problem}
@@ -2061,8 +2024,9 @@ function ProjectCrumb({
   );
   return (
     <div className="cl-crumb">
+      <Folder size={14} strokeWidth={1.75} aria-hidden />
       <a href={`#/espaces/${session.space_id}`}>{session.space_name}</a>
-      <span aria-hidden>·</span>
+      <span aria-hidden>›</span>
       <select
         className="cl-crumb__select"
         aria-label="Projet de la séance"
