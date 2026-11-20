@@ -527,7 +527,7 @@ function AddPerson({
       ? `${taken.name} est archivé`
       : "Oui, la même personne (Entrée)";
     return (
-      <div className="cl-who__ask cl-add" role="group" aria-labelledby="cl-add-question">
+      <div className="cl-who__ask cl-add" data-asking role="group" aria-labelledby="cl-add-question">
         <Face person={taken} size="xl" />
         <p id="cl-add-question" className="cl-who__question" aria-live="polite">
           {taken.name} est déjà dans la liste{taken.archived ? ", archivé" : ""}.

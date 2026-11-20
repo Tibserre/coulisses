@@ -4287,6 +4287,11 @@ button.cl-tree__more:hover {
   padding: var(--spacing-4) 0;
 }
 
+/* « C'est la même personne ? »: spaced like « C'est Marie ? ». */
+.cl-who__ask.cl-add[data-asking] {
+  gap: 24px;
+}
+
 .cl-who__ask.cl-add .cl-face[data-size="xl"] {
   width: 84px;
   height: 84px;
