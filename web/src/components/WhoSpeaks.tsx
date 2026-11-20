@@ -491,7 +491,7 @@ export function WhoSpeaks({
                 disabled={busy}
                 onClick={no}
               >
-                <X size={18} strokeWidth={2} />
+                <X size={22} strokeWidth={2} />
               </button>
               <button
                 type="button"
@@ -501,7 +501,7 @@ export function WhoSpeaks({
                 disabled={busy}
                 onClick={() => confirm(asking.person)}
               >
-                <Check size={20} strokeWidth={2.25} />
+                <Check size={30} strokeWidth={2.5} />
               </button>
             </span>
           </div>

@@ -4280,29 +4280,56 @@ button.cl-tree__more:hover {
 }
 
 /* Adding someone, drawn like « C'est Marie ? »: the name across the column. */
+/* In « Qui est là ? », the adding sits under « Dire qui est là », its disc smaller. */
 .cl-who__ask.cl-add {
   min-height: 0;
-  padding: var(--spacing-6) 0;
+  gap: 18px;
+  padding: var(--spacing-4) 0;
+}
+
+.cl-who__ask.cl-add .cl-face[data-size="xl"] {
+  width: 84px;
+  height: 84px;
+  font-size: 32px;
+}
+
+.cl-who__pick > .cl-who__ask.cl-add {
+  min-height: min(530px, calc(100vh - 140px));
+  gap: 24px;
+  padding: 0 0 6px;
+}
+
+.cl-who__pick > .cl-who__ask.cl-add .cl-face[data-size="xl"] {
+  width: 104px;
+  height: 104px;
+  font-size: 40px;
 }
 
 .cl-add__name {
   width: 100%;
-  height: 44px;
+  max-width: 400px;
+  height: 54px;
   padding: 0 var(--spacing-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-element);
+  border-radius: 10px;
   background: var(--color-background-surface);
   color: var(--color-text-primary);
-  font: inherit;
-  font-size: 18px;
+  font-family: var(--font-family-heading);
+  font-size: 24px;
   font-weight: var(--font-weight-medium);
+  letter-spacing: -0.02em;
   text-align: center;
+}
+
+.cl-add__name::placeholder {
+  color: var(--color-text-secondary);
+  font-weight: 400;
 }
 
 .cl-add__name:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 14%, transparent);
 }
 
 /* A new character: its rounded square, before anyone plays it. */
@@ -6470,8 +6497,20 @@ button.cl-tree__more:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-4);
+  gap: 24px;
+  padding-bottom: 6px;
   min-height: min(530px, calc(100vh - 140px));
+}
+
+/* The big disc of a question or an adding: 104 px, 84 px when two are side by side. */
+.cl-who__ask .cl-face[data-size="xl"] {
+  width: 104px;
+  height: 104px;
+  font-size: 40px;
+}
+
+.cl-who__ask .cl-face[data-size="xl"][data-guest] {
+  box-shadow: inset 0 0 0 2.5px currentColor;
 }
 
 .cl-who__askfaces {
@@ -6479,31 +6518,45 @@ button.cl-tree__more:hover {
 }
 
 .cl-who__askfaces > * + * {
-  margin-left: -12px;
-  box-shadow: 0 0 0 3px var(--color-background-surface);
+  margin-left: -18px;
+}
+
+.cl-who__askfaces > * {
+  box-shadow: 0 0 0 4px var(--color-background-surface);
+}
+
+.cl-who__askfaces .cl-face[data-size="xl"] {
+  width: 84px;
+  height: 84px;
+  font-size: 32px;
 }
 
 .cl-who__askfaces .cl-who__empty {
-  width: 80px;
-  height: 80px;
+  width: 84px;
+  height: 84px;
   background: var(--color-background-surface);
 }
 
 .cl-who__question {
   margin: 0;
-  font-size: 20px;
+  font-family: var(--font-family-heading);
+  font-size: 26px;
   font-weight: var(--font-weight-medium);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-align: center;
 }
 
 .cl-who__yesno {
   display: flex;
-  gap: var(--spacing-6);
+  align-items: center;
+  gap: 40px;
 }
 
 .cl-who__no,
 .cl-who__yes {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6516,14 +6569,18 @@ button.cl-tree__more:hover {
   border: 1px solid var(--color-border);
   background: var(--color-background-surface);
   color: var(--color-text-primary);
+  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.06);
 }
 
 .cl-who__yes {
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
   border: 0;
   background: var(--color-accent);
   color: #fff;
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.08),
+    0 12px 24px -12px color-mix(in srgb, var(--color-accent) 55%, transparent);
 }
 
 .cl-who__no:disabled,

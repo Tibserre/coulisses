@@ -526,7 +526,7 @@ function AddPerson({
     <div className="cl-who__ask cl-add" role="group" aria-label="Ajouter quelqu'un">
       {typed === "" ? (
         <span className="cl-face" data-size="xl" data-empty aria-hidden>
-          <Plus size={28} strokeWidth={1.5} />
+          <Plus size={36} strokeWidth={1.5} />
         </span>
       ) : character ? (
         <span className="cl-face" data-size="xl" data-role data-character aria-hidden>
@@ -571,7 +571,7 @@ function AddPerson({
       )}
       <span className="cl-who__yesno">
         <button type="button" className="cl-who__no" aria-label="Annuler" title="Annuler" onClick={onCancel}>
-          <X size={18} strokeWidth={2} />
+          <X size={22} strokeWidth={2} />
         </button>
         <button
           type="button"
@@ -581,7 +581,7 @@ function AddPerson({
           disabled={!can}
           onClick={add}
         >
-          <Check size={20} strokeWidth={2.25} />
+          <Check size={30} strokeWidth={2.5} />
         </button>
       </span>
     </div>
