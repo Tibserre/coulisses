@@ -15,6 +15,7 @@ from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
 from coulisses_app.spaces import SpaceError
+from coulisses_app.storage import db
 from coulisses_app.storage.db import connect
 
 from .conftest import FAKE_CHAIN, local_client
@@ -76,8 +77,9 @@ def test_removing_the_audio_keeps_the_text_and_says_it(data: DataDir, recording:
         create_app(data, FAKE_CHAIN, profile="essai", processor=None, web_dir=None)
     )
     assert client.get(f"/api/seances/{session_id}/audio").status_code == 404
-    listed = client.get(f"/api/seances/{session_id}").json()["session"]["audio"]
-    assert listed["state"] == "removed"
+    detail = client.get(f"/api/seances/{session_id}").json()
+    assert detail["session"]["audio"]["state"] == "removed"
+    assert detail["heard_version"] is None  # nothing to play any more
 
 
 def test_nothing_is_removed_while_recording_or_processing(data: DataDir, recording: Path) -> None:
@@ -186,7 +188,9 @@ def test_the_purge_is_announced_first_and_happens_after_the_notice(
     assert [a.session_id for a in retention.coming(data, NOW)] == [session_id]
 
     again = retention.check(data, NOW + timedelta(days=6, hours=23))
-    assert (again.announced, again.purged) == ([], [])  # announced once, not yet due
+    # The second reminder (3 days before, ADR 0083), not due yet.
+    assert ([a.session_id for a in again.announced], again.purged) == ([session_id], [])
+    assert retention.check(data, NOW + timedelta(days=6, hours=23, minutes=30)).announced == []
     assert sources(data, session_id)
 
     due = retention.check(data, NOW + timedelta(days=7))
@@ -295,12 +299,83 @@ def test_the_service_keeps_extends_removes_and_lists(data: DataDir, recording: P
     removed = client.post(f"/api/seances/{session_id}/supprimer-audio").json()
     assert (removed["session"]["audio"]["state"], removed["problems"]) == ("removed", [])
     info = client.get("/api/conservation").json()
-    assert info["settings"] == {"retention_days": 90, "notice_days": 7}
+    assert info["settings"] == {"retention_days": 90, "notice_days": 7, "reminder_days": [7, 3]}
     assert [e["kind"] for e in info["journal"]] == ["audio_deletion"]
     changed = client.put("/api/conservation", json={"retention_days": 60, "notice_days": 5})
-    assert changed.json()["settings"] == {"retention_days": 60, "notice_days": 5}
+    assert changed.json()["settings"] == {
+        "retention_days": 60,
+        "notice_days": 5,
+        "reminder_days": [5, 3],
+    }
     refused = client.put("/api/conservation", json={"retention_days": 5, "notice_days": 9})
     assert refused.status_code == 422
+    too_long = client.put("/api/conservation", json={"retention_days": 120, "notice_days": 7})
+    assert too_long.status_code == 422
+    assert "90 jours au plus" in too_long.json()["detail"]
+
+
+def _before_0012(tmp_path: Path, name: str, retention_days: int, notice_days: int) -> DataDir:
+    """A database migrated up to 0011, with these settings and an announced purge."""
+    shipped = db.migrations()
+    older = DataDir(tmp_path / name)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(db, "migrations", lambda: [m for m in shipped if m[0] <= 11])
+        db.migrate(older)
+    conn = db.connect(older)
+    with conn:
+        conn.executemany(
+            "INSERT INTO app_setting (key, value) VALUES (?, ?)",
+            [
+                (retention.RETENTION_KEY, str(retention_days)),
+                (retention.NOTICE_KEY, str(notice_days)),
+            ],
+        )
+        conn.execute(
+            "INSERT INTO session (id, space_id, recorded_at, created_at, reference_source_id,"
+            " purge_announced_at) VALUES ('s', 1, 'x', 'x', 'ref', '2026-10-01T00:00:00Z')"
+        )
+        conn.execute(
+            "INSERT INTO session (id, space_id, recorded_at, created_at, reference_source_id,"
+            " purge_announced_at) VALUES ('t', 1, 'x', 'x', 'ref', '2026-10-02T00:00:00Z')"
+        )
+    conn.close()
+    return older
+
+
+def test_a_delay_above_90_days_comes_down_to_90_and_is_announced_again(
+    tmp_path: Path,
+) -> None:
+    """The user's choice (ADR 0083): a delay set before above 90 days comes down to 90."""
+    cases = (
+        (_before_0012(tmp_path, "longue", 365, 120), (90, 90), None),  # announced again
+        (_before_0012(tmp_path, "un-an", 365, 7), (90, 7), None),  # its notice kept
+        (_before_0012(tmp_path, "courte", 60, 7), (60, 7), "2026-10-01T00:00:00Z"),  # as was
+    )
+    for data, settings, announced in cases:
+        assert len(db.migrate(data)) == 1
+        conn = db.connect(data)
+        try:
+            got = retention.get_settings(conn)
+            assert (got.retention_days, got.notice_days) == settings
+            row = conn.execute(
+                "SELECT purge_announced_at, purge_reminded_at FROM session WHERE id = 's'"
+            ).fetchone()
+            assert (row[0], row[1]) == (announced, None)
+            # The other session, announced too: the same, never only one of them.
+            other = conn.execute("SELECT purge_announced_at FROM session WHERE id = 't'")
+            assert (other.fetchone()[0] is None) == (announced is None)
+        finally:
+            conn.close()
+
+
+def test_no_delay_goes_above_90_days(data: DataDir) -> None:
+    conn = connect(data)
+    try:
+        with pytest.raises(SpaceError, match="90 jours au plus"):
+            retention.set_settings(conn, 120, 7)
+        retention.set_settings(conn, 90, 7)
+    finally:
+        conn.close()
 
 
 def test_a_waiting_rerun_holds_the_purge_and_the_deletion_of_the_audio(
@@ -611,3 +686,95 @@ def test_the_copy_kept_by_a_repatriation_is_never_pruned(data: DataDir) -> None:
 
     assert brought.exists()
     assert len(list(data.backups.glob("coulisses-avant-0*.db"))) == 3
+
+
+def test_a_purge_is_reminded_once_three_days_before(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)  # due in 5 days; announced now, purged in 7
+    first = retention.check(data, NOW).announced
+    assert [a.purge_on for a in first] == ["2026-10-14T12:00:00Z"]
+    assert retention.check(data, NOW + timedelta(days=3)).announced == []  # 4 days left
+    second = retention.check(data, NOW + timedelta(days=4, hours=1))
+    assert [(a.session_id, a.purge_on) for a in second.announced] == [
+        (session_id, "2026-10-14T12:00:00Z")
+    ]
+    # Given once: a later check (or one after a restart) says nothing more.
+    assert retention.check(data, NOW + timedelta(days=5)).announced == []
+    assert retention.check(data, NOW + timedelta(days=7)).purged == [session_id]
+
+
+def test_a_notice_of_three_days_or_less_has_one_reminder(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    conn = connect(data)
+    try:
+        retention.set_settings(conn, 90, 3)
+        assert retention.get_settings(conn).reminder_days == [3]
+    finally:
+        conn.close()
+    assert retention.check(data, NOW + timedelta(days=2)).announced  # 3 days before
+    assert retention.check(data, NOW + timedelta(days=4)).announced == []
+    assert retention.check(data, NOW + timedelta(days=5)).purged == [session_id]
+
+
+def test_extending_clears_the_second_reminder_too(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    assert retention.check(data, NOW).announced
+    assert retention.check(data, NOW + timedelta(days=4, hours=1)).announced
+    retention.extend(data, session_id, NOW + timedelta(days=5))  # kept 90 days from then
+    later = NOW + timedelta(days=5 + 90 - 7)
+    assert [a.session_id for a in retention.check(data, later).announced] == [session_id]
+    assert retention.check(data, later + timedelta(days=3)).announced == []
+    reminded = retention.check(data, later + timedelta(days=4, hours=1)).announced
+    assert [a.session_id for a in reminded] == [session_id]
+
+
+def test_a_closed_application_purges_without_the_second_reminder(
+    data: DataDir, recording: Path
+) -> None:
+    """Only the first reminder holds the purge (ADR 0029, kept by 0083)."""
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    assert retention.check(data, NOW).announced
+    late = retention.check(data, NOW + timedelta(days=8))
+    assert (late.announced, late.purged) == ([], [session_id])
+
+
+def test_a_new_delay_gives_both_reminders_again(data: DataDir, recording: Path) -> None:
+    session_id = processed(data, recording)
+    entered(data, session_id, days_ago=85)
+    assert retention.check(data, NOW).announced
+    assert retention.check(data, NOW + timedelta(days=4, hours=1)).announced
+    conn = connect(data)
+    try:
+        retention.set_settings(conn, 60, 7)
+    finally:
+        conn.close()
+    after = NOW + timedelta(days=5)
+    first = retention.check(data, after).announced
+    assert [a.purge_on for a in first] == ["2026-10-19T12:00:00Z"]
+    assert retention.check(data, after + timedelta(days=3)).announced == []
+    second = retention.check(data, after + timedelta(days=4, hours=1)).announced
+    assert [a.session_id for a in second] == [session_id]
+
+
+def test_a_purge_that_fails_keeps_the_announcements_of_its_check(
+    data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit S1: an unexpected error in one purge never loses the announcements already
+    marked by the same check (they would never be notified)."""
+    overdue = processed(data, recording)
+    entered(data, overdue, days_ago=200)
+    assert retention.check(data, NOW).announced  # purged from NOW + 7 days
+    coming = processed(data, recording)
+    entered(data, coming, days_ago=80)  # due in 3 days at NOW + 7: announced then
+
+    def broken(*_: object, **__: object) -> list[str]:
+        raise OSError("disque débranché")
+
+    monkeypatch.setattr(retention, "remove_audio", broken)
+    later = retention.check(data, NOW + timedelta(days=7))
+    assert [a.session_id for a in later.announced] == [coming]
+    assert later.purged == []
+    assert len(later.problems) == 1 and "journal du service" in later.problems[0]

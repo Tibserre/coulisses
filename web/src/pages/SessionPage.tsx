@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import {
   ProcessingOutline,
+  StopNote,
   RerunRunning,
 } from "../components/ProcessingOutline.tsx";
 import { StageList } from "../components/StageList.tsx";
@@ -65,7 +66,7 @@ import {
   SessionLanguage,
   useLanguages,
 } from "../components/Languages.tsx";
-import { labelOf, languageWord, languageWorthShowing } from "../languages.ts";
+import { labelOf, languageReady, languageWord, languageWorthShowing } from "../languages.ts";
 import {
   GiveToPanel,
   TranscriptView,
@@ -100,6 +101,7 @@ import {
   wordAt,
 } from "../transcript.ts";
 import { usePlayback } from "../usePlayback.ts";
+import { nextHeardVersion } from "../heardVersion.ts";
 import { useDevMode } from "../devMode.ts";
 import { describeStageError } from "../errors.ts";
 
@@ -207,6 +209,10 @@ export function SessionPage({
   const [folded, setFolded] = useState<Set<number>>(new Set());
   const [phasesStatus, setPhasesStatus] = useState<PhasesStatus | null>(null);
   const pb = usePlayback();
+  /** The version of the file heard, the last one known (a null meanwhile changes nothing):
+   *  in the audio's address, so that a file replaced under an open page (a conversion
+   *  overnight) is loaded anew, not read in pieces of two files (spec §7.2, ADR 0074). */
+  const [heardVersion, setHeardVersion] = useState<string | null>(null);
   const dev = useDevMode();
 
   const refresh = useCallback(async () => {
@@ -217,6 +223,14 @@ export function SessionPage({
       setError((e as Error).message);
     }
   }, [id]);
+  // Refreshed even when refused: a 409 means it already resumed, and only a running job is followed.
+  const resume = async (attendees?: number) => {
+    try {
+      await api.resume(id, attendees);
+    } finally {
+      await refresh();
+    }
+  };
 
   const jobState = detail?.session.job_state;
   const spaceId = detail?.session.space_id;
@@ -244,11 +258,45 @@ export function SessionPage({
     void refresh();
   }, [refresh]);
 
+  // A new version of the sound heard (never a null): reloaded where it was.
+  const nextHeard = detail?.heard_version ?? null;
+  /** In the address: the version known, or the one just read (the first load has it). */
+  const shownHeard = heardVersion ?? nextHeard;
+  useEffect(() => {
+    const next = nextHeardVersion(heardVersion, nextHeard);
+    if (next.version === heardVersion) return;
+    if (next.reload) pb.beforeSwap();
+    setHeardVersion(next.version);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- on a new version only
+  }, [nextHeard]);
+  // Back on the page (the Mac woken, the window in front again): read again, once, so that
+  // a file replaced meanwhile is known. Never polled outside a processing (reading the
+  // version may prepare the listening mix again).
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+    };
+  }, [refresh]);
+
   // Follow the processing while it runs; nothing to poll once it is over.
   useEffect(() => {
     if (jobState !== "queued" && jobState !== "running") return;
     const timer = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(timer);
+  }, [jobState, refresh]);
+  // Out of « en cours » (stopped from the menu, which hands back the session alone): read
+  // once more, so that its stages show how they ended, not as at the last poll.
+  const lastJobState = useRef(jobState);
+  useEffect(() => {
+    const was = lastJobState.current;
+    lastJobState.current = jobState;
+    if ((was === "queued" || was === "running") && jobState !== was) void refresh();
   }, [jobState, refresh]);
 
   // The version on screen. A new one (a rerun completed, another shown) is read once no
@@ -291,17 +339,23 @@ export function SessionPage({
   }, [attributeRun, loadPhases]);
   const phasesWaiting =
     phasesStatus?.state === "queued" || phasesStatus?.state === "running";
+  // Over: the transcript gets its chapters, read once no line is being typed into.
+  const [chaptersDue, setChaptersDue] = useState(false);
   useEffect(() => {
     if (!phasesWaiting) return;
     const timer = window.setInterval(() => void loadPhases(), 3000);
     return () => {
       window.clearInterval(timer);
-      // Over: the transcript gets its chapters.
-      api
-        .transcript(id)
-        .then(setView, (e: Error) => setTranscriptError(e.message));
+      setChaptersDue(true);
     };
-  }, [phasesWaiting, loadPhases, id]);
+  }, [phasesWaiting, loadPhases]);
+  useEffect(() => {
+    if (!chaptersDue || typing) return;
+    setChaptersDue(false);
+    api
+      .transcript(id)
+      .then(setView, (e: Error) => setTranscriptError(e.message));
+  }, [chaptersDue, typing, id]);
 
   // The title is proposed on demand, from the chapters (ADR 0026): asked, then followed
   // until it is there. A failure says why, next to the title.
@@ -750,16 +804,32 @@ export function SessionPage({
       {/* Once the audio is deleted there is nothing to load (spec §7.10). */}
       <audio
         ref={pb.audioRef}
-        src={audioGone ? undefined : api.audioUrl(id)}
+        src={
+          // Once the session is read: its version is in the address from the first load.
+          audioGone || !detail
+            ? undefined
+            : `${api.audioUrl(id)}${shownHeard ? `?v=${encodeURIComponent(shownHeard)}` : ""}`
+        }
         preload="metadata"
+        // A file that cannot be read any more: the session is read again, a new version
+        // of its sound reloads it.
+        onError={() => void refresh()}
       />
       <LanguageDownloadDialog
         language={toDownload}
         after="La séance l'attend : son traitement partira dès que le modèle sera là, sans bloquer les autres."
         onClose={() => setToDownload(null)}
-        onStarted={() => {
+        onStarted={(started) => {
           void reloadLanguages();
-          void refresh();
+          // Picked above the title: the session takes it now that its download is started
+          // (a session already waiting for it is in it).
+          const chosen = toDownload;
+          if (chosen && started > 0 && session && chosen.language !== session.language)
+            void api.setSessionLanguage(id, chosen.language).then(
+              () => refresh(),
+              (e: Error) => setError(e.message),
+            );
+          else void refresh();
         }}
       />
       {/* Read, not yet shown: the session, or the version it has. Its shapes meanwhile, then
@@ -797,7 +867,6 @@ export function SessionPage({
                       <Attendees
                         session={session}
                         people={people}
-                        inline
                         onSave={async (ids, unnamed) => {
                           await api.setAttendees(id, ids, unnamed);
                           await refresh();
@@ -1111,17 +1180,6 @@ export function SessionPage({
               />
             </div>
           )}
-          {stopProblem && (
-            <div className="cl-review__notice">
-              <Banner
-                status="warning"
-                title="À l'arrêt de l'enregistrement"
-                description={stopProblem}
-                isDismissable
-                onDismiss={() => setStopProblem(null)}
-              />
-            </div>
-          )}
           {menuError && (
             <div className="cl-review__notice">
               <Banner
@@ -1137,6 +1195,7 @@ export function SessionPage({
             <ProcessingPanel
               detail={detail}
               people={people}
+              stopProblem={stopProblem}
               onAskStop={() => setMenuRequest("stop")}
               onAskDelete={() => setMenuRequest("session")}
               onSaveAttendees={async (ids, unnamed) => {
@@ -1151,10 +1210,7 @@ export function SessionPage({
                 await refresh();
               }}
               transcriptError={transcriptError}
-              onResume={async (attendees) => {
-                await api.resume(id, attendees);
-                await refresh();
-              }}
+              onResume={resume}
               onProcess={async () => {
                 await api.processSession(id);
                 await refresh();
@@ -1190,10 +1246,7 @@ export function SessionPage({
                   <RerunNotices
                     detail={detail}
                     view={view}
-                    onResume={async (attendees) => {
-                      await api.resume(id, attendees);
-                      await refresh();
-                    }}
+                    onResume={resume}
                     onShowList={() => openVersions("non-reportees")}
                   />
                 </div>
@@ -1533,6 +1586,7 @@ function RerunNotices({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => setSeen(carryoverSeen(view.run_id)), [view.run_id]);
   const { session, rerun } = detail;
+  useEffect(() => setError(null), [session.job_state]);
   const notices: ReactNode[] = [];
 
   if (
@@ -1657,14 +1711,16 @@ function ImportLanguage({
         title="Langue de la séance"
         intro="Le compte à rebours continue : changer la langue ne le relance pas."
         onPick={(l) =>
-          api.setSessionLanguage(session.id, l.language).then(
-            (next) => {
-              setError(null);
-              onChanged(next);
-              if (!l.installed) onDownload(l);
-            },
-            (e: Error) => setError(e.message),
-          )
+          // Not here: chosen once its download is started; closed before, nothing changes.
+          languageReady(l)
+            ? api.setSessionLanguage(session.id, l.language).then(
+                (next) => {
+                  setError(null);
+                  onChanged(next);
+                },
+                (e: Error) => setError(e.message),
+              )
+            : onDownload(l)
         }
       >
         <button type="button" className="cl-linkbtn">
@@ -1683,6 +1739,7 @@ function ImportLanguage({
 function ProcessingPanel({
   detail,
   people,
+  stopProblem,
   onAskStop,
   onAskDelete,
   onSaveAttendees,
@@ -1698,6 +1755,8 @@ function ProcessingPanel({
 }: {
   detail: SessionDetail;
   people: Person[];
+  /** What the stop of the recording said: under the discs (also said under the title). */
+  stopProblem: string | null;
   /** The confirmations of « ⋯ »: stop the processing (ADR 0070), delete the session. */
   onAskStop: () => void;
   onAskDelete: () => void;
@@ -1734,6 +1793,8 @@ function ProcessingPanel({
   const proposed =
     attendees ?? (Number.isFinite(found) && found >= 1 ? found : 1);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  // Said for the try it answers: gone once the job moves (resumed elsewhere, failed again).
+  useEffect(() => setResumeError(null), [session.job_state]);
   // The audio deleted (by hand, or never processed and deleted): nothing can be resumed.
   const gone = session.audio.state === "removed";
   const resume = async (withAttendees?: number) => {
@@ -1753,6 +1814,11 @@ function ProcessingPanel({
     : "Une erreur de Coulisses a arrêté le traitement : ce n'est pas votre enregistrement. Reprenez ; si elle revient, son détail est en mode développeur.";
   return (
     <main className="cl-processing">
+      {/* Under the discs while they turn; here when there are none (on battery, waiting
+          for a language, stopped). */}
+      {stopProblem && !(running && !session.processing_waits_for) && (
+        <StopNote problem={stopProblem} />
+      )}
       {gone && (
         <Banner
           status="info"
@@ -1793,8 +1859,11 @@ function ProcessingPanel({
           onStopped={onLanguagesChanged}
         />
       )}
-      {running && !session.processing_waits_for && <ProcessingOutline detail={detail} />}
-      {running && (
+      {running && !session.processing_waits_for && (
+        <ProcessingOutline detail={detail} stopProblem={stopProblem} />
+      )}
+      {/* Waiting for what this Mac lacks: the page is that, stopping stays in « … ». */}
+      {running && !session.processing_waits_for && (
         <div className="cl-processing__stop">
           <Button
             label="Arrêter le traitement"

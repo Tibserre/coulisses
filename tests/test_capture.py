@@ -4,9 +4,11 @@ of synthetic sound pushed by the test; no real device is opened."""
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -198,6 +200,51 @@ def test_on_battery_the_processing_waits_for_the_user(
         sessions.start_processing(data, stopped.session_id, profile="essai")
 
 
+def test_process_clicked_twice_queues_one_processing(
+    data: DataDir,
+    mic: FakeMic,
+    awake: CountingAwake,
+    clock: Clock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two « Traiter » at once: the second waits for the first, then finds it asked."""
+    rec = recorder(data, mic, awake, clock, battery=True)
+    start(rec)
+    mic.push(tone(0.5, 0.3))
+    wait_for(lambda: rec.state() is not None and rec.state().elapsed_s >= 0.5)  # type: ignore[union-attr]
+    session_id = rec.stop(profile="essai").session_id
+    refusals: list[Exception] = []
+
+    def second_click() -> None:
+        try:
+            sessions.start_processing(data, session_id, profile="essai")
+        except sessions.AlreadyProcessedError as exc:
+            refusals.append(exc)
+
+    attendee_ids = sessions.spaces.attendee_ids
+    other = threading.Thread(target=second_click)
+
+    def checked_then_second_click(conn: Any, sid: str) -> Any:
+        # The first click has checked that nothing is asked: the second comes now.
+        if other.ident is None:
+            other.start()
+            other.join(0.5)
+        return attendee_ids(conn, sid)
+
+    monkeypatch.setattr(sessions.spaces, "attendee_ids", checked_then_second_click)
+    sessions.start_processing(data, session_id, profile="essai")
+    other.join()
+    conn = connect(data)
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM job WHERE session_id = ? AND kind = 'chain'", (session_id,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert count == 1
+    assert len(refusals) == 1
+
+
 def test_too_quiet_and_saturation_are_said(
     data: DataDir, mic: FakeMic, awake: CountingAwake, clock: Clock
 ) -> None:
@@ -323,6 +370,9 @@ def test_the_interface_drives_the_recording(
     assert started.json()["device"] == "Micro MacBook Pro"
     mic.push(tone(0.5, 0.3))
     wait_for(lambda: client.get("/api/enregistrement").json()["elapsed_s"] >= 0.5)
+    # The file grows at each look: no version of the sound played until it is over.
+    recording = client.get(f"/api/seances/{started.json()['session_id']}").json()
+    assert recording["heard_version"] is None
     assert client.post("/api/enregistrement/pause").json()["state"] == "paused"
     assert client.post("/api/enregistrement/reprise").json()["state"] == "recording"
     assert client.post("/api/enregistrement", json={}).status_code == 422  # one at a time
@@ -333,6 +383,7 @@ def test_the_interface_drives_the_recording(
     session_id = stopped["session_id"]
     detail = client.get(f"/api/seances/{session_id}").json()
     assert detail["source"]["capture_state"] == "complete"
+    assert detail["heard_version"] is not None
     assert client.post(f"/api/seances/{session_id}/traiter").status_code == 202
     assert client.post(f"/api/seances/{session_id}/traiter").status_code == 422
     assert client.post("/api/enregistrement/arret").status_code == 422

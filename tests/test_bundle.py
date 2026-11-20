@@ -11,6 +11,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 import pytest
+from coulisses.api import catalog
 
 from coulisses_app import bundle, cli, system_audio
 from coulisses_app.bundle import RESOURCES_ENV, TOOLS, IncompleteAppError, Resources
@@ -31,7 +32,14 @@ def make_app(root: Path, *, without: str | None = None) -> Path:
             program = resources / "bin" / tool
             program.write_text("#!/bin/sh\n", encoding="utf-8")
             program.chmod(0o755)
+    for key in BUNDLED:
+        if f"le modèle {key}" != without:
+            (resources / bundle.BUNDLED_MODELS / key).mkdir(parents=True)
     return resources
+
+
+BUNDLED = [m.key for m in catalog().models if m.bundled]
+"""The models the engine's catalog ships with the application (engine ADR 0081)."""
 
 
 def snapshot(folder: Path) -> dict[str, float]:
@@ -55,11 +63,21 @@ def test_the_app_gives_its_interface_and_tools(tmp_path: Path) -> None:
     assert resources.system_audio_program == root / "bin" / "coulisses-son-ordinateur"
 
 
-@pytest.mark.parametrize("missing", ["l'interface", "l'identifiant de version", *TOOLS])
+@pytest.mark.parametrize(
+    "missing",
+    ["l'interface", "l'identifiant de version", *TOOLS, *(f"le modèle {k}" for k in BUNDLED)],
+)
 def test_an_incomplete_app_is_said(tmp_path: Path, missing: str) -> None:
     resources = Resources(make_app(tmp_path, without=missing))
     with pytest.raises(IncompleteAppError, match=f"il manque {missing} dans"):
-        resources.check()
+        resources.check(bundled=BUNDLED)
+
+
+def test_the_app_ships_pyannote_and_the_repository_does_not() -> None:
+    assert BUNDLED == ["pyannote-community-1"]  # the engine's catalog, v1.15.0
+    assert Resources.from_env({}).bundled_model(BUNDLED[0]) is None
+    shipped = Resources(Path("/Applications/Coulisses.app/Contents/Resources"))
+    assert shipped.bundled_model(BUNDLED[0]) == shipped.root / "modeles" / BUNDLED[0]  # type: ignore[operator]
 
 
 def test_a_tool_that_cannot_run_counts_as_missing(tmp_path: Path) -> None:

@@ -279,3 +279,29 @@ def test_only_an_app_built_from_the_very_tag_is_published(publier) -> None:
     for other in ("v0.37.1-3-gabc1234", "v0.38.0-modifie", "v0.38.0-1-gabc1234"):
         with pytest.raises(SystemExit):
             publier.built_as(other, "v0.38.0")
+
+
+def test_steps_side_by_side_all_end_before_a_failure_stops(publier) -> None:
+    import threading
+
+    assert publier.side_by_side(lambda: 1, lambda: "deux") == [1, "deux"]
+    ended = threading.Event()
+
+    def fails() -> None:
+        publier.fail("l'essai a échoué")
+
+    def slow() -> None:
+        ended.wait(0.2)
+        ended.set()
+
+    with pytest.raises(SystemExit):
+        publier.side_by_side(fails, slow)
+    assert ended.is_set()  # the other step ran to its end, never cut short
+
+
+def test_a_logged_step_that_fails_shows_its_log(publier, tmp_path, capsys) -> None:
+    log = tmp_path / "essai.log"
+    with pytest.raises(SystemExit):
+        publier.shown(["sh", "-c", "echo trace; exit 3"], tmp_path, log)
+    err = capsys.readouterr().err
+    assert "trace" in err and str(log) in err

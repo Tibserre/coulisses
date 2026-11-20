@@ -8,6 +8,7 @@ import json
 import stat
 import sys
 import textwrap
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -227,7 +228,7 @@ def recorded(data: DataDir, mic: NDArray[np.float32], system: NDArray[np.float32
 def test_the_mix_is_turned_down_never_to_saturate(data: DataDir) -> None:
     loud = np.full((4800, 1), 0.8, np.float32)
     session_id = recorded(data, loud, loud)
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
     assert path is not None and path == data.sources_dir(session_id) / mixing.MIX_FILE
     mix = read(path)
     assert np.max(np.abs(mix)) == pytest.approx(mixing.CEILING, abs=1e-5)
@@ -239,7 +240,7 @@ def test_a_stereo_microphone_is_mixed_down_and_a_shorter_track_padded(data: Data
     mic = np.stack([np.full(9600, 0.2, np.float32), np.full(9600, 0.4, np.float32)], axis=1)
     system = np.full((4800, 1), 0.1, np.float32)
     session_id = recorded(data, mic, system)
-    mix = read(mixing.processing_path(data, session_id))  # type: ignore[arg-type]
+    mix = read(mixing.processing_input(data, session_id)[0])  # type: ignore[arg-type]
     assert mix.shape == (9600, 1)
     assert mix[0, 0] == pytest.approx(0.4, abs=1e-5)  # (0.2 + 0.4) / 2 + 0.1
     assert mix[-1, 0] == pytest.approx(0.3, abs=1e-5)  # the computer's sound ended
@@ -247,10 +248,10 @@ def test_a_stereo_microphone_is_mixed_down_and_a_shorter_track_padded(data: Data
 
 def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
     session_id = recorded(data, tone(0.2, 0.3), tone(0.2, 0.1))
-    path = mixing.processing_path(data, session_id)
+    path = mixing.processing_input(data, session_id)[0]
     assert path is not None
     made = path.stat().st_mtime_ns
-    assert mixing.processing_path(data, session_id) == path
+    assert mixing.processing_input(data, session_id)[0] == path
     assert path.stat().st_mtime_ns == made  # the same sources: kept
     conn = connect(data)
     with conn:
@@ -259,7 +260,7 @@ def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
             "UPDATE audio_source SET sha256 = 'fichier' WHERE session_id = ? AND source_id = ?",
             (session_id, "system"),
         )
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     assert path.stat().st_mtime_ns == made
     with conn:
         conn.execute(
@@ -267,24 +268,24 @@ def test_the_mix_is_made_again_when_its_sources_differ(data: DataDir) -> None:
             (session_id, "system"),
         )
     conn.close()
-    mixing.processing_path(data, session_id)
+    mixing.processing_input(data, session_id)[0]
     facts = json.loads(path.with_name(mixing.MIX_FACTS).read_text(encoding="utf-8"))
     assert facts["made_from"]["system"] == "autre"
 
 
 def test_without_the_computers_sound_the_reference_is_processed(data: DataDir) -> None:
     alone = recorded(data, tone(0.2, 0.3), None)
-    assert mixing.processing_path(data, alone) == data.sources_dir(alone) / "ref.wav"
+    assert mixing.processing_input(data, alone)[0] == data.sources_dir(alone) / "ref.wav"
     # Recorded empty (the tap stopped at once): the microphone alone, said on the page.
     empty = recorded(data, tone(0.2, 0.3), np.zeros((0, 1), np.float32))
-    assert mixing.processing_path(data, empty) == data.sources_dir(empty) / "ref.wav"
+    assert mixing.processing_input(data, empty)[0] == data.sources_dir(empty) / "ref.wav"
 
 
 def test_a_missing_computers_sound_is_said_never_skipped(data: DataDir) -> None:
     session_id = recorded(data, tone(0.2, 0.3), tone(0.2, 0.1))
     (data.sources_dir(session_id) / "system.wav").unlink()
     with pytest.raises(mixing.MixError, match="personnes à distance"):
-        mixing.processing_path(data, session_id)
+        mixing.processing_input(data, session_id)[0]
     # Heard meanwhile: the microphone, never nothing.
     assert mixing.listening_path(data, session_id) == data.sources_dir(session_id) / "ref.wav"
 
@@ -296,6 +297,34 @@ def test_files_cannot_go_while_the_mix_is_made(data: DataDir) -> None:
         retention.delete_session(data, session_id)
     retention.delete_session(data, session_id)
     assert not data.session_dir(session_id).exists()
+
+
+def test_a_removal_under_way_is_over_before_the_mix_is_made(data: DataDir) -> None:
+    """Audit S2: a removal of the audio that has not committed yet is waited for, then
+    seen; the mix is never written back into a session whose audio is gone."""
+    session_id = recorded(data, tone(0.2, 0.3), tone(0.2, 0.1))
+    removal = connect(data)
+    removal.execute("BEGIN IMMEDIATE")
+    removal.execute(
+        "UPDATE session SET audio_removed_at = '2026-11-17T00:00:00Z' WHERE id = ?",
+        (session_id,),
+    )
+    outcome: list[object] = []
+
+    def mix() -> None:
+        try:
+            outcome.append(mixing.processing_input(data, session_id))
+        except mixing.MixError as exc:
+            outcome.append(exc)
+
+    worker = threading.Thread(target=mix)
+    worker.start()
+    time.sleep(0.5)
+    removal.commit()
+    removal.close()
+    worker.join(timeout=10)
+    assert [type(o) for o in outcome] == [mixing.MixError]
+    assert not (data.sources_dir(session_id) / mixing.MIX_FILE).exists()
 
 
 # -- the program ---------------------------------------------------------------------------
@@ -355,7 +384,83 @@ def test_the_program_refusing_is_said_in_french(tmp_path: Path) -> None:
         """,
     )
     stream = system_audio.HelperStream("AirPods", 1, lambda *_: None, program=refusing)
-    with pytest.raises(system_audio.SystemAudioError, match="« AirPods » ne peut pas enregistrer"):
+    with pytest.raises(system_audio.SystemAudioError, match="« AirPods » n'a pas pu être converti"):
+        stream.start()
+
+
+AT_24_KHZ = SPEAKING.replace(
+    'say(event="ready", rate=48000, channels=channels)',
+    'say(event="ready", rate=48000, device_rate=24000, channels=channels)',
+)
+
+
+def test_airpods_at_24_khz_are_recorded_at_48_and_said_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Hands-free AirPods run at 24 kHz: the program converts both tracks to 48 kHz, on the
+    same clock; the service records as it would any microphone."""
+    got: list[NDArray[np.float32]] = []
+    stream = system_audio.HelperStream(
+        "AirPods", 1, lambda block, _: got.append(block), program=program(tmp_path, AT_24_KHZ)
+    )
+    with caplog.at_level("WARNING", logger="coulisses_app.system_audio"):
+        stream.start()
+        deadline = time.monotonic() + 5
+        while len(got) < 2:
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        stream.stop()
+    assert got[0].shape == (1024, 2)
+    assert "AirPods runs at 24000 Hz, converted to 48000 Hz" in caplog.text
+
+
+LOSS_AT_THE_END = """
+    import json, struct, sys
+    args = sys.argv[1:]
+    channels = int(args[args.index("--canaux") + 1])
+    sys.stderr.write(json.dumps({"event": "ready", "rate": 48000}) + "\\n"); sys.stderr.flush()
+    sys.stdin.read()
+    # Stopping: the converter held nothing more, but frames were lost meanwhile.
+    sys.stdout.buffer.write(struct.pack("<II", 0, 480)); sys.stdout.buffer.flush()
+"""
+
+
+def test_a_loss_said_alone_at_the_end_is_passed_on(tmp_path: Path) -> None:
+    got: list[tuple[tuple[int, ...], bool]] = []
+    stream = system_audio.HelperStream(
+        "AirPods",
+        1,
+        lambda block, lost: got.append((block.shape, lost)),
+        program=program(tmp_path, LOSS_AT_THE_END),
+    )
+    stream.start()
+    stream.stop()
+    assert got == [((0, 2), True)]
+
+
+def test_an_empty_block_with_a_loss_is_counted_and_writes_nothing(
+    data: DataDir, awake: CountingAwake, clock: Clock
+) -> None:
+    tap = FakeTap()
+    rec = system_recorder(data, tap, awake, clock)
+    session_id = start_online(rec).session_id
+    tap.push(both(tone(1.0, 0.3), tone(1.0, 0.1)))
+    assert tap.on_block is not None
+    tap.on_block(np.zeros((0, 2), np.float32), True)
+    wait_for(lambda: rec.state() is not None and rec.state().dropouts == 1)  # type: ignore[union-attr]
+    assert rec.stop(profile="essai").duration_s == pytest.approx(1.0)
+    folder = data.sources_dir(session_id)
+    assert read(folder / "ref.wav").shape == read(folder / "system.wav").shape == (48_000, 1)
+
+
+def test_a_program_at_another_rate_is_refused_never_written_at_the_wrong_one(
+    tmp_path: Path,
+) -> None:
+    """An older program that hands over the microphone's own rate: every time read from
+    the files would be wrong (P2)."""
+    other = program(tmp_path, SPEAKING.replace("rate=48000", "rate=24000"))
+    stream = system_audio.HelperStream("AirPods", 1, lambda *_: None, program=other)
+    with pytest.raises(system_audio.SystemAudioError, match="converti en 48 kHz"):
         stream.start()
 
 
@@ -492,7 +597,7 @@ FLUSHING = """
     import struct, sys
     args = sys.argv[1:]
     channels = int(args[args.index("--canaux") + 1])
-    sys.stderr.write('{"event": "ready"}\\n'); sys.stderr.flush()
+    sys.stderr.write('{"event": "ready", "rate": 48000}\\n'); sys.stderr.flush()
     block = struct.pack("<II", 512, 0) + b"\\0" * (512 * (channels + 1) * 4)
     for _ in range(200):
         sys.stdout.buffer.write(block)

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { StageView } from "./api.ts";
-import { processingDiscs } from "./processing.ts";
+import { attendeesOf, fewerAttendees, processingDiscs, toggleAttendee } from "./processing.ts";
 
 const stage = (
   name: string,
@@ -181,4 +181,17 @@ test("the people present are a number first, some of them named if wanted", asyn
   assert.deepEqual(attendeesOf(2, [1, 2, 3]), { ids: [1, 2, 3], count: 3, unnamed: null });
   assert.deepEqual(attendeesOf(0, []), { ids: [], count: 0, unnamed: null });
   assert.deepEqual(attendeesOf(-1, []), { ids: [], count: 0, unnamed: null });
+});
+
+test("one fewer takes an unnamed place first, then the last one checked", () => {
+  assert.deepEqual(fewerAttendees({ ids: [1, 2], count: 4 }), { ids: [1, 2], count: 3 });
+  assert.deepEqual(fewerAttendees({ ids: [1, 2], count: 2 }), { ids: [1], count: 1 });
+  assert.deepEqual(fewerAttendees({ ids: [], count: 0 }), { ids: [], count: 0 });
+});
+
+test("checking someone when every place has a name raises the number", () => {
+  const checked = toggleAttendee({ ids: [1, 2], count: 2 }, 3);
+  assert.equal(attendeesOf(checked.count, checked.ids).count, 3);
+  // Unchecked: the place stays, unnamed.
+  assert.deepEqual(toggleAttendee({ ids: [1, 2], count: 2 }, 2), { ids: [1], count: 2 });
 });

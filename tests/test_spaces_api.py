@@ -287,6 +287,8 @@ def test_a_step_1_database_is_migrated_without_losing_anything(tmp_path: Path) -
             "INSERT INTO session (id, troupe_id, recorded_at, created_at, reference_source_id,"
             " attendee_count) VALUES ('s1', 1, 'x', 'x', 'ref', 4)"
         )
+        # A base made before « Espace 1 »: its space keeps its name.
+        conn.execute("UPDATE troupe SET name = 'Ma troupe'")
     conn.close()
     backups = db.migrate(data)
     assert len(backups) == 1

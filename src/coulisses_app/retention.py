@@ -4,7 +4,8 @@ The audio of a processed session is kept `retention_days` from the day it entere
 application (import or recording), or longer if the user extended it, or forever if the
 user chose « Garder l'audio ». A coming purge is announced first (banner, macOS
 notification) and only happens once the notice has run its course from that announcement:
-nothing older ever disappears unannounced. A purge removes the audio files only; the text,
+nothing older ever disappears unannounced. A second reminder follows, `SECOND_REMINDER_DAYS`
+before the purge (ADR 0083). A purge removes the audio files only; the text,
 the corrections and the summaries stay (P5).
 
 Deleting a session by hand removes everything: its rows, its folder, and its rows in the
@@ -31,7 +32,7 @@ from pathlib import Path
 from typing import Literal
 
 from coulisses.api import read_provenance
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from coulisses_app.paths import DataDir
 from coulisses_app.spaces import NotFoundError, SpaceError
@@ -43,6 +44,14 @@ RETENTION_KEY = "conservation_jours"
 NOTICE_KEY = "preavis_jours"
 DEFAULT_RETENTION_DAYS = 90
 DEFAULT_NOTICE_DAYS = 7
+MAX_RETENTION_DAYS = 90
+"""The audio is kept 90 days at most (ADR 0083); a longer delay set before came down to 90
+days with the migration 0012."""
+SECOND_REMINDER_DAYS = 3
+"""The second reminder, given that many days before the purge (ADR 0083); the first one is
+the announcement, `notice_days` before. Only the first one holds the purge (ADR 0029, kept by
+0083): an application closed through the last 3 days purges at its next check, the second
+reminder never given."""
 BACKUPS_KEPT = 3
 """Copies of the database kept, the one just made among them (ADR 0052)."""
 
@@ -52,6 +61,15 @@ AudioState = Literal["kept", "removed", "scheduled", "announced", "never_process
 class RetentionSettings(BaseModel):
     retention_days: int
     notice_days: int
+
+    @computed_field
+    @property
+    def reminder_days(self) -> list[int]:
+        """The reminders really given, in days before the purge: the announcement, then the
+        second one if it comes later (a notice of 3 days or less has only the first)."""
+        if self.notice_days > SECOND_REMINDER_DAYS:
+            return [self.notice_days, SECOND_REMINDER_DAYS]
+        return [self.notice_days]
 
 
 class AudioStatus(BaseModel):
@@ -111,6 +129,8 @@ def get_settings(conn: sqlite3.Connection) -> RetentionSettings:
 def set_settings(conn: sqlite3.Connection, retention_days: int, notice_days: int) -> None:
     if retention_days < 1:
         raise SpaceError("L'audio se garde au moins un jour.")
+    if retention_days > MAX_RETENTION_DAYS:
+        raise SpaceError(f"L'audio se garde {MAX_RETENTION_DAYS} jours au plus.")
     if not 1 <= notice_days <= retention_days:
         raise SpaceError("Le préavis va d'un jour à la durée de conservation.")
     with conn:
@@ -121,7 +141,7 @@ def set_settings(conn: sqlite3.Connection, retention_days: int, notice_days: int
                 (key, json.dumps(value)),
             )
         # A shorter delay is announced again from now: never a purge without its notice.
-        conn.execute("UPDATE session SET purge_announced_at = NULL")
+        conn.execute("UPDATE session SET purge_announced_at = NULL, purge_reminded_at = NULL")
 
 
 # -- when -----------------------------------------------------------------------------------
@@ -208,7 +228,8 @@ def keep_audio(data: DataDir, session_id: str, keep: bool) -> None:
     try:
         with conn:
             done = conn.execute(
-                "UPDATE session SET keep_audio = ?, purge_announced_at = NULL WHERE id = ?",
+                "UPDATE session SET keep_audio = ?, purge_announced_at = NULL,"
+                " purge_reminded_at = NULL WHERE id = ?",
                 (int(keep), session_id),
             ).rowcount
         if not done:
@@ -225,7 +246,8 @@ def extend(data: DataDir, session_id: str, now: datetime | None = None) -> None:
         until = (now or datetime.now(UTC)) + timedelta(days=settings.retention_days)
         with conn:
             done = conn.execute(
-                "UPDATE session SET retain_until = ?, purge_announced_at = NULL WHERE id = ?",
+                "UPDATE session SET retain_until = ?, purge_announced_at = NULL,"
+                " purge_reminded_at = NULL WHERE id = ?",
                 (_iso(until), session_id),
             ).rowcount
         if not done:
@@ -369,7 +391,7 @@ def remove_audio(
             stamp = now_iso()
             conn.execute(
                 "UPDATE session SET audio_removed_at = ?, audio_removed_reason = ?,"
-                " purge_announced_at = NULL WHERE id = ?",
+                " purge_announced_at = NULL, purge_reminded_at = NULL WHERE id = ?",
                 (stamp, reason, session_id),
             )
             conn.execute(
@@ -646,14 +668,15 @@ class Announcement(BaseModel):
 
 class CheckResult(BaseModel):
     announced: list[Announcement]
-    """Purges announced by this check (to notify)."""
+    """Purges announced by this check, or reminded a second time (to notify)."""
     purged: list[str]
     problems: list[str]
 
 
 def check(data: DataDir, now: datetime | None = None) -> CheckResult:
-    """Announce the purges coming within the notice, and purge what is due and was
-    announced long enough ago. Run at start, then every hour."""
+    """Announce the purges coming within the notice, remind them `SECOND_REMINDER_DAYS`
+    before, and purge what is due and was announced long enough ago. Run at start, then
+    every hour."""
     now = now or datetime.now(UTC)
     conn = connect(data)
     try:
@@ -683,8 +706,27 @@ def check(data: DataDir, now: datetime | None = None) -> CheckResult:
                         )
                     )
                 continue
-            if _purge_on(row, settings) <= now:
+            when = _purge_on(row, settings)
+            if when <= now:
                 due.append((row["id"], _name(row)))
+            elif (
+                row["purge_reminded_at"] is None
+                and SECOND_REMINDER_DAYS in settings.reminder_days[1:]
+                and when - now <= timedelta(days=SECOND_REMINDER_DAYS)
+            ):
+                with conn:
+                    conn.execute(
+                        "UPDATE session SET purge_reminded_at = ? WHERE id = ?",
+                        (_iso(now), row["id"]),
+                    )
+                announced.append(
+                    Announcement(
+                        session_id=row["id"],
+                        title=row["title"],
+                        recorded_at=row["recorded_at"],
+                        purge_on=_iso(when),
+                    )
+                )
     finally:
         conn.close()
     purged: list[str] = []
@@ -700,6 +742,14 @@ def check(data: DataDir, now: datetime | None = None) -> CheckResult:
             # Busy (recording, processing) or a file that would not go: tried again at the
             # next check, and said (P8).
             problems.append(f"Purge de l'audio de {name} : {exc}")
+        except Exception as exc:
+            # Anything else stops this purge only: the announcements of this check are
+            # already marked and must still be notified; retried at the next check (P8).
+            log.exception("purge of %s failed: %s", session_id, exc)
+            problems.append(
+                f"Purge de l'audio de {name} : erreur inattendue (le détail est dans le "
+                "journal du service). Elle sera réessayée."
+            )
     return CheckResult(announced=announced, purged=purged, problems=problems)
 
 
@@ -793,8 +843,8 @@ def _backup_day(path: Path) -> str:
 
 
 def notify(announced: list[Announcement], run: Callable[[list[str]], object] | None = None) -> None:
-    """A macOS notification for the purges just announced (the banner says it too). A
-    notification that cannot be shown is logged; the banner stays."""
+    """A macOS notification for the purges just announced or reminded (the banner says it
+    too). A notification that cannot be shown is logged; the banner stays."""
     if not announced or sys.platform != "darwin":
         return
     count = len(announced)
@@ -845,7 +895,7 @@ def _day(iso_date: str) -> str:
 
 class Watcher:
     """Checks the purges at start, then every hour, in a background thread; a coming purge
-    is notified once, when announced."""
+    is notified twice: when announced, then `SECOND_REMINDER_DAYS` before."""
 
     def __init__(
         self,

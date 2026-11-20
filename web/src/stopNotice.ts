@@ -5,9 +5,12 @@ const KEY = "coulisses.arret.";
 
 export function keepStopProblem(sessionId: string, problem: string): void {
   try {
-    sessionStorage.setItem(KEY + sessionId, problem);
+    // Added to what is already kept: two problems of one session are both said.
+    const kept = sessionStorage.getItem(KEY + sessionId);
+    sessionStorage.setItem(KEY + sessionId, kept ? `${kept}\n${problem}` : problem);
   } catch {
-    // Not carried: the session's page still says it under its title.
+    // Not carried: a stop problem is still said under the session's title; an annotation
+    // lost on leaving the page is then lost unsaid (sessionStorage refused, rare).
   }
 }
 

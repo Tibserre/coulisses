@@ -8,7 +8,7 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Modèle de départ | `space_template` | Pré-remplissage des réglages d'un espace à sa création (« Troupe d'impro », « Réunions de travail », « Vide »). Pas un type : tout reste modifiable ensuite. |
 | Reconnaissance des voix | `voice_recognition` | Réglage d'un espace : reconnaître une personne d'une séance à l'autre par sa voix. Désactivé par défaut. |
 | Langue d'une séance | `language` | La langue parlée, que le moteur transcrit et aligne (code ISO 639-1, « fr » par défaut) : celle d'un espace pour ses nouvelles séances, celle d'une séance pour son traitement, celle d'une version d'après la provenance (ADR 0072). |
-| Attente du modèle | `waits_for_models` | Un traitement en file qui attend le modèle de sa langue au lieu d'échouer ; la séance le dit (`processing_waits_for`) (ADR 0072). |
+| Attente du modèle | `waits_for_models` | Un traitement en file qui attend ce qui manque à la chaîne pour sa langue (modèles, outils de calcul) au lieu d'échouer ; la séance le dit (`processing_waits_for`) (ADR 0072, 0080). |
 | Membre | `member` | Personne d'un espace, avec un rôle libre (« coach », « comédienne », « cheffe de projet »). |
 | Invité | `guest` | Personne extérieure présente à une ou plusieurs séances d'un espace. |
 | Personne | `person` | Membre ou invité. Ce à quoi un locuteur est rattaché. |
@@ -20,7 +20,9 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Source audio | `audio_source` | Un fichier audio original d'une séance (capté ou importé). Une seule est traitée en V1 ; chaque micro ajouté en ajoute une (`mic2`, `mic3`…, ADR 0031, 0033), le son de l'ordinateur aussi (`system`, ADR 0032). |
 | Son de l'ordinateur | `system_audio` | Tout ce que le Mac joue pendant une réunion en ligne ou hybride, enregistré avec le micro, sur son horloge (source `system`, ADR 0032). |
 | Mix | `mix` | La piste que le moteur traite quand une séance a le son de l'ordinateur : le micro plus ce son, baissés d'un seul gain (`sources/mix.wav`, puis `mix.flac` une fois l'enregistrement fini, ADR 0046). Un audio dérivé, refait depuis les sources. |
-| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, puis `listening.flac`, ADR 0037, 0046). Le moteur ne l'entend pas. |
+| Mix d'écoute | `listening_mix` | Ce que la page d'une séance fait entendre quand elle a le son de l'ordinateur : le mix, micro baissé quand personne n'y parle (`sources/listening.wav`, puis `listening.m4a`, du FLAC dans un MP4 ; `listening.flac` avant l'ADR 0073 ; ADR 0037, 0046, 0074). Le moteur ne l'entend pas. |
+| Écoute | `heard` | Ce que la page d'une séance fait entendre : le mix d'écoute, ou la piste elle-même (la copie d'écoute de la v0.38.2 tant qu'elle existe ; `lossless.heard_path`, ADR 0074). |
+| Copie d'écoute | `listening_copy` | La copie en MP4 que la v0.38.2 faisait d'une piste entendue telle quelle (`sources/listening-copy.m4a`, ADR 0073) : entendue tant que la piste est en FLAC brut, supprimée une fois la piste dans un MP4 (ADR 0074). Plus jamais faite. |
 | Source de référence | `reference_source` | La source audio qui sert de base de temps quand une séance en a plusieurs. |
 | Micro principal | `reference_source` (captée) | Le micro choisi en premier à l'enregistrement : la source de référence, celle qui est traitée (ADR 0033). |
 | Micro ajouté | `mic2`, `mic3`… | Un micro de plus enregistrant en même temps, choisi dans la liste des micros (« + » ou le chevron à côté du micro) ; gardé, pas encore traité (ADR 0031, 0033, 0067). |
@@ -78,7 +80,8 @@ Vocabulaire unique du projet. **Interface, docs et prompts** utilisent le terme 
 | Journal des suppressions | `deletion_log` | Trace de chaque purge et de chaque suppression : quand, quoi, quelle séance. Il dit aussi chaque passage en FLAC (des WAV supprimés une fois prouvés identiques, ADR 0046). |
 | Gardé en FLAC | `lossless` | Une piste enregistrée par l'app, gardée sans perte en FLAC une fois l'enregistrement fini : les mêmes échantillons, deux fois moins de place (ADR 0046). |
 | Audio gardé | `keep_audio` | Option d'une séance : son audio n'est jamais purgé (ADR 0029). Remplace « épinglée ». |
-| Préavis | `notice` | Délai entre l'annonce d'une purge et la purge elle-même (7 jours par défaut). |
+| Préavis | `notice` | Délai entre l'annonce d'une purge et la purge elle-même : 7 jours, le premier des deux rappels de purge (ADR 0083). |
+| Rappel de purge | `reminder_days` | Chacun des deux avertissements fixes avant une purge, 7 puis 3 jours avant (ADR 0083). Distinct des rappels d'enregistrement (`reminders`, ADR 0054). |
 | Annonce de purge | `purge_announcement` | Avertissement (bandeau, notification macOS) qu'une purge aura lieu ; le préavis court à partir de lui. |
 | Prolonger | `extend` | Garder l'audio d'une séance une durée de conservation entière à partir d'aujourd'hui. |
 | Banc d'essai | `bench` | Outillage de mesure des moteurs sur mes données (`evaluation.md`). |

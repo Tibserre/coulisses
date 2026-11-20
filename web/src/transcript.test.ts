@@ -458,7 +458,7 @@ test("the person whose voice it seems to be comes first, typed or not", async ()
 });
 
 test("one voice shown: its lines, its chapters, the others folded into a count", async () => {
-  const { focusModel, speakerMarks, speakerExcerpt } =
+  const { focusModel, speakerMarks } =
     await import("./transcript.ts");
   const model = buildModel(CHAPTERED);
   const shape = (
@@ -488,8 +488,6 @@ test("one voice shown: its lines, its chapters, the others folded into a count",
     { start: 0, end: 0.9 },
     { start: 9, end: 9.3 },
   ]);
-  assert.equal(speakerExcerpt(model, "7")?.turn.index, 0); // its longest line
-  assert.equal(speakerExcerpt(model, "absent"), null);
 });
 
 test("chapters being written run over the session, the last one cut where reading stopped", () => {

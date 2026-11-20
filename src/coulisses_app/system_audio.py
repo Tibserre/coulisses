@@ -133,8 +133,8 @@ _MESSAGES = {
     "tap": "macOS a refusé de donner le son de l'ordinateur. Autorisez-le dans Réglages "
     "Système, Confidentialité et sécurité, Enregistrement de l'écran et de l'audio du "
     "système, à l'application qui lance Coulisses.",
-    "frequence": "Le micro « {micro} » ne peut pas enregistrer en 48 kHz avec le son de "
-    "l'ordinateur : choisissez le micro du Mac.",
+    "frequence": "Le son du micro « {micro} » n'a pas pu être converti en 48 kHz pour "
+    "l'enregistrer avec le son de l'ordinateur : choisissez le micro du Mac.",
 }
 
 
@@ -225,6 +225,18 @@ class HelperStream:
             kind = event.get("event")
             if kind == "ready":
                 log.info("system audio ready: %s", event)
+                if event.get("rate") != self._rate:
+                    # Blocks not at the files' rate: every time read from them would be
+                    # wrong (P2).
+                    self._failure = _message("frequence", self.microphone)
+                    continue
+                if event.get("device_rate") not in (None, self._rate):
+                    log.warning(
+                        "system audio: %s runs at %s Hz, converted to %d Hz",
+                        self.microphone,
+                        event.get("device_rate"),
+                        self._rate,
+                    )
                 self._ready.set()
             elif kind == "error":
                 log.error("system audio failed: %s", event)
@@ -248,7 +260,7 @@ class HelperStream:
             heard += frames
             payload = stdout.read(frames * width * 4)
             usable = len(payload) // (width * 4) * width * 4
-            if usable:
+            if usable or (lost and not frames):  # a loss said alone, at the end, is passed on
                 block = np.frombuffer(payload[:usable], dtype="<f4").reshape(-1, width).copy()
                 self._on_block(block, lost > 0)
             if usable < frames * width * 4:

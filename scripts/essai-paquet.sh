@@ -4,6 +4,8 @@
 # the network cut (a macOS sandbox lets it reach 127.0.0.1 only), a throwaway data folder.
 # It checks that:
 #   - the signature is valid, before and after;
+#   - the model shipped inside is accepted by the .app's engine, without network, and has
+#     its credits;
 #   - the .app's tools need nothing of this Mac, and ffmpeg is LGPL, without network, and
 #     reads every format of ADR 0041;
 #   - a recording imported in the app is processed to the end by the engine (real models,
@@ -124,12 +126,31 @@ for tool in ffmpeg ffprobe uv coulisses-son-ordinateur; do
   foreign=$(otool -L $RES/bin/$tool | tail -n +2 | awk '{print $1}' | grep -vE '^(/usr/lib/|/System/Library/)' || true)
   [[ -z $foreign ]] || fail "$tool dépend de ce Mac : $foreign"
 done
+# The model shipped inside (engine ADR 0081): the engine of the .app installs it, without
+# network, into a throwaway models folder, as a friend's first launch does; and its credits.
+SHIPPED=$($RES/python/bin/python3 -I -B -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["modele_livre"]["cle"])' $ROOT/scripts/construction.toml)
+[[ -d $RES/modeles/$SHIPPED ]] || fail "le modèle livré $SHIPPED manque dans l'app"
+[[ -s $RES/licences/$SHIPPED.txt ]] || fail "les crédits de $SHIPPED manquent dans licences/"
+mkdir $WORK/modeles-livres
+env -i HOME=$HOME COULISSES_MODELS_DIR=$WORK/modeles-livres PYTHONDONTWRITEBYTECODE=1 \
+  PATH=$RES/bin:/usr/bin:/bin:/usr/sbin:/sbin sandbox-exec -p '(version 1)(allow default)(deny network*)' \
+  $RES/python/bin/python3 -I -B -c \
+  "import sys; from pathlib import Path; from coulisses.api import install_bundled; install_bundled(sys.argv[1], Path(sys.argv[2]))" \
+  $SHIPPED $RES/modeles/$SHIPPED || fail "le moteur de l'app refuse le modèle livré $SHIPPED"
+[[ -d $WORK/modeles-livres/$SHIPPED ]] || fail "install_bundled n'a rien installé pour $SHIPPED"
 BUILT_WITH=$($RES/bin/ffmpeg -version)
 [[ $BUILT_WITH == *--disable-network* ]] || fail "ffmpeg n'est pas construit sans réseau"
 [[ $BUILT_WITH == *--enable-gpl* || $BUILT_WITH == *--enable-nonfree* ]] && fail "ffmpeg n'est pas sous LGPL"
 PROTOCOLS=$($RES/bin/ffmpeg -hide_banner -protocols | awk '/Input:/{on=1; next} /Output:/{on=0} on {print $1}' | sort -u | tr '\n' ' ')
 [[ $PROTOCOLS == "file pipe " ]] || fail "protocoles en entrée de ffmpeg : $PROTOCOLS"
 print "   signature valide ($SIGNER) ; outils autonomes ; ffmpeg LGPL, sans réseau, protocoles : $PROTOCOLS"
+print "   $SHIPPED livré : installé sans réseau par le moteur de l'app, crédits joints"
+# The computer's sound: the private TCC calls the app reads its permission with (ADR 0077).
+TCC=$(swift $ROOT/scripts/verifier-son-ordinateur.swift) || {
+  [[ -n $TCC ]] || TCC="la vérification du son de l'ordinateur n'a pas pu tourner (swift absent ?)"
+  fail "${TCC#ÉCHEC : }"
+}
+print "   $TCC"
 
 print "2. Le ffmpeg de l'app lit chaque format…"
 say -v Thomas -o $WORK/voix.aiff "Bonjour à tous. On reprend la scène du marché, avec plus d'énergie au début."
@@ -174,11 +195,29 @@ samples = raw.read_bytes()
 assert len(samples) > 100_000, len(samples)
 target.write_bytes(wav.header(48000, channels, len(samples)) + samples)
 made = lossless.convert_file(target, wav.pcm_sha256(target))
-assert lossless.decoded_pcm_sha256(made.flac) == made.pcm_sha256
+assert lossless.decoded_pcm_sha256(made.kept) == made.pcm_sha256
 ' $WORK/piste-$channels.raw $channels $WORK/piste-$channels.wav ||
     fail "FLAC ($channels canaux) : la conversion de l'app n'a pas rendu les mêmes échantillons"
 done
 print "   FLAC 24 bits, mono et stéréo, par la conversion de l'app : mêmes échantillons"
+# ADR 0073: what is heard is served as FLAC in an MP4, by the app's ffmpeg: a FLAC copied
+# in, and a WAV encoded in, both read back as the WAV's samples.
+heard() { $RES/bin/ffmpeg -loglevel error -y "${@[1,-2]}" -f mp4 -movflags +faststart ${@[-1]} }
+samples() { $RES/bin/ffmpeg -loglevel error -i $1 -f s24le -c:a pcm_s24le - | shasum -a 256 }
+heard -i $WORK/piste-1.wav -c:a flac -compression_level 5 $WORK/ecoute-wav.m4a ||
+  fail "FLAC dans un MP4 : le ffmpeg de l'app ne l'écrit pas depuis un WAV"
+$RES/bin/ffmpeg -loglevel error -y -i $WORK/piste-1.wav -c:a flac $WORK/ecoute.flac ||
+  fail "FLAC : le ffmpeg de l'app ne l'écrit pas"
+heard -i $WORK/ecoute.flac -map 0:a:0 -map_metadata -1 -c:a copy $WORK/ecoute-flac.m4a ||
+  fail "FLAC dans un MP4 : le ffmpeg de l'app ne l'écrit pas depuis un FLAC"
+# Each read on its own line: a read that fails stops the trial (pipefail), never two empty
+# reads found equal.
+expected=$(samples $WORK/piste-1.wav)
+for made in ecoute-wav ecoute-flac; do
+  read_back=$(samples $WORK/$made.m4a)
+  [[ $read_back == $expected ]] || fail "FLAC dans un MP4 ($made) : pas les mêmes échantillons"
+done
+print "   FLAC dans un MP4, depuis un WAV et depuis un FLAC, par le ffmpeg de l'app : mêmes échantillons"
 
 cat > $WORK/reseau.sb <<'PROFILE'
 (version 1)

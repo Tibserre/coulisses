@@ -12,7 +12,18 @@ from pathlib import Path
 
 import coulisses.testing.fakes  # noqa: F401  # registers the fake engines
 import pytest
-from coulisses.api import ChainConfig, Languages, LanguageSupport, StageConfig
+from coulisses.api import (
+    Catalog,
+    CatalogModel,
+    ChainConfig,
+    ErrorCode,
+    Languages,
+    LanguageSupport,
+    MissingPiece,
+    Readiness,
+    StageConfig,
+    StageName,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -71,6 +82,8 @@ class FakeModel:
         self.prompt_tokens = 1000
         self.done_reason: str | None = "stop"
         self.counted = True
+        self.installed = [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
+        """What Ollama has installed; empty: it answers, with no model."""
 
     def version(self) -> str | None:
         return "0.0-essai"
@@ -80,7 +93,7 @@ class FakeModel:
             raise OllamaError(
                 "Ollama ne répond pas sur 127.0.0.1:11434 : lancez l'application Ollama."
             )
-        return [InstalledModel(name="modele-essai", size_bytes=1, digest="abc")]
+        return list(self.installed)
 
     def chat(
         self,
@@ -132,10 +145,76 @@ class FakeLanguages:
         self.aligners = {"fr": "aligneur-francais", "de": "aligneur-allemand"}
         self.aligners["en"] = "aligneur-anglais"
         self.unaligned: set[str] = set()
+        self.chain_missing: set[str] = set()
+        """Models of the other stages (who speaks when), missing whatever the language."""
+        self.environments: dict[str, str] = {}
+        """Environments missing: name → what it is for."""
+        self.altered: set[str] = set()
+        """Models on disk but damaged."""
 
     def install(self, key: str) -> None:
         for keys in self.missing.values():
             keys.discard(key)
+        self.chain_missing.discard(key)
+        self.environments.pop(key, None)
+
+    def readiness(
+        self, profile: str = "chaine-retenue", root: Path | None = None, language: str = "fr"
+    ) -> Readiness:
+        """The engine's `readiness`: the language's models and the others, the environments."""
+        missing = (
+            [
+                MissingPiece(code=ErrorCode.MODEL_MISSING, stage=stage, model=key, message="absent")
+                for stage, keys in (
+                    (StageName.ALIGN, sorted(self.missing.get(language, set()))),
+                    (StageName.DIARIZE, sorted(self.chain_missing)),
+                )
+                for key in keys
+            ]
+            + [
+                MissingPiece(
+                    code=ErrorCode.ENVIRONMENT_MISSING,
+                    stage=StageName.DIARIZE,
+                    environment=name,
+                    label=label,
+                    message="absent",
+                    announced_bytes=900_000_000,
+                )
+                for name, label in self.environments.items()
+            ]
+            + [
+                MissingPiece(
+                    code=ErrorCode.MODEL_ALTERED,
+                    stage=StageName.DIARIZE,
+                    model=key,
+                    message="abîmé",
+                )
+                for key in sorted(self.altered)
+            ]
+        )
+        return Readiness(
+            profile=profile, language=language, ready=not missing, missing=tuple(missing)
+        )
+
+    def catalog(self) -> Catalog:
+        return Catalog(
+            models=tuple(
+                CatalogModel(
+                    key=key,
+                    stage=StageName.DIARIZE,
+                    role="diarisation",
+                    description="",
+                    announced_bytes=size,
+                    repo="x/y",
+                    revision="r",
+                    licence="MIT",
+                )
+                for key, size in [
+                    *((k, 500_000_000) for k in sorted(self.chain_missing | self.altered)),
+                    *((k, 1_260_000_000) for k in sorted(self.aligners.values())),
+                ]
+            )
+        )
 
     def __call__(self, profile: str = "chaine-retenue", root: Path | None = None) -> Languages:
         self.calls += 1
@@ -163,4 +242,6 @@ def fake_languages(monkeypatch: pytest.MonkeyPatch) -> FakeLanguages:
     """No test reads the models on this Mac to know its languages (ADR 0072)."""
     fake = FakeLanguages()
     monkeypatch.setattr("coulisses_app.languages.engine_languages", fake)
+    monkeypatch.setattr("coulisses_app.languages.engine_readiness", fake.readiness)
+    monkeypatch.setattr("coulisses_app.languages.engine_catalog", fake.catalog)
     return fake

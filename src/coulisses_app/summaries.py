@@ -46,6 +46,9 @@ class PendingGeneration(BaseModel):
     model: str
     state: str
     error: str | None
+    waits_for_writer: jobs.WriterWait | None = None
+    """Queued, waiting for the language model (Ollama is optional): not done yet, not
+    failed; made once it is there."""
 
 
 class Generations(BaseModel):
@@ -87,6 +90,7 @@ def list_generations(data: DataDir, session_id: str) -> Generations:
                 model=j.params.model,
                 state=j.state,
                 error=j.error,
+                waits_for_writer=j.params.waits_for_writer,
             )
             for j in jobs.generation_jobs(conn, session_id)
             # The chapters have their own place (phases_status), next to the transcript.
@@ -323,6 +327,9 @@ class PhasesStatus(BaseModel):
 
     state: Literal["none", "queued", "running", "failed", "done"]
     error: str | None = None
+    waits_for_writer: jobs.WriterWait | None = None
+    """« queued », waiting for the language model (Ollama is optional): not failed, made once
+    it is there."""
     model: str | None = None
     finished_at: datetime | None = None
     adjustments: list[str] = []
@@ -357,7 +364,12 @@ def phases_status(data: DataDir, session_id: str) -> PhasesStatus:
         )
         if state == "running":
             return _running(data, session_id, job.id, job.params.model)
-        return PhasesStatus(state=state, error=job.error, model=job.params.model)
+        return PhasesStatus(
+            state=state,
+            error=job.error,
+            model=job.params.model,
+            waits_for_writer=job.params.waits_for_writer,
+        )
     if view is None or view.phases_run_id is None:
         return PhasesStatus(state="none")
     folder = data.run_dir(session_id, view.phases_run_id)

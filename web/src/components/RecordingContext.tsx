@@ -1,22 +1,22 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Popover } from "@astryxdesign/core/Popover";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Folder, Languages as LanguageIcon } from "lucide-react";
 import {
   api,
   type Language,
-  type Person,
   type Project,
   type Session,
   type Space,
 } from "../api.ts";
-import { inLanguage, languageWorthShowing } from "../languages.ts";
+import { inLanguage, languageReady, languageWorthShowing } from "../languages.ts";
 import { LanguageDownloadDialog, LanguagePick, useLanguages } from "./Languages.tsx";
 
-/** Where a recording goes and who is there, changed while it runs (spec §7.2, ADR 0056):
- *  the space, the project, the people checked. A recording starts in one gesture, in the
- *  space selected; this is where it is put right. Each one is a quiet label that opens its
- *  list, floating under it: nothing moves. Its language too (ADR 0072), when it has
- *  something to say: the processing starts at the stop, in the language of the moment. */
+/** Where a recording goes, changed while it runs (spec §7.2, ADR 0056, D5a): its language
+ *  (ADR 0072), when it has something to say, then its space and project, in one list (the
+ *  space, its projects under it). A recording starts in one gesture, in the space selected;
+ *  this is where it is put right. Each one is a quiet label that opens its list, floating
+ *  under it: nothing moves. The processing starts at the stop, in the language of the
+ *  moment. Who is there is said apart (« Qui est là ? »). */
 export function RecordingContext({
   session,
   spaces,
@@ -30,16 +30,8 @@ export function RecordingContext({
   onChanged: (session: Session) => void;
   onError: (message: string) => void;
 }) {
-  const [people, setPeople] = useState<Person[] | null>(null);
   /** People unchecked by a move to another space: said, never silent (P8). */
   const [unchecked, setUnchecked] = useState<string[]>([]);
-  useEffect(() => {
-    setPeople(null);
-    api.people(session.space_id).then(
-      (all) => setPeople(all.filter((p) => !p.archived)),
-      (e: Error) => onError(e.message),
-    );
-  }, [session.space_id, onError]);
 
   const { languages, reload } = useLanguages(onError);
   const [toDownload, setToDownload] = useState<Language | null>(null);
@@ -56,141 +48,105 @@ export function RecordingContext({
   };
 
   const space = spaces.find((s) => s.id === session.space_id);
-  const ownProjects = projects.filter(
-    (p) => p.space_id === session.space_id && !p.archived,
-  );
-  const project = ownProjects.find((p) => p.id === session.project_id);
-  const checked = new Set(session.attendee_ids);
-  const names = (people ?? [])
-    .filter((p) => checked.has(p.id))
-    .map((p) => p.name);
+  const project = projects.find((p) => p.id === session.project_id);
+
+  /** Into a space (and one of its projects, or none): moved first if it is another. */
+  const place = (spaceId: number, projectId: number | null) =>
+    void (async () => {
+      try {
+        let next = session;
+        if (spaceId !== session.space_id) {
+          const moved = await api.moveSession(session.id, spaceId);
+          // Said once done, by the service: who was unchecked, archived ones too.
+          setUnchecked(moved.unchecked);
+          next = moved.session;
+          // Shown at once: if the project then fails, the space shown is the true one.
+          onChanged(next);
+        }
+        if (projectId !== next.project_id)
+          next = await api.setSessionProject(session.id, projectId);
+        onChanged(next);
+      } catch (e) {
+        onError((e as Error).message);
+      }
+    })();
 
   return (
     <div className="cl-rec__context">
-      <ChipMenu label={space?.name ?? "Espace"} title="Espace">
-        {(close) =>
-          spaces
-            .filter((s) => !s.archived)
-            .map((s) => (
-              <Choice
-                key={s.id}
-                isCurrent={s.id === session.space_id}
-                onPick={() => {
-                  close();
-                  if (s.id === session.space_id) return;
-                  void (async () => {
-                    try {
-                      const moved = await api.moveSession(session.id, s.id);
-                      // Said once done, by the service: who was unchecked, archived ones too.
-                      setUnchecked(moved.unchecked);
-                      onChanged(moved.session);
-                    } catch (e) {
-                      onError((e as Error).message);
-                    }
-                  })();
-                }}
-              >
-                {s.name}
-              </Choice>
-            ))
-        }
-      </ChipMenu>
-      <ChipMenu label={project?.name ?? "Aucun projet"} title="Projet">
-        {(close) => [
-          <Choice
-            key="aucun"
-            isCurrent={session.project_id === null}
-            onPick={() => {
-              close();
-              void run(() => api.setSessionProject(session.id, null));
-            }}
-          >
-            Aucun projet
-          </Choice>,
-          ...ownProjects.map((p) => (
-            <Choice
-              key={p.id}
-              isCurrent={p.id === session.project_id}
-              onPick={() => {
-                close();
-                void run(() => api.setSessionProject(session.id, p.id));
-              }}
-            >
-              {p.name}
-            </Choice>
-          )),
-        ]}
-      </ChipMenu>
-      <ChipMenu
-        label={
-          checked.size === 0
-            ? "Présents"
-            : checked.size === 1
-              ? (names[0] ?? "1 présent")
-              : `${checked.size} présents`
-        }
-        title="Présents"
-        prefix={checked.size === 0 ? "+ " : ""}
-      >
-        {() =>
-          people === null
-            ? []
-            : people.length === 0
-              ? [
-                  <li key="vide" className="cl-nameedit__empty">
-                    Personne dans cet espace pour l'instant.
-                  </li>,
-                ]
-              : people.map((p) => (
-                  <Choice
-                    key={p.id}
-                    isCurrent={checked.has(p.id)}
-                    onPick={() => {
-                      const next = checked.has(p.id)
-                        ? session.attendee_ids.filter((id) => id !== p.id)
-                        : [...session.attendee_ids, p.id];
-                      setUnchecked([]);
-                      void run(() =>
-                        api.setAttendees(
-                          session.id,
-                          next,
-                          session.unnamed_attendees,
-                        ),
-                      );
-                    }}
-                  >
-                    {p.name}
-                  </Choice>
-                ))
-        }
-      </ChipMenu>
       {languages && languageWorthShowing(languages, session.language) && (
         <LanguagePick
           languages={languages}
           value={session.language}
           title="Langue de la séance"
-          intro="Le traitement partira à l'arrêt, dans cette langue."
           onPick={(l) =>
-            void run(() => api.setSessionLanguage(session.id, l.language)).then((done) => {
-              if (done && !l.installed) setToDownload(l);
-            })
+            // Not here: chosen once its download is started; closed before, nothing changes.
+            languageReady(l)
+              ? void run(() => api.setSessionLanguage(session.id, l.language))
+              : setToDownload(l)
           }
         >
           <button
             type="button"
-            className="cl-chip"
+            className="cl-chip cl-chip--quiet"
             aria-label={`Langue de la séance : ${inLanguage(languages, session.language)}. Changer`}
           >
+            <LanguageIcon size={16} strokeWidth={1.75} aria-hidden />
             {inLanguage(languages, session.language)}
             <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
           </button>
         </LanguagePick>
       )}
+      {languages && languageWorthShowing(languages, session.language) && (
+        <span className="cl-rec__mid" aria-hidden>
+          ·
+        </span>
+      )}
+      <ChipMenu
+        label={project ? `${space?.name ?? "Espace"} / ${project.name}` : (space?.name ?? "Espace")}
+        title="Espace et projet"
+        icon={<Folder size={16} strokeWidth={1.75} aria-hidden />}
+      >
+        {(close) =>
+          spaces
+            .filter((s) => !s.archived)
+            .flatMap((s) => [
+              <Choice
+                key={`e${s.id}`}
+                isCurrent={s.id === session.space_id && session.project_id === null}
+                onPick={() => {
+                  close();
+                  place(s.id, null);
+                }}
+              >
+                {s.name}
+              </Choice>,
+              ...projects
+                .filter((p) => p.space_id === s.id && !p.archived)
+                .map((p) => (
+                  <Choice
+                    key={`p${p.id}`}
+                    isCurrent={p.id === session.project_id}
+                    indent
+                    onPick={() => {
+                      close();
+                      place(s.id, p.id);
+                    }}
+                  >
+                    {p.name}
+                  </Choice>
+                )),
+            ])
+        }
+      </ChipMenu>
       <LanguageDownloadDialog
         language={toDownload}
         after="Le traitement partira à l'arrêt, dès que le modèle sera là."
         onClose={() => setToDownload(null)}
-        onStarted={() => void reload()}
+        onStarted={(started) => {
+          void reload();
+          const chosen = toDownload;
+          if (chosen && started > 0) void run(() => api.setSessionLanguage(session.id, chosen.language));
+        }}
       />
       {unchecked.length > 0 && (
         <span className="cl-rec__said" role="status">
@@ -205,12 +161,12 @@ export function RecordingContext({
 function ChipMenu({
   label,
   title,
-  prefix = "",
+  icon,
   children,
 }: {
   label: string;
   title: string;
-  prefix?: string;
+  icon: ReactNode;
   children: (close: () => void) => ReactNode[];
 }) {
   const [isOpen, setOpen] = useState(false);
@@ -231,10 +187,10 @@ function ChipMenu({
     >
       <button
         type="button"
-        className="cl-chip"
+        className="cl-chip cl-chip--quiet"
         aria-label={`${title} : ${label}. Changer`}
       >
-        {prefix}
+        {icon}
         {label}
         <ChevronDown size={14} strokeWidth={1.75} aria-hidden />
       </button>
@@ -245,10 +201,13 @@ function ChipMenu({
 function Choice({
   isCurrent,
   onPick,
+  indent = false,
   children,
 }: {
   isCurrent: boolean;
   onPick: () => void;
+  /** A project, under its space. */
+  indent?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -256,6 +215,7 @@ function Choice({
       <button
         type="button"
         className="cl-spacepick__item"
+        data-indent={indent || undefined}
         aria-current={isCurrent || undefined}
         onClick={onPick}
       >

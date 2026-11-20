@@ -23,15 +23,35 @@ DEFAULT_LANGUAGE = "fr"
 engine (`languages`)."""
 
 
+class MissingEnvironment(BaseModel):
+    """An environment of the engine a stage of the chain runs in, not installed."""
+
+    name: str
+    label: str | None = None
+    """What it is for, in French, as the engine says it."""
+    announced_bytes: int | None = None
+    """Its size on disk once installed, an order of magnitude the engine publishes (said
+    « environ »); None when the engine does not give one."""
+
+
 class WaitsFor(BaseModel):
     """What a processing in the queue waits for before it may start."""
 
     reason: Literal["model_missing", "language_unsupported"]
+    """`model_missing`: something the chain needs is not on this Mac, a model of any of
+    its stages (not only its language's) or an environment."""
     language: str
     label: str | None = None
     """None for a language the engine no longer handles."""
     missing_models: list[str] = []
+    """Every model the chain lacks for this language, its language's and the others."""
+    missing_environments: list[MissingEnvironment] = []
+    altered_models: list[str] = []
+    """Models on this Mac but damaged (files missing or changed): never downloaded over,
+    removed first by the user (Réglages, Transcription), then downloaded again."""
     download_bytes: int = 0
+    """Announced size of `missing_models`; the environments' is theirs (`announced_bytes`),
+    an order of magnitude."""
 
 
 Rerun = Literal["transcribe", "diarize", "all"]
@@ -82,12 +102,24 @@ class ChainParams(BaseModel):
     outlives the purge of the session's audio (P7)."""
 
 
+class WriterWait(BaseModel):
+    """Why a generation in the queue waits for the language model (Ollama is optional):
+    not a failure, it is made once the model is there."""
+
+    reason: Literal["ollama_absent", "no_model"]
+    """`ollama_absent`: Ollama does not answer on this Mac (not installed, or not running);
+    `no_model`: it answers, with no model installed."""
+
+
 class GenerationParams(BaseModel):
     """A summary or the title to generate, with the model chosen when queued."""
 
     v: int = 1
     action_ref: str
     model: str
+    waits_for_writer: WriterWait | None = None
+    """In the queue, not claimed while set: no language model to write it with. Seen again
+    regularly while some wait (`writer_waiting_jobs`), and at start."""
 
 
 class Job(BaseModel):
@@ -163,6 +195,22 @@ def enqueue_rerun(
 def enqueue_generation(
     conn: sqlite3.Connection, session_id: str, *, action_ref: str, model: str
 ) -> int:
+    # Asked again while the same one waits for the language model: that one stays, alone,
+    # with the model asked now (a choice made by hand is never lost).
+    waiting = conn.execute(
+        "SELECT id, params FROM job WHERE session_id = ? AND kind = 'generation'"
+        " AND state = 'queued'"
+        " AND json_extract(params, '$.action_ref') = ?"
+        " AND json_extract(params, '$.waits_for_writer') IS NOT NULL ORDER BY id LIMIT 1",
+        (session_id, action_ref),
+    ).fetchone()
+    if waiting is not None:
+        kept = GenerationParams.model_validate_json(waiting["params"])
+        conn.execute(
+            "UPDATE job SET params = ? WHERE id = ?",
+            (kept.model_copy(update={"model": model}).model_dump_json(), waiting["id"]),
+        )
+        return int(waiting["id"])
     params = GenerationParams(action_ref=action_ref, model=model)
     cursor = conn.execute(
         "INSERT INTO job (session_id, kind, state, params, requested_at)"
@@ -193,13 +241,15 @@ def _job(row: sqlite3.Row) -> Job:
 def claim_next(conn: sqlite3.Connection) -> Job | None:
     """Take the oldest queued job and mark it running, atomically. One waiting for the people
     present (`starts_at`) is left until its time, one waiting for a model of its language
-    (`waits_for_models`) until it is there; the others go ahead of them."""
+    (`waits_for_models`) or for the language model (`waits_for_writer`) until it is there;
+    the others go ahead of them."""
     with conn:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT * FROM job WHERE state = 'queued'"
             " AND coalesce(json_extract(params, '$.starts_at'), '') <= ?"
-            " AND json_extract(params, '$.waits_for_models') IS NULL ORDER BY id LIMIT 1",
+            " AND json_extract(params, '$.waits_for_models') IS NULL"
+            " AND json_extract(params, '$.waits_for_writer') IS NULL ORDER BY id LIMIT 1",
             (now_iso(),),
         ).fetchone()
         if row is None:
@@ -220,16 +270,19 @@ def finish(conn: sqlite3.Connection, job_id: int, *, error: str | None) -> None:
         )
 
 
-def requeue(conn: sqlite3.Connection, job_id: int) -> None:
+def requeue(conn: sqlite3.Connection, job_id: int, *, only_failed: bool = False) -> bool:
     """Put a job back in the queue: it resumes, reusing the runs that succeeded. Stopped by
     the user, it is no longer said so. What it waited for is seen again when claimed (a
-    model installed meanwhile, ADR 0072)."""
+    model installed meanwhile, ADR 0072). Returns whether it was put back (`only_failed`:
+    not if it was resumed and claimed meanwhile)."""
     with conn:
-        conn.execute(
+        cursor = conn.execute(
             "UPDATE job SET state = 'queued', finished_at = NULL, error = NULL,"
-            " params = json_remove(params, '$.stopped_at', '$.waits_for_models') WHERE id = ?",
+            " params = json_remove(params, '$.stopped_at', '$.waits_for_models') WHERE id = ?"
+            + (" AND state = 'failed'" if only_failed else ""),
             (job_id,),
         )
+    return cursor.rowcount == 1
 
 
 def record_stopped_run(conn: sqlite3.Connection, job_id: int, run_id: str) -> None:
@@ -284,16 +337,19 @@ def _update_params(conn: sqlite3.Connection, job_id: int, **changes: Any) -> Non
         conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job_id))
 
 
-def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> None:
+def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) -> bool:
     """Resume a failed job asking for another minimum of voices, only after a diarization
     refused with `too_few_speakers` (checked by the caller). The former minimum stays in
     that run's provenance (`error.details.expected`): nothing is lost. Who was present is
-    not changed: people can be present without speaking."""
+    not changed: people can be present without speaking. Returns whether it was resumed
+    (not if it was resumed and claimed meanwhile)."""
     with conn:
         conn.execute("BEGIN IMMEDIATE")
-        row = conn.execute("SELECT params FROM job WHERE id = ?", (job.id,)).fetchone()
+        row = conn.execute(
+            "SELECT params FROM job WHERE id = ? AND state = 'failed'", (job.id,)
+        ).fetchone()
         if row is None:
-            return
+            return False
         params = ChainParams.model_validate_json(row["params"]).model_copy(
             update={"attendees": attendees, "waits_for_models": None}
         )
@@ -302,6 +358,7 @@ def resume_with_attendees(conn: sqlite3.Connection, job: Job, attendees: int) ->
             " WHERE id = ?",
             (params.model_dump_json(), job.id),
         )
+    return True
 
 
 def take_attendees(conn: sqlite3.Connection, session_id: str, attendees: int | None) -> bool:
@@ -346,6 +403,54 @@ def hold(conn: sqlite3.Connection, job_id: int, waits: WaitsFor) -> None:
             " error = NULL, params = ? WHERE id = ?",
             (params.model_dump_json(), job_id),
         )
+
+
+def hold_generation(conn: sqlite3.Connection, job_id: int, waits: WriterWait) -> None:
+    """A generation claimed with no language model to write it: back in the queue, waiting
+    for it. Not a failure (Ollama is optional)."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT params FROM job WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return
+        params = GenerationParams.model_validate_json(row["params"]).model_copy(
+            update={"waits_for_writer": waits}
+        )
+        conn.execute(
+            "UPDATE job SET state = 'queued', started_at = NULL, finished_at = NULL,"
+            " error = NULL, params = ? WHERE id = ?",
+            (params.model_dump_json(), job_id),
+        )
+
+
+def writer_waiting_jobs(conn: sqlite3.Connection) -> list[Job]:
+    """The generations in the queue waiting for the language model."""
+    return [
+        _job(r)
+        for r in conn.execute(
+            "SELECT * FROM job WHERE state = 'queued' AND kind = 'generation'"
+            " AND json_extract(params, '$.waits_for_writer') IS NOT NULL ORDER BY id"
+        )
+    ]
+
+
+def set_writer_wait(
+    conn: sqlite3.Connection, job_id: int, waits: WriterWait | None, *, model: str
+) -> None:
+    """What a generation in the queue waits for, seen again; None: it is claimed in its
+    turn, with `model` (the one it was asked with, or the one now chosen for its writing
+    when that one is not installed). One no longer in the queue is left as it is."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT params FROM job WHERE id = ? AND state = 'queued'", (job_id,)
+        ).fetchone()
+        if row is None:
+            return
+        params = GenerationParams.model_validate_json(row["params"]).model_copy(
+            update={"waits_for_writer": waits, "model": model}
+        )
+        conn.execute("UPDATE job SET params = ? WHERE id = ?", (params.model_dump_json(), job_id))
 
 
 def waiting_jobs(conn: sqlite3.Connection) -> list[Job]:

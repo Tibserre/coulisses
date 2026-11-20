@@ -59,19 +59,74 @@ export const LOG_KIND: Record<DeletionLogEntry["kind"], string> = {
   backup_pruning: "Anciennes copies de la base",
 };
 
-/** The value after `value` in `steps` (or before it), within `min` and `max`: a value
- *  set elsewhere, between two steps, goes to the next one. */
-export function nextStep(
-  steps: readonly number[],
-  value: number,
-  up: boolean,
-  min: number,
-  max: number,
-): number {
+/** The value after `value` in `steps` (or before it): a value set elsewhere, between
+ *  two steps, goes to the next one. */
+export function nextStep(steps: readonly number[], value: number, up: boolean): number {
   const sorted = [...steps].sort((a, b) => a - b);
   const next = up
     ? sorted.find((s) => s > value)
     : [...sorted].reverse().find((s) => s < value);
-  if (next === undefined) return value;
-  return Math.min(max, Math.max(min, next));
+  return next ?? value;
+}
+
+/** The keepings offered (spec §7.10): a week at least, three months at most. */
+export const RETENTION_CHOICES = [7, 14, 30, 60, 90];
+
+/** The choices shown: those offered, and the one kept if it was set to another value
+ *  before, so that what is kept is always shown and never silently changed. */
+export function retentionChoices(kept: number): number[] {
+  return RETENTION_CHOICES.includes(kept)
+    ? RETENTION_CHOICES
+    : [...RETENTION_CHOICES, kept].sort((a, b) => a - b);
+}
+
+/** What is written when a keeping is chosen: the notice kept as it is, never above the
+ *  keeping (the service refuses a notice longer than the keeping). */
+export function retentionWrite(
+  days: number,
+  noticeDays: number,
+): { retention_days: number; notice_days: number } {
+  return { retention_days: days, notice_days: Math.min(noticeDays, days) };
+}
+
+/** Whole calendar days from today to that day, in local time: 0 today, 1 tomorrow. */
+export function daysUntil(iso: string, now: Date = new Date()): number {
+  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((day(new Date(iso)) - day(now)) / 86_400_000);
+}
+
+/** « aujourd'hui », « demain », « dans 3 jours ». A day already past (a purge not run yet,
+ *  the Mac asleep) reads as today: it is the next thing to happen. */
+export function untilWords(days: number): string {
+  if (days <= 0) return "aujourd'hui";
+  if (days === 1) return "demain";
+  return `dans ${days} jours`;
+}
+
+/** The reminders before a purge, said once: « Rappel 7 jours avant », « Rappel 7 jours,
+ *  puis 3 jours avant ». */
+export function remindersLine(days: number[]): string {
+  const sorted = [...new Set(days)].filter((d) => d > 0).sort((a, b) => b - a);
+  if (sorted.length === 0) return "Sans rappel";
+  const said = sorted.map((d) => (d === 1 ? "1 jour" : `${d} jours`));
+  return `Rappel ${said.slice(0, -1).map((s) => `${s}, puis `).join("")}${said.at(-1)} avant`;
+}
+
+/** Sessions whose audio went (purged or deleted by hand) while their text stayed, as far
+ *  as the log read goes. A session deleted since, whole, is not counted: nothing of it is
+ *  left. */
+export function sessionsWithoutAudio(journal: DeletionLogEntry[]): number {
+  const deleted = new Set(
+    journal.filter((e) => e.kind === "session_deletion").map((e) => e.session_id),
+  );
+  return new Set(
+    journal
+      .filter(
+        (e) =>
+          (e.kind === "purge" || e.kind === "audio_deletion") &&
+          e.session_id &&
+          !deleted.has(e.session_id),
+      )
+      .map((e) => e.session_id),
+  ).size;
 }

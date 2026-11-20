@@ -218,6 +218,8 @@ def test_a_processing_waits_for_its_languages_model_then_goes(
         "language": "en",
         "label": "Anglais",
         "missing_models": ["aligneur-anglais"],
+        "missing_environments": [],
+        "altered_models": [],
         "download_bytes": 1_260_000_000,
     }
     assert client.get(f"/api/seances/{english}").json()["stages"]  # still readable
@@ -272,6 +274,8 @@ def test_a_language_the_engine_no_longer_handles_waits_for_another(
         "language": "nl",
         "label": None,
         "missing_models": [],
+        "missing_environments": [],
+        "altered_models": [],
         "download_bytes": 0,
     }
 
@@ -559,14 +563,83 @@ def test_the_two_failures_are_said_apart_in_french(data: DataDir) -> None:
     assert state["loop_error"] is None
     assert state["waiting_release_error"].startswith("Les séances qui attendaient un modèle")
     assert state["waiting_release_error_detail"] == "RuntimeError : base verrouillée"
-    # As before for the interface of today: the detail, never lost.
-    assert state["processing_error"] == "RuntimeError : base verrouillée"
+    assert "processing_error" not in state  # said apart, in French
 
     processor.loop_error = "OperationalError : database is locked"
     state = reading.get("/api/etat").json()
     assert state["loop_error"].startswith("Le traitement des séances est arrêté")
     assert state["loop_error_detail"] == "OperationalError : database is locked"
-    assert state["processing_error"] == "OperationalError : database is locked"
+
+
+# -- everything the chain lacks, not only the language's models --------------------------
+
+
+def test_a_processing_waits_for_every_model_and_environment_of_the_chain(
+    client: TestClient, data: DataDir, recording: Path, fake_languages: FakeLanguages
+) -> None:
+    # A new install after « Plus tard »: who speaks when, and its environment, are missing too.
+    fake_languages.chain_missing = {"diariseur", "segmenteur"}
+    fake_languages.environments = {"diarizen": "Qui parle quand"}
+    session_id = import_(client, recording, langue="en")
+    held = claim(data)
+    assert held is not None and Processor(data, FAKE_CHAIN).run_job(held).held
+    assert session(client, session_id)["processing_waits_for"] == {
+        "reason": "model_missing",
+        "language": "en",
+        "label": "Anglais",
+        "missing_models": ["aligneur-anglais", "diariseur", "segmenteur"],
+        "missing_environments": [
+            {"name": "diarizen", "label": "Qui parle quand", "announced_bytes": 900_000_000}
+        ],
+        "altered_models": [],
+        "download_bytes": 1_260_000_000 + 2 * 500_000_000,
+    }
+
+    # Only the language's model downloaded: it still waits, for the others.
+    fake_languages.install("aligneur-anglais")
+    Processor(data, FAKE_CHAIN).release_waiting()
+    waits = session(client, session_id)["processing_waits_for"]
+    assert waits["missing_models"] == ["diariseur", "segmenteur"]
+    assert waits["download_bytes"] == 2 * 500_000_000
+
+    for piece in ("diariseur", "segmenteur", "diarizen"):
+        fake_languages.install(piece)
+    Processor(data, FAKE_CHAIN).release_waiting()
+    assert session(client, session_id)["processing_waits_for"] is None
+    assert run_next(data).session_id == session_id
+
+
+def test_an_environment_alone_or_a_damaged_model_is_waited_for_too(
+    client: TestClient, data: DataDir, recording: Path, fake_languages: FakeLanguages
+) -> None:
+    fake_languages.environments = {"torch": "Outils de calcul"}
+    session_id = import_(client, recording)
+    held = claim(data)
+    assert held is not None and Processor(data, FAKE_CHAIN).run_job(held).held
+    waits = session(client, session_id)["processing_waits_for"]
+    assert (waits["reason"], waits["missing_models"], waits["download_bytes"]) == (
+        "model_missing",
+        [],
+        0,  # environments are not counted in download_bytes
+    )
+    assert waits["missing_environments"] == [
+        {"name": "torch", "label": "Outils de calcul", "announced_bytes": 900_000_000}
+    ]
+
+    # Installed, but a model found damaged: never downloaded over, said apart.
+    fake_languages.install("torch")
+    fake_languages.altered = {"diariseur"}
+    Processor(data, FAKE_CHAIN).release_waiting()
+    waits = session(client, session_id)["processing_waits_for"]
+    assert (waits["missing_models"], waits["altered_models"], waits["download_bytes"]) == (
+        [],
+        ["diariseur"],
+        0,
+    )
+
+    fake_languages.altered = set()  # removed, then downloaded again
+    Processor(data, FAKE_CHAIN).release_waiting()
+    assert run_next(data).session_id == session_id
 
 
 # -- the writings --------------------------------------------------------------------

@@ -1,25 +1,24 @@
-import type {
-  CatalogModel,
-  ModelAction,
-  ModelsView,
-  StageName,
+import {
+  api,
+  type CatalogModel,
+  type ModelAction,
+  type ModelsView,
+  type StageName,
 } from "./api.ts";
-import { gigabytes, missingEnvironments } from "./models.ts";
+import { environmentBytes, gigabytes, missingEnvironments } from "./models.ts";
+import type { PieceKind } from "./onboarding.ts";
+import { LABELS, WHAT } from "./components/pieceWords.ts";
 
 /** What the engine's state asks of the user on this Mac (ADR 0049; « geste demandé » in the
  *  glossary), grouped in updates the user decides one at a time: what changed, in a
  *  sentence and a few figures, then two ways out, the recommended one first. Kept light:
  *  it speaks to people, not to engineers. Made from the models' view alone: nothing here
  *  names a model or a version (P6). */
-export type NoticeKind = "replacement" | "install" | "cleanup";
-
 export type ChoiceKind =
   /** Download the new model, then remove the old one once the new one is there. */
   | "replace"
   /** The new one is there: remove the old one. */
   | "removeOld"
-  /** Download the models and install the environments the processing lacks. */
-  | "install"
   /** Remove the environments an older engine left. */
   | "removeEnvironments"
   /** Nothing now: asked again at the next launch. */
@@ -29,10 +28,21 @@ export type ChoiceKind =
 
 export interface Choice {
   kind: ChoiceKind;
+  /** Says what it does before it is done: the size downloaded, the space freed. */
   label: string;
-  /** What it does, said before it is done: the network, the space freed, what is lost. */
-  description: string;
   recommended: boolean;
+}
+
+/** One thing the update is about, drawn as a tile (ADR 0079): the model in use and its
+ *  successor, or what no longer serves. Said by what it is for, never by its name (P6). */
+export interface NoticeTile {
+  /** The model or environment folder it stands for. */
+  key: string;
+  role: "old" | "new";
+  piece: PieceKind;
+  name: string;
+  what: string;
+  bytes: number | null;
 }
 
 export interface Gain {
@@ -40,15 +50,17 @@ export interface Gain {
   value: string;
 }
 
-export interface UpdateNotice {
+/** An update that asks a choice in the update window: a model replaced, old environments
+ *  left. */
+export interface ChoiceNotice {
   /** Stable while the update is the same: what « keep » keeps. */
   id: string;
-  kind: NoticeKind;
-  /** The nature of the change, above the title. */
-  eyebrow: string;
+  kind: "replacement" | "cleanup";
   title: string;
   /** What it is about, in one sentence. */
   explanation: string;
+  /** What it is about, as tiles. */
+  tiles: NoticeTile[];
   /** A few figures, measured by the engine. */
   gains: Gain[];
   /** The engine's own sentence, as it is: only when it gave no figures. */
@@ -64,12 +76,23 @@ export interface UpdateNotice {
   removeEnvironments: string[];
 }
 
-/** Whose update it is, and what a model does, by its stage. */
-const ENGINE_OF: Partial<Record<StageName, string>> = {
-  transcribe: "du moteur de transcription",
-  align: "de l'alignement des mots",
-  diarize: "de la reconnaissance des voix",
-};
+/** What the processing lacks on this Mac (ADR 0079): the onboarding at the first launch,
+ *  else the « Ce qui manque » window, its tiles and its « Télécharger ». No text of its own:
+ *  those screens say it. */
+export interface InstallNotice {
+  id: string;
+  kind: "install";
+  download: string[];
+  install: string[];
+  remove: [];
+  removeEnvironments: [];
+  /** The first launch: nothing of the engine on this Mac yet but what the app ships. */
+  welcome: boolean;
+}
+
+export type UpdateNotice = ChoiceNotice | InstallNotice;
+
+/** What a model does, by its stage. */
 const WHAT_OF: Partial<Record<StageName, string>> = {
   transcribe: "de transcription",
   align: "d'alignement des mots",
@@ -80,7 +103,11 @@ const QUALITY = {
   better: "meilleure",
   worse: "moindre",
 } as const;
-const TITLE = "Une action est attendue de votre part";
+const PIECE_OF: Partial<Record<StageName, PieceKind>> = {
+  transcribe: "transcribe",
+  align: "align",
+  diarize: "diarize",
+};
 
 const folderName = (path: string) =>
   path.split("/").filter(Boolean).pop() ?? path;
@@ -113,9 +140,9 @@ export function replacementGains(
   return gains;
 }
 
-function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
+function replacements(view: ModelsView, lacking: Set<string>): ChoiceNotice[] {
   const { catalog, inventory } = view;
-  const notices: UpdateNotice[] = [];
+  const notices: ChoiceNotice[] = [];
   for (const old of inventory.models) {
     if (!old.replaced_by) continue;
     const by = old.replaced_by;
@@ -123,13 +150,12 @@ function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
     const now = catalog.models.find((m) => m.key === by);
     const stage = (now ?? was)?.stage;
     const what = stage && WHAT_OF[stage] ? ` ${WHAT_OF[stage]}` : "";
+    const piece = (stage && PIECE_OF[stage]) || "tools";
     const lighter = !!(was && now && now.announced_bytes < was.announced_bytes);
     const freed = gigabytes(old.size_bytes);
     const gains = replacementGains(was, now);
     const base = {
       kind: "replacement" as const,
-      eyebrow: `Mise à jour ${(stage && ENGINE_OF[stage]) || "du moteur"}`,
-      title: TITLE,
       gains,
       note: gains.length ? null : was?.replacement_note || null,
       evidence: was?.replacement_evidence ?? null,
@@ -141,21 +167,19 @@ function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
       notices.push({
         ...base,
         id: `remplacement:${old.key}:${by}`,
-        explanation: `Un nouveau modèle${what}${lighter ? ", plus léger," : ""} peut remplacer celui que vous utilisez.`,
+        title: `Un nouveau modèle${what}`,
+        explanation: `${lighter ? "Plus léger, il" : "Il"} remplace celui que vous utilisez. D'ici là, les séances attendent.`,
+        tiles: [
+          { key: old.key, role: "old", piece, name: "Actuel", what: "Supprimé ensuite", bytes: old.size_bytes },
+          { key: by, role: "new", piece, name: "Nouveau", what: WHAT[piece], bytes: now?.announced_bytes ?? null },
+        ],
         choices: [
           {
             kind: "replace",
-            label: "Remplacer l'ancien par le nouveau",
-            description: `Télécharge ${now ? gigabytes(now.announced_bytes) : "le nouveau"} depuis internet, puis supprime l'ancien (${freed} libérés).`,
+            label: now ? `Remplacer · ${gigabytes(now.announced_bytes)}` : "Remplacer",
             recommended: true,
           },
-          {
-            kind: "later",
-            label: "Garder l'ancien pour l'instant",
-            description:
-              "Les séances ne pourront pas être traitées tant que le nouveau n'est pas installé.",
-            recommended: false,
-          },
+          { kind: "later", label: "Plus tard", recommended: false },
         ],
         download: [by],
       });
@@ -164,20 +188,14 @@ function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
         ...base,
         // Its own id: keeping the old one for good never hides a later « Remplacer ».
         id: `ancien:${old.key}:${by}`,
-        explanation: `Le nouveau modèle${what} est installé : l'ancien ne sert plus.`,
+        title: `L'ancien modèle${what} ne sert plus`,
+        explanation: "Le nouveau est installé.",
+        tiles: [
+          { key: old.key, role: "old", piece, name: "Ancien modèle", what: "Ne sert plus", bytes: old.size_bytes },
+        ],
         choices: [
-          {
-            kind: "removeOld",
-            label: "Supprimer l'ancien modèle",
-            description: `Libère ${freed} sur ce Mac.`,
-            recommended: true,
-          },
-          {
-            kind: "keep",
-            label: "Garder l'ancien modèle",
-            description: "Il reste sur ce Mac, sans servir.",
-            recommended: false,
-          },
+          { kind: "removeOld", label: `Libérer ${freed}`, recommended: true },
+          { kind: "keep", label: "Le garder", recommended: false },
         ],
         download: [],
       });
@@ -186,78 +204,56 @@ function replacements(view: ModelsView, lacking: Set<string>): UpdateNotice[] {
   return notices;
 }
 
-function installation(view: ModelsView, keys: string[]): UpdateNotice | null {
+function installation(view: ModelsView, keys: string[]): InstallNotice | null {
   const { catalog, inventory, readiness } = view;
   const environments = missingEnvironments(readiness, inventory);
   if (!keys.length && !environments.length) return null;
-  const firstLaunch =
-    inventory.models.length === 0 &&
-    !inventory.environments.some((e) => e.installed);
-  const bytes = keys.reduce(
-    (sum, key) =>
-      sum + (catalog.models.find((m) => m.key === key)?.announced_bytes ?? 0),
-    0,
-  );
+  // Nothing on this Mac yet but what the app ships and installs itself (a bundled model,
+  // engine v1.15.0): still the first launch.
+  const bundled = (key: string) =>
+    catalog.models.find((m) => m.key === key)?.bundled === true;
   return {
     id: `installation:${[...keys, ...environments.map(([name]) => name)].join(",")}`,
     kind: "install",
-    eyebrow: firstLaunch ? "Bienvenue dans Coulisses" : "Mise à jour du moteur",
-    title: TITLE,
-    explanation: firstLaunch
-      ? "Pour traiter vos séances, Coulisses doit d'abord télécharger ce qui lui sert à les écouter."
-      : "Pour continuer à traiter vos séances, Coulisses doit télécharger un complément.",
-    gains: [],
-    note: null,
-    evidence: null,
-    choices: [
-      {
-        kind: "install",
-        label: firstLaunch ? "Tout télécharger" : "Télécharger",
-        description:
-          bytes && !environments.length
-            ? `Environ ${gigabytes(bytes)} depuis internet, une seule fois.`
-            : `Depuis internet, une seule fois${bytes ? ` (plus de ${gigabytes(bytes)})` : ""}.`,
-        recommended: true,
-      },
-      {
-        kind: "later",
-        label: "Plus tard",
-        description: "Les séances ne pourront pas être traitées d'ici là.",
-        recommended: false,
-      },
-    ],
     download: keys,
     install: environments.map(([name]) => name),
     remove: [],
     removeEnvironments: [],
+    welcome:
+      inventory.models.every((m) => bundled(m.key)) &&
+      !inventory.environments.some((e) => e.installed),
   };
 }
 
-function cleanup(view: ModelsView): UpdateNotice | null {
+function cleanup(view: ModelsView): ChoiceNotice | null {
   const old = view.inventory.environments.filter((e) => !e.current);
   if (!old.length) return null;
   const freed = gigabytes(old.reduce((sum, e) => sum + e.size_bytes, 0));
   return {
     id: `nettoyage:${old.map((e) => folderName(e.path)).join(",")}`,
     kind: "cleanup",
-    eyebrow: "Mise à jour du moteur",
-    title: TITLE,
+    title:
+      old.length > 1
+        ? "D'anciennes versions restent sur ce Mac"
+        : "Une ancienne version reste sur ce Mac",
     explanation:
-      "Une ancienne version d'un composant du moteur est restée sur ce Mac. Elle ne sert plus.",
+      "Un composant du moteur a été mis à jour ; l'ancienne version ne sert plus.",
+    tiles: old.map((e) => ({
+      key: e.path,
+      role: "old" as const,
+      piece: "tools" as const,
+      name: `${LABELS.tools}, ancienne version`,
+      what: "Ne sert plus",
+      bytes: e.size_bytes,
+    })),
     gains: [],
     note: null,
     evidence: null,
     choices: [
-      {
-        kind: "removeEnvironments",
-        label: "La supprimer",
-        description: `Libère ${freed} sur ce Mac.`,
-        recommended: true,
-      },
+      { kind: "removeEnvironments", label: `Libérer ${freed}`, recommended: true },
       {
         kind: "keep",
-        label: "La garder",
-        description: "Elle reste sur ce Mac, sans servir.",
+        label: old.length > 1 ? "Les garder" : "La garder",
         recommended: false,
       },
     ],
@@ -286,6 +282,44 @@ export function updateNotices(view: ModelsView): UpdateNotice[] {
     ),
     cleanup(view),
   ].filter((n): n is UpdateNotice => n !== null);
+}
+
+/** What the update window still has to ask in this session: not what was answered (except
+ *  the one asked from the settings, shown first), and nothing of what the processing lacks
+ *  once « Ce qui manque » was closed: closing it is « later », even if what lacks changed
+ *  meanwhile (a piece installed while it was open). */
+export function stillAsked(
+  notices: UpdateNotice[],
+  passed: string[],
+  asked: string | null,
+  lackingLater: boolean,
+): UpdateNotice[] {
+  return notices
+    .filter(
+      (n) =>
+        (n.id === asked || !passed.includes(n.id)) &&
+        !(lackingLater && n.kind === "install"),
+    )
+    .sort((a, b) => Number(b.id === asked) - Number(a.id === asked));
+}
+
+/** Whether the update window takes up « Ce qui manque » for what the processing lacks:
+ *  only while the window is open, never behind the onboarding (it covers the same pieces,
+ *  and the downloads it started end the first launch while it is still open), and not once
+ *  closed in this session. */
+export function takesUpLacking(
+  isOpen: boolean,
+  shown: UpdateNotice | null,
+  welcoming: boolean,
+  lackingLater: boolean,
+): boolean {
+  return (
+    isOpen &&
+    !welcoming &&
+    !lackingLater &&
+    shown?.kind === "install" &&
+    !shown.welcome
+  );
 }
 
 /** A replacement the user chose: the old models go once the new ones are installed. */
@@ -358,4 +392,136 @@ export function onStepsChanged(
   const handle = (e: Event) => listener((e as CustomEvent<ModelsView>).detail);
   window.addEventListener(CHANGED, handle);
   return () => window.removeEventListener(CHANGED, handle);
+}
+
+/** Everything the processing lacks on this Mac, fetched in one go (« Voir ce qui manque »):
+ *  the models and environments the engine's readiness names, plus the models a waiting
+ *  session's language needs (`extra`). What already runs is not asked again. */
+export interface Everything {
+  download: string[];
+  install: string[];
+  /** The models' announced size; the environments' is not known before they install. */
+  bytes: number;
+  /** Something not sized (an environment an older engine does not size): more than `bytes`. */
+  more: boolean;
+  /** `bytes` counts an environment's order of magnitude: said « environ ». */
+  approximate?: boolean;
+}
+
+export function everythingMissing(
+  view: ModelsView,
+  actions: ModelAction[] = view.actions,
+  extra: string[] = [],
+): Everything | null {
+  const running = new Set(
+    actions
+      .filter((a) => a.state === "running")
+      .map((a) => `${a.kind}:${a.name}`),
+  );
+  const keys = new Set([
+    ...view.readiness.missing
+      .filter((p) => p.code === "model_missing" && p.model)
+      .map((p) => p.model!),
+    ...extra,
+  ]);
+  const download = [...keys].filter((key) => !running.has(`model:${key}`));
+  const install = missingEnvironments(view.readiness, view.inventory)
+    .map(([name]) => name)
+    .filter((name) => !running.has(`environment:${name}`));
+  if (!download.length && !install.length) return null;
+  const sizes = [
+    ...download.map(
+      (key) => view.catalog.models.find((m) => m.key === key)?.announced_bytes ?? null,
+    ),
+    ...install.map((name) => environmentBytes(view.readiness, name)),
+  ];
+  const bytes = sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
+  // Something without an announced size: more than the figure said. An environment the
+  // engine sizes is an order of magnitude: « environ ».
+  return {
+    download,
+    install,
+    bytes,
+    more: sizes.includes(null),
+    approximate: install.length > 0 && !sizes.includes(null),
+  };
+}
+
+/** Whether a waiting session needs more than its language's own download (a new install):
+ *  then « Voir ce qui manque », else the language's « Télécharger ». */
+export function beyondLanguage(
+  everything: Everything | null,
+  languageMissing: readonly string[],
+): boolean {
+  return (
+    everything !== null &&
+    (everything.install.length > 0 ||
+      everything.download.some((key) => !languageMissing.includes(key)))
+  );
+}
+
+/** Whether a model's row gives way to « Voir ce qui manque », outside developer mode: missing,
+ *  with nothing of its own to say (no last download, no old model it replaces). */
+export function coveredByEverything(
+  everything: Everything | null,
+  row: { key: string; state: { kind: string }; last: unknown },
+  replacing: boolean,
+): boolean {
+  return (
+    everything !== null &&
+    row.state.kind === "missing" &&
+    row.last === null &&
+    !replacing &&
+    everything.download.includes(row.key)
+  );
+}
+
+/** Whether everything the processing lacks is downloading or installing: then it says so,
+ *  rather than what lacks. A damaged model, or one nothing fetches, keeps it said. */
+export function allLackingRunning(
+  view: ModelsView,
+  actions: ModelAction[] = view.actions,
+): boolean {
+  const running = (kind: string, name: string | null) =>
+    name !== null &&
+    actions.some((a) => a.state === "running" && a.kind === kind && a.name === name);
+  return (
+    view.readiness.missing.length > 0 &&
+    view.readiness.missing.every((p) =>
+      p.code === "model_missing"
+        ? running("model", p.model)
+        : p.code === "environment_missing"
+          ? running("environment", p.environment)
+          : false,
+    )
+  );
+}
+
+/** Starts it, each piece by the route that exists (ADR 0036); the models' view read again
+ *  after, for whoever follows the downloads. A refusal is thrown, with what had started. */
+export async function downloadEverything(everything: Everything): Promise<void> {
+  const total = everything.download.length + everything.install.length;
+  let started = 0;
+  try {
+    for (const key of everything.download) {
+      await api.downloadModel(key);
+      started += 1;
+    }
+    for (const name of everything.install) {
+      await api.installEnvironment(name);
+      started += 1;
+    }
+  } catch (e) {
+    const said = (e as Error).message;
+    throw new Error(
+      started ? `${started} sur ${total} ont démarré ; le suivant a été refusé : ${said}` : said,
+    );
+  } finally {
+    try {
+      stepsChanged(await api.engineModels());
+    } catch (e) {
+      // The service gone: the frame says it; what started runs on.
+      console.warn("everything: reading the models again:", (e as Error).message);
+    }
+  }
 }

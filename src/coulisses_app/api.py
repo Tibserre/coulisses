@@ -86,10 +86,6 @@ class AppInfo(BaseModel):
     """The service's process: the app in the Dock takes back one left running alone."""
     profile: str
     recovery_problems: list[str]
-    processing_error: str | None
-    """As before, for the interface of today: the technical detail of the loop's own last
-    error, or else of the failure to release the sessions waiting for a model. Replaced by
-    `loop_error` and `waiting_release_error`, said apart and in French."""
     loop_error: str | None = None
     """Said in French: the processing loop's own last error (not a job's); the queue may be
     stuck, the loop tries again every two seconds."""
@@ -100,11 +96,20 @@ class AppInfo(BaseModel):
     after a download); they stay waiting until the next start or the next download."""
     waiting_release_error_detail: str | None = None
     """Its technical detail (developer mode)."""
+    writer_release_error: str | None = None
+    """Said in French: the titles, chapters and summaries waiting for the language model could
+    not be seen again; they stay waiting, tried again every minute."""
+    writer_release_error_detail: str | None = None
+    """Its technical detail (developer mode)."""
 
 
 LOOP_ERROR = (
     "Le traitement des séances est arrêté par une erreur. Il réessaie toutes les deux "
     "secondes ; si cela dure, quittez puis relancez Coulisses."
+)
+WRITER_RELEASE_ERROR = (
+    "Les titres, chapitres et résumés qui attendent le modèle de langage n'ont pas pu être "
+    "revus : ils restent en attente, et Coulisses réessaie chaque minute."
 )
 RELEASE_ERROR = (
     "Les séances qui attendaient un modèle n'ont pas pu repartir. Elles réessaieront au "
@@ -163,6 +168,10 @@ class SessionDetail(BaseModel):
     mix: mixing.MixFacts | None = None
     """The microphone mixed with the computer's sound, once made (from the job that used
     it, once the audio is purged); whether the computer's sound held anything."""
+    heard_version: str | None = None
+    """Changes when the file the page plays is replaced (a listening mix made, a track put
+    in an MP4): the player loads it again, its byte ranges being of the former file. None
+    without a sound to play, or while it records."""
 
 
 class RerunRequest(BaseModel):
@@ -217,11 +226,6 @@ class OfferedActionRequest(BaseModel):
     action_ref: str | None = None
 
 
-class SpaceActionRequest(BaseModel):
-    auto_run: bool
-    model: str | None = None
-
-
 class GenerationRequest(BaseModel):
     action_ref: str
     model: str | None = None
@@ -264,6 +268,9 @@ def writing_advice(found: list[InstalledModel]) -> WritingAdvice:
 class ModelsInfo(BaseModel):
     reachable: bool
     error: str | None
+    available: bool
+    """A language model can write: Ollama answers, with at least one model. False: titles,
+    chapters and summaries wait for it (Ollama is optional); the processing does not."""
     default: str
     """The summaries' model: the one offered first when a summary is asked."""
     writings: dict[settings.Writing, str]
@@ -456,6 +463,14 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        # The models shipped with the app, installed from it without the network (engine
+        # ADR 0081), before a processing resumes: a failure to look is logged and seen again
+        # at the next start (the model is shown missing meanwhile); an install that fails is
+        # a task said like any download.
+        try:
+            engine_store.install_shipped()
+        except Exception:
+            log.exception("installing the models shipped with the application")
         if processor is not None:
             processor.start()
         if watcher is not None:
@@ -517,13 +532,14 @@ def create_app(
             pid=os.getpid(),
             profile=profile,
             recovery_problems=problems,
-            processing_error=(processor.loop_error or processor.release_error)
-            if processor
-            else None,
             loop_error=LOOP_ERROR if processor and processor.loop_error else None,
             loop_error_detail=processor.loop_error if processor else None,
             waiting_release_error=RELEASE_ERROR if processor and processor.release_error else None,
             waiting_release_error_detail=processor.release_error if processor else None,
+            writer_release_error=WRITER_RELEASE_ERROR
+            if processor and processor.writer_release_error
+            else None,
+            writer_release_error_detail=processor.writer_release_error if processor else None,
         )
 
     def _folders() -> Folders:
@@ -709,9 +725,10 @@ def create_app(
             used_mix = jobs.latest_mix(conn, session_id)
         finally:
             conn.close()
+        source = sessions.reference_source(data, session_id)
         return SessionDetail(
             session=session,
-            source=sessions.reference_source(data, session_id),
+            source=source,
             stages=stage_views(data, chain, session_id),
             version=shown["run_id"] if shown else None,
             other_sources=sessions.other_sources(data, session_id),
@@ -721,6 +738,24 @@ def create_app(
             # Once the audio is purged, from the job that used it (P7).
             mix=mixing.read_facts(data, session_id)
             or (mixing.MixFacts.model_validate(used_mix) if used_mix is not None else None),
+            # Not while it records: the file grows at each look.
+            heard_version=None
+            if source is not None and source.capture_state == "recording"
+            else _heard_version(session_id),
+        )
+
+    def _heard_version(session_id: str) -> str | None:
+        if retention.audio_status(data, session_id).state == "removed":
+            return None
+        path = lossless.heard_path(data, session_id)
+        try:
+            facts = path.stat() if path is not None else None
+        except FileNotFoundError:  # moved in the Finder: the player says it
+            return None
+        return (
+            f"{path.name}-{facts.st_mtime_ns}-{facts.st_size}"
+            if path is not None and facts is not None
+            else None
         )
 
     @app.get("/api/seances/{session_id}/versions")
@@ -805,9 +840,13 @@ def create_app(
                         detail="Le nombre de présents ne peut changer qu'après une diarisation "
                         "refusée pour trop peu de voix.",
                     )
-                jobs.resume_with_attendees(conn, job, demande.presents)
+                resumed = jobs.resume_with_attendees(conn, job, demande.presents)
             else:
-                jobs.requeue(conn, job.id)
+                resumed = jobs.requeue(conn, job.id, only_failed=True)
+            if not resumed:  # resumed by another click meanwhile
+                raise HTTPException(
+                    status_code=409, detail="Le traitement de cette séance a déjà repris."
+                )
         finally:
             conn.close()
         if processor is not None:
@@ -918,15 +957,6 @@ def create_app(
             _check_action(data, demande.action_ref)
         return spaces.set_offered_action(data, space_id, demande.action_ref)
 
-    @app.put("/api/espaces/{space_id}/actions/{action_ref}")
-    def set_space_action(
-        space_id: int, action_ref: str, demande: SpaceActionRequest
-    ) -> list[spaces.SpaceAction]:
-        _check_action(data, action_ref)
-        return spaces.set_space_action(
-            data, space_id, action_ref, auto_run=demande.auto_run, model=demande.model
-        )
-
     # -- summaries --------------------------------------------------------------------
 
     @app.get("/api/modeles")
@@ -942,14 +972,20 @@ def create_app(
             return ModelsInfo(
                 reachable=False,
                 error=str(exc),
+                available=False,
                 default=writings["resume"],
                 writings=writings,
                 models=[],
                 advice=writing_advice([]),
             )
+        if found and processor is not None:
+            # Seen just now: what waited for it goes without waiting for the next look. A
+            # failure there is said by the service, never the list's (`writer_release_error`).
+            processor.see_writer_again()
         return ModelsInfo(
             reachable=True,
             error=None,
+            available=bool(found),
             default=writings["resume"],
             writings=writings,
             models=found,
@@ -1326,7 +1362,7 @@ def create_app(
         if status.state == "removed":
             raise _not_found("L'audio de cette séance a été supprimé.")
         # With the computer's sound, its listening mix once made (ADR 0032, 0037).
-        path = mixing.listening_path(data, session_id)
+        path = lossless.heard_path(data, session_id)
         if path is None:
             raise _not_found("Séance introuvable.")
         if not path.is_file():
@@ -1334,10 +1370,11 @@ def create_app(
                 "L'enregistrement est introuvable dans le dossier de la séance. "
                 "A-t-il été déplacé ou supprimé dans le Finder ?"
             )
+        # A track kept in FLAC, in an MP4 where the player seeks exactly (ADR 0046, 0074).
         media_type = (
-            lossless.MEDIA_TYPE
-            if path.suffix.lower() == lossless.SUFFIX
-            else mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            lossless.media_type(path)
+            or mimetypes.guess_type(path.name)[0]
+            or "application/octet-stream"
         )
         return FileResponse(path, media_type=media_type)
 

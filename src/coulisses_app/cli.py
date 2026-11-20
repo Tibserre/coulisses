@@ -11,7 +11,7 @@ import webbrowser
 from pathlib import Path
 
 import uvicorn
-from coulisses.api import DEFAULT_PROFILE, ChainConfig, load_profile, profile_path
+from coulisses.api import DEFAULT_PROFILE, ChainConfig, catalog, load_profile, profile_path
 
 from coulisses_app import lossless, system_audio
 from coulisses_app.api import create_app
@@ -57,6 +57,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="développement : port 8766, ~/Coulisses/Données-dev, jamais les données réelles",
     )
+    parser.add_argument(
+        "--ecoute-exacte",
+        action="store_true",
+        help=(
+            "range dans un MP4 les pistes encore gardées en FLAC brut, y compris celles "
+            "d'une séance où cela a échoué au démarrage (ADR 0074), sans perte, puis "
+            "s'arrête ; le service doit être arrêté"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -92,7 +101,8 @@ def main(argv: list[str] | None = None) -> None:
     # From the .app: its tools on the PATH, uv's downloads under ~/Coulisses (ADR 0040).
     resources = Resources.from_env()
     try:
-        resources.check()
+        # The models shipped with the .app, as the engine's catalog says (engine ADR 0081).
+        resources.check(bundled=[m.key for m in catalog().models if m.bundled])
     except IncompleteAppError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
@@ -116,6 +126,14 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Base sauvegardée avant mise à jour : {backup}", file=sys.stderr)
         # Only the latest copies are kept (ADR 0052); what could not go is said at start.
         pruned += [f"Anciennes copies de la base : {p}" for p in prune_backups(data, backup)]
+    if args.ecoute_exacte:
+        # The tracks still in raw FLAC (those that failed at a start too) put in an MP4,
+        # then stop (ADR 0074). The data lock held above: no service runs meanwhile.
+        try:
+            failed = lossless.rewrap_all(data, lambda line: print(line, file=sys.stderr))
+        finally:
+            lock.close()
+        raise SystemExit(1 if failed else 0)
 
     chain = ChainConfig.from_profile(load_profile(profile_path(DEFAULT_PROFILE)))
     awake = KeepAwake()

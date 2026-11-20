@@ -6,25 +6,92 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
-## Non publié
-
-### Nouveautés
-
-- dit à part et en français l'arrêt du traitement et la reprise en échec (etat)
-- transcrit une séance dans la langue de son espace ou choisie (langue)
-- choisit la langue d'un espace et d'une séance dans l'interface (langue)
+## v0.41.1 — 2026-11-19
 
 ### Corrections
 
-- démarre le service même si la reprise des séances en attente échoue (langue)
-- refait les voix d'une version de langue inconnue, et dit un échec de reprise (langue)
-- relance les voix d'une version de langue inconnue (langues)
-- refuse une base migrée au-delà de 0010 sans noms (base)
-- réunit la spec de la langue et ne relance pas les voix d'une langue inconnue (langues)
-- nomme les langues des modèles d'après le service et laisse choisir une langue inconnue (langues)
-- ne propose jamais de supprimer le français (langues)
-- refuse au démarrage une base migrée par une autre branche (base)
-- ne dit un aligneur exigé que pour sa langue (modeles)
+- Le son d'une séance se recharge quand son fichier est remplacé, par exemple juste après l'enregistrement, même si sa page est restée ouverte. La lecture ne saute plus.
+- La liste des langues est triée : d'abord celles qui sont sur ce Mac, puis celles à télécharger, avec leur taille. Une langue absente n'est choisie qu'une fois son téléchargement lancé ; « Plus tard » ne change rien.
+
+## v0.41.0 — 2026-11-18
+
+### Nouveautés
+
+- L'écran d'enregistrement est refait. L'onde suit le son réel et défile plus vite. La pause et l'arrêt se font dans l'écran même : en pause, le temps se grise et « En pause » s'affiche au-dessus. Une ligne pleine largeur sert à ajouter une personne.
+
+### Corrections
+
+- Cliquer deux fois sur « Traiter » ou « Reprendre » ne lance plus deux fois le même traitement.
+- La page d'une séance se met à jour quand son traitement s'arrête ou que sa reprise est refusée.
+- Après l'arrêt d'un enregistrement, la page qu'on vient de quitter n'emmène plus vers la séance.
+- Les présents en train d'être cochés ne se décochent plus pendant un traitement.
+- L'accueil dit chaque panne du service par une phrase claire.
+- L'échec de la suppression d'un modèle est expliqué en français.
+- Une suppression d'audio qui échoue ne fait plus perdre ses rappels, et l'écoute d'une séance ne se prépare plus pendant que son audio est supprimé.
+
+## v0.40.0 — 2026-11-17
+
+### Nouveautés
+
+- Réglages › Séances est refait. La durée de conservation de l'audio se choisit d'un clic : 7, 14, 30, 60 ou 90 jours. « Bientôt supprimés » liste les séances dont l'audio va partir, avec les jours qui restent et « Garder ». Les réglages d'enregistrement et le dossier d'export passent en cartes.
+- Un second rappel avant que l'audio d'une séance soit supprimé : 7 jours avant, puis 3 jours avant, chacun par un bandeau et une notification.
+- L'audio se garde 90 jours au plus. Une durée réglée plus longue redescend à 90 jours, et les suppressions proches sont annoncées de nouveau, avec tout leur préavis. Le texte des séances, lui, n'est jamais supprimé.
+
+### Corrections
+
+- Ce que signale l'arrêt d'un enregistrement s'affiche sous les disques, au lieu d'un bandeau à refermer.
+- Les avertissements (audio bientôt supprimé, modèle manquant, micro perdu) sont écrits dans un jaune lisible.
+- Un signe de ponctuation isolé est attribué à la voix du mot qu'il accompagne.
+
+## v0.39.0 — 2026-11-11
+
+### Nouveautés
+
+- Un premier lancement en quelques étapes. Coulisses se présente, montre ce qu'il faut télécharger pour écouter les séances, avec la taille de chaque chose, vous laisse choisir les langues, puis télécharge sur votre accord. L'avancement se suit sans rien ouvrir, et « Plus tard » vous le repropose au lancement suivant.
+- Plus besoin de compte Hugging Face. Le modèle qui sépare les voix est livré avec l'app. Ses auteurs sont cités dans Réglages › Avancé, section « Crédits ».
+- Ollama devient facultatif. Sans lui, une séance est quand même transcrite, avec qui a dit quoi ; seuls le titre, les chapitres et les résumés attendent qu'il soit installé.
+- Le son de l'ordinateur (Zoom, Teams, Meet…) s'autorise dès le premier lancement, au lieu de se découvrir muet après un premier enregistrement.
+- Une séance à qui il manque quelque chose pour être traitée le dit en grand et propose de tout télécharger d'un coup, au lieu d'échouer.
+- Réglages › Transcription montre la place prise sur ce Mac, les langues en cartes, et un seul bouton pour arrêter ou reprendre les téléchargements.
+- Une installation neuve commence avec un espace nommé « Espace 1 ».
+- « Mettre à jour » reste visible dans la colonne après « Plus tard ».
+
+### Corrections
+
+- La fenêtre qui propose de remplacer un ancien modèle ou de supprimer d'anciens composants est redessinée.
+- Pendant le téléchargement de la transcription, les langues ne se disent plus toutes en téléchargement.
+- Plus d'alerte vide dans Réglages › Transcription.
+
+## v0.38.3 — 2026-11-06
+
+### Corrections
+
+- Les séances enregistrées avant la v0.38.2 repartent elles aussi exactement à la phrase cliquée. Au premier démarrage, Coulisses range leur son dans le nouveau format, en tâche de fond, sans perte de qualité : chaque fichier est vérifié avant que l'ancien soit supprimé, et la conversion est notée au journal. Une séance qui n'a pas pu être convertie garde ses fichiers.
+- Plus de son en double. Chaque son est gardé en un seul fichier : une séance enregistrée sans le son de l'ordinateur ne prend plus les 260 Mo par heure de plus de la v0.38.2, et la copie déjà faite par cette version est retirée.
+
+## v0.38.2 — 2026-11-04
+
+### Corrections
+
+- Quand on clique sur une phrase, l'écoute repart exactement à cet endroit. Avant, sur une séance enregistrée, le lecteur tombait à plusieurs secondes de la phrase cliquée, et le mot surligné prenait de l'avance sur la voix. Le son garde la même qualité, sans perte. Une séance enregistrée sans le son de l'ordinateur prend un peu plus de place (environ 260 Mo de plus par heure). Les séances enregistrées avant cette version gardent pour l'instant l'ancien comportement.
+
+## v0.38.1 — 2026-10-30
+
+### Corrections
+
+- On peut maintenant enregistrer avec des AirPods, ou tout micro qui ne tourne pas à 48 kHz. Avant, « Nouvelle note » ne démarrait pas avec un tel micro. Le micro et le son de l'ordinateur sont convertis ensemble, et restent calés l'un sur l'autre. Avec des AirPods, le son de l'ordinateur perd ses aigus les plus hauts (au-delà de 12 kHz) : la voix n'est pas touchée.
+
+## v0.38.0 — 2026-10-30
+
+### Nouveautés depuis la 0.37.0
+
+- Transcrire dans une autre langue. Une séance peut maintenant être transcrite en anglais, allemand, espagnol, italien ou portugais, en plus du français. Chaque langue s'ajoute une fois dans **Réglages > Transcription**, rubrique « Langues » (environ 1,3 Go par langue autre que le français, téléchargés quand vous le demandez). Chaque espace a une langue par défaut, réglée dans ses paramètres ; une séance la prend à sa création, et se change au-dessus de son titre. Une séance déjà transcrite peut être refaite dans une autre langue : « ⋯ › Refaire le traitement… › Le texte ».
+- Les comptes rendus (titres, chapitres, résumés) restent rédigés en français, quelle que soit la langue de la séance. Leur qualité sur une séance dans une autre langue n'est pas encore mesurée.
+
+### Corrections
+
+- Une base de données mise à jour par une version de développement de Coulisses est maintenant reconnue au démarrage, avec un message qui dit quelle copie reprendre, au lieu d'une erreur plus tard.
+- Si la reprise des séances qui attendaient un modèle échoue, l'app démarre quand même et le dit.
 
 ## v0.37.0 — 2026-10-29
 

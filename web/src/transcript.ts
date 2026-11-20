@@ -447,25 +447,6 @@ export function speakerMarks(
     .map((r) => ({ start: r.turn.start!, end: r.turn.end ?? r.turn.start! }));
 }
 
-/** The line to hear to recognise a voice: its longest measured one. */
-export function speakerExcerpt(
-  model: ReviewModel,
-  label: string,
-): TurnRow | null {
-  let best: TurnRow | null = null;
-  let length = -1;
-  for (const r of model.timed) {
-    if (r.speaker.label !== label || r.turn.start == null || r.turn.end == null)
-      continue;
-    const l = r.turn.end - r.turn.start;
-    if (l > length) {
-      best = r;
-      length = l;
-    }
-  }
-  return best;
-}
-
 /** The strip of chapters laid out (ADR 0061). Set chapters run from the first one's start
  *  to the last one's end. Chapters being written run over the whole session: before the
  *  first one, room is kept (`lead`), and after `readUntil` (the last line the detection
