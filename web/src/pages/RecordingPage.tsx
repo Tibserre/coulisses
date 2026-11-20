@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
@@ -267,18 +267,20 @@ export function RecordingPage({
       (e: Error) => setError(e.message),
     );
   }, [sessionId]);
-  const [people, setPeople] = useState<Person[] | null>(null);
+  /** The space's people, archived ones too: a name typed is matched against them all. */
+  const [everyone, setEveryone] = useState<Person[] | null>(null);
+  const people = useMemo(() => everyone?.filter((p) => !p.archived) ?? null, [everyone]);
   const spaceId = session?.space_id ?? null;
   const loadPeople = useCallback(async () => {
     if (spaceId === null) return;
     try {
-      setPeople((await api.people(spaceId)).filter((p) => !p.archived));
+      setEveryone(await api.people(spaceId));
     } catch (e) {
       setError((e as Error).message);
     }
   }, [spaceId]);
   useEffect(() => {
-    setPeople(null);
+    setEveryone(null);
     void loadPeople();
   }, [loadPeople]);
   const attendees = useAttendees(session, setSession, setError);
@@ -806,6 +808,7 @@ export function RecordingPage({
               session={session}
               spaceName={space?.name ?? "l'espace"}
               people={people}
+              known={everyone ?? people}
               attendees={attendees}
               onPeopleChanged={loadPeople}
               onError={setError}

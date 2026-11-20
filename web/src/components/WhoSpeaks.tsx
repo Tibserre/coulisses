@@ -103,6 +103,8 @@ export function WhoSpeaks({
   const [picked, setPicked] = useState<Person | null>(null);
   /** A character being cast (ADR 0091): « Qui joue Hamlet ? », then who plays it. */
   const [role, setRole] = useState<string | null>(null);
+  /** Someone being added (the « + »), or null for the list. */
+  const [adding, setAdding] = useState<string | null>(null);
   /** A yes or no first: the recognised voice (« C'est Marie ? »), or someone who already has
    *  a voice (« C'est aussi Marie ? », the two voices merged on yes). */
   const [asking, setAsking] = useState(() => askFor(speaker, people, voices));
@@ -144,6 +146,7 @@ export function WhoSpeaks({
     setQuery("");
     setPicked(null);
     setRole(null);
+    setAdding(null);
     setAt(0);
     setError(null);
     // The cursor in the search (or on « oui »), once the dialog has put it on its title.
@@ -236,12 +239,28 @@ export function WhoSpeaks({
     if (!role && hasVoice(p, speaker, voices)) setAsking({ person: p, merge: true });
     else setPicked((was) => (was?.id === p.id ? null : p));
   };
-  const addGuest = () =>
-    void run(async () => {
-      const guest = await onAddGuest(query.trim());
-      setPicked(guest);
+  /** The « + »: a guest added is the voice's name at once; a character asks who plays it. */
+  const add = (name: string, character: boolean) => {
+    if (character) {
+      setRole(name);
+      setPicked(null);
       setQuery("");
+      setAdding(null);
+      return;
+    }
+    void run(async () => {
+      const guest = await onAddGuest(name);
+      setQuery("");
+      setAdding(null);
+      setPicked(guest);
+      await onCorrect({
+        kind: "assign_speaker",
+        speaker: label,
+        person_id: guest.id,
+        ...(role ? { character: role } : {}),
+      });
     });
+  };
   const makeMember = (p: Person) =>
     void run(async () => {
       await api.updatePerson(p.id, { kind: "member" });
@@ -520,21 +539,11 @@ export function WhoSpeaks({
                   ? { tip: `${p.name} a déjà une voix dans cette séance`, wave: true }
                   : null
               }
-              onAddGuest={addGuest}
-              onAddCharacter={
-                theatre && !role
-                  ? () => {
-                      setRole(query.trim());
-                      setPicked(null);
-                      setQuery("");
-                      // The button goes: the keyboard back in the search, for who plays it.
-                      window.setTimeout(
-                        () => body.current?.querySelector<HTMLElement>(".cl-who__pick input")?.focus(),
-                        0,
-                      );
-                    }
-                  : undefined
-              }
+              adding={adding}
+              onAdding={setAdding}
+              onAdd={add}
+              theatre={theatre && !role}
+              busy={busy}
               onMakeMember={makeMember}
               onEnter={(only) => {
                 // A name typed that leaves one person: that one, not the one chosen before.
@@ -566,7 +575,7 @@ export function WhoSpeaks({
           )
         )}
         {/* While asking, the answer is the two discs: no button jumps under the pointer. */}
-        {!asking && (
+        {!asking && adding === null && (
           <button
             type="button"
             className="cl-who__ok"
