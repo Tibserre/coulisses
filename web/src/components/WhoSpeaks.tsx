@@ -292,9 +292,10 @@ export function WhoSpeaks({
       isOpen
       onOpenChange={(open) => !open && onClose()}
       width={920}
+      maxHeight="90dvh"
       aria-label="Qui parle ?"
     >
-      <div ref={body} onKeyDown={onKeyDown}>
+      <div ref={body} onKeyDown={onKeyDown} className="cl-who__frame">
       <DialogHeader
         title={
           <span className="cl-who__title">

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
+import { AudioLines } from "lucide-react";
 import type { Person, Speaker } from "../api.ts";
 import { formatDuration, plural } from "../format.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
@@ -62,7 +63,8 @@ export function VoiceFace({
 /** The voices of a session as one button (ADR 0090): the named ones stacked, « +N » in grey
  *  for those left; a click lists them all, those to name first (the one being named at the
  *  top), a rule, then the named ones, each with its speaking time. Two voices of the same
- *  person are offered to be merged there. */
+ *  person are offered to be merged there. With no voice named, the session's header says
+ *  « N voix à nommer » instead of a lone « +N » (ADR 0093); « Qui parle ? » keeps the pile. */
 export function VoicesMenu({
   voices,
   toName,
@@ -152,16 +154,24 @@ export function VoicesMenu({
           className="cl-who__pile"
           aria-label={`${tip ? `${tip} : ` : ""}${plural(named.length, "voix nommée", "voix nommées")}, ${plural(toName.length, "à nommer", "à nommer")}. Voir les voix`}
         >
-          <span className="cl-faces">
-            {pile.map((v) => (
-              <VoiceFace key={v.label} voice={v} people={people} size="sm" />
-            ))}
-            {over > 0 && (
-              <span className="cl-face" data-over aria-hidden>
-                +{over}
-              </span>
-            )}
-          </span>
+          {named.length === 0 && !current ? (
+            // Nothing named yet: a lone « +4 » says nothing, so say what is to do.
+            <span className="cl-who__tonamed" aria-hidden>
+              <AudioLines size={14} strokeWidth={2} />
+              {plural(toName.length, "voix à nommer", "voix à nommer")}
+            </span>
+          ) : (
+            <span className="cl-faces">
+              {pile.map((v) => (
+                <VoiceFace key={v.label} voice={v} people={people} size="sm" />
+              ))}
+              {over > 0 && (
+                <span className="cl-face" data-over aria-hidden>
+                  +{over}
+                </span>
+              )}
+            </span>
+          )}
         </button>
       </Popover>
       {tip && !open && <Tooltip anchorRef={button} content={tip} />}

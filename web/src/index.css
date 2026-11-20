@@ -6211,6 +6211,17 @@ button.cl-tree__more:hover {
   background: var(--color-background-muted);
 }
 
+.cl-who__tonamed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: 2px var(--spacing-2);
+  border-radius: 999px;
+  background: var(--color-background-muted);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
 .cl-who__time {
   margin-left: auto;
   font-size: var(--font-size-xs);
@@ -6224,9 +6235,22 @@ button.cl-tree__more:hover {
   background: var(--color-border);
 }
 
+/* The dialog crops what overflows: the header and the foot stay, the two columns scroll. */
+.cl-who__frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .cl-who {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for the ring's 4 px halo, which the scrolling would clip. */
+  padding: 4px;
+  margin: -4px;
   font-size: var(--font-size-sm);
 }
 
@@ -6390,6 +6414,7 @@ button.cl-tree__more:hover {
 }
 
 .cl-who__foot {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
