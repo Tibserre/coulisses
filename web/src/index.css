@@ -4332,6 +4332,11 @@ button.cl-tree__more:hover {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 14%, transparent);
 }
 
+/* « Paul 2 » offered, selected: typing replaces it. */
+.cl-add__name::selection {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
 /* A new character: its rounded square, before anyone plays it. */
 .cl-face[data-character] {
   background: var(--color-text-primary);

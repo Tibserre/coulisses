@@ -6,6 +6,7 @@ import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { AudioLines, Check, Minus, Plus, Search, User, X } from "lucide-react";
 import { api, type Person, type Session } from "../api.ts";
 import { plural } from "../format.ts";
+import { bare, freeName } from "../people.ts";
 import { attendeesOf, fewerAttendees, toggleAttendee } from "../processing.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
 
@@ -78,8 +79,6 @@ export function useAttendees(
 export type Attendees = NonNullable<ReturnType<typeof useAttendees>>;
 
 const initial = (name: string) => name.trim().charAt(0).toLocaleUpperCase("fr");
-const bare = (s: string) =>
-  s.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("fr").trim();
 
 /** A person's disc: their initial in their colour (a guest's outlined), or an empty place. */
 export function Face({ person, size = "md" }: { person?: Person; size?: "sm" | "md" | "lg" | "xl" }) {
@@ -400,7 +399,6 @@ export function PeoplePicker({
         name={adding}
         onName={onAdding}
         known={known}
-        spaceName={spaceName}
         theatre={theatre}
         busy={busy}
         onCancel={() => onAdding(null)}
@@ -482,12 +480,13 @@ export function PeoplePicker({
 }
 
 /** Adding someone, drawn like « C'est Marie ? »: the big disc (« + » until a name, then its
- *  initial, outlined: a guest), the name across the column, then no and yes (Entrée). */
+ *  initial, outlined: a guest), the name across the column, then no and yes (Entrée). A name
+ *  someone of the space bears already asks « C'est la même personne ? » (their disc, full):
+ *  yes picks them, no gives the name back as « Paul 2 », selected. */
 function AddPerson({
   name,
   onName,
   known,
-  spaceName,
   theatre,
   busy,
   onCancel,
@@ -497,31 +496,75 @@ function AddPerson({
   name: string;
   onName: (name: string) => void;
   known: Person[];
-  spaceName: string;
   theatre: boolean;
   busy: boolean;
   onCancel: () => void;
   onAdd: (name: string, character: boolean) => void;
-  /** The name typed is someone's already: that person, rather than a second one. */
+  /** The name typed is someone's already, and it is them: that person, not a second one. */
   onPick: (p: Person) => void;
 }) {
   const [character, setCharacter] = useState(false);
   const typed = name.trim();
   // Someone of the space already bears it (archived ones too): no one in double.
   const taken = character ? null : (known.find((p) => bare(p.name) === bare(typed)) ?? null);
-  const can = typed !== "" && !busy && !taken?.archived;
+  // Asked on opening with a taken name, or on adding one; never while typing.
+  const [asking, setAsking] = useState(taken !== null);
+  const field = useRef<HTMLInputElement>(null);
+  const select = useRef(false);
+  useEffect(() => {
+    if (!select.current) return;
+    select.current = false;
+    field.current?.select();
+  });
+  const can = typed !== "" && !busy;
   const add = () => {
     if (!can) return;
-    if (taken) onPick(taken);
+    if (taken) setAsking(true);
     else onAdd(typed, character);
   };
-  const yes = taken
-    ? taken.archived
-      ? `${taken.name} est archivé dans ${spaceName}`
-      : `Choisir ${taken.name}, déjà dans ${spaceName} (Entrée)`
-    : character
-      ? `Ajouter le personnage (Entrée)`
-      : `Ajouter (Entrée)`;
+  if (asking && taken) {
+    const same = taken.archived
+      ? `${taken.name} est archivé`
+      : "Oui, la même personne (Entrée)";
+    return (
+      <div className="cl-who__ask cl-add" role="group" aria-labelledby="cl-add-question">
+        <Face person={taken} size="xl" />
+        <p id="cl-add-question" className="cl-who__question" aria-live="polite">
+          {taken.name} est déjà dans la liste{taken.archived ? ", archivé" : ""}.
+          <br />
+          C'est la même personne ?
+        </p>
+        <span className="cl-who__yesno">
+          <button
+            type="button"
+            className="cl-who__no"
+            aria-label="Non, quelqu'un d'autre"
+            title="Non, quelqu'un d'autre"
+            autoFocus={taken.archived}
+            onClick={() => {
+              select.current = true;
+              onName(freeName(typed, known));
+              setAsking(false);
+            }}
+          >
+            <X size={22} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            className="cl-who__yes"
+            aria-label={same}
+            title={same}
+            autoFocus={!taken.archived}
+            disabled={busy || taken.archived}
+            onClick={() => onPick(taken)}
+          >
+            <Check size={30} strokeWidth={2.5} />
+          </button>
+        </span>
+      </div>
+    );
+  }
+  const yes = character ? "Ajouter le personnage (Entrée)" : "Ajouter (Entrée)";
   return (
     <div className="cl-who__ask cl-add" role="group" aria-label="Ajouter quelqu'un">
       {typed === "" ? (
@@ -534,11 +577,12 @@ function AddPerson({
         </span>
       ) : (
         <Face
-          person={taken ?? { id: 0, space_id: 0, kind: "guest", name: typed, role: null, color_slot: 0, archived: false }}
+          person={{ id: 0, space_id: 0, kind: "guest", name: typed, role: null, color_slot: 0, archived: false }}
           size="xl"
         />
       )}
       <input
+        ref={field}
         className="cl-add__name"
         type="text"
         value={name}
@@ -563,11 +607,6 @@ function AddPerson({
           <SegmentedControlItem value="person" label="Une personne" />
           <SegmentedControlItem value="role" label="Un personnage" />
         </SegmentedControl>
-      )}
-      {taken && (
-        <span className="cl-sr" role="status">
-          {yes}
-        </span>
       )}
       <span className="cl-who__yesno">
         <button type="button" className="cl-who__no" aria-label="Annuler" title="Annuler" onClick={onCancel}>
