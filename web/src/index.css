@@ -6251,15 +6251,16 @@ button.cl-tree__more:hover {
   background: var(--color-background-muted);
 }
 
-.cl-who__tonamed {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  padding: 2px var(--spacing-2);
-  border-radius: 999px;
-  background: var(--color-background-muted);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
+/* The header's pile: discs of 30 px; a voice without a name, an empty place (ADR 0093). */
+.cl-voices .cl-who__pile .cl-face {
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+}
+
+.cl-face[data-voice] {
+  box-sizing: border-box;
+  border-width: 1.5px;
 }
 
 .cl-who__time {

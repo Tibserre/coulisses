@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Popover } from "@astryxdesign/core/Popover";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { AudioLines } from "lucide-react";
+import { User } from "lucide-react";
 import type { Person, Speaker } from "../api.ts";
 import { formatDuration, plural } from "../format.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
@@ -9,6 +9,9 @@ import { Face } from "./AttendeesSheet.tsx";
 
 /** Named voices shown in the pile; the others go into its « +N ». */
 const PILE = 8;
+/** With no voice named, empty places shown before « +N ».
+ *  shortcut: only three voices was drawn; many unnamed ones is a proposal, not validated. */
+const EMPTY_PILE = 3;
 
 const initial = (name: string) => name.trim().charAt(0).toLocaleUpperCase("fr");
 
@@ -60,11 +63,20 @@ export function VoiceFace({
   );
 }
 
+/** A voice without a name, small: the empty place of « Qui parle ? » (dashed, a silhouette). */
+function EmptyVoice() {
+  return (
+    <span className="cl-face" data-empty data-voice aria-hidden>
+      <User size={15} strokeWidth={1.75} />
+    </span>
+  );
+}
+
 /** The voices of a session as one button (ADR 0090): the named ones stacked, « +N » in grey
  *  for those left; a click lists them all, those to name first (the one being named at the
  *  top), a rule, then the named ones, each with its speaking time. Two voices of the same
- *  person are offered to be merged there. With no voice named, the session's header says
- *  « N voix à nommer » instead of a lone « +N » (ADR 0093); « Qui parle ? » keeps the pile. */
+ *  person are offered to be merged there. With no voice named, the session's header shows an
+ *  empty place per voice and a click opens the most talkative one (ADR 0093). */
 export function VoicesMenu({
   voices,
   toName,
@@ -112,6 +124,38 @@ export function VoicesMenu({
     </li>
   );
   const first = current && !current.named ? [current, ...left] : left;
+  // Nothing named yet: the empty places, and straight to the voice to name first.
+  if (named.length === 0 && !current) {
+    if (toName.length === 0) return null; // no voice that speaks: nothing to name
+    const empty = toName.slice(0, EMPTY_PILE);
+    return (
+      <>
+        <button
+          ref={button}
+          type="button"
+          className="cl-who__pile"
+          aria-label={
+            toName.length === 1
+              ? "La voix n'a pas encore de nom. La nommer"
+              : `Les ${toName.length} voix n'ont pas encore de nom. Les nommer`
+          }
+          onClick={() => onPick(toName[0])}
+        >
+          <span className="cl-faces">
+            {empty.map((v) => (
+              <EmptyVoice key={v.label} />
+            ))}
+            {toName.length > empty.length && (
+              <span className="cl-face" data-over aria-hidden>
+                +{toName.length - empty.length}
+              </span>
+            )}
+          </span>
+        </button>
+        {tip && <Tooltip anchorRef={button} content={tip} />}
+      </>
+    );
+  }
   return (
     <>
       <Popover
@@ -154,24 +198,16 @@ export function VoicesMenu({
           className="cl-who__pile"
           aria-label={`${tip ? `${tip} : ` : ""}${plural(named.length, "voix nommée", "voix nommées")}, ${plural(toName.length, "à nommer", "à nommer")}. Voir les voix`}
         >
-          {named.length === 0 && !current ? (
-            // Nothing named yet: a lone « +4 » says nothing, so say what is to do.
-            <span className="cl-who__tonamed" aria-hidden>
-              <AudioLines size={14} strokeWidth={2} />
-              {plural(toName.length, "voix à nommer", "voix à nommer")}
-            </span>
-          ) : (
-            <span className="cl-faces">
-              {pile.map((v) => (
-                <VoiceFace key={v.label} voice={v} people={people} size="sm" />
-              ))}
-              {over > 0 && (
-                <span className="cl-face" data-over aria-hidden>
-                  +{over}
-                </span>
-              )}
-            </span>
-          )}
+          <span className="cl-faces">
+            {pile.map((v) => (
+              <VoiceFace key={v.label} voice={v} people={people} size="sm" />
+            ))}
+            {over > 0 && (
+              <span className="cl-face" data-over aria-hidden>
+                +{over}
+              </span>
+            )}
+          </span>
         </button>
       </Popover>
       {tip && !open && <Tooltip anchorRef={button} content={tip} />}
