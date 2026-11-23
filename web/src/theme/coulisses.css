@@ -427,6 +427,18 @@
     --astryx-section-padding: var(--spacing-4);
   }
 
+  .astryx-tooltip {
+    background-color: var(--color-background-popover);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 5px;
+    box-shadow: 0 4px 12px -4px rgba(26, 26, 26, 0.22);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: center;
+  }
+
   .astryx-text[data-color="primary"] { color: var(--color-text-primary); }
 
   .astryx-heading[data-color="primary"] { color: var(--color-text-primary); }

@@ -3793,8 +3793,8 @@ button.cl-tree__more:hover {
 
 .cl-rec__tip small {
   display: block;
-  font-size: var(--font-size-xs);
-  opacity: 0.75;
+  font-size: 11px;
+  color: var(--color-text-secondary);
 }
 
 .cl-rec__context {
@@ -4526,8 +4526,22 @@ button.cl-tree__more:hover {
 
 .cl-sheet__tipnote {
   display: block;
-  font-size: var(--font-size-xs);
-  opacity: 0.75;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+/* The tooltip 6 px off what is hovered (on every side: it stays centred), its inner
+   padding; its look is in the theme. */
+.astryx-tooltip {
+  margin: 6px;
+}
+
+/* Astryx's inner content div (useTooltip): to check when Astryx moves up. One line in
+   practice, wrapped rather than cut when long (a long list of names). */
+.astryx-tooltip > div {
+  padding: 3px 8px;
+  width: max-content;
+  max-width: min(32rem, calc(100vw - 24px));
 }
 
 .cl-sheet__foot {
