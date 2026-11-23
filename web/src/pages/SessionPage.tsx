@@ -1325,7 +1325,6 @@ export function SessionPage({
           attendees={session.attendee_ids}
           spaceName={session.space_name}
           lines={voiceTurns(unfolded, guided.label!)}
-          turns={view.turns}
           sessionId={id}
           duration={session.duration_s ?? pb.duration ?? 0}
           pb={pb}

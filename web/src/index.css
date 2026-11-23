@@ -6407,36 +6407,71 @@ button.cl-tree__more:hover {
   font-size: var(--font-size-xs);
 }
 
-/* The session's wave: grey where someone speaks, dark where this voice does. */
-.cl-who__wave {
-  position: relative;
-  height: 36px;
+/* Under ▶: the line heard, then the whole session in one strip (ADR 0094). */
+.cl-who__listen {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cl-who__wave {
+  display: block;
+  height: 40px;
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
 }
 
-.cl-who__wave i {
-  flex: 1;
-  border-radius: 1px;
-  background: var(--color-border);
+.cl-who__wave path {
+  fill: none;
+  stroke: var(--color-text-primary);
+  stroke-opacity: 0.72;
+  stroke-width: 1.5px;
+  stroke-linecap: round;
 }
 
-.cl-who__wave i[data-mine] {
-  background: var(--color-text-primary);
+.cl-who__wave path[data-heard] {
+  stroke: var(--color-accent);
+  stroke-opacity: 1;
 }
 
-.cl-who__mark {
+.cl-who__strip {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.cl-who__strip::before {
+  content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
+  inset: 5px 0;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+}
+
+.cl-who__strip i {
+  position: absolute;
+  top: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--color-text-primary) 50%, transparent);
+}
+
+.cl-who__dot {
+  position: absolute;
+  top: 1.5px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
   background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 .cl-who__foot {

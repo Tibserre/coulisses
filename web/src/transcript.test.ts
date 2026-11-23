@@ -5,7 +5,7 @@ import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
   nearestLine,
-  speechWave,
+  excerptWave,
   waveHeight,
   turnSeconds,
   namingLines,
@@ -653,7 +653,7 @@ test("a voice's lines for naming: the longest first, an unmeasured one last", ()
   assert.equal(turnSeconds(lines[2].turn), null);
 });
 
-test("on the wave: the nearest measured line, and the speech of each slice", () => {
+test("on the strip: the nearest measured line", () => {
   const row = (index: number, start: number | null, end: number | null) =>
     ({
       kind: "turn",
@@ -665,30 +665,16 @@ test("on the wave: the nearest measured line, and the speech of each slice", () 
   assert.equal(nearestLine(lines, 70)?.turn.index, 2);
   assert.equal(nearestLine(lines, 0)?.turn.index, 0);
   assert.equal(nearestLine([row(1, null, null)], 5), null);
-  const turn = (speaker: string, start: number | null, end: number | null) => ({
-    index: 0,
-    speaker,
-    start,
-    end,
-    edited: false,
-    words: [],
-  });
-  const wave = speechWave(
-    [turn("1", 0, 5), turn("2", 10, 20), turn("2", 30, null)],
-    "1",
-    40,
-    4,
-  );
-  assert.deepEqual(wave, [
-    { level: 0.5, mine: true },
-    { level: 1, mine: false },
-    { level: 0, mine: false },
-    { level: 0, mine: false },
-  ]);
-  assert.deepEqual(speechWave([], "1", 0, 2), [
-    { level: 0, mine: false },
-    { level: 0, mine: false },
-  ]);
+});
+
+test("the wave of a line: its measured levels, never stretched", () => {
+  // 10 levels over 10 s: one a second.
+  const levels = [-60, -50, -40, -30, -20, -10, -20, -30, -40, -50];
+  assert.deepEqual(excerptWave(levels, 10, 2, 5, 132), [-40, -30, -20]);
+  // More levels than bars: each bar the loudest of its own.
+  assert.deepEqual(excerptWave(levels, 10, 0, 10, 2), [-20, -10]);
+  assert.deepEqual(excerptWave(levels, 10, 5, 5, 132), []);
+  assert.deepEqual(excerptWave([], 10, 0, 5, 132), []);
 });
 
 test("a measured peak as a bar's height", () => {

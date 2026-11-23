@@ -8,25 +8,27 @@ import {
   type EditRequest,
   type Person,
   type Speaker,
-  type Turn,
+  type Wave,
 } from "../api.ts";
-import { formatDuration, plural } from "../format.ts";
+import { formatClock, formatDuration, plural } from "../format.ts";
 import {
   askFor,
   hasVoice,
   namingLines,
+  excerptWave,
   nearestLine,
-  speechWave,
   waveHeight,
   whoOrder,
   type TurnRow,
 } from "../transcript.ts";
-import type { Playback } from "../usePlayback.ts";
+import { EXCERPT_S, type Playback } from "../usePlayback.ts";
 import { Face, PeoplePicker } from "./AttendeesSheet.tsx";
 import { VoiceFace, VoicesMenu } from "./VoicesMenu.tsx";
 
-/** Bars of the session's wave. */
-const BARS = 72;
+/** The levels asked of the service: its 50 ms slices, up to the most it gives. */
+const LEVELS_MAX = 20_000;
+/** Bars of the line's wave: one every 3 px across the column. */
+const LINE_BARS = 132;
 /** A character's disc (ADR 0091): a rounded square with its initial, over the face of who
  *  plays it once chosen (« le double »). */
 export function RoleFace({ role, person }: { role: string; person?: Person }) {
@@ -54,7 +56,6 @@ export function WhoSpeaks({
   attendees,
   spaceName,
   lines,
-  turns,
   sessionId,
   duration,
   pb,
@@ -79,8 +80,6 @@ export function WhoSpeaks({
   spaceName: string;
   /** The voice's lines, in their order. */
   lines: TurnRow[];
-  /** All the lines of the session, for its wave. */
-  turns: readonly Turn[];
   sessionId: string;
   /** The session's length; 0 when unknown (then no wave). */
   duration: number;
@@ -112,26 +111,28 @@ export function WhoSpeaks({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const body = useRef<HTMLDivElement>(null);
-  /** The session's wave measured on its sound (ADR 0092), once ready; meanwhile, or when
-   *  there is none (404), the one drawn from the lines' times. */
-  const [measured, setMeasured] = useState<number[] | null>(null);
+  /** The session's wave measured on its sound (ADR 0092), once ready: the line heard is
+   *  drawn from it, nothing meanwhile or when there is none (404), never invented (P2). */
+  const [measured, setMeasured] = useState<Wave | null>(null);
   const [waveNote, setWaveNote] = useState<string | null>(null);
   useEffect(() => {
     let gone = false;
     let timer = 0;
     const ask = () =>
-      api.wave(sessionId, BARS).then(
+      // shortcut: one wave for the whole session, so past ~16 min a level holds several
+      // 50 ms slices and a line has fewer bars; a range asked of the service would fix it.
+      api.wave(sessionId, Math.min(LEVELS_MAX, Math.max(1, Math.ceil(duration / 0.05)))).then(
         (w) => {
-          // A short session has fewer bars (never more than its 50 ms slices).
-          if (!gone && w.levels_db.length > 0) setMeasured(w.levels_db);
+          // A short session has fewer levels (never more than its 50 ms slices).
+          if (!gone && w.levels_db.length > 0) setMeasured(w);
         },
         (e: unknown) => {
           if (gone) return;
           // Being measured: asked again a little later.
           if (e instanceof ServiceError && e.status === 409)
             timer = window.setTimeout(() => void ask(), 3000);
-          // None (404, said by the service) or another failure: the wave drawn from the
-          // lines stays, and why is kept for developer mode.
+          // None (404, said by the service) or another failure: no wave is drawn, and why
+          // is kept for developer mode.
           else setWaveNote((e as Error).message);
         },
       );
@@ -140,7 +141,7 @@ export function WhoSpeaks({
       gone = true;
       window.clearTimeout(timer);
     };
-  }, [sessionId]);
+  }, [sessionId, duration]);
   // Each voice starts afresh: its recognised person chosen, its longest line shown.
   useEffect(() => {
     setQuery("");
@@ -176,11 +177,18 @@ export function WhoSpeaks({
 
   const longest = namingLines(lines, "long");
   const current = longest[Math.min(at, longest.length - 1)] ?? null;
+  // What ▶ plays of the line: from its start, up to its end or 8 s (usePlayback).
+  const from = current?.turn.start ?? null;
+  const to =
+    from == null ? null : Math.min(current?.turn.end ?? Infinity, from + EXCERPT_S);
+  // Heard from its start, or from a click in its wave.
   const hearing =
-    current != null && pb.excerpt != null && pb.excerpt === current.turn.start;
+    from != null && to != null && pb.excerpt != null && pb.excerpt >= from && pb.excerpt < to;
   const silent = audioGone || current?.turn.start == null;
   const hear = (row: TurnRow | null) => {
     if (!row || audioGone) return;
+    // Heard: it stops.
+    if (row === current && hearing) return pb.listen(pb.excerpt!, to!);
     const { start, end } = row.turn;
     // The excerpt stops at its end, else after 8 s (usePlayback).
     if (start != null) pb.listen(start, end ?? Infinity);
@@ -272,17 +280,12 @@ export function WhoSpeaks({
   const number =
     (place < 0 ? 0 : place) + named.length + (speaker.named ? 0 : 1);
   const timed = lines.filter((r) => r.turn.start != null);
-  const wave =
-    duration > 0 ? speechWave(turns, label, duration, measured?.length ?? BARS) : [];
-  // The measured levels, once there (ADR 0092): the wave's height; the lines' times only
-  // say where this voice speaks.
-  const heights = measured
-    ? measured.map((db) => waveHeight(db))
-    : wave.map((b) => b.level);
-  const mark =
-    current?.turn.start != null && duration > 0
-      ? current.turn.start / duration
-      : null;
+  // The line heard, as measured (ADR 0092): across the column, never stretched.
+  const bars =
+    measured && from != null && to != null
+      ? excerptWave(measured.levels_db, measured.duration_s, from, to, LINE_BARS)
+      : [];
+  const barAt = (i: number) => from! + ((i + 0.5) / bars.length) * (to! - from!);
   const chosen = picked;
 
   // ← → Space drive the listening, outside the search field.
@@ -426,44 +429,78 @@ export function WhoSpeaks({
             </span>
           </div>
           {dev && !measured && waveNote && (
-            <p className="cl-who__said">
-              Onde dessinée d'après les répliques : {waveNote}
-            </p>
+            <p className="cl-who__said">Pas d'onde mesurée : {waveNote}</p>
           )}
-          {wave.length > 0 && (
-            <button
-              type="button"
-              className="cl-who__wave"
-              aria-label="Où cette voix parle dans la séance : un clic prend la réplique la plus proche"
-              disabled={!timed.length}
-              onClick={(e) => {
-                const box = e.currentTarget.getBoundingClientRect();
-                const row = nearestLine(
-                  timed,
-                  ((e.clientX - box.left) / box.width) * duration,
-                );
-                const next = row ? longest.indexOf(row) : -1;
-                if (next >= 0) {
-                  setAt(next);
-                  hear(row);
-                }
-              }}
-            >
-              {wave.map((b, i) => (
-                <i
-                  key={i}
-                  data-mine={b.mine || undefined}
-                  style={{ height: `${Math.max(4, (heights[i] ?? 0) * 100)}%` }}
-                />
-              ))}
-              {mark != null && (
-                <b
-                  className="cl-who__mark"
-                  style={{ left: `${mark * 100}%` }}
-                />
-              )}
-            </button>
-          )}
+          <div className="cl-who__listen">
+            {bars.length > 0 && (
+              <button
+                type="button"
+                className="cl-who__wave"
+                style={{ width: bars.length * 3 }}
+                aria-label="L'onde de cette réplique : un clic l'écoute à partir de là"
+                disabled={silent}
+                onClick={(e) => {
+                  // From the keyboard (no pointer): the line, from its start.
+                  if (e.detail === 0) return hear(current);
+                  const box = e.currentTarget.getBoundingClientRect();
+                  const t = from! + ((e.clientX - box.left) / box.width) * (to! - from!);
+                  pb.listen(Math.min(Math.max(t, from!), to! - 0.05), to!);
+                }}
+              >
+                <svg width={bars.length * 3} height={40} aria-hidden>
+                  {[false, true].map((heard) => (
+                    <path
+                      key={String(heard)}
+                      data-heard={heard || undefined}
+                      d={bars
+                        .map((db, i) =>
+                          (hearing && barAt(i) < pb.time) === heard
+                            ? `M${i * 3 + 1.5} ${20 - (1 + waveHeight(db) * 15)}v${2 + waveHeight(db) * 30}`
+                            : "",
+                        )
+                        .join("")}
+                    />
+                  ))}
+                </svg>
+              </button>
+            )}
+            {duration > 0 && timed.length > 0 && (
+              <button
+                type="button"
+                className="cl-who__strip"
+                aria-label="Où cette voix parle dans la séance : un clic prend la réplique la plus proche"
+                onClick={(e) => {
+                  const box = e.currentTarget.getBoundingClientRect();
+                  const row = nearestLine(
+                    timed,
+                    ((e.clientX - box.left) / box.width) * duration,
+                  );
+                  const next = row ? longest.indexOf(row) : -1;
+                  if (next >= 0) {
+                    setAt(next);
+                    hear(row);
+                  }
+                }}
+              >
+                {timed.map((r) => (
+                  <i
+                    key={r.key}
+                    title={formatClock(r.turn.start!)}
+                    style={{
+                      left: `${(r.turn.start! / duration) * 100}%`,
+                      width: `max(2px, ${(((r.turn.end ?? r.turn.start!) - r.turn.start!) / duration) * 100}%)`,
+                    }}
+                  />
+                ))}
+                {from != null && (
+                  <b
+                    className="cl-who__dot"
+                    style={{ left: `${(((from + (current?.turn.end ?? from)) / 2) / duration) * 100}%` }}
+                  />
+                )}
+              </button>
+            )}
+          </div>
         </div>
         {asking ? (
           <div

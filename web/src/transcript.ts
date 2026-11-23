@@ -606,30 +606,31 @@ export function nearestLine(lines: TurnRow[], at: number): TurnRow | null {
   return best;
 }
 
-/** The session's wave in « Qui parle ? » while the service keeps no envelope of the sound
- *  (ADR 0090): `count` bars over `duration`, each as high as the share of its slice where
- *  someone speaks (the measured times of the lines, P2), dark where this voice speaks. */
-export function speechWave(
-  turns: readonly Turn[],
-  label: string,
+/** The wave of what ▶ plays in « Qui parle ? »: the measured levels (ADR 0092) from `from`
+ *  to `to`, at most `max` bars, each the loudest of its levels. A short line has fewer
+ *  bars: never stretched, nothing invented (P2). */
+export function excerptWave(
+  levels: readonly number[],
   duration: number,
-  count: number,
-): { level: number; mine: boolean }[] {
-  const bars = Array.from({ length: count }, () => ({ level: 0, mine: false }));
-  if (duration <= 0) return bars;
-  const slice = duration / count;
-  for (const t of turns) {
-    if (t.start == null || t.end == null || t.end <= t.start) continue;
-    const first = Math.max(0, Math.floor(t.start / slice));
-    const last = Math.min(count - 1, Math.floor(t.end / slice));
-    for (let i = first; i <= last; i++) {
-      const covered =
-        Math.min(t.end, (i + 1) * slice) - Math.max(t.start, i * slice);
-      bars[i].level = Math.min(1, bars[i].level + covered / slice);
-      if (t.speaker === label && covered > 0) bars[i].mine = true;
-    }
-  }
-  return bars;
+  from: number,
+  to: number,
+  max: number,
+): number[] {
+  const n = levels.length;
+  if (duration <= 0 || to <= from || n === 0) return [];
+  const part = levels.slice(
+    Math.max(0, Math.floor((from / duration) * n)),
+    Math.min(n, Math.ceil((to / duration) * n)),
+  );
+  if (part.length <= max) return part;
+  return Array.from({ length: max }, (_, i) =>
+    Math.max(
+      ...part.slice(
+        Math.floor((i * part.length) / max),
+        Math.floor(((i + 1) * part.length) / max),
+      ),
+    ),
+  );
 }
 
 /** What « Qui parle ? » asks first about a voice (ADR 0090): « C'est Marie ? » for the
