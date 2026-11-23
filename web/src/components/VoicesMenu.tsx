@@ -133,7 +133,7 @@ export function VoicesMenu({
         <button
           ref={button}
           type="button"
-          className="cl-who__pile"
+          className="cl-pile cl-who__pile"
           aria-label={
             toName.length === 1
               ? "La voix n'a pas encore de nom. La nommer"
@@ -195,7 +195,7 @@ export function VoicesMenu({
         <button
           ref={button}
           type="button"
-          className="cl-who__pile"
+          className="cl-pile cl-who__pile"
           aria-label={`${tip ? `${tip} : ` : ""}${plural(named.length, "voix nommée", "voix nommées")}, ${plural(toName.length, "à nommer", "à nommer")}. Voir les voix`}
         >
           <span className="cl-faces">

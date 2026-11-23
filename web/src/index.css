@@ -3775,20 +3775,27 @@ button.cl-tree__more:hover {
   margin-top: var(--spacing-4);
 }
 
-.cl-rec__faces {
+/* A pile of discs as one button, the same everywhere: who is there while recording, the
+   voices of a session, the voices in « Qui parle ? ». */
+.cl-pile {
   display: inline-flex;
   align-items: center;
   height: 38px;
-  margin-top: 6px;
-  padding: 0 var(--spacing-2);
+  padding: 0 6px;
   border: 0;
   border-radius: var(--radius-element);
   background: none;
   cursor: pointer;
 }
 
-.cl-rec__faces:hover {
+.cl-pile:hover,
+.cl-pile:focus-visible,
+.cl-pile[aria-expanded="true"] {
   background: var(--color-background-muted);
+}
+
+.cl-rec__faces {
+  margin-top: 6px;
 }
 
 .cl-rec__tip small {
@@ -6237,18 +6244,13 @@ button.cl-tree__more:hover {
 }
 
 .cl-who__pile {
-  display: inline-flex;
   margin-left: var(--spacing-2);
-  padding: 2px;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  cursor: pointer;
 }
 
-.cl-who__pile:hover,
-.cl-who__pile:focus-visible {
-  background: var(--color-background-muted);
+/* In a session's header: the discs aligned on the text, the hover overflowing. */
+.cl-voices .cl-who__pile {
+  height: 42px;
+  margin: 0 -6px;
 }
 
 /* The header's pile: discs of 30 px; a voice without a name, an empty place (ADR 0093). */

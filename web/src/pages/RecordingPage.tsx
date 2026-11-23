@@ -624,7 +624,7 @@ export function RecordingPage({
                   >
                     <button
                       type="button"
-                      className="cl-rec__faces"
+                      className="cl-pile cl-rec__faces"
                       aria-label={`Dire qui est là : ${whoSaid(attendees, people)}`}
                       onClick={() => setSheet(true)}
                     >
