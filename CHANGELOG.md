@@ -23,6 +23,7 @@ la publication lit celle de `main`.
 - pose « C'est Marie ? » pour une voix reconnue ou déjà donnée (nommage)
 - marque d'une onde ceux qui ont déjà une voix (nommage)
 - nomme les voix dans « Qui parle ? » (nommage)
+- dit au modèle la langue de la séance (redaction)
 
 ### Corrections
 
