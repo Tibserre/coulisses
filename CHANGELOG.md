@@ -6,6 +6,31 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Nouveautés
+
+- montre un rond vide par voix tant qu'aucune n'a de nom (seance)
+- montre l'onde de la réplique écoutée et la séance en une ligne (qui-parle)
+- demande « C'est la même personne ? » pour un nom déjà pris (personnes)
+- ajoute quelqu'un par un avatar « + » (personnes)
+- branche l'onde mesurée et le réglage « Jeu et personnages » (seance)
+- allume « Jeu et personnages » pour une nouvelle troupe d'impro (espaces)
+- range l'en-tête d'une séance autour de la pile des voix (seance)
+- ajoute le réglage « Jeu et personnages » (espaces)
+- ouvre « Cette réplique est de » sur le nom d'une réplique (nommage)
+- mesure l'onde de la séance sur le son d'écoute et la garde après la purge (onde)
+- pose « C'est Marie ? » pour une voix reconnue ou déjà donnée (nommage)
+- marque d'une onde ceux qui ont déjà une voix (nommage)
+- nomme les voix dans « Qui parle ? » (nommage)
+
+### Corrections
+
+- garde une place par voix dans la pile, comme à l'enregistrement (seance)
+- dit « N voix à nommer » quand aucune voix n'a de nom (seance)
+- précise les renvois et la voix actuelle de « Cette réplique est de » (nommage)
+- coupe les noms longs de « Qui est là ? » sur deux lignes (enregistrement)
+
 ## v0.41.1 — 2026-11-19
 
 ### Corrections
