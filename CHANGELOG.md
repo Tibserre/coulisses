@@ -10,28 +10,21 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
-- montre un rond vide par voix tant qu'aucune n'a de nom (seance)
-- montre l'onde de la réplique écoutée et la séance en une ligne (qui-parle)
-- demande « C'est la même personne ? » pour un nom déjà pris (personnes)
-- ajoute quelqu'un par un avatar « + » (personnes)
-- branche l'onde mesurée et le réglage « Jeu et personnages » (seance)
-- allume « Jeu et personnages » pour une nouvelle troupe d'impro (espaces)
-- range l'en-tête d'une séance autour de la pile des voix (seance)
-- ajoute le réglage « Jeu et personnages » (espaces)
-- ouvre « Cette réplique est de » sur le nom d'une réplique (nommage)
-- mesure l'onde de la séance sur le son d'écoute et la garde après la purge (onde)
-- pose « C'est Marie ? » pour une voix reconnue ou déjà donnée (nommage)
-- marque d'une onde ceux qui ont déjà une voix (nommage)
-- nomme les voix dans « Qui parle ? » (nommage)
-- dit au modèle la langue de la séance (redaction)
+- « Qui parle ? » permet de nommer chaque voix d'une séance : on écoute ses répliques, puis on choisit qui parle, ou on ajoute quelqu'un par l'avatar « + ». Quand une voix ressemble à une personne déjà connue, l'app demande « C'est Marie ? ».
+- Sous le bouton de lecture, l'onde de la réplique écoutée : la partie déjà entendue change de couleur, et un clic dans l'onde reprend l'écoute à cet endroit. Dessous, toute la séance tient sur une ligne, avec un trait là où la voix parle.
+- Un nom déjà pris pose la question « C'est la même personne ? ». Si ce n'est pas elle, l'app propose « Paul 2 ».
+- L'en-tête d'une séance est rangé autour de la pile des voix : un rond par voix, vide tant qu'elle n'a pas de nom. Un clic ouvre « Qui parle ? ».
+- Un clic sur le nom d'une réplique ouvre « Cette réplique est de », pour la donner à une autre voix.
+- Dans la liste des personnes, une petite onde marque celles dont l'app connaît déjà la voix.
+- Nouveau réglage d'espace « Jeu et personnages », allumé d'office pour une nouvelle troupe d'impro.
+- L'onde d'une séance est mesurée sur son son, et elle reste après la suppression de l'audio.
+- Les comptes rendus tiennent compte de la langue de la séance.
+- Les infobulles sont plus claires et plus discrètes.
 
 ### Corrections
 
-- transcrit les fichiers AIFF importés (moteur v1.15.2) (import)
-- garde une place par voix dans la pile, comme à l'enregistrement (seance)
-- dit « N voix à nommer » quand aucune voix n'a de nom (seance)
-- précise les renvois et la voix actuelle de « Cette réplique est de » (nommage)
-- coupe les noms longs de « Qui est là ? » sur deux lignes (enregistrement)
+- Un fichier AIFF importé est de nouveau transcrit.
+- Les noms longs de « Qui est là ? » passent sur deux lignes au lieu d'être coupés.
 
 ## v0.41.1 — 2026-11-19
 
