@@ -25,7 +25,7 @@ from typing import Literal, NamedTuple, Protocol
 
 from pydantic import BaseModel
 
-from coulisses_app import actions, bundle, corrections, notes, sessions, spaces
+from coulisses_app import actions, bundle, corrections, languages, notes, sessions, spaces
 from coulisses_app.format import clock
 from coulisses_app.paths import DataDir
 from coulisses_app.phases import (
@@ -142,8 +142,13 @@ def _write_new(path: Path, text: str) -> None:
         out.write(text)
 
 
-def _context(conn: sqlite3.Connection, session: sessions.Session) -> assembly.SessionContext:
+def _context(
+    conn: sqlite3.Connection, data: DataDir, session: sessions.Session, view_run_id: str
+) -> assembly.SessionContext:
     attendees = [spaces.get_person(conn, i) for i in session.attendee_ids]
+    spoken = languages.of_version(conn, data, session.id, view_run_id)
+    if spoken is None:
+        log.warning("session %s: its transcription does not say its language", session.id)
     when = datetime.fromisoformat(session.recorded_at.replace("Z", "+00:00")).astimezone()
     return assembly.SessionContext(
         space=session.space_name,
@@ -155,6 +160,8 @@ def _context(conn: sqlite3.Connection, session: sessions.Session) -> assembly.Se
         unnamed_attendees=session.unnamed_attendees,
         glossary=spaces.glossary_terms(conn, session.space_id),
         notes=note.text if (note := notes.after_session(conn, session.id)) else None,
+        # French says nothing: its prompts stay those measured.
+        language=spoken.label.lower() if spoken and spoken.language != languages.DEFAULT else None,
     )
 
 
@@ -333,7 +340,7 @@ def generate(
     folder = data.run_dir(session_id, run_id)
     conn = connect(data)
     try:
-        session_context = _context(conn, session)
+        session_context = _context(conn, data, session, view.run_id)
         context = assembly.context_block(session_context, view)
         notes_digest = notes.digest(session_context.notes)
         with conn:

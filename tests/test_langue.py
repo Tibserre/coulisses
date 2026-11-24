@@ -17,9 +17,10 @@ from coulisses_app import corrections, engine_models, jobs, languages, sessions,
 from coulisses_app.api import create_app
 from coulisses_app.paths import DataDir
 from coulisses_app.processing import Processor
+from coulisses_app.prompting.generate import generate
 from coulisses_app.storage.db import connect
 
-from .conftest import FAKE_CHAIN, FakeLanguages, local_client
+from .conftest import FAKE_CHAIN, FakeLanguages, FakeModel, local_client
 from .test_import_attend import import_
 
 
@@ -639,3 +640,67 @@ def test_an_environment_alone_or_a_damaged_model_is_waited_for_too(
     fake_languages.altered = set()  # removed, then downloaded again
     Processor(data, FAKE_CHAIN).release_waiting()
     assert run_next(data).session_id == session_id
+
+
+# -- the writings --------------------------------------------------------------------
+
+
+def test_the_model_is_told_the_language_of_the_version_it_reads(
+    client: TestClient, data: DataDir, recording: Path, fake_languages: FakeLanguages
+) -> None:
+    fake_languages.install("aligneur-anglais")
+    session_id = import_(client, recording)
+    run_next(data)
+    model = FakeModel()
+
+    def context_sent() -> str:
+        prov = generate(data, session_id, "resume-impro", "modele-essai", model)
+        assert prov.status == "succeeded", prov.error
+        return model.calls[-1][1][1]["content"]
+
+    # French says nothing: its prompts stay those measured.
+    assert "Langue de la séance" not in context_sent()
+    first = client.get(f"/api/seances/{session_id}/versions").json()["versions"][0]["run_id"]
+    client.post(f"/api/seances/{session_id}/relancer", json={"etape": "transcribe", "langue": "en"})
+    run_next(data)
+    assert (
+        "- Langue de la séance : anglais. Ta réponse reste en français ; une citation exacte "
+        "reste en anglais, entre guillemets." in context_sent()
+    )
+    # The former version, shown again: its language, read in its provenance.
+    client.post(f"/api/seances/{session_id}/versions/{first}/afficher")
+    assert "Langue de la séance" not in context_sent()
+
+
+def test_a_language_the_engine_no_longer_names_or_a_transcription_that_does_not_say_it(
+    client: TestClient,
+    data: DataDir,
+    recording: Path,
+    fake_languages: FakeLanguages,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_languages.install("aligneur-anglais")
+    session_id = import_(client, recording)
+    run_next(data)
+    client.post(f"/api/seances/{session_id}/relancer", json={"etape": "transcribe", "langue": "en"})
+    run_next(data)
+    view = corrections.build_view(data, session_id)
+    assert view is not None
+
+    def spoken() -> languages.Spoken | None:
+        conn = connect(data)
+        try:
+            return languages.of_version(conn, data, session_id, view.run_id)
+        finally:
+            conn.close()
+
+    assert spoken() == languages.Spoken(language="en", label="Anglais")
+    # No longer named by the engine: its code, never another language.
+    monkeypatch.setattr(
+        "coulisses_app.languages.engine_languages",
+        lambda profile, root=None: fake_languages(profile).model_copy(update={"languages": ()}),
+    )
+    assert spoken() == languages.Spoken(language="en", label="en")
+    # Not said by its provenance: none named, never French.
+    monkeypatch.setattr("coulisses_app.languages.of_transcription", lambda prov: None)
+    assert spoken() is None
