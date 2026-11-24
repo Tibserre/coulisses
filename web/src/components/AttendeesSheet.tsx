@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
-import { Check, Minus, Plus, Search, User, X } from "lucide-react";
+import { AudioLines, Check, Minus, Plus, Search, User, X } from "lucide-react";
 import { api, type Person, type Session } from "../api.ts";
 import { plural } from "../format.ts";
+import { bare, freeName } from "../people.ts";
 import { attendeesOf, fewerAttendees, toggleAttendee } from "../processing.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
 
@@ -77,11 +79,9 @@ export function useAttendees(
 export type Attendees = NonNullable<ReturnType<typeof useAttendees>>;
 
 const initial = (name: string) => name.trim().charAt(0).toLocaleUpperCase("fr");
-const bare = (s: string) =>
-  s.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("fr").trim();
 
 /** A person's disc: their initial in their colour (a guest's outlined), or an empty place. */
-export function Face({ person, size = "md" }: { person?: Person; size?: "sm" | "md" | "lg" }) {
+export function Face({ person, size = "md" }: { person?: Person; size?: "sm" | "md" | "lg" | "xl" }) {
   return person ? (
     <span
       className="cl-face"
@@ -151,6 +151,7 @@ export function AttendeesSheet({
   session,
   spaceName,
   people,
+  known = people,
   attendees,
   onPeopleChanged,
   onError,
@@ -160,18 +161,22 @@ export function AttendeesSheet({
   session: Session;
   spaceName: string;
   people: Person[];
+  /** Everyone of the space, archived ones too: a name typed is never added twice. */
+  known?: Person[];
   attendees: Attendees;
   /** A guest added or made a member: the people read again. */
   onPeopleChanged: () => Promise<void>;
   onError: (message: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
   /** The order at opening, those checked first: nothing moves under the pointer. */
   const [order, setOrder] = useState<number[]>([]);
   const [said, setSaid] = useState<{ text: string; undo: () => Promise<void> } | null>(null);
   useEffect(() => {
     if (!isOpen) return;
     setQuery("");
+    setAdding(null);
     setSaid(null);
     const checked = new Set(attendees.ids);
     setOrder([
@@ -186,26 +191,27 @@ export function AttendeesSheet({
     ...order.map((id) => byId.get(id)).filter((p): p is Person => Boolean(p)),
     ...people.filter((p) => !order.includes(p.id)),
   ];
-  const q = bare(query);
-  const found = q ? listed.filter((p) => bare(p.name).includes(q)) : listed;
-  const exact = q !== "" && people.some((p) => bare(p.name) === q);
 
+  const [busy, setBusy] = useState(false);
   const run = async (step: () => Promise<void>) => {
+    setBusy(true);
     try {
       await step();
     } catch (e) {
       onError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
-  const addGuest = () =>
+  const addGuest = (name: string) =>
     run(async () => {
-      const name = query.trim();
       const raised = attendees.full();
       const guest = await api.addPerson(session.space_id, { name, kind: "guest" });
       await onPeopleChanged();
       setOrder((o) => [...o.slice(0, attendees.ids.length), guest.id, ...o.slice(attendees.ids.length)]);
       attendees.toggle(guest.id);
       setQuery("");
+      setAdding(null);
       setSaid({
         text: `${guest.name} participe en invité.`,
         // Taken back: unchecked and archived, never deleted (P8).
@@ -244,89 +250,20 @@ export function AttendeesSheet({
           <span className="cl-sheet__opt">facultatif</span>
         </div>
         <p className="cl-sheet__why">Les voix seront plus faciles à reconnaître ensuite.</p>
-        <label className="cl-sheet__find" data-typed={query ? true : undefined}>
-          <Search size={14} strokeWidth={1.75} aria-hidden />
-          <input
-            type="text"
-            value={query}
-            placeholder="Chercher ou ajouter un nom"
-            aria-label="Chercher ou ajouter un nom"
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && q && !exact) {
-                e.preventDefault();
-                void addGuest();
-              }
-            }}
-          />
-          {query && (
-            <button type="button" className="cl-sheet__clear" aria-label="Effacer" onClick={() => setQuery("")}>
-              <X size={14} strokeWidth={1.75} />
-            </button>
-          )}
-        </label>
-        <div className="cl-sheet__scroll">
-          <ul className="cl-sheet__grid" aria-label="Personnes de l'espace">
-          {found.map((p) => {
-            const on = attendees.ids.includes(p.id);
-            return (
-              <li key={p.id} className="cl-sheet__cell">
-                <button
-                  type="button"
-                  className="cl-sheet__tile"
-                  aria-pressed={on}
-                  data-on={on || undefined}
-                  onClick={() => attendees.toggle(p.id)}
-                >
-                  <span className="cl-sheet__disc">
-                    <Face person={p} size="lg" />
-                    {on && (
-                      <span className="cl-sheet__ok" aria-hidden>
-                        <Check size={11} strokeWidth={3} />
-                      </span>
-                    )}
-                  </span>
-                  <span className="cl-sheet__name">{p.name}</span>
-                </button>
-                {p.kind === "guest" && (
-                  <Tooltip
-                    content={
-                      <>
-                        Passer membre
-                        <small className="cl-sheet__tipnote">{p.name} participe en invité</small>
-                      </>
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="cl-sheet__member"
-                      aria-label={`Passer ${p.name} membre de ${spaceName}`}
-                      onClick={() => void makeMember(p)}
-                    >
-                      <Plus size={12} strokeWidth={2.25} aria-hidden />
-                    </button>
-                  </Tooltip>
-                )}
-              </li>
-            );
-          })}
-          </ul>
-          {q && found.length === 0 && (
-            <p className="cl-sheet__opt cl-sheet__none">Aucune personne de ce nom dans {spaceName}.</p>
-          )}
-          {q && !exact && (
-            <button type="button" className="cl-sheet__new" onClick={() => void addGuest()}>
-              <span className="cl-face" data-size="md" data-empty aria-hidden>
-                <Plus size={14} strokeWidth={1.75} />
-              </span>
-              <span className="cl-sheet__newtext">
-                <b>Ajouter « {query.trim()} »</b>
-                <small>Nouvelle personne, en invité</small>
-              </span>
-              <kbd>Entrée</kbd>
-            </button>
-          )}
-        </div>
+        <PeoplePicker
+          query={query}
+          onQuery={setQuery}
+          listed={listed}
+          spaceName={spaceName}
+          isOn={(p) => attendees.ids.includes(p.id)}
+          onTile={(p) => attendees.toggle(p.id)}
+          adding={adding}
+          onAdding={setAdding}
+          onAdd={(name) => void (!busy && addGuest(name))}
+          known={known}
+          busy={busy}
+          onMakeMember={(p) => void makeMember(p)}
+        />
         <div className="cl-sheet__foot">
           {said ? (
             <span role="status">
@@ -392,4 +329,350 @@ export function Counter({ attendees, size }: { attendees: Attendees; size: "md" 
       <span className="cl-counter__cap">{attendees.count === 1 ? "présent" : "présents"}</span>
     </div>
   );
+}
+
+/** What a tile says on hover: its whole name when cut, then what its mark says. */
+export function tileTip(cutName: string | null, mark: string | null): string {
+  return [cutName, mark].filter(Boolean).join(" · ");
+}
+
+/** The people of the space to pick from (« Qui est là ? », « Qui parle ? »): the search, the
+ *  big discs (two lines of name at most), a guest outlined with « + » to make them a member.
+ *  The first disc is « + »: it opens the adding of someone, in place of the list. */
+export function PeoplePicker({
+  query,
+  onQuery,
+  listed,
+  known = listed,
+  spaceName,
+  isOn,
+  onTile,
+  badge,
+  columns = 6,
+  autoFocus = false,
+  adding,
+  onAdding,
+  onAdd,
+  theatre = false,
+  busy = false,
+  onMakeMember,
+  onEnter,
+}: {
+  query: string;
+  onQuery: (query: string) => void;
+  /** In the order shown. */
+  listed: Person[];
+  /** Everyone a typed name is matched against, archived included (no one in double);
+   *  by default those listed. */
+  known?: Person[];
+  spaceName: string;
+  isOn: (p: Person) => boolean;
+  onTile: (p: Person) => void;
+  /** A small wave on the disc, said on hover (« Marie a déjà une voix dans cette séance »):
+   *  no small text under the name. */
+  badge?: (p: Person) => { tip: string; wave: boolean } | null;
+  columns?: 4 | 6;
+  autoFocus?: boolean;
+  /** The name being added, or null for the list. */
+  adding: string | null;
+  onAdding: (name: string | null) => void;
+  /** A new guest (invité d'office), or with « Jeu et personnages » a character (ADR 0091). */
+  onAdd: (name: string, character: boolean) => void;
+  /** « Une personne | Un personnage » under the name. */
+  theatre?: boolean;
+  busy?: boolean;
+  onMakeMember: (p: Person) => void;
+  /** Entrée on the search: with the one person a name typed leaves, if it does. */
+  onEnter?: (only: Person | null) => void;
+}) {
+  const q = bare(query);
+  const found = q ? listed.filter((p) => bare(p.name).includes(q)) : listed;
+  const only = q
+    ? (found.find((p) => bare(p.name) === q) ?? (found.length === 1 ? found[0] : null))
+    : null;
+  // Back from adding someone: the keyboard back in the search.
+  const back = useRef(false);
+  if (adding !== null) back.current = true;
+  if (adding !== null)
+    return (
+      <AddPerson
+        name={adding}
+        onName={onAdding}
+        known={known}
+        theatre={theatre}
+        busy={busy}
+        onCancel={() => onAdding(null)}
+        onAdd={onAdd}
+        onPick={(p) => {
+          if (!isOn(p)) onTile(p);
+          onAdding(null);
+        }}
+      />
+    );
+  return (
+    <>
+      <label className="cl-sheet__find" data-typed={query ? true : undefined}>
+        <Search size={14} strokeWidth={1.75} aria-hidden />
+        <input
+          type="text"
+          value={query}
+          autoFocus={autoFocus || back.current}
+          placeholder="Chercher ou ajouter un nom"
+          aria-label="Chercher ou ajouter un nom"
+          onChange={(e) => onQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            // A name that leaves no one: its adding, the name already filled in.
+            if (q && !only) onAdding(query.trim());
+            else onEnter?.(only);
+          }}
+        />
+        {query && (
+          <button type="button" className="cl-sheet__clear" aria-label="Effacer" onClick={() => onQuery("")}>
+            <X size={14} strokeWidth={1.75} />
+          </button>
+        )}
+      </label>
+      <div className="cl-sheet__scroll">
+        <ul className="cl-sheet__grid" data-columns={columns} aria-label="Personnes de l'espace">
+          <li className="cl-sheet__cell">
+            <button
+              type="button"
+              className="cl-sheet__tile cl-sheet__add"
+              aria-label={q ? `Ajouter « ${query.trim()} »` : "Ajouter quelqu'un"}
+              onClick={() => onAdding(query.trim())}
+            >
+              <span className="cl-face" data-size="lg" data-empty aria-hidden>
+                <Plus size={18} strokeWidth={1.75} />
+              </span>
+              <span className="cl-sheet__name">{query.trim() || "Ajouter"}</span>
+            </button>
+          </li>
+          {found.map((p) => (
+            <li key={p.id} className="cl-sheet__cell">
+              <Tile person={p} on={isOn(p)} badge={badge?.(p) ?? null} onToggle={() => onTile(p)} />
+              {p.kind === "guest" && (
+                <Tooltip
+                  content={
+                    <>
+                      Passer membre
+                      <small className="cl-sheet__tipnote">{p.name} participe en invité</small>
+                    </>
+                  }
+                >
+                  <button
+                    type="button"
+                    className="cl-sheet__member"
+                    aria-label={`Passer ${p.name} membre de ${spaceName}`}
+                    onClick={() => onMakeMember(p)}
+                  >
+                    <Plus size={12} strokeWidth={2.25} aria-hidden />
+                  </button>
+                </Tooltip>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+/** Adding someone, drawn like « C'est Marie ? »: the big disc (« + » until a name, then its
+ *  initial, outlined: a guest), the name across the column, then no and yes (Entrée). A name
+ *  someone of the space bears already asks « C'est la même personne ? » (their disc, full):
+ *  yes picks them, no gives the name back as « Paul 2 », selected. */
+function AddPerson({
+  name,
+  onName,
+  known,
+  theatre,
+  busy,
+  onCancel,
+  onAdd,
+  onPick,
+}: {
+  name: string;
+  onName: (name: string) => void;
+  known: Person[];
+  theatre: boolean;
+  busy: boolean;
+  onCancel: () => void;
+  onAdd: (name: string, character: boolean) => void;
+  /** The name typed is someone's already, and it is them: that person, not a second one. */
+  onPick: (p: Person) => void;
+}) {
+  const [character, setCharacter] = useState(false);
+  const typed = name.trim();
+  // Someone of the space already bears it (archived ones too): no one in double.
+  const taken = character ? null : (known.find((p) => bare(p.name) === bare(typed)) ?? null);
+  // Asked on opening with a taken name, or on adding one; never while typing.
+  const [asking, setAsking] = useState(taken !== null);
+  const field = useRef<HTMLInputElement>(null);
+  const select = useRef(false);
+  useEffect(() => {
+    if (!select.current) return;
+    select.current = false;
+    field.current?.select();
+  });
+  const can = typed !== "" && !busy;
+  const add = () => {
+    if (!can) return;
+    if (taken) setAsking(true);
+    else onAdd(typed, character);
+  };
+  if (asking && taken) {
+    const same = taken.archived
+      ? `${taken.name} est archivé`
+      : "Oui, la même personne (Entrée)";
+    return (
+      <div className="cl-who__ask cl-add" data-asking role="group" aria-labelledby="cl-add-question">
+        <Face person={taken} size="xl" />
+        <p id="cl-add-question" className="cl-who__question" aria-live="polite">
+          {taken.name} est déjà dans la liste{taken.archived ? ", archivé" : ""}.
+          <br />
+          C'est la même personne ?
+        </p>
+        <span className="cl-who__yesno">
+          <button
+            type="button"
+            className="cl-who__no"
+            aria-label="Non, quelqu'un d'autre"
+            title="Non, quelqu'un d'autre"
+            autoFocus={taken.archived}
+            onClick={() => {
+              select.current = true;
+              onName(freeName(typed, known));
+              setAsking(false);
+            }}
+          >
+            <X size={22} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            className="cl-who__yes"
+            aria-label={same}
+            title={same}
+            autoFocus={!taken.archived}
+            disabled={busy || taken.archived}
+            onClick={() => onPick(taken)}
+          >
+            <Check size={30} strokeWidth={2.5} />
+          </button>
+        </span>
+      </div>
+    );
+  }
+  const yes = character ? "Ajouter le personnage (Entrée)" : "Ajouter (Entrée)";
+  return (
+    <div className="cl-who__ask cl-add" role="group" aria-label="Ajouter quelqu'un">
+      {typed === "" ? (
+        <span className="cl-face" data-size="xl" data-empty aria-hidden>
+          <Plus size={36} strokeWidth={1.5} />
+        </span>
+      ) : character ? (
+        <span className="cl-face" data-size="xl" data-role data-character aria-hidden>
+          {initial(typed)}
+        </span>
+      ) : (
+        <Face
+          person={{ id: 0, space_id: 0, kind: "guest", name: typed, role: null, color_slot: 0, archived: false }}
+          size="xl"
+        />
+      )}
+      <input
+        ref={field}
+        className="cl-add__name"
+        type="text"
+        value={name}
+        autoFocus
+        placeholder={character ? "Son nom de personnage" : "Son nom"}
+        aria-label={character ? "Nom du personnage" : "Son nom"}
+        onChange={(e) => onName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          e.stopPropagation();
+          add();
+        }}
+      />
+      {theatre && (
+        <SegmentedControl
+          label="Une personne ou un personnage"
+          value={character ? "role" : "person"}
+          onChange={(v: string) => setCharacter(v === "role")}
+          size="sm"
+        >
+          <SegmentedControlItem value="person" label="Une personne" />
+          <SegmentedControlItem value="role" label="Un personnage" />
+        </SegmentedControl>
+      )}
+      <span className="cl-who__yesno">
+        <button type="button" className="cl-who__no" aria-label="Annuler" title="Annuler" onClick={onCancel}>
+          <X size={22} strokeWidth={2} />
+        </button>
+        <button
+          type="button"
+          className="cl-who__yes"
+          aria-label={yes}
+          title={yes}
+          disabled={!can}
+          onClick={add}
+        >
+          <Check size={30} strokeWidth={2.5} />
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** A person in the sheet's grid: the name holds two lines, then « … »; cut, the whole name comes on hover. */
+function Tile({
+  person,
+  on,
+  badge,
+  onToggle,
+}: {
+  person: Person;
+  on: boolean;
+  badge: { tip: string; wave: boolean } | null;
+  onToggle: () => void;
+}) {
+  const name = useRef<HTMLSpanElement>(null);
+  const [cut, setCut] = useState(false);
+  useLayoutEffect(() => {
+    const el = name.current;
+    if (el) setCut(el.scrollHeight > el.clientHeight + 1);
+  }, [person.name]);
+  const tile = (
+      <button
+        type="button"
+        className="cl-sheet__tile"
+        aria-pressed={on}
+        data-on={on || undefined}
+        onClick={onToggle}
+      >
+        <span className="cl-sheet__disc">
+          <Face person={person} size="lg" />
+          {on && (
+            <span className="cl-sheet__ok" aria-hidden>
+              <Check size={11} strokeWidth={3} />
+            </span>
+          )}
+          {badge?.wave && (
+            <span className="cl-sheet__badge" aria-hidden>
+              <AudioLines size={11} strokeWidth={2} />
+            </span>
+          )}
+        </span>
+        <span ref={name} className="cl-sheet__name">
+          {person.name}
+        </span>
+      </button>
+  );
+  // Only a cut name or a wave gets a tooltip: otherwise screen readers would hear the name twice.
+  // The whole name when cut, and what the wave says.
+  const tip = tileTip(cut ? person.name : null, badge?.tip ?? null);
+  return tip ? <Tooltip content={tip}>{tile}</Tooltip> : tile;
 }

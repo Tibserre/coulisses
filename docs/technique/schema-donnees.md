@@ -15,6 +15,8 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
                                       en .flac une fois fini, sans perte (ADR 0046) ; seul contenu purgé
     sources/mix.{wav,flac}, mix.json  le micro et le son de l'ordinateur réunis (ADR 0032), purgés aussi
     sources/listening.{wav,flac}      le mix d'écoute, micro baissé entre les paroles (ADR 0037), purgé aussi
+    onde.json                         l'onde du son entendu : une crête en dBFS toutes les 50 ms, mesurée
+                                      par ffmpeg (ADR 0092) ; refaite quand ce son change, mesurée avant la purge et gardée après
     runs/<run_id>/                    une exécution : spec.json, output.json, provenance.json…
 ```
 
@@ -39,7 +41,7 @@ $COULISSES_DATA_DIR/                  ~/Coulisses/Données (réel), Données-dev
 | Table | Colonnes | Étape |
 |---|---|---|
 | `troupe` | `id`, `name*`, `created_at*` | 1 (une créée d'office) ; devient `space` à l'étape 2 |
-| `space` (ADR 0020) | `troupe` renommée (migration 0002) ; une base neuve a un espace « Espace 1 » (« Ma troupe » dans les bases créées avant, jamais renommé), plus `voice_recognition*` (bool, faux par défaut), `archived_at` | 2 |
+| `space` (ADR 0020) | `troupe` renommée (migration 0002) ; une base neuve a un espace « Espace 1 » (« Ma troupe » dans les bases créées avant, jamais renommé), plus `voice_recognition*` (bool, faux par défaut), `archived_at` ; `theatre` (bool, faux par défaut, y compris pour les espaces d'avant : « Jeu et personnages », ADR 0091, migration 0013) | 2 |
 | `session` | `id*` (texte), `troupe_id*`, `title`, `title_edited*` (bool), `recorded_at*` (début de la captation ; pour un import, date de modification du fichier, corrigeable), `created_at*`, `reference_source_id*`, `attendee_count` (nombre saisi, minimum de voix) | 1 ; à l'étape 2, `troupe_id` → `space_id` et `attendee_count` → `unnamed_attendees` (présents non nommés, en plus des cochés) |
 | `audio_source` | `session_id*`, `source_id*`, `origin*` (`captured`, `imported`), `original_name*`, `file_name*`, `sha256*`, `size_bytes*`, `duration_s`, `sample_rate`, `channels`, `codec`, `device`, `offset_s*` (0 en V1), `drift_ppm*` (0 en V1), `added_at*`, `removed_at` | 1 |
 | `audio_source` (captation) | `capture_state` (`recording`, `complete`, `recovered` : interrompue puis réparée au redémarrage ; vide pour un import), `capture_ended_at` (migration 0005, ADR 0027) | 6 |

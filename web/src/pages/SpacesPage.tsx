@@ -88,7 +88,7 @@ export function NewSpaceForm({ onCreated, onCancel }: { onCreated: (space: Space
       <label className="cl-select">
         <span>Modèle de départ</span>
         <select value={template} onChange={(e) => setTemplate(e.target.value as SpaceTemplate)}>
-          <option value="impro">Troupe d'impro : Résumé Impro proposé</option>
+          <option value="impro">Troupe d'impro : Résumé Impro proposé, jeu et personnages</option>
           <option value="reunion">Réunions de travail : compte rendu de réunion proposé</option>
           <option value="vide">Vide : aucun résumé proposé</option>
         </select>
@@ -177,6 +177,17 @@ function SpaceDetail({
           description="Activé, Coulisses reconnaît les voix déjà nommées et propose leur nom (« C'est Marie ? ») : c'est toujours vous qui confirmez. Désactivé, les voix ne sont jamais comparées d'une séance à l'autre et on les nomme à chaque séance."
           value={space.voice_recognition}
           onChange={(on) => void attempt(() => api.updateSpace(space.id, { voice_recognition: on }))}
+        />
+      </section>
+
+      {/* What belongs to theatre, off by default (ADR 0091): sessions already made keep theirs. */}
+      <section className="cl-space__section">
+        <Heading level={3}>Théâtre</Heading>
+        <Switch
+          label="Jeu et personnages"
+          description="Pour les répétitions. Pendant l'enregistrement, on dit quand on joue et quand on discute, et les chapitres le reprennent. En nommant les voix, un nom peut être un personnage, joué par quelqu'un de l'espace."
+          value={space.theatre}
+          onChange={(on) => void attempt(() => api.updateSpace(space.id, { theatre: on }))}
         />
       </section>
 

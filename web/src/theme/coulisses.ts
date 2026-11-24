@@ -140,6 +140,20 @@ export const coulissesTheme = defineTheme({
     "segmented-control-item": { base: { borderRadius: "var(--radius-inner)" } },
     card: { base: { padding: "var(--spacing-4)" } },
     section: { base: { padding: "var(--spacing-4)" } },
+    // Light and quiet, not a black block (validated 2026-11-23).
+    tooltip: {
+      base: {
+        backgroundColor: "var(--color-background-popover)",
+        color: "var(--color-text-primary)",
+        border: "1px solid var(--color-border)",
+        borderRadius: "5px",
+        boxShadow: "0 4px 12px -4px rgba(26, 26, 26, 0.22)",
+        fontSize: "12px",
+        fontWeight: "400",
+        lineHeight: "1.35",
+        textAlign: "center",
+      },
+    },
   },
 
   icons: neutralIconRegistry,

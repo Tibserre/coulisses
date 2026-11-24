@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
@@ -267,22 +267,26 @@ export function RecordingPage({
       (e: Error) => setError(e.message),
     );
   }, [sessionId]);
-  const [people, setPeople] = useState<Person[] | null>(null);
+  /** The space's people, archived ones too: a name typed is matched against them all. */
+  const [everyone, setEveryone] = useState<Person[] | null>(null);
+  const people = useMemo(() => everyone?.filter((p) => !p.archived) ?? null, [everyone]);
   const spaceId = session?.space_id ?? null;
   const loadPeople = useCallback(async () => {
     if (spaceId === null) return;
     try {
-      setPeople((await api.people(spaceId)).filter((p) => !p.archived));
+      setEveryone(await api.people(spaceId));
     } catch (e) {
       setError((e as Error).message);
     }
   }, [spaceId]);
   useEffect(() => {
-    setPeople(null);
+    setEveryone(null);
     void loadPeople();
   }, [loadPeople]);
   const attendees = useAttendees(session, setSession, setError);
 
+  // Jeu ⇄ Discussion only in a space that has « Jeu et personnages » (ADR 0091).
+  const theatre = spaces.find((s) => s.id === session?.space_id)?.theatre ?? false;
   // Space: pause or resume. J, D: play or discussion. M: a key moment. N: write a note.
   // In a field or a list, keys keep their own meaning (rules/web.md); on a button just
   // clicked, they still work, and Space pauses rather than pressing it again.
@@ -299,6 +303,7 @@ export function RecordingPage({
           onButton: Boolean(target?.closest("button")),
         },
         { held: heldRef.current, stopping: stoppingRef.current },
+        theatre,
       );
       if (action === null) return;
       // On a button just clicked, Space pauses rather than pressing it again.
@@ -312,7 +317,7 @@ export function RecordingPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggle, mark, mode]);
+  }, [toggle, mark, mode, theatre]);
 
   const saveNote = async () => {
     const text = note.trim();
@@ -462,7 +467,7 @@ export function RecordingPage({
               </>
             )}
             <span className="cl-rec__spacer" />
-            {mode ? (
+            {!theatre ? null : mode ? (
               <span className="cl-mode" data-kind={mode.mode}>
                 <span className="cl-mode__now">
                   <span className="cl-mode__dot" aria-hidden />
@@ -619,7 +624,7 @@ export function RecordingPage({
                   >
                     <button
                       type="button"
-                      className="cl-rec__faces"
+                      className="cl-pile cl-rec__faces"
                       aria-label={`Dire qui est là : ${whoSaid(attendees, people)}`}
                       onClick={() => setSheet(true)}
                     >
@@ -647,7 +652,11 @@ export function RecordingPage({
                 elapsed={elapsed}
                 rmsDb={state.levels.rms_db}
                 paused={paused}
-                markers={state.markers}
+                markers={
+                  theatre
+                    ? state.markers
+                    : state.markers.filter((m) => m.kind === "key_moment")
+                }
                 notes={state.notes}
                 events={micEvents(timelineMics(state))}
                 draftAt={note ? noteAt : null}
@@ -799,6 +808,7 @@ export function RecordingPage({
               session={session}
               spaceName={space?.name ?? "l'espace"}
               people={people}
+              known={everyone ?? people}
               attendees={attendees}
               onPeopleChanged={loadPeople}
               onError={setError}

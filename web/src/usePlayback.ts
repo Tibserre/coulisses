@@ -24,7 +24,7 @@ export interface Playback {
 }
 
 /** How long an excerpt is heard at most. */
-const EXCERPT_S = 8;
+export const EXCERPT_S = 8;
 
 /** Drives the page's <audio> element; the current time is read every frame while playing
  *  so the current word follows the sound smoothly. */

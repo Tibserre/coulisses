@@ -332,6 +332,8 @@ export interface Space {
   id: number;
   name: string;
   voice_recognition: boolean;
+  /** « Jeu et personnages » (ADR 0091): Jeu ⇄ Discussion, the chapters' genre, characters. */
+  theatre: boolean;
   archived: boolean;
   /** The language its new sessions take (ISO 639-1, ADR 0072). */
   language: string;
@@ -928,6 +930,13 @@ export interface SpaceAction {
 
 export type SpaceTemplate = "impro" | "reunion" | "vide";
 
+export interface Wave {
+  heard_version: string | null;
+  duration_s: number;
+  /** Peaks in dBFS, −120 for silence. */
+  levels_db: number[];
+}
+
 export class ServiceError extends Error {
   /** The HTTP status, when the service answered: 409 for a correction meant for a version
    *  no longer shown. */
@@ -1017,6 +1026,10 @@ export const api = {
       `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `${sessionPath(id)}/audio`,
+  /** The session's wave measured on the sound heard (ADR 0092): `bars` peaks in dBFS.
+   *  409 while it is measured, 404 when there is none. */
+  wave: (id: string, bars: number) =>
+    getJson<Wave>(`${sessionPath(id)}/onde?barres=${bars}`),
   microphones: () => getJson<InputDevice[]>("/api/micros"),
   power: () => getJson<{ on_battery: boolean }>("/api/alimentation"),
   recording: () => getJson<RecordingState | null>("/api/enregistrement"),
@@ -1207,7 +1220,7 @@ export const api = {
     `${sessionPath(id)}/export?contenu=${contenu}${generationId != null ? `&resume=${generationId}` : ""}`,
   updateSpace: (
     id: number,
-    changes: Partial<Pick<Space, "name" | "voice_recognition" | "archived" | "language">>,
+    changes: Partial<Pick<Space, "name" | "voice_recognition" | "theatre" | "archived" | "language">>,
   ) => send<Space>("PATCH", `/api/espaces/${id}`, changes),
   people: (spaceId: number) =>
     getJson<Person[]>(`/api/espaces/${spaceId}/personnes`),

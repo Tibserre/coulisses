@@ -5,11 +5,13 @@ import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
   nearestLine,
-  tickWidth,
+  excerptWave,
+  waveHeight,
   turnSeconds,
   namingLines,
-  choiceNote,
-  namingChoices,
+  askFor,
+  hasVoice,
+  whoOrder,
   voiceTurns,
   voicesToName,
   chaptersWriting,
@@ -579,25 +581,25 @@ test("the guided naming: voices in the order heard, the recognised person, then 
   });
   const v2 = speaker("2", "Voix 2");
   const ana = speaker("3", "Ana", { named: true, person_id: 1 });
-  const choices = namingChoices(v1, people, [v1, v2, ana], [1, 2], "");
+  const order = whoOrder(v1, people, [v1, v2, ana], [1, 2]);
   assert.deepEqual(
-    choices.map((c) => (c.kind === "person" ? c.person.name : c.kind)),
+    order.map((p) => p.name),
     ["Cléo", "Bob", "Ana"],
   );
-  assert.equal(choiceNote(choices[0], v1, [1, 2]), "voix reconnue");
-  assert.equal(choiceNote(choices[1], v1, [1, 2]), "membre · présent");
-  assert.equal(
-    choiceNote(choices[2], v1, [1, 2], [v1, v2, ana]),
-    "a déjà une voix : les réunir",
-  );
-  const typed = namingChoices(v2, people, [v1, v2], [], "Zoé");
-  assert.deepEqual(
-    typed.map((c) => c.kind),
-    ["guest", "free"],
-  );
+  assert.equal(hasVoice(people[0], v1, [v1, v2, ana]), true);
+  assert.equal(hasVoice(people[0], ana, [v1, v2, ana]), false);
+  assert.deepEqual(askFor(v1, people, [v1, v2, ana]), { person: people[2], merge: false });
+  const anaAgain = speaker("4", "Voix 4", {
+    proposal: { person_id: 1, name: "Ana", color_slot: 1, distance: 0.1 },
+  });
+  assert.deepEqual(askFor(anaAgain, people, [v1, ana, anaAgain]), {
+    person: people[0],
+    merge: true,
+  });
+  assert.equal(askFor(v2, people, [v1, v2]), null);
 });
 
-test("voices to name come in the order first heard, with their own lines", () => {
+test("voices to name come the most talkative first, with their own lines", () => {
   const line = (index: number, who: string) => ({
     index,
     speaker: who,
@@ -610,15 +612,15 @@ test("voices to name come in the order first heard, with their own lines", () =>
     ...VIEW,
     turns: [line(0, "2"), line(1, "1"), line(2, "2"), line(3, "3")],
     speakers: [
-      speaker("1", "Voix 1"),
-      speaker("2", "Voix 2"),
+      speaker("1", "Voix 1", { seconds: 30 }),
+      speaker("2", "Voix 2", { seconds: 4 }),
       speaker("3", "Marie", { named: true }),
     ],
     phases: [],
   });
   assert.deepEqual(
     voicesToName(model).map((s) => s.label),
-    ["2", "1"],
+    ["1", "2"],
   );
   assert.deepEqual(
     voiceTurns(model, "2").map((r) => r.turn.index),
@@ -651,7 +653,7 @@ test("a voice's lines for naming: the longest first, an unmeasured one last", ()
   assert.equal(turnSeconds(lines[2].turn), null);
 });
 
-test("on the strip: the nearest measured line, and marks as long as the lines", () => {
+test("on the strip: the nearest measured line", () => {
   const row = (index: number, start: number | null, end: number | null) =>
     ({
       kind: "turn",
@@ -663,7 +665,21 @@ test("on the strip: the nearest measured line, and marks as long as the lines", 
   assert.equal(nearestLine(lines, 70)?.turn.index, 2);
   assert.equal(nearestLine(lines, 0)?.turn.index, 0);
   assert.equal(nearestLine([row(1, null, null)], 5), null);
-  assert.equal(tickWidth(lines[0].turn), 3);
-  assert.equal(tickWidth(lines[2].turn), 14);
-  assert.equal(tickWidth(lines[1].turn), 3);
+});
+
+test("the wave of a line: its measured levels, never stretched", () => {
+  // 10 levels over 10 s: one a second.
+  const levels = [-60, -50, -40, -30, -20, -10, -20, -30, -40, -50];
+  assert.deepEqual(excerptWave(levels, 10, 2, 5, 132), [-40, -30, -20]);
+  // More levels than bars: each bar the loudest of its own.
+  assert.deepEqual(excerptWave(levels, 10, 0, 10, 2), [-20, -10]);
+  assert.deepEqual(excerptWave(levels, 10, 5, 5, 132), []);
+  assert.deepEqual(excerptWave([], 10, 0, 5, 132), []);
+});
+
+test("a measured peak as a bar's height", () => {
+  assert.equal(waveHeight(0), 1);
+  assert.equal(waveHeight(-30), 0.5);
+  assert.equal(waveHeight(-120), 0);
+  assert.equal(waveHeight(3), 1);
 });

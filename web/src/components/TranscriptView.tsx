@@ -1,6 +1,5 @@
 import {
   memo,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -9,7 +8,6 @@ import {
 import { Popover } from "@astryxdesign/core/Popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  ArrowRightLeft,
   BookmarkPlus,
   Flag,
   PenLine,
@@ -29,7 +27,7 @@ import type {
   Speaker,
   Word as WordData,
 } from "../api.ts";
-import { formatClock, plural } from "../format.ts";
+import { formatClock, formatDuration, plural } from "../format.ts";
 import { speakerInk } from "../theme/shared.ts";
 import type { PhaseRow, ReviewModel, Row, TurnRow } from "../transcript.ts";
 import {
@@ -39,7 +37,6 @@ import {
   wordTip,
 } from "../transcript.ts";
 import type { Playback } from "../usePlayback.ts";
-import { NameEditor } from "./NamePanel.tsx";
 
 /** The art direction's curve: lively start, soft landing, no bounce. */
 const GLIDE = { duration: 0.16, ease: [0.22, 1, 0.36, 1] } as const;
@@ -53,9 +50,10 @@ export interface Editing {
   /** A request to put the cursor in a line's text (E), by its index in the run. */
   editingTurn: number | null;
   setEditingTurn: (turn: number | null) => void;
-  /** Line whose voice is being named. */
-  namingTurn: number | null;
-  setNamingTurn: (turn: number | null) => void;
+  /** Opens « Qui parle ? » on this voice (ADR 0090). */
+  nameVoice: (label: string) => void;
+  /** The space has « Jeu et personnages » (ADR 0091): the chapters say their genre. */
+  theatre: boolean;
   selected: ReadonlySet<number>;
   toggleSelected: (turn: number, extend: boolean) => void;
   /** Fold or unfold a chapter, by its first line. */
@@ -196,6 +194,51 @@ export function GiveToPanel({
           </li>
         ))}
     </ul>
+  );
+}
+
+/** « Cette réplique est de » (ADR 0090): a click on a line's name lists the voices of the
+ *  session, with their speaking time; another one takes the line, and « Renommer toute la
+ *  voix de … » opens « Qui parle ? » on it. */
+function LineVoices({
+  voices,
+  speaker,
+  onGive,
+  onRename,
+}: {
+  voices: Speaker[];
+  speaker: Speaker;
+  onGive: (target: string) => void;
+  onRename: () => void;
+}) {
+  return (
+    <div className="cl-linevoices">
+      <p className="cl-linevoices__title">Cette réplique est de</p>
+      <ul className="cl-spacepick" aria-label="Cette réplique est de">
+        {voices
+          .filter((v) => v.label !== null)
+          .map((v) => (
+            <li key={v.label}>
+              <button
+                type="button"
+                className="cl-spacepick__item"
+                aria-current={v.label === speaker.label || undefined}
+                aria-disabled={v.label === speaker.label || undefined}
+                onClick={() => v.label !== speaker.label && onGive(v.label!)}
+              >
+                <span className="cl-dot" style={{ background: inkOf(v) }} aria-hidden />
+                <span className="cl-spacepick__what">{speakerTitle(v)}</span>
+                <span className="cl-who__time">{formatDuration(v.seconds)}</span>
+              </button>
+            </li>
+          ))}
+      </ul>
+      {speaker.label !== null && (
+        <button type="button" className="cl-spacepick__item cl-linevoices__rename" onClick={onRename}>
+          Renommer toute la voix de {speaker.name}…
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -341,27 +384,15 @@ const TurnLine = memo(function TurnLine({
   voices: Speaker[];
 }) {
   const { turn, speaker } = row;
-  // Named in place, on the first line of its group (TranscriptView brings it there).
-  const naming = editing.namingTurn === turn.index && !row.continued;
-  const { setNamingTurn } = editing;
-  // Closed by Escape: the keyboard goes back to the voice's name.
-  const nameButton = useRef<HTMLButtonElement>(null);
-  const refocus = useRef(false);
-  const closeNaming = useCallback(
-    (byKeyboard: boolean) => {
-      refocus.current = byKeyboard;
-      setNamingTurn(null);
-    },
-    [setNamingTurn],
-  );
-  useEffect(() => {
-    if (naming || !refocus.current) return;
-    refocus.current = false;
-    nameButton.current?.focus();
-  }, [naming]);
   const isCurrent = currentWord !== null;
   const isSelected = editing.selected.has(turn.index);
   const [giving, setGiving] = useState(false);
+  const give = (target: string) => {
+    setGiving(false);
+    void editing
+      .correct({ kind: "reassign_turns", turns: [turn.index], target })
+      .catch(() => undefined);
+  };
   const suggestions = turn.words.filter((w) => w.suggestion);
 
   const applyGlossary = () => {
@@ -395,43 +426,44 @@ const TurnLine = memo(function TurnLine({
       </div>
       <div className="cl-turn__body">
         <div className="cl-turn__head">
-          {naming ? (
-            <NameEditor
-              speaker={speaker}
-              people={editing.people}
-              voices={voices}
-              onCorrect={async (c) => {
-                await editing.correct(c);
-                editing.setNamingTurn(null);
-              }}
-              onAddGuest={editing.addGuest}
-              onShowLines={editing.showSpeaker}
-              onClose={closeNaming}
-            />
-          ) : (
+          <Popover
+            isOpen={giving}
+            onOpenChange={setGiving}
+            label="Cette réplique est de"
+            placement="below"
+            alignment="start"
+            width={280}
+            padding={1}
+            content={
+              <LineVoices
+                voices={voices}
+                speaker={speaker}
+                onGive={give}
+                onRename={() => {
+                  setGiving(false);
+                  if (speaker.label) editing.nameVoice(speaker.label);
+                }}
+              />
+            }
+          >
             <button
-              ref={nameButton}
               type="button"
               className="cl-name"
               data-unnamed={!speaker.named || undefined}
               style={{ color: inkOf(speaker) }}
-              title="Nommer cette voix (N)"
-              onClick={() => editing.setNamingTurn(turn.index)}
+              title="À qui est cette réplique ? (N pour nommer la voix)"
             >
               {speaker.name}
               {speaker.played_by && (
-                <span className="cl-name__played">
-                  {" "}
-                  · joué par {speaker.played_by}
-                </span>
+                <span className="cl-name__played"> · joué par {speaker.played_by}</span>
               )}
             </button>
-          )}
-          {!naming && !speaker.named && speaker.label !== null && (
+          </Popover>
+          {!speaker.named && speaker.label !== null && (
             <button
               type="button"
               className="cl-turn__nommer"
-              onClick={() => editing.setNamingTurn(turn.index)}
+              onClick={() => editing.nameVoice(speaker.label!)}
             >
               Nommer
             </button>
@@ -476,37 +508,6 @@ const TurnLine = memo(function TurnLine({
                 <RotateCcw size={14} strokeWidth={1.75} />
               </button>
             )}
-            <Popover
-              isOpen={giving}
-              onOpenChange={setGiving}
-              label="Donner cette réplique à"
-              width={280}
-              content={
-                <GiveToPanel
-                  voices={voices}
-                  except={speaker.label}
-                  onGive={(target) => {
-                    setGiving(false);
-                    void editing
-                      .correct({
-                        kind: "reassign_turns",
-                        turns: [turn.index],
-                        target,
-                      })
-                      .catch(() => undefined);
-                  }}
-                />
-              }
-            >
-              <button
-                type="button"
-                className="cl-iconbtn"
-                aria-label="Donner à une autre voix"
-                title="Donner à une autre voix"
-              >
-                <ArrowRightLeft size={14} strokeWidth={1.75} />
-              </button>
-            </Popover>
           </span>
         </div>
         <EditableText turn={turn} currentWord={currentWord} editing={editing} />
@@ -617,13 +618,17 @@ const PhaseHeading = memo(function PhaseHeading({
   if (editing.chaptersProvisional)
     // Being written (ADR 0061): read, never changed until the chapters are set.
     return (
-      <div className="cl-chapter" data-kind={phase.kind} data-provisional>
+      <div
+        className="cl-chapter"
+        data-kind={editing.theatre ? phase.kind : undefined}
+        data-provisional
+      >
         <div className="cl-turn__margin">
           <TimeLink t={phase.start} isCurrent={false} onSeek={onSeek} />
         </div>
         <div className="cl-chapter__body">
           <span className="cl-chapter__rule" aria-hidden />
-          <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>
+          {editing.theatre && <span className="cl-chapter__kind">{KIND_LABEL[phase.kind]}</span>}
           <span className="cl-chapter__title">
             {phase.title || "Chapitre sans titre"}
           </span>
@@ -635,7 +640,7 @@ const PhaseHeading = memo(function PhaseHeading({
   return (
     <div
       className="cl-chapter"
-      data-kind={phase.kind}
+      data-kind={editing.theatre ? phase.kind : undefined}
       data-folded={folded || undefined}
     >
       <div className="cl-turn__margin">
@@ -662,7 +667,7 @@ const PhaseHeading = memo(function PhaseHeading({
               className="cl-chapter__marked"
             />
           )}
-          {KIND_LABEL[phase.kind]}
+          {editing.theatre && KIND_LABEL[phase.kind]}
         </span>
         <PhaseTitle
           turn={phase.turn}
@@ -676,6 +681,7 @@ const PhaseHeading = memo(function PhaseHeading({
           </span>
         )}
         <span className="cl-chapter__rule" aria-hidden />
+        {(editing.theatre || !opensSession) && (
         <Popover
           isOpen={menu}
           onOpenChange={setMenu}
@@ -683,7 +689,7 @@ const PhaseHeading = memo(function PhaseHeading({
           width={260}
           content={
             <ul className="cl-namepanel__list" aria-label="Ce chapitre">
-              {KINDS.map((kind) => (
+              {(editing.theatre ? KINDS : []).map((kind) => (
                 <li key={kind}>
                   <button
                     type="button"
@@ -734,6 +740,7 @@ const PhaseHeading = memo(function PhaseHeading({
             <Ellipsis size={14} strokeWidth={1.75} />
           </button>
         </Popover>
+        )}
       </div>
     </div>
   );
@@ -792,37 +799,6 @@ export function TranscriptView({
     }
   }, [currentIndex, pb.playing, virtualizer]);
 
-  // Naming a voice: on the first line of its group (a line that goes on hides its name),
-  // brought into view with room under it for the list, which floats over the lines below.
-  const naming = editing.namingTurn;
-  const { setNamingTurn } = editing;
-  const namingIndex =
-    naming == null
-      ? -1
-      : model.rows.findIndex(
-          (r) => r.kind === "turn" && r.turn.index === naming,
-        );
-  useEffect(() => {
-    if (namingIndex < 0) return;
-    let head = namingIndex;
-    while (head > 0 && (model.rows[head] as TurnRow).continued) head--;
-    const row = model.rows[head];
-    if (row.kind === "turn" && row.turn.index !== naming) {
-      setNamingTurn(row.turn.index);
-      return;
-    }
-    const box = scroller.current;
-    const line = box?.querySelector<HTMLElement>(`[data-index="${head}"]`);
-    if (!box || !line) {
-      virtualizer.scrollToIndex(head, { align: "start" });
-      return;
-    }
-    const top =
-      line.getBoundingClientRect().top - box.getBoundingClientRect().top;
-    if (top < 0 || top > box.clientHeight - 360)
-      box.scrollBy({ top: top - 96, behavior: "smooth" });
-  }, [namingIndex, naming, model.rows, setNamingTurn, virtualizer]);
-
   return (
     <div ref={scroller} className="cl-transcript" aria-label="Transcription">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -839,8 +815,6 @@ export function TranscriptView({
                 left: 0,
                 right: 0,
                 transform: `translateY(${item.start}px)`,
-                // Its list floats over the lines under it.
-                zIndex: item.index === namingIndex ? 2 : undefined,
               }}
             >
               {row.kind === "turn" ? (
