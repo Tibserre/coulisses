@@ -27,6 +27,7 @@ la publication lit celle de `main`.
 
 ### Corrections
 
+- transcrit les fichiers AIFF importés (moteur v1.15.2) (import)
 - garde une place par voix dans la pile, comme à l'enregistrement (seance)
 - dit « N voix à nommer » quand aucune voix n'a de nom (seance)
 - précise les renvois et la voix actuelle de « Cette réplique est de » (nommage)
