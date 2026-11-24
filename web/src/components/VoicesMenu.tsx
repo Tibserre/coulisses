@@ -7,11 +7,8 @@ import { formatDuration, plural } from "../format.ts";
 import { speakerInk, speakerTint } from "../theme/shared.ts";
 import { Face } from "./AttendeesSheet.tsx";
 
-/** Named voices shown in the pile; the others go into its « +N ». */
-const PILE = 8;
-/** With no voice named, empty places shown before « +N ».
- *  shortcut: only three voices was drawn; many unnamed ones is a proposal, not validated. */
-const EMPTY_PILE = 3;
+/** Places in the pile, as for who is there while recording: beyond, « +N ». */
+const PILE = 6;
 
 const initial = (name: string) => name.trim().charAt(0).toLocaleUpperCase("fr");
 
@@ -72,11 +69,11 @@ function EmptyVoice() {
   );
 }
 
-/** The voices of a session as one button (ADR 0090): the named ones stacked, « +N » in grey
- *  for those left; a click lists them all, those to name first (the one being named at the
- *  top), a rule, then the named ones, each with its speaking time. Two voices of the same
- *  person are offered to be merged there. With no voice named, the session's header shows an
- *  empty place per voice and a click opens the most talkative one (ADR 0093). */
+/** The voices of a session as one button (ADR 0090, 0093): the named ones stacked, then an
+ *  empty place for each one to name, six places at most, then « +N » in grey; a click lists
+ *  them all, those to name first (the one being named at the top), a rule, then the named ones, each with its speaking time. Two voices of the same
+ *  person are offered to be merged there. With no voice named, a click in the session's header
+ *  opens the most talkative one. */
 export function VoicesMenu({
   voices,
   toName,
@@ -92,7 +89,7 @@ export function VoicesMenu({
   /** Those without a name, in the order they are named. */
   toName: Speaker[];
   people: Person[];
-  /** The voice being named: first, marked, and not counted in « +N ». */
+  /** The voice being named: first in the list, marked. */
   current?: Speaker | null;
   twins?: [Speaker, Speaker][];
   /** Said on hover (« Nommer les voix »). */
@@ -103,9 +100,27 @@ export function VoicesMenu({
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const named = voices.filter((v) => v.named);
-  const pile = named.slice(0, PILE);
-  const left = toName.filter((v) => v !== current);
-  const over = named.length - pile.length + left.length;
+  // Each voice keeps its place (as while recording): the named, then an empty place for each
+  // one to name; past the pile's places, « +N ».
+  const places = [...named, ...toName];
+  const over = places.length > PILE ? places.length - (PILE - 1) : 0;
+  const shown = over ? places.slice(0, PILE - 1) : places;
+  const faces = (
+    <span className="cl-faces">
+      {shown.map((v) =>
+        v.named ? (
+          <VoiceFace key={v.label} voice={v} people={people} size="sm" />
+        ) : (
+          <EmptyVoice key={v.label} />
+        ),
+      )}
+      {over > 0 && (
+        <span className="cl-face" data-over aria-hidden>
+          +{over}
+        </span>
+      )}
+    </span>
+  );
   const row = (v: Speaker) => (
     <li key={v.label}>
       <button
@@ -123,11 +138,11 @@ export function VoicesMenu({
       </button>
     </li>
   );
+  const left = toName.filter((v) => v !== current);
   const first = current && !current.named ? [current, ...left] : left;
   // Nothing named yet: the empty places, and straight to the voice to name first.
   if (named.length === 0 && !current) {
     if (toName.length === 0) return null; // no voice that speaks: nothing to name
-    const empty = toName.slice(0, EMPTY_PILE);
     return (
       <>
         <button
@@ -141,16 +156,7 @@ export function VoicesMenu({
           }
           onClick={() => onPick(toName[0])}
         >
-          <span className="cl-faces">
-            {empty.map((v) => (
-              <EmptyVoice key={v.label} />
-            ))}
-            {toName.length > empty.length && (
-              <span className="cl-face" data-over aria-hidden>
-                +{toName.length - empty.length}
-              </span>
-            )}
-          </span>
+          {faces}
         </button>
         {tip && <Tooltip anchorRef={button} content={tip} />}
       </>
@@ -198,16 +204,7 @@ export function VoicesMenu({
           className="cl-pile cl-who__pile"
           aria-label={`${tip ? `${tip} : ` : ""}${plural(named.length, "voix nommée", "voix nommées")}, ${plural(toName.length, "à nommer", "à nommer")}. Voir les voix`}
         >
-          <span className="cl-faces">
-            {pile.map((v) => (
-              <VoiceFace key={v.label} voice={v} people={people} size="sm" />
-            ))}
-            {over > 0 && (
-              <span className="cl-face" data-over aria-hidden>
-                +{over}
-              </span>
-            )}
-          </span>
+          {faces}
         </button>
       </Popover>
       {tip && !open && <Tooltip anchorRef={button} content={tip} />}
