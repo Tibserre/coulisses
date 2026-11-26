@@ -13,7 +13,7 @@ Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n
 | Connecteur coupé (Réglages) | 403 | « Le connecteur de Coulisses est coupé. Ouvrez-le dans Coulisses › Réglages › Connecteur. » |
 | Séance inconnue, ou dans un espace fermé au connecteur | 404 | « Séance introuvable, ou dans un espace fermé au connecteur. » (les deux cas ne se distinguent pas) |
 | Résumé inconnu de cette séance | 404 | « Résumé introuvable. » |
-| Transcript pas encore prêt ; résumé échoué ou pas fini | 409 | la raison, en français |
+| Transcript pas encore prêt, traitement échoué (dit comme tel : attendre n’y changerait rien) ou fichiers illisibles ; résumé échoué ou pas fini | 409 | la raison, en français |
 | La séance a changé pendant une lecture par morceaux | 409 | « La séance a changé depuis le début de la lecture (corrections, version, chapitres) : reprenez au début. » |
 | Les résultats ont changé entre deux pages d'une recherche | 409 | « La recherche a changé depuis la page précédente : relancez-la. » |
 | Paramètre invalide | 422 | la raison, en français |

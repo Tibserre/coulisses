@@ -234,8 +234,9 @@ class _Seen:
     names_shared: bool
     view: corrections.CorrectedView | None
     masker: Masker | None
-    unreadable: bool = False
-    """Its transcript's files could not be read: said when it is read (409), never hidden."""
+    unreadable: str | None = None
+    """Why its transcript cannot be read (damaged files, failed processing): said when it is
+    read (409), never hidden."""
     listed: Masker | None = None
     """The space's masker without this session's free voices: the names `lister_espaces`
     gives, which the filters accept too."""
@@ -269,15 +270,21 @@ def _seen(data: DataDir, conn: sqlite3.Connection, session_id: str) -> _Seen:
     session = sessions.get_session(data, session_id)
     if session is None:
         raise ConnectorError(404, NOT_FOUND)
-    unreadable = False
+    unreadable = None
     try:
         view = corrections.build_view(data, session_id, recognise=False)
     except RunNotSucceededError:
+        # Failed, not pending: waiting would not help (P8).
         view = None
+        unreadable = "Le traitement de cette séance a échoué : relancez-le dans Coulisses."
     except (OSError, ValueError) as exc:
         # One damaged session must not stop the reading of the others.
         log.warning("connector: %s unreadable: %s", session_id, exc)
-        view, unreadable = None, True
+        view = None
+        unreadable = (
+            "Le transcript de cette séance est illisible : ses fichiers sont abîmés ou"
+            " ont été déplacés."
+        )
     names_shared = bool(row["connector_names"])
     return _Seen(
         session=session,
@@ -834,11 +841,7 @@ def read_transcript(
         view = seen.view
         if view is None:
             raise ConnectorError(
-                409,
-                "Le transcript de cette séance est illisible : ses fichiers sont abîmés ou"
-                " ont été déplacés."
-                if seen.unreadable
-                else "Le transcript de cette séance n'est pas encore prêt.",
+                409, seen.unreadable or "Le transcript de cette séance n'est pas encore prêt."
             )
         turns = view.turns
         chosen: PhaseRef | None = None

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from coulisses.api import RunNotSucceededError
 from fastapi.testclient import TestClient
 
 from coulisses_app import (
@@ -416,6 +417,23 @@ def test_a_damaged_session_does_not_stop_the_others(data: DataDir, recording: Pa
     assert listed[0]["transcript_ready"] is False
     read = client.get(f"/api/connecteur/seances/{session_id}/transcript")
     assert read.status_code == 409 and "illisible" in read.json()["detail"]
+
+
+def test_a_failed_processing_is_said_failed_not_pending(
+    data: DataDir, recording: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+
+    def failed(*args: object, **kwargs: object) -> None:
+        raise RunNotSucceededError("the chain failed")
+
+    monkeypatch.setattr(corrections, "build_view", failed)
+    read = client.get(f"/api/connecteur/seances/{session_id}/transcript")
+    assert read.status_code == 409
+    assert read.json()["detail"] == (
+        "Le traitement de cette séance a échoué : relancez-le dans Coulisses."
+    )
 
 
 def test_the_tab_says_what_is_missing_and_opens_the_extension(
