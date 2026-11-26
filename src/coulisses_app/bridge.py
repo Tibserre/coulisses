@@ -373,7 +373,9 @@ def handle(service: Service, message: dict[str, Any]) -> dict[str, Any] | None:
             result = call_tool(service, str(params.get("name")), arguments)
         except BridgeError as exc:
             return _answer(message_id, _tool_result(str(exc), error=True))
-        text = json.dumps(result, ensure_ascii=False, indent=1)
+        text = json.dumps(
+            result, ensure_ascii=False, separators=(",", ":")
+        )  # compact: the assistant pays per token
         return _answer(message_id, _tool_result(text, error=False))
     return _error(message_id, -32601, f"Méthode inconnue : {method}")
 
