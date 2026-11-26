@@ -367,6 +367,7 @@ export interface ConnectorSettings {
 export type ConnectorTool =
   | "chercher"
   | "lister_seances"
+  | "lister_espaces"
   | "lire_seance"
   | "lire_resume"
   | "lire_transcript";
