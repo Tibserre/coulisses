@@ -9,6 +9,8 @@ import { formatDate } from "./format.ts";
 export const TOOL_LABEL: Record<ConnectorTool, string> = {
   chercher: "Recherche",
   lister_seances: "Liste des séances",
+  // Never about a session: the spaces open to it, their projects and how many sessions.
+  lister_espaces: "Liste des espaces et de leurs projets",
   lire_seance: "Lecture de la séance",
   lire_resume: "Lecture d'un résumé",
   lire_transcript: "Lecture du transcript",

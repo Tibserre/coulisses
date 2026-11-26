@@ -207,7 +207,7 @@ function SpaceDetail({
         />
         <Switch
           label="Transmettre les noms"
-          description="Sans cette option, chaque nom connu de l'espace (présents, voix nommées, membres, invités, noms propres du glossaire) devient « Personne A », « Personne B »…, la même lettre pour la même personne dans toutes les séances de l'espace. C'est fait au mieux : un surnom, un diminutif ou un nom mal transcrit passe."
+          description="Sans cette option, chaque nom connu de l'espace (présents, voix nommées, membres, invités, noms propres du glossaire) devient « Personne A », « Personne B »…, la même lettre pour la même personne dans toutes les séances de l'espace. Un personnage joué reste lisible : seul son interprète est masqué. C'est fait au mieux : un surnom, un diminutif ou un nom mal transcrit passe."
           value={space.connector_names}
           isDisabled={!space.connector_access}
           onChange={(on) =>
