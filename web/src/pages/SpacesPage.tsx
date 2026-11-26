@@ -191,6 +191,31 @@ function SpaceDetail({
         />
       </section>
 
+      <section className="cl-space__section">
+        <Heading level={3}>Connecteur des assistants</Heading>
+        <Text type="supporting">
+          Ce qu'un assistant branché à Coulisses peut lire de cet espace, quand le connecteur
+          est ouvert (<a href="#/reglages?onglet=connecteur">Réglages › Connecteur</a>).
+        </Text>
+        <Switch
+          label="Accessible au connecteur"
+          description="Fermé, cet espace n'apparaît dans aucune réponse, pas même dans la recherche."
+          value={space.connector_access}
+          onChange={(on) =>
+            void attempt(() => api.updateSpace(space.id, { connector_access: on }))
+          }
+        />
+        <Switch
+          label="Transmettre les noms"
+          description="Sans cette option, chaque nom connu de l'espace (présents, voix nommées, membres, invités, noms propres du glossaire) devient « Personne A », « Personne B »…, la même lettre pour la même personne dans toutes les séances de l'espace. C'est fait au mieux : un surnom, un diminutif ou un nom mal transcrit passe."
+          value={space.connector_names}
+          isDisabled={!space.connector_access}
+          onChange={(on) =>
+            void attempt(() => api.updateSpace(space.id, { connector_names: on }))
+          }
+        />
+      </section>
+
       {/* At the end: archiving is rare, and never next to what one types. */}
       <section className="cl-space__section">
         <Heading level={3}>{space.archived ? "Espace archivé" : "Archiver l'espace"}</Heading>
