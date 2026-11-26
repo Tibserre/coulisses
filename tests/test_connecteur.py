@@ -436,6 +436,21 @@ def test_a_failed_processing_is_said_failed_not_pending(
     )
 
 
+def test_a_character_stays_readable_its_player_is_masked(data: DataDir, recording: Path) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    marie = next(p for p in spaces.list_people(data, space_id) if p.name == "Marie Dupont")
+    corrections.add(
+        data,
+        session_id,
+        {"kind": "assign_speaker", "speaker": "S1", "person_id": marie.id, "character": "Le roi"},
+    )
+    _open(client, space_id)
+    read = client.get(f"/api/connecteur/seances/{session_id}").json()
+    # A role, not a person (choice of the user, 2026-11-26): only who plays it is masked.
+    assert "Le roi (joué par Personne A)" in [s["name"] for s in read["speakers"]]
+    assert "Marie" not in json.dumps(read, ensure_ascii=False)
+
+
 def test_the_tab_says_what_is_missing_and_opens_the_extension(
     data: DataDir, recording: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
