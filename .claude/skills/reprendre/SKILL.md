@@ -1,6 +1,6 @@
 ---
 name: reprendre
-description: Remet en route une session Coulisses dans son rôle (Pilotage, Moteur, Service, Interface, Design, Design system, Rédaction, Distribution) à partir de son carnet, de ses relais et de l'état git, sans rien supposer de conversations passées. À utiliser au début de chaque session, ou quand une conversation a été perdue.
+description: Remet en route une session Coulisses dans son rôle (Pilotage, Moteur, Service, Interface, Design, Design system, Connecteur, Rédaction, Distribution) à partir de son carnet, de ses relais et de l'état git, sans rien supposer de conversations passées. À utiliser au début de chaque session, ou quand une conversation a été perdue.
 argument-hint: <rôle>
 ---
 
@@ -8,7 +8,7 @@ argument-hint: <rôle>
 
 Copie identique dans `Pilotage/`, `App/` et `Moteur/` (`.claude/skills/reprendre/`) : en modifier une, c'est modifier les trois.
 
-Rôles et fichiers : pilotage → `tableau-de-bord.md` ; moteur, service, interface, design, distribution → `roles/<rôle>.md` ; design system → `roles/design-system.md` ; rédaction → `roles/redaction.md`. Tout est sous `~/Coulisses/Pilotage/`.
+Rôles et fichiers : pilotage → `tableau-de-bord.md` ; moteur, service, interface, design, connecteur, distribution → `roles/<rôle>.md` ; design system → `roles/design-system.md` ; rédaction → `roles/redaction.md`. Tout est sous `~/Coulisses/Pilotage/`.
 
 ## 1. Lire, dans cet ordre
 1. `~/Coulisses/Pilotage/organisation.md`, s'il n'est pas déjà dans ton contexte : ton territoire et les règles.
