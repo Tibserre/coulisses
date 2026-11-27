@@ -300,6 +300,18 @@ export function SettingsPage({
                   size="sm"
                   onClick={() => void act(() => api.openFolder("donnees"))}
                 />
+                <Button
+                  label="Exporter les temps de traitement"
+                  size="sm"
+                  // Checked first, so a failure is said here rather than shown raw; then
+                  // served as an attachment, the app asks where to save it (lanceur).
+                  onClick={() =>
+                    void act(async () => {
+                      await api.checkExport(api.processingTimesUrl);
+                      window.location.assign(api.processingTimesUrl);
+                    })
+                  }
+                />
                 {folders?.log && (
                   <Button
                     label="Ouvrir le journal technique"

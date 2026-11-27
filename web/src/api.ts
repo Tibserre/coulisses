@@ -1026,6 +1026,8 @@ export const api = {
       `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `${sessionPath(id)}/audio`,
+  /** Every engine run's time with the Mac's description (ADR 0095), served as a file to save. */
+  processingTimesUrl: "/api/temps-de-traitement",
   /** The session's wave measured on the sound heard (ADR 0092): `bars` peaks in dBFS.
    *  409 while it is measured, 404 when there is none. */
   wave: (id: string, bars: number) =>
