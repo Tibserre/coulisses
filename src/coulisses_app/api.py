@@ -783,19 +783,31 @@ def create_app(
         )
 
     @app.get("/api/seances/{session_id}/onde")
-    def waveform_levels(session_id: str, barres: int = Query(ge=1, le=20_000)) -> waveform.Waveform:
-        """The measured waveform of the sound played (ADR 0092), in `barres` levels. 409
-        while it is measured, or while it records: the page draws its own meanwhile."""
+    def waveform_levels(
+        session_id: str,
+        barres: int = Query(ge=1, le=20_000),
+        debut: float | None = Query(default=None, ge=0),
+        fin: float | None = Query(default=None, ge=0),
+    ) -> waveform.Waveform:
+        """The measured waveform of the sound played (ADR 0092), in `barres` levels; only
+        those of one passage with `debut` and `fin`, in seconds (ADR 0094). 409 while it is
+        measured, or while it records: the page draws its own meanwhile. A passage gives the
+        whole slices it touches (up to 50 ms more on each side), cut at the end of the
+        sound; `duration_s` stays the session's."""
         if sessions.get_session(data, session_id) is None:
             raise _not_found("Séance introuvable.")
+        if debut is not None and fin is not None and fin <= debut:
+            raise HTTPException(status_code=422, detail="La fin du passage doit suivre son début.")
         try:
-            return waveform.levels(data, session_id, barres)
+            return waveform.levels(data, session_id, barres, debut, fin)
         except waveform.NotReady:
             raise HTTPException(
                 status_code=409, detail="L'onde du son est en préparation."
             ) from None
         except waveform.NoWaveform as exc:
             raise _not_found(str(exc)) from None
+        except waveform.OutsideSound as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
 
     @app.get("/api/seances/{session_id}/versions")
     def session_versions(session_id: str) -> versions.Versions:

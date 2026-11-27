@@ -166,3 +166,36 @@ def test_a_failure_before_the_measure_leaves_the_session_free(
     monkeypatch.setattr(waveform, "heard_version", failing_in_the_background)
     assert client.get(f"/api/seances/{session_id}/onde?barres=4").status_code == 409
     wait_for(lambda: not waveform.busy(session_id))  # never left raised
+
+
+def test_one_passage_has_its_own_slices() -> None:
+    """« Qui parle ? » draws the turn heard (ADR 0094): its slices, not the whole session's."""
+    hour = waveform.Waveform(
+        heard_version="v", duration_s=4_000.0, levels_db=[float(-i % 90) for i in range(80_000)]
+    )
+    eight = waveform._bars(hour, 132, 3_600.0, 3_608.0)
+    assert len(eight.levels_db) == 132  # 160 slices of 50 ms, grouped
+    five = waveform._bars(hour, 132, 3_600.0, 3_605.0)
+    assert five.levels_db == hour.levels_db[72_000:72_100]  # 100 slices, each once
+
+
+def test_a_passage_is_asked_by_its_times(client: TestClient, data: DataDir) -> None:
+    sound = np.concatenate([np.zeros((48_000, 1), dtype=np.float32), tone(1.0, 0.5)])
+    session_id = recorded(data, sound, None)
+    envelope(client, session_id, 4)  # measured once
+    url = f"/api/seances/{session_id}/onde?barres=100"
+    quiet = client.get(f"{url}&debut=0&fin=0.5").json()["levels_db"]
+    loud = client.get(f"{url}&debut=1.5&fin=2").json()["levels_db"]
+    assert quiet == [-120.0] * 10
+    assert len(loud) == 10 and min(loud) == pytest.approx(20 * np.log10(0.5), abs=0.2)
+    assert client.get(f"{url}&debut=2&fin=1").status_code == 422
+
+
+def test_a_passage_past_the_end_is_cut_or_refused(client: TestClient, data: DataDir) -> None:
+    session_id = recorded(data, tone(1.0, 0.5), None)
+    envelope(client, session_id, 4)
+    url = f"/api/seances/{session_id}/onde?barres=100"
+    assert len(client.get(f"{url}&debut=0.5&fin=5").json()["levels_db"]) == 10  # cut at 1 s
+    outside = client.get(f"{url}&debut=2&fin=3")
+    assert outside.status_code == 422 and "hors du son" in outside.json()["detail"]
+    assert client.get(f"{url}&fin=0").status_code == 422

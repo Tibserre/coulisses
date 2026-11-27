@@ -6,6 +6,7 @@ the user). Measured again in the background when the file played is replaced."""
 from __future__ import annotations
 
 import logging
+import math
 import os
 import subprocess
 import tempfile
@@ -41,6 +42,10 @@ class NotReady(Exception):
     """Being measured, or nothing to measure yet (a recording under way)."""
 
 
+class OutsideSound(Exception):
+    """A passage asked beyond the sound measured: said, in French."""
+
+
 class NoWaveform(Exception):
     """Nothing to measure, or the measure failed: said, in French."""
 
@@ -63,8 +68,15 @@ def heard_version(data: DataDir, session_id: str) -> str | None:
     return f"{path.name}-{facts.st_mtime_ns}-{facts.st_size}"
 
 
-def levels(data: DataDir, session_id: str, bars: int) -> Waveform:
-    """`bars` levels, each the loudest of its slices. Raises `NotReady` while it is measured
+def levels(
+    data: DataDir,
+    session_id: str,
+    bars: int,
+    start_s: float | None = None,
+    end_s: float | None = None,
+) -> Waveform:
+    """`bars` levels, each the loudest of its slices; only those between `start_s` and
+    `end_s` when given (one passage, ADR 0094). Raises `NotReady` while it is measured
     (started here if needed) or while it records, `NoWaveform` when there is none to give."""
     reference = sessions.reference_source(data, session_id)
     if reference is not None and reference.capture_state == "recording":
@@ -75,12 +87,12 @@ def levels(data: DataDir, session_id: str, bars: int) -> Waveform:
             raise NoWaveform(
                 "L'audio de cette séance a été supprimé avant que son onde soit mesurée."
             )
-        return _bars(kept, bars)  # kept after the purge (decided by the user)
+        return _bars(kept, bars, start_s, end_s)  # kept after the purge (the user's choice)
     version = heard_version(data, session_id)
     if version is None:
         raise NoWaveform("Le son de cette séance est introuvable : il n'y a rien à mesurer.")
     if kept is not None and kept.heard_version == version:
-        return _bars(kept, bars)
+        return _bars(kept, bars, start_s, end_s)
     with _measuring_lock:
         failed = _failed.get(session_id) == version
     if failed:
@@ -120,10 +132,17 @@ def busy(session_id: str) -> bool:
         return session_id in _measuring
 
 
-def _bars(kept: Waveform, bars: int) -> Waveform:
-    levels = kept.levels_db
+def _bars(
+    kept: Waveform, bars: int, start_s: float | None = None, end_s: float | None = None
+) -> Waveform:
+    # The slices the passage touches, whole: a slice measured is never cut.
+    first = math.floor((start_s or 0.0) / STEP_S + 1e-6)
+    last = len(kept.levels_db) if end_s is None else math.ceil(end_s / STEP_S - 1e-6)
+    levels = kept.levels_db[first:last]
     if not levels:
-        return kept
+        if start_s is not None or end_s is not None:
+            raise OutsideSound("Ce passage est hors du son.")
+        return kept  # nothing was measured (an empty sound)
     count = min(bars, len(levels))
     grouped = [
         max(levels[i * len(levels) // count : (i + 1) * len(levels) // count]) for i in range(count)

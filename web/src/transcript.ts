@@ -606,33 +606,6 @@ export function nearestLine(lines: TurnRow[], at: number): TurnRow | null {
   return best;
 }
 
-/** The wave of what ▶ plays in « Qui parle ? »: the measured levels (ADR 0092) from `from`
- *  to `to`, at most `max` bars, each the loudest of its levels. A short line has fewer
- *  bars: never stretched, nothing invented (P2). */
-export function excerptWave(
-  levels: readonly number[],
-  duration: number,
-  from: number,
-  to: number,
-  max: number,
-): number[] {
-  const n = levels.length;
-  if (duration <= 0 || to <= from || n === 0) return [];
-  const part = levels.slice(
-    Math.max(0, Math.floor((from / duration) * n)),
-    Math.min(n, Math.ceil((to / duration) * n)),
-  );
-  if (part.length <= max) return part;
-  return Array.from({ length: max }, (_, i) =>
-    Math.max(
-      ...part.slice(
-        Math.floor((i * part.length) / max),
-        Math.floor(((i + 1) * part.length) / max),
-      ),
-    ),
-  );
-}
-
 /** What « Qui parle ? » asks first about a voice (ADR 0090): « C'est Marie ? » for the
  *  person recognised (ADR 0057), « C'est aussi Marie ? » when that person already has a
  *  voice of the session (yes merges the two, P3); nothing when the voice is named. */
