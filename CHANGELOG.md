@@ -10,28 +10,15 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
-- donne l'onde d'un seul passage (onde)
-- nomme la liste des espaces dans le journal (connecteur)
-- garde les lettres dans l'espace et aide l'assistant à s'orienter (connecteur)
-- laisse le lanceur dire au pont quelle app ouvrir (connecteur)
-- nomme par sa date une séance sans titre dans le journal des accès (connecteur)
-- ajoute le pont coulisses-mcp, en lecture seule (connecteur)
-- ouvre l'extension pour Claude Desktop et dit ce qui manque au lanceur (connecteur)
-- ouvre au connecteur des assistants des routes en lecture seule (connecteur)
-- suit le contrat mis à jour du connecteur (connecteur)
-- ajoute l'onglet « Connecteur » des Réglages et les deux options d'un espace (connecteur)
+- Un assistant comme Claude Desktop ou Claude Code peut maintenant lire vos séances, sans rien pouvoir modifier : il cherche, lit une séance, son résumé ou sa transcription. Le connecteur est coupé d'office. On l'ouvre dans le nouvel onglet « Connecteur » des Réglages, qui dit ce que l'ouverture implique. L'extension pour Claude Desktop s'y installe d'un clic.
+- Chaque espace a deux nouvelles options, fermées d'office : « Accessible au connecteur », puis « Transmettre les noms ». Sans la seconde, chaque nom devient « Personne A », « Personne B »… pour l'assistant.
+- Le journal des accès, dans le même onglet, liste tout ce que l'assistant a lu, le plus récent d'abord.
+- Dans « Qui parle ? », l'onde de la réplique écoutée reste précise, même sur une longue séance.
+- « Exporter les temps de traitement », dans Réglages › Avancé, enregistre dans un fichier la durée de chaque traitement avec la description du Mac, pour la transmettre si vous le souhaitez.
 
 ### Corrections
 
-- télécharge par un lien pour ne plus couper les requêtes de la page (export)
-- exporte les temps de traitement depuis l'onglet Avancé (reglages)
-- exporte les temps de traitement avec la description du Mac (temps)
-- dit qu'un traitement a échoué plutôt que « pas encore prêt » (connecteur)
-
-### Performances
-
-- demande l'onde de la seule réplique écoutée (qui-parle)
-- envoie les réponses du pont en JSON compact (connecteur)
+- « Télécharger la transcription » ouvre de nouveau la fenêtre « Enregistrer » sans afficher à tort « Le service Coulisses ne répond pas ».
 
 ## v0.42.0 — 2026-11-24
 
