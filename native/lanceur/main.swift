@@ -13,6 +13,7 @@
 // (COULISSES_PROJET, `scripts/tester-branche.sh`).
 
 import AppKit
+import Security
 import UserNotifications
 import WebKit
 
@@ -56,6 +57,9 @@ let logDir = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Logs/Coulisses")
 let logFile = logDir.appendingPathComponent(isDev ? "service-dev.log" : "service.log")
 let startWithin: TimeInterval = 180
+/// Opened by the connector's bridge (`open -g … --args --connecteur`, ADR 0065): no window
+/// is shown until the user asks for it (the Dock icon, the menu bar).
+let forConnector = CommandLine.arguments.contains("--connecteur")
 /// The data the service must serve: the real ones, or Données-dev for « Coulisses (dév) »,
 /// unless told otherwise (the service refuses the real ones to dév).
 let expectedData: String = {
@@ -117,6 +121,11 @@ func isLeftAlone(_ pid: pid_t) -> Bool {
 }
 
 func appendToLog(_ line: String) {
+    // Even before the service starts (the connector is written first): never lost.
+    try? FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+    if !FileManager.default.fileExists(atPath: logFile.path) {
+        FileManager.default.createFile(atPath: logFile.path, contents: nil)
+    }
     guard let handle = try? FileHandle(forWritingTo: logFile) else { return }
     handle.seekToEndOfFile()
     handle.write("\(line)\n".data(using: .utf8)!)
@@ -134,6 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     /// taken back, so that ⌘Q stops it.
     var adopted: pid_t?
     var stopping = false
+    /// Woken by an assistant before Sparkle's question was answered: started with the window.
+    var updatesDeferred = false
+    /// The window shown at least once (after a launch by an assistant).
+    var shownOnce = false
     /// The app is quitting: nothing more is shown (no update window on the way out).
     var quitting = false
     /// While a recording runs: its red dot and time in the menu bar, with its menu.
@@ -175,8 +188,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         setUpNotifications()
         readSystemAudioStatus()
         watchRecording()
-        startUpdates()
+        // Sparkle asks its question (ADR 0040) in a window: woken by an assistant, not before
+        // the user opens Coulisses. Once answered, it does what it does at any launch.
+        if forConnector && UserDefaults.standard.object(forKey: "SUEnableAutomaticChecks") == nil {
+            updatesDeferred = true
+        } else {
+            startUpdates()
+        }
         buildMenu()
+        writeConnector()
         makeWindow()
         showPage(title: "\(appName) démarre…", detail: nil, actions: false)
         start()
@@ -184,7 +204,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         window.makeKeyAndOrderFront(nil)
+        windowShown()
         return true
+    }
+
+    /// Woken by an assistant and never shown yet: no window of any kind (ADR 0065). Once
+    /// shown, the app behaves as after any launch.
+    var hiddenForConnector: Bool { forConnector && !shownOnce }
+
+    /// The window shown at last, after a launch by an assistant: Sparkle may ask now, and a
+    /// version found meanwhile is shown unless the page shows its reminder.
+    func windowShown() {
+        guard forConnector, !shownOnce else { return }
+        shownOnce = true
+        if updatesDeferred {
+            updatesDeferred = false
+            startUpdates()
+            buildMenu()
+        }
+        reminderWithdrawnUnlessShown()
     }
 
     // -- the service --------------------------------------------------------------------
@@ -460,6 +498,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
         window.center()
         window.setFrameAutosaveName(appName)
+        // Woken by an assistant: in the Dock, in the background, nothing in front.
+        guard !forConnector else { return }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -999,6 +1039,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
     @objc func openWindow() {
         window.makeKeyAndOrderFront(nil)
+        windowShown()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -1024,6 +1065,163 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
                 alert.runModal()
             }
         }.resume()
+    }
+}
+
+// -- the connector (ADR 0065) ----------------------------------------------------------------
+//
+// An assistant's configuration names one fixed path, ~/Coulisses/Connecteur/coulisses-mcp
+// (coulisses-mcp-dev for « Coulisses (dév) »), written here at each launch: it finds this app
+// by its identifier, wherever it is, and runs the bridge it carries (`coulisses_app.bridge`).
+// Next to it, the extension for Claude Desktop (`.mcpb`), which runs that launcher. Coulisses
+// never writes into another tool's configuration; the service reads these paths for the
+// « Connecteur » tab.
+
+let connectorDir = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Coulisses/Connecteur")
+let connectorLauncher = connectorDir.appendingPathComponent(isDev ? "coulisses-mcp-dev" : "coulisses-mcp")
+let connectorExtension = connectorDir.appendingPathComponent(isDev ? "Coulisses (dév).mcpb" : "Coulisses.mcpb")
+
+/// A shell word, quoted: what it says, never run.
+func shellQuoted(_ text: String) -> String {
+    "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
+}
+
+/// This app's designated requirement (its identifier and its certificate, or its own hash
+/// for an app signed ad hoc): the launcher runs nothing from an app that does not satisfy it.
+func designatedRequirement() -> String? {
+    var code: SecCode?
+    var staticCode: SecStaticCode?
+    var requirement: SecRequirement?
+    var text: CFString?
+    guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+        SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+        SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess,
+        let requirement, SecRequirementCopyString(requirement, [], &text) == errSecSuccess, let text
+    else { return nil }
+    return text as String
+}
+
+/// The fixed launcher: the app looked up by its identifier (Launch Services, never launched
+/// by the lookup), checked against the signature of the app that wrote the launcher (another
+/// app taking the same identifier runs nothing), then its own Python, or for an app built
+/// from the repository, its project through uv, offline (P1).
+func launcherScript(identifier: String, requirement: String) -> String {
+    let id = shellQuoted(identifier)
+    let variant = isDev ? " --dev" : ""
+    let environment =
+        "/usr/bin/env -i HOME=\"$HOME\" TMPDIR=\"${TMPDIR:-/tmp}\" USER=\"$USER\" LANG=fr_FR.UTF-8 PATH=/usr/bin:/bin:/usr/sbin:/sbin"
+    let header = """
+        #!/bin/sh
+        # Le connecteur de \(appName) pour un assistant (ADR 0065), écrit par \(appName) à chaque
+        # lancement : il retrouve l'app et lance le pont qu'elle contient.
+        ID=\(id)
+
+        """
+    guard isStandalone else {
+        // Built from the repository: the bridge of the project its service runs (a worktree
+        // tried with `tester-branche.sh`), through uv, offline (P1).
+        let project = shellQuoted(projectDir ?? installedProject)
+        return header + """
+            cd \(project) && exec \(environment) \\
+              \(shellQuoted(uvPath)) run --project \(project) --offline --quiet coulisses-mcp\(variant) --identifiant "$ID"
+
+            """
+    }
+    let required = shellQuoted("=" + requirement)
+    let missing = shellQuoted(
+        "\(appName) est introuvable sur ce Mac, ou n'a pas la signature de celle qui a écrit ce lanceur. Installez-le, ou ouvrez-le une fois, puis réessayez.")
+    return header + """
+        # Where it was when it wrote this launcher, then wherever Launch Services finds it (never
+        # launched by the lookup): only an app with the signature of the one that wrote it.
+        signed() { [ -n "$1" ] && [ -d "$1" ] && /usr/bin/codesign --verify -R \(required) "$1" 2>/dev/null; }
+        APP=\(shellQuoted(Bundle.main.bundlePath))
+        if ! signed "$APP"; then
+          APP=$(/usr/bin/osascript -l JavaScript -e 'ObjC.import("AppKit"); var u = $.NSWorkspace.sharedWorkspace.URLForApplicationWithBundleIdentifier("'"$ID"'"); u.isNil() ? "" : u.path.js' 2>/dev/null)
+          if ! signed "$APP"; then
+            echo \(missing) >&2
+            exit 1
+          fi
+        fi
+        exec \(environment) PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \\
+          "$APP/Contents/Resources/python/bin/python3" -I -B -m coulisses_app.bridge\(variant) --identifiant "$ID"
+
+        """
+}
+
+/// The extension for Claude Desktop (MCPB): a manifest, and a stub that runs the launcher.
+func extensionManifest() -> [String: Any] {
+    let version = settings["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    return [
+        "manifest_version": "0.3",
+        "name": isDev ? "coulisses-dev" : "coulisses",
+        "display_name": appName,
+        "version": version,
+        "description":
+            "Lit vos séances \(appName), en lecture seule : chercher, lister les séances, lire une séance, son résumé et sa transcription. Le connecteur s'ouvre dans Réglages > Connecteur.",
+        "author": ["name": appName],
+        "server": [
+            "type": "binary",
+            "entry_point": "server/coulisses-mcp",
+            "mcp_config": [
+                "command": "/bin/sh", "args": ["${__dirname}/server/coulisses-mcp"], "env": [String: String](),
+            ],
+        ],
+        "compatibility": ["platforms": ["darwin"]],
+    ]
+}
+
+extension AppDelegate {
+    /// Written at each launch of the app that serves the real data (or Données-dev): never by
+    /// a copy launched on other data (`COULISSES_DATA_DIR`, the package test). A failure is
+    /// logged; the « Connecteur » tab says the launcher is missing.
+    func writeConnector() {
+        guard ProcessInfo.processInfo.environment["COULISSES_DATA_DIR"] == nil,
+            let identifier = Bundle.main.bundleIdentifier
+        else { return }
+        guard let requirement = designatedRequirement() else {
+            appendToLog("connecteur : l'app n'a pas de signature lisible, le lanceur n'est pas écrit")
+            return
+        }
+        do {
+            let files = FileManager.default
+            try files.createDirectory(at: connectorDir, withIntermediateDirectories: true)
+            try launcherScript(identifier: identifier, requirement: requirement).write(
+                to: connectorLauncher, atomically: true, encoding: .utf8)
+            try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: connectorLauncher.path)
+            try writeExtension()
+        } catch {
+            appendToLog("connecteur : le lanceur ou l'extension n'a pas pu être écrit : \(error.localizedDescription)")
+        }
+    }
+
+    func writeExtension() throws {
+        let files = FileManager.default
+        let staging = files.temporaryDirectory.appendingPathComponent("coulisses-mcpb-\(UUID().uuidString)")
+        defer { try? files.removeItem(at: staging) }
+        let server = staging.appendingPathComponent("contenu/server")
+        try files.createDirectory(at: server, withIntermediateDirectories: true)
+        let manifest = try JSONSerialization.data(
+            withJSONObject: extensionManifest(), options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        try manifest.write(to: staging.appendingPathComponent("contenu/manifest.json"))
+        try "#!/bin/sh\nexec \(shellQuoted(connectorLauncher.path)) \"$@\"\n".write(
+            to: server.appendingPathComponent("coulisses-mcp"), atomically: true, encoding: .utf8)
+        let archive = staging.appendingPathComponent("extension.mcpb")
+        let zip = Process()
+        zip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        zip.arguments = ["-c", "-k", "--norsrc", "--noextattr", staging.appendingPathComponent("contenu").path, archive.path]
+        try zip.run()
+        zip.waitUntilExit()
+        guard zip.terminationStatus == 0 else {
+            throw NSError(
+                domain: "Coulisses", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "ditto a échoué (code \(zip.terminationStatus))"])
+        }
+        if files.fileExists(atPath: connectorExtension.path) {
+            _ = try files.replaceItemAt(connectorExtension, withItemAt: archive)
+        } else {
+            try files.moveItem(at: archive, to: connectorExtension)
+        }
     }
 }
 
@@ -1066,6 +1264,12 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
         func forgetReminder() { pageShowsReminder = false }
 
+        /// The window shown after a hidden launch: a version kept meanwhile, if the page does
+        /// not show it, is shown as when the reminder is withdrawn.
+        func reminderWithdrawnUnlessShown() {
+            if updateReady && !pageShowsReminder { reminderWithdrawn() }
+        }
+
         /// Nothing shows the reminder any more (the page withdrew it, a launcher page, the
         /// page's process gone): a version already waiting is shown in Sparkle's window, at
         /// once or once the recording or processing is over, unless a page shows it again.
@@ -1075,7 +1279,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             let show = { [weak self] in
                 guard let self else { return }
                 self.withdrawalPending = false
-                guard !self.quitting, !self.pageShowsReminder, self.updateReady else { return }
+                // Woken by an assistant, window not shown: kept for when it is (windowShown).
+                guard !self.quitting, !self.pageShowsReminder, self.updateReady,
+                    !self.hiddenForConnector
+                else { return }
                 self.updates?.checkForUpdates(nil)
             }
             withdrawalPending = true
@@ -1115,7 +1322,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
         func standardUserDriverShouldHandleShowingScheduledUpdate(
             _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool
-        ) -> Bool { !pageShowsReminder }
+        ) -> Bool { !pageShowsReminder && !hiddenForConnector }
 
         func standardUserDriverWillHandleShowingUpdate(
             _ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState
@@ -1250,6 +1457,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         func refreshUpdatesState() { refreshBridge() }
         func forgetReminder() {}
         func reminderWithdrawn() {}
+        func reminderWithdrawnUnlessShown() {}
         func pageChanged() {}
     }
 #endif

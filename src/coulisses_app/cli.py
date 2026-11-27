@@ -164,6 +164,7 @@ def main(argv: list[str] | None = None) -> None:
             after_stop=lambda session_id: lossless.after_recording(data, session_id),
         ),
         watcher=Watcher(data),
+        dev=args.dev,
     )
     url = f"http://{HOST}:{port}/"
     if not args.sans_navigateur:

@@ -108,7 +108,13 @@ def _entries(
 def refresh(data: DataDir) -> list[str]:
     """Index again the sessions whose text changed, forget the deleted ones. Returns what
     could not be indexed."""
-    problems: list[str] = []
+    return [message for _, message in refresh_sessions(data)]
+
+
+def refresh_sessions(data: DataDir) -> list[tuple[str, str]]:
+    """As `refresh`, each problem with its session (the connector says only those of the
+    spaces it may read)."""
+    problems: list[tuple[str, str]] = []
     conn = connect(data)
     try:
         with conn:
@@ -127,7 +133,7 @@ def refresh(data: DataDir) -> list[str]:
             except (OSError, ValueError, RunNotSucceededError) as exc:
                 log.warning("search: %s not indexed: %s", session_id, exc)
                 name = row["title"] or f"la séance du {row['recorded_at'][:10]}"
-                problems.append(f"« {name} » n'a pas pu être lue pour la recherche.")
+                problems.append((session_id, f"« {name} » n'a pas pu être lue pour la recherche."))
                 continue
             with conn:
                 conn.execute("DELETE FROM search_index WHERE session_id = ?", (session_id,))
@@ -146,7 +152,7 @@ def refresh(data: DataDir) -> list[str]:
     return problems
 
 
-def _match(query: str) -> str | None:
+def fts_match(query: str) -> str | None:
     """Every word typed, as a prefix (« repet » finds « répétition »): FTS5 syntax is never
     passed through from the user."""
     words = re.findall(r"\w+", query)
@@ -165,7 +171,7 @@ def _parts(snippet: str) -> list[Part]:
 
 def search(data: DataDir, query: str) -> Results:
     problems = refresh(data)
-    match = _match(query)
+    match = fts_match(query)
     if match is None:
         return Results(query=query, sessions=[], problems=problems)
     conn = connect(data)
