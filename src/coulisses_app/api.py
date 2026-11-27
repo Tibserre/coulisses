@@ -44,10 +44,12 @@ from coulisses_app import (
     jobs,
     languages,
     lossless,
+    machine,
     marks,
     mixing,
     notes,
     preview,
+    processing_times,
     projects,
     reminders,
     retention,
@@ -70,7 +72,7 @@ from coulisses_app.prompting import assembly
 from coulisses_app.prompting.generate import PHASES_REF, TITLE_REF, ModelClient
 from coulisses_app.prompting.ollama import InstalledModel, OllamaClient, OllamaError
 from coulisses_app.status import StageView, stage_views
-from coulisses_app.storage.db import connect
+from coulisses_app.storage.db import connect, now_iso
 
 log = logging.getLogger(__name__)
 
@@ -524,6 +526,30 @@ def create_app(
         return JSONResponse(status_code=status, content={"detail": str(exc)})
 
     problems = recovery_problems or []
+
+    @app.get("/api/temps-de-traitement")
+    def processing_times_export() -> JSONResponse:
+        """The processing times and this Mac (ADR 0095), as a file the user saves and sends
+        on (P1: nothing leaves the Mac otherwise)."""
+        described = {
+            **machine.describe(),
+            "app_version": version("coulisses-app"),
+            "app_build": app_build,
+            "engine_version": version("coulisses"),
+        }
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        return JSONResponse(
+            {
+                "format": processing_times.FORMAT,
+                "exported_at": now_iso(),
+                "machine": described,
+                "sessions": processing_times.export(data),
+            },
+            headers={
+                "Content-Disposition": "attachment; filename="
+                f"coulisses-temps-de-traitement-{stamp}.json"
+            },
+        )
 
     @app.get("/api/etat")
     def info() -> AppInfo:

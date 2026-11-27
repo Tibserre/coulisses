@@ -121,9 +121,7 @@ export function SessionMenu({
                   label: "Télécharger la transcription (.md)",
                   onClick: () =>
                     void run(async () => {
-                      const url = api.exportUrl(session.id, "transcript");
-                      await api.checkExport(url);
-                      window.location.href = url;
+                      await api.saveExport(api.exportUrl(session.id, "transcript"));
                     })(),
                 },
               ]

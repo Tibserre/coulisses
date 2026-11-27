@@ -1026,6 +1026,8 @@ export const api = {
       `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `${sessionPath(id)}/audio`,
+  /** Every engine run's time with the Mac's description (ADR 0095), served as a file to save. */
+  processingTimesUrl: "/api/temps-de-traitement",
   /** The session's wave measured on the sound heard (ADR 0092): `bars` peaks in dBFS, of
    *  the whole session or of `from`–`to` (seconds). 409 while it is measured, 404 when there
    *  is none, 422 for a passage outside the sound. */
@@ -1209,9 +1211,10 @@ export const api = {
     return response.text();
   },
   renameSession: (id: string, title: string) => send<Session>("PATCH", sessionPath(id), { title }),
-  /** Read once before the page goes to it: a refusal is said on the page, never shown in
-   *  place of it (the browser would open the JSON of the error). */
-  checkExport: async (url: string) => {
+  /** Checked first, so a failure is said in the page rather than shown raw; then saved by a
+   *  download link, which the app turns into « Enregistrer sous » (lanceur). Not by navigating:
+   *  WebKit cuts the page's requests in flight when a navigation becomes a download. */
+  saveExport: async (url: string) => {
     let response: Response;
     try {
       response = await fetch(url);
@@ -1219,6 +1222,12 @@ export const api = {
       throw new ServiceError("Le service Coulisses ne répond pas. Est-il lancé ?");
     }
     if (!response.ok) throw await readError(response);
+    // shortcut: asked twice; should the second ask fail alone (the service stopped in between),
+    // the error's JSON is saved as the export. Keep until it is seen once: blob: links are refused by the lanceur.
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "";
+    link.click();
   },
   exportUrl: (id: string, contenu: "resume" | "transcript" | "tout", generationId?: number) =>
     `${sessionPath(id)}/export?contenu=${contenu}${generationId != null ? `&resume=${generationId}` : ""}`,

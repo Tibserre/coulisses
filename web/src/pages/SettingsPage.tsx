@@ -300,6 +300,11 @@ export function SettingsPage({
                   size="sm"
                   onClick={() => void act(() => api.openFolder("donnees"))}
                 />
+                <Button
+                  label="Exporter les temps de traitement"
+                  size="sm"
+                  onClick={() => void act(() => api.saveExport(api.processingTimesUrl))}
+                />
                 {folders?.log && (
                   <Button
                     label="Ouvrir le journal technique"

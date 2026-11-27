@@ -6,6 +6,14 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
+## Non publié
+
+### Corrections
+
+- télécharge par un lien pour ne plus couper les requêtes de la page (export)
+- exporte les temps de traitement depuis l'onglet Avancé (reglages)
+- exporte les temps de traitement avec la description du Mac (temps)
+
 ## v0.42.0 — 2026-11-24
 
 ### Nouveautés
