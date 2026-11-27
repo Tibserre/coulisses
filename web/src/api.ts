@@ -1026,10 +1026,14 @@ export const api = {
       `${sessionPath(id)}/executions/${encodeURIComponent(runId)}/provenance`,
     ),
   audioUrl: (id: string) => `${sessionPath(id)}/audio`,
-  /** The session's wave measured on the sound heard (ADR 0092): `bars` peaks in dBFS.
-   *  409 while it is measured, 404 when there is none. */
-  wave: (id: string, bars: number) =>
-    getJson<Wave>(`${sessionPath(id)}/onde?barres=${bars}`),
+  /** The session's wave measured on the sound heard (ADR 0092): `bars` peaks in dBFS, of
+   *  the whole session or of `from`–`to` (seconds). 409 while it is measured, 404 when there
+   *  is none, 422 for a passage outside the sound. */
+  wave: (id: string, bars: number, from?: number, to?: number) =>
+    getJson<Wave>(
+      `${sessionPath(id)}/onde?barres=${bars}` +
+        (from != null && to != null ? `&debut=${from}&fin=${to}` : ""),
+    ),
   microphones: () => getJson<InputDevice[]>("/api/micros"),
   power: () => getJson<{ on_battery: boolean }>("/api/alimentation"),
   recording: () => getJson<RecordingState | null>("/api/enregistrement"),

@@ -5,7 +5,6 @@ import type { CorrectedView, Person, Speaker, Word } from "./api.ts";
 import {
   changesChapters,
   nearestLine,
-  excerptWave,
   waveHeight,
   turnSeconds,
   namingLines,
@@ -665,16 +664,6 @@ test("on the strip: the nearest measured line", () => {
   assert.equal(nearestLine(lines, 70)?.turn.index, 2);
   assert.equal(nearestLine(lines, 0)?.turn.index, 0);
   assert.equal(nearestLine([row(1, null, null)], 5), null);
-});
-
-test("the wave of a line: its measured levels, never stretched", () => {
-  // 10 levels over 10 s: one a second.
-  const levels = [-60, -50, -40, -30, -20, -10, -20, -30, -40, -50];
-  assert.deepEqual(excerptWave(levels, 10, 2, 5, 132), [-40, -30, -20]);
-  // More levels than bars: each bar the loudest of its own.
-  assert.deepEqual(excerptWave(levels, 10, 0, 10, 2), [-20, -10]);
-  assert.deepEqual(excerptWave(levels, 10, 5, 5, 132), []);
-  assert.deepEqual(excerptWave([], 10, 0, 5, 132), []);
 });
 
 test("a measured peak as a bar's height", () => {

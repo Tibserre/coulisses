@@ -8,14 +8,12 @@ import {
   type EditRequest,
   type Person,
   type Speaker,
-  type Wave,
 } from "../api.ts";
 import { formatClock, formatDuration, plural } from "../format.ts";
 import {
   askFor,
   hasVoice,
   namingLines,
-  excerptWave,
   nearestLine,
   waveHeight,
   whoOrder,
@@ -25,8 +23,6 @@ import { EXCERPT_S, type Playback } from "../usePlayback.ts";
 import { Face, PeoplePicker } from "./AttendeesSheet.tsx";
 import { VoiceFace, VoicesMenu } from "./VoicesMenu.tsx";
 
-/** The levels asked of the service: its 50 ms slices, up to the most it gives. */
-const LEVELS_MAX = 20_000;
 /** Bars of the line's wave: one every 3 px across the column. */
 const LINE_BARS = 132;
 /** A character's disc (ADR 0091): a rounded square with its initial, over the face of who
@@ -44,9 +40,9 @@ export function RoleFace({ role, person }: { role: string; person?: Person }) {
 
 /** « Qui parle ? » (ADR 0090): one voice at a time, the most talkative first. On the left,
  *  one listens: the voice's big ring (the face of the person chosen), its line in large with
- *  ▶ and ‹ ›, the session's wave dark where it speaks. On the right, one chooses as in
- *  « Qui est là ? »; a new name is a guest. On top, the pile of the voices named and « +N »
- *  for the others: one button that lists them all. Times are the measured ones (P2); what
+ *  ▶ and ‹ ›, the wave of what ▶ plays, then the session in one strip (ADR 0094). On the
+ *  right, one chooses as in « Qui est là ? »; a new name is a guest. On top, the pile of the
+ *  voices, a place each: one button that lists them all. Times are the measured ones (P2); what
  *  cannot be heard is said (P8). */
 export function WhoSpeaks({
   speaker,
@@ -81,7 +77,7 @@ export function WhoSpeaks({
   /** The voice's lines, in their order. */
   lines: TurnRow[];
   sessionId: string;
-  /** The session's length; 0 when unknown (then no wave). */
+  /** The session's length; 0 when unknown (then no strip of the session). */
   duration: number;
   pb: Playback;
   audioGone: boolean;
@@ -111,37 +107,6 @@ export function WhoSpeaks({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const body = useRef<HTMLDivElement>(null);
-  /** The session's wave measured on its sound (ADR 0092), once ready: the line heard is
-   *  drawn from it, nothing meanwhile or when there is none (404), never invented (P2). */
-  const [measured, setMeasured] = useState<Wave | null>(null);
-  const [waveNote, setWaveNote] = useState<string | null>(null);
-  useEffect(() => {
-    let gone = false;
-    let timer = 0;
-    const ask = () =>
-      // shortcut: one wave for the whole session, so past ~16 min a level holds several
-      // 50 ms slices and a line has fewer bars; a range asked of the service would fix it.
-      api.wave(sessionId, Math.min(LEVELS_MAX, Math.max(1, Math.ceil(duration / 0.05)))).then(
-        (w) => {
-          // A short session has fewer levels (never more than its 50 ms slices).
-          if (!gone && w.levels_db.length > 0) setMeasured(w);
-        },
-        (e: unknown) => {
-          if (gone) return;
-          // Being measured: asked again a little later.
-          if (e instanceof ServiceError && e.status === 409)
-            timer = window.setTimeout(() => void ask(), 3000);
-          // None (404, said by the service) or another failure: no wave is drawn, and why
-          // is kept for developer mode.
-          else setWaveNote((e as Error).message);
-        },
-      );
-    void ask();
-    return () => {
-      gone = true;
-      window.clearTimeout(timer);
-    };
-  }, [sessionId, duration]);
   // Each voice starts afresh: its recognised person chosen, its longest line shown.
   useEffect(() => {
     setQuery("");
@@ -185,6 +150,41 @@ export function WhoSpeaks({
   const hearing =
     from != null && to != null && pb.excerpt != null && pb.excerpt >= from && pb.excerpt < to;
   const silent = audioGone || current?.turn.start == null;
+  /** What ▶ plays, measured on the sound (ADR 0092, 0094), once ready: nothing meanwhile or
+   *  when there is none (404), never invented (P2). Kept with the passage it is for, its
+   *  levels or why there are none. */
+  const [measured, setMeasured] = useState<{
+    from: number;
+    to: number;
+    levels: number[];
+    note: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (from == null || to == null) return;
+    let gone = false;
+    let timer = 0;
+    const ask = () =>
+      api.wave(sessionId, LINE_BARS, from, to).then(
+        (w) => {
+          // A short line has fewer levels (never more than its 50 ms slices).
+          if (!gone) setMeasured({ from, to, levels: w.levels_db, note: null });
+        },
+        (e: unknown) => {
+          if (gone) return;
+          // Being measured: asked again a little later.
+          if (e instanceof ServiceError && e.status === 409)
+            timer = window.setTimeout(() => void ask(), 3000);
+          // None (404, said by the service) or another failure: no wave is drawn, and why
+          // is kept for developer mode.
+          else setMeasured({ from, to, levels: [], note: (e as Error).message });
+        },
+      );
+    void ask();
+    return () => {
+      gone = true;
+      window.clearTimeout(timer);
+    };
+  }, [sessionId, from, to]);
   const hear = (row: TurnRow | null) => {
     if (!row || audioGone) return;
     // Heard: it stops.
@@ -280,11 +280,9 @@ export function WhoSpeaks({
   const number =
     (place < 0 ? 0 : place) + named.length + (speaker.named ? 0 : 1);
   const timed = lines.filter((r) => r.turn.start != null);
-  // The line heard, as measured (ADR 0092): across the column, never stretched.
-  const bars =
-    measured && from != null && to != null
-      ? excerptWave(measured.levels_db, measured.duration_s, from, to, LINE_BARS)
-      : [];
+  // The line heard, as measured: across the column, never stretched.
+  const mine = measured && measured.from === from && measured.to === to ? measured : null;
+  const bars = mine?.levels ?? [];
   const barAt = (i: number) => from! + ((i + 0.5) / bars.length) * (to! - from!);
   const chosen = picked;
 
@@ -428,8 +426,8 @@ export function WhoSpeaks({
               {longest.length}
             </span>
           </div>
-          {dev && !measured && waveNote && (
-            <p className="cl-who__said">Pas d'onde mesurée : {waveNote}</p>
+          {dev && mine?.note && (
+            <p className="cl-who__said">Pas d'onde mesurée : {mine.note}</p>
           )}
           <div className="cl-who__listen">
             {bars.length > 0 && (

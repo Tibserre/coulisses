@@ -12,7 +12,7 @@ Après essai en dév, l'utilisateur : la visualisation « marche mal, notamment 
 
 ## Conséquences
 - Spec §7.6 mise à jour.
-- L'application demande au service l'onde de toute la séance, une crête toutes les 50 ms, jusqu'à 20 000 niveaux (sa limite) : au-delà d'environ 16 minutes, un niveau couvre plusieurs tranches et une réplique a moins de barres. Une demande de l'onde d'un seul passage est confiée au Service ; l'application la prendra dès qu'elle existe.
+- L'application demande au service l'onde du seul passage joué (`debut`, `fin`, 0092 précisé le 2026-11-27), 132 niveaux au plus : une crête par tranche de 50 ms jusqu'à 6,6 s de passage, quelle que soit la longueur de la séance.
 
 ## Alternatives écartées
 - Garder l'onde de la séance en l'affinant : sur une longue séance, une réplique y reste invisible.
