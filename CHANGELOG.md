@@ -10,6 +10,7 @@ la publication lit celle de `main`.
 
 ### Nouveautés
 
+- donne l'onde d'un seul passage (onde)
 - nomme la liste des espaces dans le journal (connecteur)
 - garde les lettres dans l'espace et aide l'assistant à s'orienter (connecteur)
 - laisse le lanceur dire au pont quelle app ouvrir (connecteur)
@@ -29,6 +30,7 @@ la publication lit celle de `main`.
 
 ### Performances
 
+- demande l'onde de la seule réplique écoutée (qui-parle)
 - envoie les réponses du pont en JSON compact (connecteur)
 
 ## v0.42.0 — 2026-11-24
