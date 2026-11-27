@@ -8,11 +8,28 @@ la publication lit celle de `main`.
 
 ## Non publié
 
+### Nouveautés
+
+- nomme la liste des espaces dans le journal (connecteur)
+- garde les lettres dans l'espace et aide l'assistant à s'orienter (connecteur)
+- laisse le lanceur dire au pont quelle app ouvrir (connecteur)
+- nomme par sa date une séance sans titre dans le journal des accès (connecteur)
+- ajoute le pont coulisses-mcp, en lecture seule (connecteur)
+- ouvre l'extension pour Claude Desktop et dit ce qui manque au lanceur (connecteur)
+- ouvre au connecteur des assistants des routes en lecture seule (connecteur)
+- suit le contrat mis à jour du connecteur (connecteur)
+- ajoute l'onglet « Connecteur » des Réglages et les deux options d'un espace (connecteur)
+
 ### Corrections
 
 - télécharge par un lien pour ne plus couper les requêtes de la page (export)
 - exporte les temps de traitement depuis l'onglet Avancé (reglages)
 - exporte les temps de traitement avec la description du Mac (temps)
+- dit qu'un traitement a échoué plutôt que « pas encore prêt » (connecteur)
+
+### Performances
+
+- envoie les réponses du pont en JSON compact (connecteur)
 
 ## v0.42.0 — 2026-11-24
 
