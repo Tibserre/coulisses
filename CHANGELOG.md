@@ -6,12 +6,6 @@ messages de commit (`scripts/release.py`, convention dans `CLAUDE.md`). À chaqu
 La section d'une version se réécrit pour les utilisateurs après `publier.py --numeroter` :
 la publication lit celle de `main`.
 
-## Non publié
-
-### Corrections
-
-- masque « Jean-Pierre » comme « Jean Pierre » et corrige les écarts des essais (connecteur)
-
 ## v0.43.0 — 2026-11-27
 
 ### Nouveautés
