@@ -10,7 +10,7 @@
 #     reads every format of ADR 0041;
 #   - a recording imported in the app is processed to the end by the engine (real models,
 #     read from ~/Coulisses/Modèles);
-#   - the connector's bridge starts, lists its five tools, and is refused while the connector
+#   - the connector's bridge starts, lists its six tools, and is refused while the connector
 #     is closed (ADR 0065);
 #   - nothing was written into the .app.
 # Voices made by `say`; the sample files are made by Homebrew's ffmpeg (test tooling only).
@@ -292,7 +292,7 @@ import json, sys
 answers = {m.get("id"): m for m in map(json.loads, open(sys.argv[1]))}
 assert answers[1]["result"]["serverInfo"]["name"] == "coulisses", answers[1]
 tools = sorted(t["name"] for t in answers[2]["result"]["tools"])
-assert tools == ["chercher", "lire_resume", "lire_seance", "lire_transcript", "lister_seances"], tools
+assert tools == ["chercher", "lire_resume", "lire_seance", "lire_transcript", "lister_espaces", "lister_seances"], tools
 refused = answers[3]["result"]
 assert refused["isError"] and "coupé" in refused["content"][0]["text"], refused
 print("   outils :", ", ".join(tools), "; connecteur coupé : refusé")

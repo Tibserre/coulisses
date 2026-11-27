@@ -27,6 +27,16 @@ from urllib.parse import quote, urlencode
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 HOST = "127.0.0.1"
+SESSION_ID = re.compile(r"[A-Za-z0-9_-]+")
+"""A session's id as the service makes it (`20261103-094412-9dxg`): never a path."""
+NOT_FOUND = "Séance introuvable, ou dans un espace fermé au connecteur."
+UPDATED = "Coulisses vient d'être mis à jour ou relancé : redemandez."
+CLOSED = (
+    "Le connecteur de Coulisses est coupé. "
+    "Ouvrez-le dans Coulisses › Réglages › Connecteur."  # noqa: RUF001
+)
+"""The service's own words (`connector.CLOSED`, a test checks): said without asking a
+route that would write the journal if the connector were opened meanwhile."""
 BUNDLE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]*")
 """An app's identifier, as `open -b` reads it: never an option nor empty."""
 WAKE_WAIT_S = 60.0
@@ -49,6 +59,11 @@ DEVELOPMENT = Variant("coulisses-dev", 8766, "local.coulisses.app.dev", "Couliss
 
 class BridgeError(Exception):
     """What the assistant is told, in French: the service's reason, or why it is not there."""
+
+
+class ArgumentError(BridgeError):
+    """An argument missing or malformed, found before asking the service: said only once
+    the connector is known to be open (closed is said first, contract §1)."""
 
 
 class Updated(Exception):
@@ -142,6 +157,14 @@ class Service:
             f"{self.variant.app} n'a pas pu être ouvert, ou son service ne répond pas après "
             f"{WAKE_WAIT_S:.0f} secondes. Ouvrez {self.variant.app} à la main, puis réessayez."
         )
+
+    def closed(self) -> bool:
+        """Whether the connector is closed, read from the settings (no journal entry)."""
+        self._ensure()
+        try:
+            return not self._request("/api/reglages/connecteur").get("open", False)
+        except (URLError, OSError, ValueError, AttributeError):
+            return False  # the argument's own reason is said instead
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         self._ensure()
@@ -288,7 +311,9 @@ for _tool in TOOLS:
 def _segment(arguments: dict[str, Any], name: str) -> str:
     value = arguments.get(name)
     if not isinstance(value, str) or not value:
-        raise BridgeError(f"« {name} » manque.")
+        raise ArgumentError(f"« {name} » manque.")
+    if name == "seance" and not SESSION_ID.fullmatch(value):
+        raise ArgumentError(NOT_FOUND)  # a path would reach another route of the service
     return quote(value, safe="")
 
 
@@ -311,7 +336,7 @@ def call_tool(service: Service, name: str, arguments: dict[str, Any]) -> Any:
     if name == "lire_resume":
         resume = arguments.get("resume")
         if not isinstance(resume, int):
-            raise BridgeError("« resume » manque : un nombre, l'id donné par lire_seance.")
+            raise ArgumentError("« resume » manque : un nombre, l'id donné par lire_seance.")
         seance = _segment(arguments, "seance")
         return service.get(f"/api/connecteur/seances/{seance}/resumes/{resume}")
     if name == "lire_transcript":
@@ -370,7 +395,12 @@ def handle(service: Service, message: dict[str, Any]) -> dict[str, Any] | None:
             return _error(message_id, -32602, "« arguments » doit être un objet.")
         arguments = cast("dict[str, Any]", raw_arguments)
         try:
-            result = call_tool(service, str(params.get("name")), arguments)
+            try:
+                result = call_tool(service, str(params.get("name")), arguments)
+            except ArgumentError:
+                if service.closed():
+                    raise BridgeError(CLOSED) from None
+                raise
         except BridgeError as exc:
             return _answer(message_id, _tool_result(str(exc), error=True))
         text = json.dumps(
@@ -396,6 +426,15 @@ def serve(service: Service, stdin: IO[str], stdout: IO[str]) -> int:
                 try:
                     reply = handle(service, message)  # pyright: ignore[reportUnknownArgumentType]
                 except Updated:
+                    if "id" in message:  # the call in progress is answered, never lost
+                        stdout.write(
+                            json.dumps(
+                                _answer(message["id"], _tool_result(UPDATED, error=True)),
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
+                        stdout.flush()
                     print(
                         f"{service.variant.app} a été mis à jour ou fermé : le connecteur s'arrête,"
                         " le client le relancera.",

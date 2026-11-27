@@ -95,6 +95,23 @@ def check_open(conn: sqlite3.Connection) -> None:
 # -- names -----------------------------------------------------------------------------
 
 
+_JOINT = r"[\s\-\u2010\u2011]+"
+"""Between two words of a name, a space and a hyphen are the same: « Jean Pierre » is also
+« Jean-Pierre ». At its edges a hyphen stays part of a word: « Marie » is not « Marie-Jo »."""
+
+
+_EDGE_BEFORE = r"(?<![\w\-\u2010\u2011])"
+_EDGE_AFTER = r"(?![\w\-\u2010\u2011])"
+
+
+def _key(folded: str) -> str:
+    return re.sub(_JOINT, " ", folded)
+
+
+def _name_pattern(folded: str) -> str:
+    return _JOINT.join(re.escape(w) for w in re.split(_JOINT, folded))
+
+
 def _fold(text: str) -> str:
     """Accents and case removed, one character for one: positions stay those of `text`."""
     out: list[str] = []
@@ -131,14 +148,24 @@ class Masker:
 
     def __init__(self, groups: list[list[str]]) -> None:
         self.names: dict[str, str] = {}
-        for rank, forms in enumerate(groups):
+        rank = 0
+        for forms in groups:
+            keys = [_key(_fold(form)) for form in forms]
+            # A group with no new name (a free voice named after someone known) takes no letter.
+            if all(key in self.names for key in keys):
+                continue
             label = f"Personne {_letter(rank)}"
-            for form in forms:
-                self.names.setdefault(_fold(form), label)
+            rank += 1
+            for key in keys:
+                self.names.setdefault(key, label)
         alternatives = sorted(self.names, key=len, reverse=True)
         self._pattern = (
             re.compile(
-                r"(?<![\w-])(?:" + "|".join(re.escape(a) for a in alternatives) + r")(?![\w-])"
+                _EDGE_BEFORE
+                + "(?:"
+                + "|".join(map(_name_pattern, alternatives))
+                + ")"
+                + _EDGE_AFTER
             )
             if alternatives
             else None
@@ -156,7 +183,7 @@ class Masker:
             kept = text[last : match.start()]
             out.append(kept)
             length += len(kept)
-            label = self.names[match.group(0)]
+            label = self.names[_key(match.group(0))]
             out.append(label)
             spans.append((length, length + len(label)))
             length += len(label)
@@ -171,7 +198,7 @@ class Masker:
 def _first_seen(forms: list[str], folded_text: str) -> int | None:
     best: int | None = None
     for form in forms:
-        found = re.search(r"(?<![\w-])" + re.escape(_fold(form)) + r"(?![\w-])", folded_text)
+        found = re.search(_EDGE_BEFORE + _name_pattern(_fold(form)) + _EDGE_AFTER, folded_text)
         if found and (best is None or found.start() < best):
             best = found.start()
     return best
@@ -837,6 +864,8 @@ def read_transcript(
         check_open(conn)
         if not 1 <= count <= MAX_TURNS:
             raise ConnectorError(422, f"« nombre » va de 1 à {MAX_TURNS}.")
+        if since is not None and since < 0:
+            raise ConnectorError(422, "« depuis » est un indice de réplique, à partir de 0.")
         seen = _seen(data, conn, session_id)
         view = seen.view
         if view is None:
@@ -1107,7 +1136,9 @@ def find(
         offset = 0
         if after is not None:
             start, _, given = after.partition(".")
-            if given != key or not start.isdigit():
+            if not start.isdigit() or not given:
+                raise ConnectorError(422, "« apres » : passez le « next » d'une réponse.")
+            if given != key:
                 raise ConnectorError(409, SEARCH_CHANGED)
             offset = int(start)
         page = found[offset : offset + limit]

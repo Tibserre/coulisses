@@ -4,7 +4,7 @@ Les routes du service pour le connecteur des assistants : celles que lit le pont
 
 ## 1. Ce que lit le pont : `/api/connecteur/…`
 
-Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n'accepte autre chose (405). Les identifiants suivent le glossaire (`phases` pour les chapitres, `timed_notes` pour les annotations, `note` pour la note d'après séance, `generations` pour les résumés) ; les outils du pont les présentent à l'assistant avec les mots de l'interface.
+Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n'accepte autre chose, HEAD compris (405, coupé ou non : ce refus ne dit rien). Les identifiants suivent le glossaire (`phases` pour les chapitres, `timed_notes` pour les annotations, `note` pour la note d'après séance, `generations` pour les résumés) ; les outils du pont les présentent à l'assistant avec les mots de l'interface.
 
 ### Erreurs communes
 | Cas | Code | `detail` |
@@ -16,7 +16,7 @@ Toutes en **GET**. Le pont n'envoie rien d'autre ; aucune route de ce préfixe n
 | Transcript pas encore prêt, traitement échoué (dit comme tel : attendre n’y changerait rien) ou fichiers illisibles ; résumé échoué ou pas fini | 409 | la raison, en français |
 | La séance a changé pendant une lecture par morceaux | 409 | « La séance a changé depuis le début de la lecture (corrections, version, chapitres) : reprenez au début. » |
 | Les résultats ont changé entre deux pages d'une recherche | 409 | « La recherche a changé depuis la page précédente : relancez-la. » |
-| Paramètre invalide | 422 | la raison, en français |
+| Paramètre invalide (type compris : « « nombre » doit être un nombre entier. » ; `apres` qui n'est pas un `next` ; `depuis` négatif) | 422 | la raison, en français |
 
 Le connecteur coupé est vérifié **avant tout autre contrôle** (404, 409, 422, types des paramètres compris) : coupé, tout répond 403. Aucune réponse ne nomme un espace fermé, ne compte ses séances ni ne cite son texte ; `more` et `next` ne tiennent compte que des espaces accessibles.
 
@@ -114,7 +114,7 @@ Les séances, de la plus pertinente à la moins pertinente ; `next` : opaque, à
   "provenance": {"engine_version": "1.13.2", "profile": "chaine-retenue", "models": {"…": "…"}, "processed_at": "…", "duration_s": 534.2, "corrections": 12}
 }
 ```
-`speakers` : les voix de la version affichée, nommées ou non (« Voix 3 »), avec leur nombre de répliques et leur temps de parole, somme des seules durées mesurées (P2). `phases` : vide si les chapitres ne sont pas faits. `timed_notes` : les annotations, `at_s` mesuré (P2) ; `note` : la note d'après séance, ou `null`. `provenance` : `null` si la séance n'est pas traitée.
+`speakers` : les voix de la version affichée, nommées ou non (« Locuteur 3 », le mot de l'app ; « Locuteur inconnu » pour les répliques sans voix, qui portent `speaker: null` dans le transcript), avec leur nombre de répliques et leur temps de parole, somme des seules durées mesurées (P2). `phases` : vide si les chapitres ne sont pas faits. `timed_notes` : les annotations, `at_s` mesuré (P2) ; `note` : la note d'après séance, ou `null`. `provenance` : `null` si la séance n'est pas traitée.
 
 ### `GET /api/connecteur/seances/{id}/transcript` — outil `lire_transcript`
 Le transcript corrigé (version affichée, corrections appliquées), par morceaux. Paramètres :
@@ -199,4 +199,5 @@ Du plus récent au plus ancien, jamais purgé. Une entrée par lecture : `tool` 
 
 - Chaque outil du pont se déclare en lecture seule, sur ce Mac seulement (annotations MCP `readOnlyHint: true`, `openWorldHint: false`).
 - Le pont lit `GET /api/etat` pour savoir si le service répond. S'il ne répond pas, il ouvre l'app par son identifiant, en arrière-plan : `open -g -b <identifiant> --args --connecteur`. L'identifiant est celui que lui passe le lanceur fixe (`coulisses-mcp [--dev] --identifiant <identifiant de l'app qui l'a écrit>`) : l'app publiée (`io.github.tibserre.coulisses`) n'a pas celui de l'app installée depuis le dépôt. Sans l'option : `local.coulisses.app` (Coulisses (dév) : `local.coulisses.app.dev`). `--dev` donne le port 8766 et le nom `coulisses-dev`. L'app ouverte avec `--connecteur` n'ouvre aucune fenêtre (pas même celle des gestes demandés au lancement, ADR 0049). Le pont attend le service 60 s au plus, puis dit en français qu'il n'a pas pu l'ouvrir.
-- Si, en cours de route, le service répond avec un autre `app_build` que celui du premier appel (une mise à jour par Sparkle), ou que l'app du pont a disparu, le pont s'arrête (code de sortie 0) : le client le relance.
+- Si, en cours de route, le service répond avec un autre `app_build` que celui du premier appel (une mise à jour par Sparkle), ou que l'app du pont a disparu, le pont répond à l'appel en cours par une erreur (« Coulisses vient d'être mis à jour ou relancé : redemandez. »), jamais par un silence, puis s'arrête (code de sortie 0) : le client le relance.
+- Avant d'appeler le service, le pont refuse un argument manquant ou mal formé ; un id de séance qui n'est pas un id (`/`, `..`) répond comme une séance introuvable. Mais si le connecteur est coupé, c'est ce refus qu'il dit d'abord.
