@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 import pytest
 from fastapi.testclient import TestClient
 
-from coulisses_app import bridge
+from coulisses_app import bridge, connector
 from coulisses_app.bridge import DEVELOPMENT, PUBLISHED, BridgeError, Service
 from coulisses_app.paths import DataDir
 
@@ -217,7 +217,11 @@ def test_it_stops_once_the_app_was_updated(data: DataDir, recording: Path) -> No
     stdin = io.StringIO("".join(json.dumps(_call(n, "lister_seances")) + "\n" for n in (1, 2)))
     stdout = Updating()
     assert bridge.serve(Service(PUBLISHED, fetch=through), stdin, stdout) == 0
-    assert [json.loads(line)["id"] for line in stdout.getvalue().splitlines()] == [1]
+    first, last = (json.loads(line) for line in stdout.getvalue().splitlines())
+    assert first["id"] == 1 and not first["result"]["isError"]
+    # The call in progress is answered, never lost: the client then launches it again.
+    assert last["id"] == 2 and last["result"]["isError"]
+    assert last["result"]["content"][0]["text"] == bridge.UPDATED
 
 
 def test_what_is_not_mcp_is_refused() -> None:
@@ -257,7 +261,11 @@ def test_it_stops_once_the_app_went_away(data: DataDir, recording: Path) -> None
     stdout = Quitting()
     service = Service(PUBLISHED, fetch=through, opener=_never)
     assert bridge.serve(service, stdin, stdout) == 0
-    assert [json.loads(line)["id"] for line in stdout.getvalue().splitlines()] == [1]
+    first, last = (json.loads(line) for line in stdout.getvalue().splitlines())
+    assert first["id"] == 1 and not first["result"]["isError"]
+    # The call in progress is answered, never lost: the client then launches it again.
+    assert last["id"] == 2 and last["result"]["isError"]
+    assert last["result"]["content"][0]["text"] == bridge.UPDATED
 
 
 def test_bad_arguments_and_unreadable_answers_are_said() -> None:
@@ -360,3 +368,30 @@ def test_an_identifier_that_is_not_one_is_refused(
         bridge.main(["--identifiant", given])
     assert refused.value.code == 2
     assert "n'est pas un identifiant d'app" in capsys.readouterr().err
+
+
+def test_a_session_id_is_never_a_path_and_closed_is_said_first(
+    data: DataDir, recording: Path
+) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    service = Service(PUBLISHED, fetch=Through(client))
+    closed = connector.CLOSED
+    assert closed == bridge.CLOSED
+    replies = _exchange(
+        service,
+        _call(1, "lire_transcript"),
+        _call(2, "lire_seance", seance=f"{session_id}/transcript"),
+    )
+    assert [r["result"]["content"][0]["text"] for r in replies] == [closed, closed]
+    _open(client, space_id)
+    replies = _exchange(
+        service,
+        _call(3, "lire_transcript"),
+        _call(4, "lire_seance", seance=f"{session_id}/transcript"),
+        _call(5, "lire_seance", seance="../../seances"),
+    )
+    assert [r["result"]["content"][0]["text"] for r in replies] == [
+        "« seance » manque.",
+        bridge.NOT_FOUND,
+        bridge.NOT_FOUND,
+    ]

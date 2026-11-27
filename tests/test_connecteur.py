@@ -253,10 +253,13 @@ def test_the_space_options_are_closed_by_default_and_changed(
         ("Marie-Jo n'est pas Marie", "Marie-Jo n'est pas Personne B"),
         ("Mariette", "Mariette"),  # whole words only
         ("Jean-Pierre Martin parle", "Personne C parle"),
+        ("Jean Pierre et jean-pierre", "Personne D et Personne D"),  # space or hyphen
+        ("Jean-Pierre-Paul", "Jean-Pierre-Paul"),  # another name
+        ("Marie\u2011Jo", "Marie\u2011Jo"),  # a non-breaking hyphen too
     ],
 )
 def test_the_masking_is_by_whole_words_accents_and_case_ignored(text: str, masked: str) -> None:
-    masker = Masker([["Élodie"], ["Marie"], ["Jean-Pierre Martin", "Martin"]])
+    masker = Masker([["Élodie"], ["Marie"], ["Jean-Pierre Martin", "Martin"], ["Jean Pierre"]])
     assert masker.mask(text) == masked
 
 
@@ -649,6 +652,13 @@ def test_the_spaces_and_projects_are_listed_and_filter(data: DataDir, recording:
     assert all(e["session_id"] is None and e["names_shared"] is None for e in spaces_read)
 
 
+def test_a_group_with_no_new_name_takes_no_letter() -> None:
+    """« Jean », a voice named freely after the Jean of the space, is masked as him: the
+    next free voice takes the next letter, none is skipped."""
+    masker = Masker([["Jean"], ["Zorglub"], ["Jean"], ["Paul"]])
+    assert masker.mask("Jean, Zorglub, Paul") == "Personne A, Personne B, Personne C"
+
+
 def test_a_project_named_after_a_free_voice_is_found_by_its_listed_name(
     data: DataDir, recording: Path
 ) -> None:
@@ -672,3 +682,27 @@ def test_a_project_named_after_a_free_voice_is_found_by_its_listed_name(
     for name in (listed, seance["project"]):
         found = client.get("/api/connecteur/seances", params={"projet": name}).json()
         assert [x["id"] for x in found["sessions"]] == [session_id], name
+
+
+def test_wrong_values_are_said_in_french(data: DataDir, recording: Path) -> None:
+    client, session_id, space_id = _prepared(data, recording)
+    _open(client, space_id)
+    base = f"/api/connecteur/seances/{session_id}/transcript"
+    for url, params, said in [
+        (base, {"nombre": "abc"}, "« nombre » doit être un nombre entier."),
+        (base, {"nombre": "2.5"}, "« nombre » doit être un nombre entier."),
+        (base, {"depuis": -1}, "« depuis » est un indice de réplique, à partir de 0."),
+        (
+            "/api/connecteur/recherche",
+            {"q": "x", "apres": "zzz"},
+            "« apres » : passez le « next » d'une réponse.",
+        ),
+        (
+            "/api/reglages/connecteur/journal",
+            {"avant": "abc"},
+            "« avant » doit être un nombre entier.",
+        ),
+    ]:
+        answer = client.get(url, params=params)
+        assert (answer.status_code, answer.json()["detail"]) == (422, said), params
+    assert client.head("/api/connecteur/espaces").status_code == 405

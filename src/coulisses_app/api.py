@@ -24,6 +24,8 @@ from coulisses.api import (
     read_provenance,
 )
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -122,6 +124,8 @@ RELEASE_ERROR = (
 
 SERVICE_LOG = Path.home() / "Library" / "Logs" / "Coulisses" / "service.log"
 """Where the app in the Dock writes the service's output (ADR 0034)."""
+CONNECTOR_PATHS = ("/api/connecteur/", "/api/reglages/connecteur/journal")
+"""Read by the assistant's bridge or about it: its refusals said in French."""
 
 Folder = Literal["donnees", "modeles", "journal"]
 
@@ -537,6 +541,18 @@ def create_app(
     @app.exception_handler(connector.ConnectorError)
     async def connector_refused(_: Request, exc: connector.ConnectorError) -> JSONResponse:
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """The connector says, in French, which parameter is wrong (contract §1): the
+        assistant reads it. The other routes keep FastAPI's answer, read by the page."""
+        if not request.url.path.startswith(CONNECTOR_PATHS):
+            return await request_validation_exception_handler(request, exc)
+        first = exc.errors()[0]
+        name = first["loc"][-1]
+        integer = str(first.get("type", "")).startswith("int")
+        reason = "doit être un nombre entier" if integer else "n'est pas valide"
+        return JSONResponse(status_code=422, content={"detail": f"« {name} » {reason}."})
 
     problems = recovery_problems or []
 
@@ -1606,6 +1622,11 @@ def create_app(
             raise HTTPException(status_code=403, detail="Le connecteur ne se lit que par son pont.")
         with _db() as conn:
             connector.check_open(conn)
+
+    @app.api_route("/api/connecteur/{rest:path}", methods=["HEAD"], include_in_schema=False)
+    def connector_head(rest: str) -> None:
+        """Only GET reads the connector (contract §1), HEAD included in the refusal."""
+        raise HTTPException(status_code=405, detail="Le connecteur ne se lit qu'en GET.")
 
     @app.get("/api/connecteur/seances", dependencies=[Depends(connector_gate)])
     def connector_sessions(
